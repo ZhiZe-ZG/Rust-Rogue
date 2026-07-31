@@ -90,14 +90,13 @@ Before building, you need:
 
 ### Platform Support
 
-**TODO**: Add build support for AArch64. This project does not currently support building on AArch64 systems.
-
 This codebase supports multiple platforms:
 - **Unix-like systems** (Linux, macOS, FreeBSD, etc.)
 - **Windows** (via Visual Studio project files or MinGW/MSYS2)
 - **DOS** (DJGPP)
 - **Cygwin**
 
+AArch64 systems, including NixOS virtual machines running on Apple Silicon hosts, use the standard `./configure` and `make` build process. No architecture-specific build flags are required for a native build.
 ---
 
 ## Building from Source
