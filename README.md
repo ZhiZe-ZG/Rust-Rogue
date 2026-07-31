@@ -90,6 +90,8 @@ Before building, you need:
 
 ### Platform Support
 
+**TODO**: Add build support for AArch64. This project does not currently support building on AArch64 systems.
+
 This codebase supports multiple platforms:
 - **Unix-like systems** (Linux, macOS, FreeBSD, etc.)
 - **Windows** (via Visual Studio project files or MinGW/MSYS2)
