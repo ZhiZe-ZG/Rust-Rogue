@@ -13,6 +13,7 @@
 - [Quick Start](#quick-start)
 - [Prerequisites](#prerequisites)
 - [Building from Source](#building-from-source)
+- [Building with Nix Flake](#building-with-nix-flake)
 - [Running the Game](#running-the-game)
 - [Project Structure](#project-structure)
 - [Development Guide](#development-guide)
@@ -214,6 +215,40 @@ make
 ```
 
 **Note**: For MinGW/MSYS2, you may need to use `mingw32-make` instead of `make` depending on your installation.
+
+---
+
+## Building with Nix Flake
+
+If you use Nix, this repository includes a `flake.nix` with both a development shell and a package build.
+
+### Launch the development shell
+
+From the repository root:
+
+```bash
+# Recommended when flake files are committed
+nix develop
+
+# Works even if flake files are not yet tracked by git
+nix develop path:.
+```
+
+This shell provides the build tools and libraries used by the project (autotools, make, ncurses, and pkg-config).
+
+### Build test with Nix
+
+To verify the package builds successfully:
+
+```bash
+# Recommended when flake files are committed
+nix build .#rogue
+
+# Works even if flake files are not yet tracked by git
+nix build path:.#rogue
+```
+
+If the build succeeds, Nix creates a `result` symlink in the repository root pointing to the built package.
 
 ---
 
