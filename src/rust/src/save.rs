@@ -1,5 +1,5 @@
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr;
 
 const MAXSTR: usize = 1024;
@@ -16,8 +16,13 @@ extern "C" {
     static mut COLS: c_int;
     static mut mpos: c_int;
     static mut stdscr: *mut CWindow;
+    static mut curscr: *mut CWindow;
+    static mut hw: *mut CWindow;
     static mut file_name: c_char;
     static mut version: c_char;
+    static mut wizard: c_int;
+    static mut environ: *mut *mut c_char;
+    static mut master_mode_enabled: c_uchar;
 
     fn msg(fmt: *const c_char, ...);
     fn readchar() -> c_int;
@@ -29,6 +34,24 @@ extern "C" {
     fn mvcur(ly: c_int, lx: c_int, y: c_int, x: c_int) -> c_int;
     fn putchar(c: c_int) -> c_int;
     fn endwin() -> c_int;
+    fn initscr() -> *mut CWindow;
+    fn keypad(win: *mut CWindow, flag: c_int) -> c_int;
+    fn newwin(nlines: c_int, ncols: c_int, y: c_int, x: c_int) -> *mut CWindow;
+    fn clearok(win: *mut CWindow, bf: c_int);
+    fn setup();
+    fn md_tstphold();
+    fn md_tstpresume();
+    fn perror(s: *const c_char);
+    fn strlen(s: *const c_char) -> usize;
+    fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
+    fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
+    fn sscanf(buf: *const c_char, fmt: *const c_char, ...) -> c_int;
+    fn rs_restore_file(inf: *mut CFile) -> c_int;
+    fn restore_link_invalid(file: *mut c_char) -> c_int;
+    fn restore_player_dead() -> c_int;
+    fn md_getpid() -> c_int;
+    fn srand(seed: c_int);
+    fn playit();
     fn resetltchars();
     fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int;
     fn fopen(path: *const c_char, mode: *const c_char) -> *mut CFile;
@@ -174,6 +197,88 @@ pub unsafe extern "C" fn save_file(savef: *mut CFile) {
     fflush(savef);
     fclose(savef);
     exit(0)
+}
+
+/// Restores a saved game and resumes play.
+#[no_mangle]
+pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c_uchar {
+    let mut buf = [0 as c_char; MAXSTR];
+    let mut lines: c_int = 0;
+    let mut cols: c_int = 0;
+    let file_name_ptr = &raw mut file_name as *mut c_char;
+    let version_ptr = &raw const version;
+
+    let mut file_ptr = file;
+    if strcmp(file_ptr, c"-r".as_ptr()) == 0 {
+        file_ptr = file_name_ptr;
+    }
+
+    md_tstphold();
+
+    let inf = fopen(file_ptr, c"r".as_ptr());
+    if inf.is_null() {
+        perror(file_ptr);
+        return 0;
+    }
+
+    let _ = fflush(ptr::null_mut());
+    let _ = fread(buf.as_mut_ptr() as *mut u8, 1, strlen(version_ptr) + 1, inf);
+    if strcmp(buf.as_ptr(), version_ptr) != 0 {
+        msg(c"Sorry, saved game is out of date.\n".as_ptr());
+        return 0;
+    }
+
+    let _ = fread(buf.as_mut_ptr() as *mut u8, 1, 80, inf);
+    let _ = sscanf(buf.as_ptr(), c"%d x %d\n".as_ptr(), &mut lines, &mut cols);
+
+    initscr();
+    keypad(stdscr, 1);
+
+    if lines > LINES {
+        endwin();
+        msg(c"Sorry, original game was played on a screen with %d lines.\n".as_ptr(), lines);
+        msg(c"Current screen only has %d lines. Unable to restore game\n".as_ptr(), LINES);
+        return 0;
+    }
+    if cols > COLS {
+        endwin();
+        msg(c"Sorry, original game was played on a screen with %d columns.\n".as_ptr(), cols);
+        msg(c"Current screen only has %d columns. Unable to restore game\n".as_ptr(), COLS);
+        return 0;
+    }
+
+    if (master_mode_enabled == 0 || wizard == 0) && restore_link_invalid(file_ptr) != 0 {
+        endwin();
+        msg(c"\nCannot restore from a linked file\n".as_ptr());
+        return 0;
+    }
+
+    hw = newwin(LINES, COLS, 0, 0);
+    setup();
+    let _ = rs_restore_file(inf);
+
+    if (master_mode_enabled == 0 || wizard == 0) && md_unlink_open_file(file_ptr, inf) < 0 {
+        msg(c"Cannot unlink file\n".as_ptr());
+        return 0;
+    }
+
+    mpos = 0;
+    clearok(stdscr, 1);
+
+    if restore_player_dead() != 0 {
+        endwin();
+        msg(c"\n\"He's dead, Jim\"\n".as_ptr());
+        return 0;
+    }
+
+    md_tstpresume();
+    environ = envp;
+    copy_cstr(file_name_ptr, file_ptr, MAXSTR);
+    clearok(curscr, 1);
+    srand(md_getpid());
+    msg(c"file name: %s".as_ptr(), file_ptr);
+    playit();
+    0
 }
 
 /// Handles signal-triggered autosave by reusing the regular save-file writer.
