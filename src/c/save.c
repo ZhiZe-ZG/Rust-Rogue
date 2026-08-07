@@ -113,6 +113,25 @@ gotfile:
 }
 
 /*
+ * auto_save:
+ *	Automatically save a file.  This is used if a HUP signal is
+ *	recieved
+ */
+
+void
+auto_save(int sig)
+{
+    FILE *savef;
+    NOOP(sig);
+
+    md_ignoreallsignals();
+    if (file_name[0] != '\0' && ((savef = fopen(file_name, "w")) != NULL ||
+	(md_unlink_open_file(file_name, savef) >= 0 && (savef = fopen(file_name, "w")) != NULL)))
+	    save_file(savef);
+    exit(0);
+}
+
+/*
  * restore:
  *	Restore a saved game from a file with elaborate checks for file
  *	integrity from cheaters
