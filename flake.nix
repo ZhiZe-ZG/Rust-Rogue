@@ -31,6 +31,8 @@
 
             nativeBuildInputs = [
               pkgs.pkg-config
+              pkgs.cargo
+              pkgs.rustc
             ];
 
             buildInputs = [
@@ -73,9 +75,11 @@
           packages = [
             pkgs.autoconf
             pkgs.automake
+              pkgs.cargo
             pkgs.gnumake
             pkgs.ncurses
             pkgs.pkg-config
+              pkgs.rustc
           ];
         };
       });

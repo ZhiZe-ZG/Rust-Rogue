@@ -22,22 +22,8 @@
 #include "rogue.h"
 #include "score.h"
 
-static char *rip[] = {
-"                       __________\n",
-"                      /          \\\n",
-"                     /    REST    \\\n",
-"                    /      IN      \\\n",
-"                   /     PEACE      \\\n",
-"                  /                  \\\n",
-"                  |                  |\n",
-"                  |                  |\n",
-"                  |   killed by a    |\n",
-"                  |                  |\n",
-"                  |       1980       |\n",
-"                 *|     *  *  *      | *\n",
-"         ________)/\\\\_//(\\/(/\\)/\\//\\/|_)_______\n",
-    0
-};
+extern size_t rogue_rip_count(void);
+extern const char *rogue_rip_line(size_t index);
 
 /*
  * score:
@@ -227,9 +213,10 @@ score(int amount, int flags, char monst)
 void
 death(char monst)
 {
-    char **dp, *killer;
+	char *killer;
     struct tm *lt;
     static time_t date;
+	size_t i;
 
     signal(SIGINT, SIG_IGN);
     purse -= purse / 10;
@@ -249,9 +236,8 @@ death(char monst)
 	time(&date);
 	lt = localtime(&date);
 	move(8, 0);
-	dp = rip;
-	while (*dp)
-	    addstr(*dp++);
+	for (i = 0; i < rogue_rip_count(); i++)
+	    addstr((char *) rogue_rip_line(i));
 	mvaddstr(17, center(killer), killer);
 	if (monst == 's' || monst == 'h')
 	    mvaddch(16, 32, ' ');

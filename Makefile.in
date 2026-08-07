@@ -101,6 +101,8 @@ man6dir = $(mandir)/man6
 HDRS     = rogue.h extern.h score.h
 HDRS_SRC = $(addprefix $(srcdir)/,$(HDRS))
 CSRC_DIR = $(srcdir)/src/c
+RUST_DIR = $(srcdir)/src/rust
+RUST_LIB = $(RUST_DIR)/target/release/librogue_rust.a
 OBJS1    = vers.$(O) extern.$(O) armor.$(O) chase.$(O) command.$(O) \
            daemon.$(O) daemons.$(O) fight.$(O) init.$(O) io.$(O) list.$(O) \
            mach_dep.$(O) main.$(O) mdport.$(O) misc.$(O) monsters.$(O) \
@@ -132,14 +134,18 @@ MISC     = Makefile.std LICENSE.TXT rogue54.sln rogue54.vcproj rogue.spec \
 %.o: $(CSRC_DIR)/%.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
     
-$(PROGRAM): $(HDRS_SRC) $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(LIBS) -o $@
+$(PROGRAM): $(RUST_LIB) $(HDRS_SRC) $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(RUST_LIB) $(LIBS) -o $@
+
+$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/rip.rs
+	cd $(RUST_DIR) && cargo build --release
     
 clean:
 	$(RM) $(OBJS1)
 	$(RM) $(OBJS2)
 	$(RM) core a.exe a.out a.exe.stackdump $(PROGRAM) $(PROGRAM).exe
 	$(RM) $(PROGRAM).tar $(PROGRAM).tar.gz $(PROGRAM).zip 
+	-$(RM) -r $(RUST_DIR)/target
 	-$(RM) -r $(DISTNAME)
     
 maintainer-clean:
