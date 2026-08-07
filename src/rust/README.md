@@ -11,6 +11,7 @@ This directory contains the Rust static library used by the C game via FFI.
 - `src/score.rs`: Scoreboard persistence (`rd_score`, `wr_score`).
 - `src/rings.rs`: Ring mechanics (`ring_on`, `ring_off`, `gethand`, `ring_eat`, `ring_num`).
 - `src/monsters.rs`: Monster behavior helpers and save checks (`randmonster`, `new_monster`, `wake_monster`, etc.).
+- `src/potions.rs`: Potion effects and visibility/status helpers (`quaff`, `is_magic`, `invis_on`, `turn_see`, `seen_stairs`, `raise_level`, `do_pot`).
 - `src/weapons.rs`: Weapon/projectile handling and formatting (`missile`, `do_motion`, `fall`, `wield`, `num`, etc.).
 - `src/armor.rs`: Armor equip/unequip and pass-turn helper functions (`wear`, `take_off`, `waste_time`).
 - `src/sticks.rs`: Wand/staff behavior and charge formatting (`fix_stick`, `do_zap`, `drain`, `fire_bolt`, `charge_str`).

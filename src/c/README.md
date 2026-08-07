@@ -34,7 +34,7 @@ Armor behavior helpers are implemented in the Rust FFI module at `src/rust/src/a
 - `things.c`: Common item/object routines used across item systems.
 - `pack.c`: Inventory/pack manipulation and pack-related helpers.
 - `list.c`: Generic list and item list operations.
-- `potions.c`: Potion effects and potion-specific handling.
+- `potions.c`: Replaced by the Rust FFI module at `src/rust/src/potions.rs`.
 - `scrolls.c`: Replaced by the Rust FFI module at `src/rust/src/scrolls.rs`.
 - `sticks.c`: Replaced by the Rust FFI module at `src/rust/src/sticks.rs`.
 

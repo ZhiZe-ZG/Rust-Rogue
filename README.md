@@ -341,7 +341,7 @@ src/c/chase.c          # Monster AI and pathfinding
 
 **Item System**:
 ```
-src/c/potions.c        # Potion types and effects
+src/rust/src/potions.rs # Potion types and effects (Rust FFI implementation)
 src/rust/src/scrolls.rs # Scroll types and effects (Rust FFI implementation)
 src/rust/src/sticks.rs # Wand/staff Rust FFI implementation
 src/c/things.c         # General item handling
@@ -483,7 +483,7 @@ main()
 2. **New Item Type**:
    - Add type constant to `rogue.h`
    - Add info structure (e.g., `pot_info[]` for potions)
-   - Implement effect in corresponding file (e.g., `potions.c`)
+   - Implement effect in the matching subsystem file or Rust FFI module (e.g., `src/rust/src/potions.rs`)
 
 3. **New Command**:
    - Add case in `command()` function in `command.c`
