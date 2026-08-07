@@ -1,6 +1,9 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 use std::ptr;
 
+/// Potion and status-effect handling for the Rust FFI bridge.
+/// These helpers implement the C-side potion logic so the game can call
+/// them through exported C entry points.
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
 
@@ -63,6 +66,8 @@ const AFTER: c_int = 2;
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
 
+/// Data structures mirrored from the C game so Rust can interact with
+/// the same in-memory layout expected by the FFI boundary.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CCoord {
@@ -155,6 +160,8 @@ struct PACT {
     pa_straight: *const c_char,
 }
 
+/// External C symbols that provide game state, UI helpers, and gameplay
+/// primitives used by the potion effects.
 unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
@@ -214,11 +221,13 @@ unsafe extern "C" {
     fn inch() -> c_int;
 }
 
+/// Cast a generic thing pointer to the monster portion of the union.
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
     tp as *mut CThingMonster
 }
 
+/// Cast a generic thing pointer to the object portion of the union.
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
     tp as *mut CThingObject
@@ -271,6 +280,8 @@ unsafe fn is_magic_local(obj: *mut CThing) -> bool {
     }
 }
 
+/// Shared implementation for potion effects that need the normal fuse/flag
+/// setup and knowledge tracking used by the C version.
 unsafe fn do_pot_impl(type_id: c_int, knowit: c_uchar) {
     let (flags, daemon, base_time, high_msg, straight_msg) = {
         let taste_ptr = (&raw mut prbuf) as *mut [c_char; 2048] as *mut c_char as *const c_char;
