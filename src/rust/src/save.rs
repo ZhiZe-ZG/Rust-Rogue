@@ -2,6 +2,10 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 use std::ptr;
 
+const MAXSTR: usize = 1024;
+const ESCAPE: c_int = 27;
+const QUIT: c_int = 1;
+
 #[repr(C)]
 pub struct CFile {
     _private: [u8; 0],
@@ -10,8 +14,17 @@ pub struct CFile {
 extern "C" {
     static mut LINES: c_int;
     static mut COLS: c_int;
+    static mut mpos: c_int;
+    static mut stdscr: *mut CWindow;
     static mut file_name: c_char;
     static mut version: c_char;
+
+    fn msg(fmt: *const c_char, ...);
+    fn readchar() -> c_int;
+    fn addstr(s: *const c_char) -> c_int;
+    fn refresh() -> c_int;
+    fn get_str(s: *mut c_char, win: *mut CWindow) -> c_int;
+    fn md_unlink(file: *mut c_char) -> c_int;
 
     fn mvcur(ly: c_int, lx: c_int, y: c_int, x: c_int) -> c_int;
     fn putchar(c: c_int) -> c_int;
@@ -19,13 +32,117 @@ extern "C" {
     fn resetltchars();
     fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int;
     fn fopen(path: *const c_char, mode: *const c_char) -> *mut CFile;
+    fn access(path: *const c_char, mode: c_int) -> c_int;
     fn md_ignoreallsignals();
     fn md_unlink_open_file(file: *mut c_char, inf: *mut CFile) -> c_int;
     fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
+    fn strerror(errnum: c_int) -> *const c_char;
+    fn __errno_location() -> *mut c_int;
     fn rs_save_file(savef: *mut CFile);
     fn fflush(stream: *mut CFile) -> c_int;
     fn fclose(stream: *mut CFile) -> c_int;
     fn exit(status: c_int) -> !;
+}
+
+#[repr(C)]
+pub struct CWindow {
+    _private: [u8; 0],
+}
+
+unsafe fn copy_cstr(dst: *mut c_char, src: *const c_char, max: usize) {
+    let mut i = 0usize;
+    while i + 1 < max {
+        let ch = ptr::read(src.add(i));
+        ptr::write(dst.add(i), ch);
+        if ch == 0 {
+            return;
+        }
+        i += 1;
+    }
+    ptr::write(dst.add(max - 1), 0);
+}
+
+/// Implements the interactive save command flow and then delegates the actual write to save_file.
+#[no_mangle]
+pub unsafe extern "C" fn save_game() {
+    let mut savef: *mut CFile;
+    let mut c: c_int;
+    let mut buf = [0 as c_char; MAXSTR];
+    let file_name_ptr = &raw mut file_name as *mut c_char;
+
+    mpos = 0;
+
+    'over: loop {
+        if ptr::read(file_name_ptr) != 0 {
+            loop {
+                msg(c"save file (%s)? ".as_ptr(), file_name_ptr);
+                c = readchar();
+                mpos = 0;
+                if c == ESCAPE {
+                    msg(c"".as_ptr());
+                    return;
+                }
+                if c == 'n' as c_int || c == 'N' as c_int || c == 'y' as c_int || c == 'Y' as c_int {
+                    break;
+                }
+                msg(c"please answer Y or N".as_ptr());
+            }
+
+            if c == 'y' as c_int || c == 'Y' as c_int {
+                addstr(c"Yes\n".as_ptr());
+                refresh();
+                copy_cstr(buf.as_mut_ptr(), file_name_ptr, MAXSTR);
+                // Continue to file-open logic using current buffer value.
+            } else {
+                // Fall through to prompt for a new name.
+                buf[0] = 0;
+            }
+        } else {
+            buf[0] = 0;
+        }
+
+        loop {
+            if buf[0] == 0 {
+                mpos = 0;
+                msg(c"file name: ".as_ptr());
+                if get_str(buf.as_mut_ptr(), stdscr) == QUIT {
+                    msg(c"".as_ptr());
+                    return;
+                }
+                mpos = 0;
+            }
+
+            if access(buf.as_ptr(), 0) == 0 {
+                loop {
+                    msg(c"File exists.  Do you wish to overwrite it?".as_ptr());
+                    mpos = 0;
+                    c = readchar();
+                    if c == ESCAPE {
+                        msg(c"".as_ptr());
+                        return;
+                    }
+                    if c == 'y' as c_int || c == 'Y' as c_int {
+                        break;
+                    }
+                    if c == 'n' as c_int || c == 'N' as c_int {
+                        continue 'over;
+                    }
+                    msg(c"Please answer Y or N".as_ptr());
+                }
+                msg(c"file name: %s".as_ptr(), buf.as_ptr());
+                md_unlink(file_name_ptr);
+            }
+
+            copy_cstr(file_name_ptr, buf.as_ptr(), MAXSTR);
+            savef = fopen(file_name_ptr, c"w".as_ptr());
+            if !savef.is_null() {
+                save_file(savef);
+            }
+
+            msg(c"%s".as_ptr(), strerror(*__errno_location()));
+            buf[0] = 0;
+        }
+    }
 }
 
 /// Writes the save-file header and hands off the actual save payload to the existing C helpers.
