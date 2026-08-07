@@ -23,9 +23,16 @@ rogue.me
 *.dll
 *.exe
 
+# Out-of-tree build directories
+build/
+build-*/
+cmake-build-*/
+
 # Rogue binaries and runtime files
 rogue
 rogue54
+*/rogue
+*/rogue54
 *.lck
 *.scr
 

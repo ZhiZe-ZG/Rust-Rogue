@@ -28,8 +28,10 @@
 **Before you begin**: Make sure you have installed all [required prerequisites](#prerequisites) (C compiler, make, and ncurses development library).
 
 ```bash
-# Configure and build
-./configure
+# Configure and build in a separate directory
+mkdir -p build
+cd build
+../configure
 make
 
 # Run the game
@@ -40,7 +42,7 @@ make
 
 **Note**: If you encounter compilation errors, especially related to ncurses compatibility, see [BUILD_ISSUES.md](BUILD_ISSUES.md) for known issues and workarounds.
 
-**Troubleshooting**: If `./configure` fails with "curses library not found", you need to install the ncurses development package (see [Prerequisites](#prerequisites)).
+**Troubleshooting**: If `../configure` (from `build/`) or `./configure` (from repository root) fails with "curses library not found", you need to install the ncurses development package (see [Prerequisites](#prerequisites)).
 
 ---
 
@@ -96,19 +98,25 @@ This codebase supports multiple platforms:
 - **DOS** (DJGPP)
 - **Cygwin**
 
-AArch64 systems, including NixOS virtual machines running on Apple Silicon hosts, use the standard `./configure` and `make` build process. No architecture-specific build flags are required for a native build.
+AArch64 systems, including NixOS virtual machines running on Apple Silicon hosts, use the standard configure and make process (including out-of-tree builds). No architecture-specific build flags are required for a native build.
 ---
 
 ## Building from Source
 
 ### Standard Build (Recommended)
 
+This project supports out-of-tree builds. Keeping generated files in a dedicated build directory helps keep the source tree clean.
+
 The project uses Autotools for configuration. The build process depends on whether the `configure` script already exists:
 
 **If `configure` script exists** (most common case):
 ```bash
+# Create and enter build directory
+mkdir -p build
+cd build
+
 # Configure the build system
-./configure
+../configure
 
 # Compile
 make
@@ -122,8 +130,12 @@ sudo make install
 # Generate configure script (requires autoconf, automake, m4)
 autoreconf -fiv
 
+# Create and enter build directory
+mkdir -p build
+cd build
+
 # Configure the build system
-./configure
+../configure
 
 # Compile
 make
@@ -133,6 +145,8 @@ sudo make install
 ```
 
 **Note**: Most source distributions include the `configure` script, so you typically only need `autoreconf` if you're building directly from a git repository that doesn't include generated files.
+
+**Note**: `build/` is ignored by git in this repository, so object files and generated binaries will not clutter source-control status.
 
 **Note**: The executable name and other build outputs are determined by the `configure` script based on the codebase configuration. If you're using `Makefile.std` directly (manual build), the default executable name is `rogue54`, whereas `configure` defaults to `rogue`. Always check the actual output of your build process to confirm the executable name.
 

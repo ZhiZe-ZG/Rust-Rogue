@@ -19,6 +19,7 @@
 DISTNAME=@PACKAGE_TARNAME@@PACKAGE_VERSION@
 PACKAGE_TARNAME = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 PROGRAM=@PROGRAM@
+srcdir=@srcdir@
 
 O=o
 
@@ -59,7 +60,7 @@ LOCKFILE = @LOCKFILE@
 GROUPOWNER = @GROUPOWNER@
 
 #CPPFLAGS=-DHAVE_CONFIG_H
-CPPFLAGS =@DEFS@ @CPPFLAGS@
+CPPFLAGS =@DEFS@ @CPPFLAGS@ -I$(srcdir)
 
 #DISTFILE = $(PROGRAM)
 DISTFILE = $(DISTNAME)-@TARGET@
@@ -98,6 +99,7 @@ man6dir = $(mandir)/man6
 ############################################################################### 
 
 HDRS     = rogue.h extern.h score.h
+HDRS_SRC = $(addprefix $(srcdir)/,$(HDRS))
 OBJS1    = vers.$(O) extern.$(O) armor.$(O) chase.$(O) command.$(O) \
            daemon.$(O) daemons.$(O) fight.$(O) init.$(O) io.$(O) list.$(O) \
            mach_dep.$(O) main.$(O) mdport.$(O) misc.$(O) monsters.$(O) \
@@ -124,12 +126,12 @@ MISC     = Makefile.std LICENSE.TXT rogue54.sln rogue54.vcproj rogue.spec \
 .SUFFIXES: .obj
 
 .c.obj:
-	$(CC) $(CFLAGS) $(CPPFLAGS) /c $*.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) /c $(srcdir)/$*.c
     
-.c.o:
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c $*.c
+%.o: $(srcdir)/%.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
     
-$(PROGRAM): $(HDRS) $(OBJS)
+$(PROGRAM): $(HDRS_SRC) $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(LIBS) -o $@
     
 clean:
@@ -149,28 +151,28 @@ maintainer-clean:
 	$(RM) $(PROGRAM).scr $(PROGRAM).lck
 
 stddocs:
-	sed -e 's/@PROGRAM@/rogue/' -e 's/@SCOREFILE@/rogue.scr/' rogue.6.in > rogue.6
-	sed -e 's/@PROGRAM@/rogue/' -e 's/@SCOREFILE@/rogue.scr/' rogue.me.in > rogue.me
-	sed -e 's/@PROGRAM@/rogue/' -e 's/@SCOREFILE@/rogue.scr/' rogue.html.in > rogue,html
-	sed -e 's/@PROGRAM@/rogue/' -e 's/@SCOREFILE@/rogue.scr/' rogue.doc.in > rogue.doc
-	sed -e 's/@PROGRAM@/rogue/' -e 's/@SCOREFILE@/rogue.scr/' rogue.cat.in > rogue.cat
+	sed -e 's/@PROGRAM@/rogue/' -e 's/@SCOREFILE@/rogue.scr/' $(srcdir)/rogue.6.in > rogue.6
+	sed -e 's/@PROGRAM@/rogue/' -e 's/@SCOREFILE@/rogue.scr/' $(srcdir)/rogue.me.in > rogue.me
+	sed -e 's/@PROGRAM@/rogue/' -e 's/@SCOREFILE@/rogue.scr/' $(srcdir)/rogue.html.in > rogue,html
+	sed -e 's/@PROGRAM@/rogue/' -e 's/@SCOREFILE@/rogue.scr/' $(srcdir)/rogue.doc.in > rogue.doc
+	sed -e 's/@PROGRAM@/rogue/' -e 's/@SCOREFILE@/rogue.scr/' $(srcdir)/rogue.cat.in > rogue.cat
 
 dist.src:
 	$(MAKE) $(MAKEFILE) clean
 	mkdir $(DISTNAME)
-	cp $(CFILES) $(HDRS) $(MISC) $(AFILES) $(DISTNAME)
+	cp $(addprefix $(srcdir)/,$(CFILES)) $(addprefix $(srcdir)/,$(HDRS)) $(addprefix $(srcdir)/,$(MISC)) $(addprefix $(srcdir)/,$(AFILES)) $(DISTNAME)
 	tar cf $(DISTNAME)-src.tar $(DISTNAME)
 	gzip -f $(DISTNAME)-src.tar
 	rm -fr $(DISTNAME)
 
-findpw: findpw.c xcrypt.o mdport.o xcrypt.o
-	$(CC) -s -o findpw findpw.c xcrypt.o mdport.o -lcurses
+findpw: $(srcdir)/findpw.c xcrypt.o mdport.o xcrypt.o
+	$(CC) -s -o findpw $(srcdir)/findpw.c xcrypt.o mdport.o -lcurses
 
 scedit: scedit.o scmisc.o vers.o mdport.o xcrypt.o
 	$(CC) -s -o scedit vers.o scedit.o scmisc.o mdport.o xcrypt.o -lcurses
 
 scmisc.o scedit.o:
-	$(CC) -O -c $(SF) $*.c
+	$(CC) -O -c $(SF) $(srcdir)/$*.c
 
 $(PROGRAM).doc: rogue.me
 	if test "x$(GROFF)" != "x" -a "x$(SED)" != "x" ; then \
@@ -187,7 +189,7 @@ $(PROGRAM).cat: rogue.6
 	fi
 
 dist: clean $(PROGRAM)
-	tar cf $(DISTFILE).tar $(PROGRAM) LICENSE.TXT $(DOCS)
+	tar cf $(DISTFILE).tar $(PROGRAM) $(DOCS) $(srcdir)/LICENSE.TXT
 	gzip -f $(DISTFILE).tar
 
 install: $(PROGRAM)
@@ -205,7 +207,7 @@ install: $(PROGRAM)
 	-$(INSTALL) -m 0644 rogue.doc $(DESTDIR)$(docdir)/$(PROGRAM).doc
 	-$(INSTALL) -m 0644 rogue.html $(DESTDIR)$(docdir)/$(PROGRAM).html
 	-$(INSTALL) -m 0644 rogue.cat $(DESTDIR)$(docdir)/$(PROGRAM).cat
-	-$(INSTALL) -m 0644 LICENSE.TXT $(DESTDIR)$(docdir)/LICENSE.TXT
+	-$(INSTALL) -m 0644 $(srcdir)/LICENSE.TXT $(DESTDIR)$(docdir)/LICENSE.TXT
 	-$(INSTALL) -m 0644 rogue.me $(DESTDIR)$(docdir)/$(PROGRAM).me
 	-if test ! -f $(DESTDIR)$(LOCKFILE)  ; then $(INSTALL) -m 0666 test $(DESTDIR)$(LOCKFILE)  ; $(RM) $(DESTDIR)$(LOCKFILE) ; fi
 	-$(RM) test
