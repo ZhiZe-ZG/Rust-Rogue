@@ -30,6 +30,7 @@ unsafe extern "C" {
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
+/// Reads the on-disk scoreboard into the caller-provided score array using the legacy file format.
 #[no_mangle]
 pub unsafe extern "C" fn rd_score(top_ten: *mut Score) {
     let mut scoreline = [0 as c_char; SCORELINE_LEN];
@@ -59,6 +60,7 @@ pub unsafe extern "C" fn rd_score(top_ten: *mut Score) {
     rewind(scoreboard);
 }
 
+/// Serializes the caller-provided score array back into the legacy scoreboard file format.
 #[no_mangle]
 pub unsafe extern "C" fn wr_score(top_ten: *mut Score) {
     let mut scoreline = [0 as c_char; SCORELINE_LEN];

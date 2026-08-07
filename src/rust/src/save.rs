@@ -102,6 +102,7 @@ pub struct CWindow {
     _private: [u8; 0],
 }
 
+/// Copies a C string into a fixed-size destination buffer and always preserves a trailing NUL.
 unsafe fn copy_cstr(dst: *mut c_char, src: *const c_char, max: usize) {
     let mut i = 0usize;
     while i + 1 < max {
@@ -115,6 +116,7 @@ unsafe fn copy_cstr(dst: *mut c_char, src: *const c_char, max: usize) {
     ptr::write(dst.add(max - 1), 0);
 }
 
+/// Checks the restored player state and reports whether the saved game is already dead.
 unsafe fn restore_player_dead() -> bool {
     player.t_stats.s_hpt <= 0
 }
@@ -233,7 +235,7 @@ pub unsafe extern "C" fn save_file(savef: *mut CFile) {
     exit(0)
 }
 
-/// Restores a saved game and resumes play.
+/// Restores a saved game from disk, rebuilds runtime state, and resumes the main game loop.
 #[no_mangle]
 pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c_uchar {
     let mut buf = [0 as c_char; MAXSTR];
@@ -309,7 +311,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     0
 }
 
-/// Handles signal-triggered autosave by reusing the regular save-file writer.
+/// Handles signal-triggered autosave by reopening the current save file and delegating to save_file.
 #[no_mangle]
 pub unsafe extern "C" fn auto_save(sig: c_int) {
     let _ = sig;
