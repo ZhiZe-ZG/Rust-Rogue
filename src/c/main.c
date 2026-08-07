@@ -63,6 +63,7 @@ main(int argc, char **argv, char **envp)
 #endif
 	dnum = lowtime + md_getpid();
     seed = dnum;
+    set_seed(seed);
 
     open_score();
 
@@ -176,16 +177,6 @@ fatal(char *s)
     refresh();
     endwin();
     my_exit(0);
-}
-
-/*
- * rnd:
- *	Pick a very random number.
- */
-int
-rnd(int range)
-{
-    return range == 0 ? 0 : abs((int) RN) % range;
 }
 
 /*

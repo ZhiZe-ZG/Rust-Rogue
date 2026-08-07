@@ -638,6 +638,7 @@ void	score(int amount, int flags, char monst);
 void	search();
 void	set_know(THING *obj, struct obj_info *info);
 void	set_oldch(THING *tp, coord *cp);
+void	set_seed(int seed);
 void	setup();
 void	shell();
 bool	show_floor();

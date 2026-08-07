@@ -7,3 +7,6 @@ edition = "2021"
 name = "rogue_rust"
 path = "src/lib.rs"
 crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+rand = "0.8"

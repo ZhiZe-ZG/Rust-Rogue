@@ -80,10 +80,10 @@ score(int amount, int flags, char monst)
 	scp->sc_score = 0;
 	for (i = 0; i < MAXSTR; i++)
 	    scp->sc_name[i] = (unsigned char) rnd(255);
-	scp->sc_flags = RN;
-	scp->sc_level = RN;
-	scp->sc_monster = (unsigned short) RN;
-	scp->sc_uid = RN;
+	scp->sc_flags = rnd(0x10000);
+	scp->sc_level = rnd(0x10000);
+	scp->sc_monster = (unsigned short) rnd(0x10000);
+	scp->sc_uid = rnd(0x10000);
     }
 
     signal(SIGINT, SIG_DFL);
@@ -174,9 +174,9 @@ score(int amount, int flags, char monst)
 		    sc2->sc_score = 0;
 		    for (i = 0; i < MAXSTR; i++)
 			sc2->sc_name[i] = (char) rnd(255);
-		    sc2->sc_flags = RN;
-		    sc2->sc_level = RN;
-		    sc2->sc_monster = (unsigned short) RN;
+		    sc2->sc_flags = rnd(0x10000);
+		    sc2->sc_level = rnd(0x10000);
+		    sc2->sc_monster = (unsigned short) rnd(0x10000);
 		    scp--;
 		}
 	    }

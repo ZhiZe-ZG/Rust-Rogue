@@ -106,7 +106,6 @@
 #define MAXLINES	32	/* maximum number of screen lines used */
 #define MAXCOLS		80	/* maximum number of screen columns used */
 
-#define RN		(((seed = seed*11109+13849) >> 16) & 0xffff)
 #ifdef CTRL
 #undef CTRL
 #endif

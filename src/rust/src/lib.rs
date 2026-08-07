@@ -2,6 +2,7 @@ pub mod armor;
 pub mod potions;
 pub mod player;
 pub mod rndmove;
+pub mod rnd;
 pub mod rooms;
 pub mod trap;
 pub mod rip;
