@@ -548,8 +548,6 @@ void	drain();
 void	draw_room(struct room *rp);
 void	drop();
 void	eat();
-size_t  encread(char *start, size_t size, FILE *inf);
-size_t	encwrite(char *start, size_t size, FILE *outf);
 int	endmsg();
 void	enter_room(coord *cp);
 void	erase_lamp(coord *pos, struct room *rp);

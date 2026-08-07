@@ -17,7 +17,7 @@ extern "C" {
     fn endwin() -> c_int;
     fn resetltchars();
     fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int;
-    fn encwrite(start: *mut c_char, size: usize, outf: *mut CFile) -> usize;
+    fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
     fn rs_save_file(savef: *mut CFile);
     fn fflush(stream: *mut CFile) -> c_int;
     fn fclose(stream: *mut CFile) -> c_int;
@@ -39,14 +39,15 @@ pub unsafe extern "C" fn save_file(savef: *mut CFile) {
     resetltchars();
     md_chmod(&raw mut file_name as *mut c_char, 0o400);
 
-    encwrite(
-        version_ptr as *mut c_char,
+    fwrite(
+        version_ptr as *const u8,
+        1,
         CStr::from_ptr(version_ptr).to_bytes_with_nul().len(),
         savef,
     );
 
     buf[..header.len()].copy_from_slice(header.as_bytes());
-    encwrite(buf.as_mut_ptr() as *mut c_char, buf.len(), savef);
+    fwrite(buf.as_ptr(), 1, buf.len(), savef);
 
     rs_save_file(savef);
     fflush(savef);

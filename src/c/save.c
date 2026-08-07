@@ -22,7 +22,7 @@
 
 typedef struct stat STAT;
 
-extern char version[], encstr[];
+extern char version[];
 
 static STAT sbuf;
 
@@ -160,13 +160,13 @@ restore(char *file, char **envp)
     syml = is_symlink(file);
 
     fflush(stdout);
-    encread(buf, (unsigned) strlen(version) + 1, inf);
+    fread(buf, 1, (unsigned) strlen(version) + 1, inf);
     if (strcmp(buf, version) != 0)
     {
 	printf("Sorry, saved game is out of date.\n");
 	return FALSE;
     }
-    encread(buf,80,inf);
+    fread(buf, 1, 80, inf);
     sscanf(buf,"%d x %d\n", &lines, &cols);
 
     initscr();                          /* Start up cursor package */
@@ -243,73 +243,6 @@ restore(char *file, char **envp)
     return(0);
 }
 
-/*
- * encwrite:
- *	Perform an encrypted write
- */
-
-size_t
-encwrite(char *start, size_t size, FILE *outf)
-{
-    char *e1, *e2, fb;
-    int temp;
-    extern char statlist[];
-    size_t o_size = size;
-    e1 = encstr;
-    e2 = statlist;
-    fb = 0;
-
-    while(size)
-    {
-	if (putc(*start++ ^ *e1 ^ *e2 ^ fb, outf) == EOF)
-            break;
-
-	temp = *e1++;
-	fb = fb + ((char) (temp * *e2++));
-	if (*e1 == '\0')
-	    e1 = encstr;
-	if (*e2 == '\0')
-	    e2 = statlist;
-	size--;
-    }
-
-    return(o_size - size);
-}
-
-/*
- * encread:
- *	Perform an encrypted read
- */
-size_t
-encread(char *start, size_t size, FILE *inf)
-{
-    char *e1, *e2, fb;
-    int temp;
-    size_t read_size;
-    extern char statlist[];
-
-    fb = 0;
-
-    if ((read_size = fread(start,1,size,inf)) == 0 || read_size == -1)
-	return(read_size);
-
-    e1 = encstr;
-    e2 = statlist;
-
-    while (size--)
-    {
-	*start++ ^= *e1 ^ *e2 ^ fb;
-	temp = *e1++;
-	fb = fb + (char)(temp * *e2++);
-	if (*e1 == '\0')
-	    e1 = encstr;
-	if (*e2 == '\0')
-	    e2 = statlist;
-    }
-
-    return(read_size);
-}
-
 static char scoreline[100];
 /*
  * read_scrore
@@ -327,8 +260,8 @@ rd_score(SCORE *top_ten)
 
 	for(i = 0; i < numscores; i++)
     {
-        encread(top_ten[i].sc_name, MAXSTR, scoreboard);
-        encread(scoreline, 100, scoreboard);
+        fread(top_ten[i].sc_name, 1, MAXSTR, scoreboard);
+        fread(scoreline, 1, 100, scoreboard);
         sscanf(scoreline, " %u %d %u %hu %d %x \n",
             &top_ten[i].sc_uid, &top_ten[i].sc_score,
             &top_ten[i].sc_flags, &top_ten[i].sc_monster,
@@ -355,12 +288,12 @@ wr_score(SCORE *top_ten)
     for(i = 0; i < numscores; i++)
     {
           memset(scoreline,0,100);
-          encwrite(top_ten[i].sc_name, MAXSTR, scoreboard);
+          fwrite(top_ten[i].sc_name, 1, MAXSTR, scoreboard);
           sprintf(scoreline, " %u %d %u %hu %d %x \n",
               top_ten[i].sc_uid, top_ten[i].sc_score,
               top_ten[i].sc_flags, top_ten[i].sc_monster,
               top_ten[i].sc_level, top_ten[i].sc_time);
-          encwrite(scoreline,100,scoreboard);
+          fwrite(scoreline, 1, 100, scoreboard);
     }
 
 	rewind(scoreboard); 

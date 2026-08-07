@@ -78,7 +78,7 @@ rs_write(FILE *savef, void *ptr, size_t size)
     if (write_error)
         return(WRITESTAT);
 
-    if (encwrite(ptr, size, savef) != size)
+    if (fwrite(ptr, 1, size, savef) != size)
         write_error = 1;
 
     return(WRITESTAT);
@@ -90,7 +90,7 @@ rs_read(FILE *inf, void *ptr, size_t size)
     if (read_error || format_error)
         return(READSTAT);
 
-    if (encread(ptr, size, inf) != size)
+    if (fread(ptr, 1, size, inf) != size)
         read_error = 1;
 
     return(READSTAT);
