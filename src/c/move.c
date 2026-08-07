@@ -396,30 +396,4 @@ bad:
     return &ret;
 }
 
-/*
- * rust_armor:
- *	Rust the given armor, if it is a legal kind to rust, and we
- *	aren't wearing a magic ring.
- */
-
-void
-rust_armor(THING *arm)
-{
-    if (arm == NULL || arm->o_type != ARMOR || arm->o_which == LEATHER ||
-	arm->o_arm >= 9)
-	    return;
-
-    if ((arm->o_flags & ISPROT) || ISWEARING(R_SUSTARM))
-    {
-	if (!to_death)
-	    msg("the rust vanishes instantly");
-    }
-    else
-    {
-	arm->o_arm++;
-	if (!terse)
-	    msg("your armor appears to be weaker now. Oh my!");
-	else
-	    msg("your armor weakens");
-    }
-}
+/* rust_armor is implemented in Rust: src/rust/src/armor.rs. */

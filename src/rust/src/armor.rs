@@ -2,6 +2,10 @@ use std::os::raw::{c_char, c_int, c_uchar};
 
 const ARMOR: c_int = ']' as c_int;
 const ISKNOW: c_int = 0o000002;
+const ISPROT: c_int = 0o000040;
+const LEFT: usize = 0;
+const RIGHT: usize = 1;
+const R_SUSTARM: c_int = 13;
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
 
@@ -43,6 +47,8 @@ unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
     static mut cur_armor: *mut CThing;
+    static mut cur_ring: [*mut CThing; 2];
+    static mut to_death: c_uchar;
 
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
     fn addmsg(fmt: *const c_char, ...);
@@ -58,6 +64,12 @@ unsafe extern "C" {
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
     tp as *mut CThingObject
+}
+
+#[inline]
+unsafe fn ring_is(which: usize, ring_type: c_int) -> bool {
+    let ring = cur_ring[which];
+    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
 /// Equips selected armor if valid and no armor is already worn.
@@ -127,4 +139,26 @@ pub unsafe extern "C" fn waste_time() {
     do_fuses(spread(1));
     do_daemons(spread(2));
     do_fuses(spread(2));
+}
+
+/// rust_armor:
+/// Rust the given armor if it is a legal kind to rust.
+#[no_mangle]
+pub unsafe extern "C" fn rust_armor(arm: *mut CThing) {
+    if arm.is_null() || (*thing_o(arm)).o_type != ARMOR || (*thing_o(arm)).o_which == 0 || (*thing_o(arm)).o_arm >= 9 {
+        return;
+    }
+
+    if ((*thing_o(arm)).o_flags & ISPROT) != 0 || ring_is(LEFT, R_SUSTARM) || ring_is(RIGHT, R_SUSTARM) {
+        if to_death == 0 {
+            msg(c"the rust vanishes instantly".as_ptr());
+        }
+    } else {
+        (*thing_o(arm)).o_arm += 1;
+        if terse == 0 {
+            msg(c"your armor appears to be weaker now. Oh my!".as_ptr());
+        } else {
+            msg(c"your armor weakens".as_ptr());
+        }
+    }
 }
