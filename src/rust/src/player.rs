@@ -1,4 +1,5 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use crate::rndmove::rndmove;
 
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
@@ -114,6 +115,11 @@ pub struct CPlace {
     pub p_monst: *mut CThing,
 }
 
+#[repr(C)]
+pub struct CWindow {
+    _private: [u8; 0],
+}
+
 unsafe extern "C" {
     static mut after: c_uchar;
     static mut count: c_int;
@@ -133,20 +139,20 @@ unsafe extern "C" {
     static mut player: CThing;
     static mut runch: c_char;
     static mut places: [CPlace; 32 * 80];
+    static mut stdscr: *mut CWindow;
 
     fn msg(fmt: *const c_char, ...);
     fn rnd(range: c_int) -> c_int;
     fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
-    fn turn_ok(y: c_int, x: c_int) -> c_uchar;
-    fn turnref();
     fn enter_room(cp: *mut CCoord);
     fn leave_room(cp: *mut CCoord);
     fn be_trapped(tc: *mut CCoord) -> c_char;
     fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;
     fn roomin(cp: *mut CCoord) -> *mut CRoom;
     fn floor_at() -> c_char;
-    fn rndmove(who: *mut CThing) -> *mut CCoord;
     fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
+    fn leaveok(win: *mut CWindow, flag: c_int) -> c_int;
+    fn refresh() -> c_int;
 }
 
 #[inline]
@@ -219,14 +225,43 @@ unsafe fn is_upper(ch: c_char) -> bool {
     (ch as u8).is_ascii_uppercase()
 }
 
+/// turnref:
+/// Decide whether to refresh at a passage turning or not.
+#[no_mangle]
+pub unsafe extern "C" fn turnref() {
+    let hero = hero_pos();
+    let place = place_at(hero.y, hero.x);
+    if ((*place).p_flags as u8 & F_SEEN as u8) == 0 {
+        if jump != 0 {
+            leaveok(stdscr, TRUE as c_int);
+            refresh();
+            leaveok(stdscr, FALSE as c_int);
+        }
+        (*place).p_flags = (((*place).p_flags as u8) | (F_SEEN as u8)) as c_char;
+    }
+}
+
+/// turn_ok:
+/// Decide whether it is legal to turn onto the given space.
+#[no_mangle]
+pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
+    let place = place_at(y, x);
+    let flags = (*place).p_flags as u8;
+    if (*place).p_ch == DOOR || (flags & (F_REAL as u8 | F_PASS as u8)) == (F_REAL as u8 | F_PASS as u8) {
+        TRUE
+    } else {
+        0
+    }
+}
+
 #[inline]
-unsafe fn move_stuff(nh: &mut CCoord, fl: c_char) {
+unsafe fn move_stuff(next_pos: &mut CCoord, fl: c_char) {
     let hero = hero_pos();
     mvaddch(hero.y, hero.x, floor_at() as c_uint);
     if (fl as u8 & F_PASS as u8) != 0 && chat_at(oldpos.y, oldpos.x) == DOOR {
-        leave_room(nh);
+        leave_room(next_pos);
     }
-    *hero_ptr() = *nh;
+    *hero_ptr() = *next_pos;
 }
 
 #[inline]
@@ -274,6 +309,10 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
     }
 }
 
+/// Global "next hero position" used by the save/load subsystem (state.c).
+#[no_mangle]
+pub static mut nh: CCoord = CCoord { x: 0, y: 0 };
+
 /// do_run:
 /// Start the hero running in the chosen direction.
 #[no_mangle]
@@ -287,7 +326,7 @@ pub unsafe extern "C" fn do_run(ch: c_char) {
 /// Check to see that a move is legal. If it is, handle the consequences.
 #[no_mangle]
 pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
-    let mut nh = CCoord { x: 0, y: 0 };
+    let mut next_pos = CCoord { x: 0, y: 0 };
     let mut current_dy = dy;
     let mut current_dx = dx;
     let hero = hero_pos();
@@ -302,23 +341,23 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     }
 
     if player_has(ISHUH) && rnd(5) != 0 {
-        nh = *rndmove(&raw mut player);
-        if coord_eq(nh, hero) {
+        next_pos = *rndmove(&raw mut player);
+        if coord_eq(next_pos, hero) {
             after = FALSE;
             running = FALSE;
             to_death = FALSE;
             return;
         }
     } else {
-        nh.y = hero.y + current_dy;
-        nh.x = hero.x + current_dx;
+        next_pos.y = hero.y + current_dy;
+        next_pos.x = hero.x + current_dx;
     }
 
     loop {
-        if nh.x < 0 || nh.x >= NUMCOLS || nh.y <= 0 || nh.y >= NUMLINES - 1 {
+        if next_pos.x < 0 || next_pos.x >= NUMCOLS || next_pos.y <= 0 || next_pos.y >= NUMLINES - 1 {
             if try_passgo_turn(&mut current_dy, &mut current_dx) {
-                nh.y = hero.y + current_dy;
-                nh.x = hero.x + current_dx;
+                next_pos.y = hero.y + current_dy;
+                next_pos.x = hero.x + current_dx;
                 continue;
             }
             running = FALSE;
@@ -328,31 +367,29 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         break;
     }
 
-    if diag_ok(hero_ptr(), &mut nh) == 0 {
+    if diag_ok(hero_ptr(), &mut next_pos) == 0 {
         after = FALSE;
         running = FALSE;
         return;
     }
 
-    if running != 0 && coord_eq(hero, nh) {
-        after = FALSE;
+    if running != 0 && coord_eq(hero, next_pos) {
         running = FALSE;
     }
 
-    fl = flat_at(nh.y, nh.x);
-    ch = winat(nh.y, nh.x);
+    fl = flat_at(next_pos.y, next_pos.x);
+    ch = winat(next_pos.y, next_pos.x);
 
     if (fl as u8 & F_REAL as u8) == 0 && ch == FLOOR {
         if !player_has(ISLEVIT) {
-            set_chat(nh.y, nh.x, TRAP);
-            add_flat_flag(nh.y, nh.x, F_REAL);
+            set_chat(next_pos.y, next_pos.x, TRAP);
+            add_flat_flag(next_pos.y, next_pos.x, F_REAL);
             ch = TRAP;
         }
     } else if player_has(ISHELD) && ch != b'F' as c_char {
         msg(c"you are being held".as_ptr());
         return;
     }
-
     match ch {
         SPACE | H_WALL | V_WALL => {
             running = FALSE;
@@ -361,46 +398,46 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         DOOR => {
             running = FALSE;
             if (flat_at(hero.y, hero.x) as u8 & F_PASS as u8) != 0 {
-                enter_room(&mut nh);
+                enter_room(&mut next_pos);
             }
-            move_stuff(&mut nh, fl);
+            move_stuff(&mut next_pos, fl);
         }
         TRAP => {
-            let trap = be_trapped(&mut nh);
+            let trap = be_trapped(&mut next_pos);
             if trap == T_DOOR || trap == T_TELEP {
                 return;
             }
-            move_stuff(&mut nh, fl);
+            move_stuff(&mut next_pos, fl);
         }
         PASSAGE => {
             (*thing_t(&raw mut player)).t_room = roomin(hero_ptr());
-            move_stuff(&mut nh, fl);
+            move_stuff(&mut next_pos, fl);
         }
         FLOOR => {
             if (fl as u8 & F_REAL as u8) == 0 {
                 be_trapped(hero_ptr());
             }
-            move_stuff(&mut nh, fl);
+            move_stuff(&mut next_pos, fl);
         }
         STAIRS => {
             seenstairs = TRUE;
             running = FALSE;
-            if is_upper(ch) || !(*place_at(nh.y, nh.x)).p_monst.is_null() {
-                fight(&mut nh, cur_weapon, FALSE);
+            if is_upper(ch) || !(*place_at(next_pos.y, next_pos.x)).p_monst.is_null() {
+                fight(&mut next_pos, cur_weapon, FALSE);
             } else {
                 take = ch;
-                move_stuff(&mut nh, fl);
+                move_stuff(&mut next_pos, fl);
             }
         }
         _ => {
             running = FALSE;
-            if is_upper(ch) || !(*place_at(nh.y, nh.x)).p_monst.is_null() {
-                fight(&mut nh, cur_weapon, FALSE);
+            if is_upper(ch) || !(*place_at(next_pos.y, next_pos.x)).p_monst.is_null() {
+                fight(&mut next_pos, cur_weapon, FALSE);
             } else {
                 if ch != STAIRS {
                     take = ch;
                 }
-                move_stuff(&mut nh, fl);
+                move_stuff(&mut next_pos, fl);
             }
         }
     }
