@@ -343,7 +343,7 @@ src/c/chase.c          # Monster AI and pathfinding
 ```
 src/c/potions.c        # Potion types and effects
 src/c/scrolls.c        # Scroll types and effects
-src/c/sticks.c         # Wand/staff types and effects
+src/rust/src/sticks.rs # Wand/staff Rust FFI implementation
 src/c/things.c         # General item handling
 ```
 

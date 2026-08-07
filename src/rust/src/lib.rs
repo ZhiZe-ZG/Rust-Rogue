@@ -5,3 +5,4 @@ pub mod save;
 pub mod score;
 pub mod monsters;
 pub mod weapons;
+pub mod sticks;

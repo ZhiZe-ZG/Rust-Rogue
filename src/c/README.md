@@ -36,7 +36,7 @@ Armor behavior helpers are implemented in the Rust FFI module at `src/rust/src/a
 - `list.c`: Generic list and item list operations.
 - `potions.c`: Potion effects and potion-specific handling.
 - `scrolls.c`: Scroll effects and scroll-specific handling.
-- `sticks.c`: Wand/staff effects and stick-specific handling.
+- `sticks.c`: Replaced by the Rust FFI module at `src/rust/src/sticks.rs`.
 
 Ring mechanics are implemented in the Rust FFI module at `src/rust/src/rings.rs`.
 

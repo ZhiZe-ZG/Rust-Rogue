@@ -324,10 +324,6 @@
 				>
 			</File>
 			<File
-				RelativePath="sticks.c"
-				>
-			</File>
-			<File
 				RelativePath="things.c"
 				>
 			</File>

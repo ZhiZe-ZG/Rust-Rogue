@@ -13,6 +13,7 @@ This directory contains the Rust static library used by the C game via FFI.
 - `src/monsters.rs`: Monster behavior helpers and save checks (`randmonster`, `new_monster`, `wake_monster`, etc.).
 - `src/weapons.rs`: Weapon/projectile handling and formatting (`missile`, `do_motion`, `fall`, `wield`, `num`, etc.).
 - `src/armor.rs`: Armor equip/unequip and pass-turn helper functions (`wear`, `take_off`, `waste_time`).
+- `src/sticks.rs`: Wand/staff behavior and charge formatting (`fix_stick`, `do_zap`, `drain`, `fire_bolt`, `charge_str`).
 
 ## FFI contract
 
