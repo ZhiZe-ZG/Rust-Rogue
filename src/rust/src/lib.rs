@@ -1,5 +1,6 @@
 pub mod armor;
 pub mod potions;
+pub mod player;
 pub mod rip;
 pub mod rings;
 pub mod save;
