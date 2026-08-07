@@ -20,6 +20,11 @@ typedef struct spot {		/* position matrix for maze positions */
 	int	used;
 } SPOT;
 
+extern void rogue_draw_room(struct room *rp);
+extern void rogue_vert(struct room *rp, int startx);
+extern void rogue_horiz(struct room *rp, int starty);
+extern void rogue_do_maze(struct room *rp);
+
 #define GOLDGRP 1
 
 /*
@@ -152,24 +157,7 @@ do_rooms()
 void
 draw_room(struct room *rp)
 {
-    int y, x;
-
-    if (rp->r_flags & ISMAZE)
-	do_maze(rp);
-    else
-    {
-	vert(rp, rp->r_pos.x);				/* Draw left side */
-	vert(rp, rp->r_pos.x + rp->r_max.x - 1);	/* Draw right side */
-	horiz(rp, rp->r_pos.y);				/* Draw top */
-	horiz(rp, rp->r_pos.y + rp->r_max.y - 1);	/* Draw bottom */
-
-	/*
-	 * Put the floor down
-	 */
-	for (y = rp->r_pos.y + 1; y < rp->r_pos.y + rp->r_max.y - 1; y++)
-	    for (x = rp->r_pos.x + 1; x < rp->r_pos.x + rp->r_max.x - 1; x++)
-		chat(y, x) = FLOOR;
-    }
+    rogue_draw_room(rp);
 }
 
 /*
@@ -180,10 +168,7 @@ draw_room(struct room *rp)
 void
 vert(struct room *rp, int startx)
 {
-    int y;
-
-    for (y = rp->r_pos.y + 1; y <= rp->r_max.y + rp->r_pos.y - 1; y++)
-	chat(y, startx) = '|';
+    rogue_vert(rp, startx);
 }
 
 /*
@@ -194,10 +179,7 @@ vert(struct room *rp, int startx)
 void
 horiz(struct room *rp, int starty)
 {
-    int x;
-
-    for (x = rp->r_pos.x; x <= rp->r_pos.x + rp->r_max.x - 1; x++)
-	chat(starty, x) = '-';
+    rogue_horiz(rp, starty);
 }
 
 /*
@@ -213,26 +195,7 @@ static SPOT	maze[NUMLINES/3+1][NUMCOLS/3+1];
 void
 do_maze(struct room *rp)
 {
-    SPOT *sp;
-    int starty, startx;
-    static coord pos;
-
-    for (sp = &maze[0][0]; sp <= &maze[NUMLINES / 3][NUMCOLS / 3]; sp++)
-    {
-	sp->used = FALSE;
-	sp->nexits = 0;
-    }
-
-    Maxy = rp->r_max.y;
-    Maxx = rp->r_max.x;
-    Starty = rp->r_pos.y;
-    Startx = rp->r_pos.x;
-    starty = (rnd(rp->r_max.y) / 2) * 2;
-    startx = (rnd(rp->r_max.x) / 2) * 2;
-    pos.y = starty + Starty;
-    pos.x = startx + Startx;
-    putpass(&pos);
-    dig(starty, startx);
+	rogue_do_maze(rp);
 }
 
 /*
