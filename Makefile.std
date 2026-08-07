@@ -61,7 +61,7 @@ EXE      =
 $(PROGRAM): $(RUST_LIB) $(HDRS) $(OBJS) fixdocs
 	$(CC) $(LDFLAGS) $(OBJS) $(RUST_LIB) $(LIBS) $(OUTFLAG)$@$(EXE)
 
-$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/rip.rs
+$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/rip.rs $(RUST_DIR)/src/save.rs
 	cd $(RUST_DIR) && cargo build --release
  
 clean:

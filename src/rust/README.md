@@ -1,10 +1,12 @@
-# Rust Source
+# Rust source notes
 
-This directory is reserved for incremental Rust ports of Rogue subsystems.
+This directory holds the first Rust migration steps for Rogue.
 
-Suggested layout:
-- `src/rust/Cargo.toml`
-- `src/rust/src/lib.rs`
-- `src/rust/include/` for C FFI headers
+## Files
 
-Keep the C executable as the host during early migration, and link Rust as a static library.
+- `Cargo.toml` — Cargo package definition for the Rust side of the migration.
+- `src/lib.rs` — Root module file that exposes the Rust submodules.
+- `src/rip.rs` — Rust implementation of the tombstone artwork used by the death screen.
+  It exposes `rip_art()` for Rust callers and `rogue_rip_count()` / `rogue_rip_line()` for C FFI.
+- `src/save.rs` — Rust implementation of the save-file entrypoint.
+  It bridges the selected save logic to the existing C helpers via FFI.

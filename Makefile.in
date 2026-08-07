@@ -137,7 +137,7 @@ MISC     = Makefile.std LICENSE.TXT rogue54.sln rogue54.vcproj rogue.spec \
 $(PROGRAM): $(RUST_LIB) $(HDRS_SRC) $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(RUST_LIB) $(LIBS) -o $@
 
-$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/rip.rs
+$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/rip.rs $(RUST_DIR)/src/save.rs
 	cd $(RUST_DIR) && cargo build --release
     
 clean:
