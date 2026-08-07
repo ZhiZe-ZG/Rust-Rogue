@@ -578,7 +578,7 @@ PACKAGE_VERSION='5.4.4'
 PACKAGE_STRING='Rogue 5.4.4'
 PACKAGE_BUGREPORT='yendor@rogueforge.net'
 
-ac_unique_file="armor.c"
+ac_unique_file="src/c/armor.c"
 # Factoring default headers for most tests.
 ac_includes_default="\
 #include <stdio.h>

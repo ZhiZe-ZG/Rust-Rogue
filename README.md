@@ -321,68 +321,74 @@ export SEED=12345
 ```
 rogue.h              # Main header with data structures and defines
 extern.h             # External declarations and platform defines
-main.c               # Entry point, initialization, main game loop
-command.c            # Command processing and input handling
+src/c/main.c         # Entry point, initialization, main game loop
+src/c/command.c      # Command processing and input handling
 ```
 
 ### Game Systems
 
-**Note**: All source files are in the root directory. The structure below is logical grouping, not actual directory structure.
+**Note**: C source files live in `src/c/`. The structure below reflects real paths.
 
 **Combat System**:
 ```
-fight.c          # Combat mechanics
-weapons.c        # Weapon types and properties
-armor.c          # Armor types and properties
+src/c/fight.c          # Combat mechanics
+src/c/weapons.c        # Weapon types and properties
+src/c/armor.c          # Armor types and properties
 ```
 
 **Monster System**:
 ```
-monsters.c       # Monster definitions and stats
-chase.c          # Monster AI and pathfinding
+src/c/monsters.c       # Monster definitions and stats
+src/c/chase.c          # Monster AI and pathfinding
 ```
 
 **Item System**:
 ```
-potions.c        # Potion types and effects
-scrolls.c        # Scroll types and effects
-rings.c          # Ring types and effects
-sticks.c         # Wand/staff types and effects
-things.c         # General item handling
+src/c/potions.c        # Potion types and effects
+src/c/scrolls.c        # Scroll types and effects
+src/c/rings.c          # Ring types and effects
+src/c/sticks.c         # Wand/staff types and effects
+src/c/things.c         # General item handling
 ```
 
 **Dungeon Generation**:
 ```
-rooms.c          # Room generation
-passages.c       # Corridor generation
-new_level.c      # Level creation and initialization
+src/c/rooms.c          # Room generation
+src/c/passages.c       # Corridor generation
+src/c/new_level.c      # Level creation and initialization
 ```
 
 **User Interface**:
 ```
-io.c             # Input/output handling
-list.c           # Inventory and object lists
-rip.c            # Death screen
+src/c/io.c             # Input/output handling
+src/c/list.c           # Inventory and object lists
+src/c/rip.c            # Death screen
 ```
 
 ### Supporting Systems
 
 ```
-daemon.c             # Background processes (monster movement, hunger, etc.)
-daemons.c            # Daemon management
-move.c               # Player and monster movement
-pack.c               # Inventory management
-save.c               # Save/load game state
-state.c              # Game state management
-init.c               # Initialization routines
-extern.c             # Global variable definitions
+src/c/daemon.c             # Background processes (monster movement, hunger, etc.)
+src/c/daemons.c            # Daemon management
+src/c/move.c               # Player and monster movement
+src/c/pack.c               # Inventory management
+src/c/save.c               # Save/load game state
+src/c/state.c              # Game state management
+src/c/init.c               # Initialization routines
+src/c/extern.c             # Global variable definitions
 ```
 
 ### Platform Abstraction
 
 ```
-mach_dep.c           # Machine-dependent code detection
-mdport.c             # Platform abstraction layer
+src/c/mach_dep.c           # Machine-dependent code detection
+src/c/mdport.c             # Platform abstraction layer
+```
+
+### Rust Source
+
+```
+src/rust/            # Rust migration workspace (library, FFI, and modules)
 ```
 
 ### Build System

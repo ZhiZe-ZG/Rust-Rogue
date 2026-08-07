@@ -27,6 +27,7 @@ rogue.me
 build/
 build-*/
 cmake-build-*/
+src/rust/target/
 
 # Rogue binaries and runtime files
 rogue

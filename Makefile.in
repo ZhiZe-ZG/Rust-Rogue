@@ -100,6 +100,7 @@ man6dir = $(mandir)/man6
 
 HDRS     = rogue.h extern.h score.h
 HDRS_SRC = $(addprefix $(srcdir)/,$(HDRS))
+CSRC_DIR = $(srcdir)/src/c
 OBJS1    = vers.$(O) extern.$(O) armor.$(O) chase.$(O) command.$(O) \
            daemon.$(O) daemons.$(O) fight.$(O) init.$(O) io.$(O) list.$(O) \
            mach_dep.$(O) main.$(O) mdport.$(O) misc.$(O) monsters.$(O) \
@@ -126,9 +127,9 @@ MISC     = Makefile.std LICENSE.TXT rogue54.sln rogue54.vcproj rogue.spec \
 .SUFFIXES: .obj
 
 .c.obj:
-	$(CC) $(CFLAGS) $(CPPFLAGS) /c $(srcdir)/$*.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) /c $(CSRC_DIR)/$*.c
     
-%.o: $(srcdir)/%.c
+%.o: $(CSRC_DIR)/%.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
     
 $(PROGRAM): $(HDRS_SRC) $(OBJS)
@@ -159,19 +160,19 @@ stddocs:
 dist.src:
 	$(MAKE) $(MAKEFILE) clean
 	mkdir $(DISTNAME)
-	cp $(addprefix $(srcdir)/,$(CFILES)) $(addprefix $(srcdir)/,$(HDRS)) $(addprefix $(srcdir)/,$(MISC)) $(addprefix $(srcdir)/,$(AFILES)) $(DISTNAME)
+	cp $(addprefix $(CSRC_DIR)/,$(CFILES)) $(addprefix $(srcdir)/,$(HDRS)) $(addprefix $(srcdir)/,$(MISC)) $(addprefix $(srcdir)/,$(AFILES)) $(DISTNAME)
 	tar cf $(DISTNAME)-src.tar $(DISTNAME)
 	gzip -f $(DISTNAME)-src.tar
 	rm -fr $(DISTNAME)
 
-findpw: $(srcdir)/findpw.c xcrypt.o mdport.o xcrypt.o
-	$(CC) -s -o findpw $(srcdir)/findpw.c xcrypt.o mdport.o -lcurses
+findpw: $(CSRC_DIR)/findpw.c xcrypt.o mdport.o xcrypt.o
+	$(CC) -s -o findpw $(CSRC_DIR)/findpw.c xcrypt.o mdport.o -lcurses
 
 scedit: scedit.o scmisc.o vers.o mdport.o xcrypt.o
 	$(CC) -s -o scedit vers.o scedit.o scmisc.o mdport.o xcrypt.o -lcurses
 
 scmisc.o scedit.o:
-	$(CC) -O -c $(SF) $(srcdir)/$*.c
+	$(CC) -O -c $(SF) $(CSRC_DIR)/$*.c
 
 $(PROGRAM).doc: rogue.me
 	if test "x$(GROFF)" != "x" -a "x$(SED)" != "x" ; then \

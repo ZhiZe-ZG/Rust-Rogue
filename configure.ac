@@ -3,7 +3,7 @@
 
 AC_PREREQ(2.56)
 AC_INIT([Rogue],[5.4.4], [yendor@rogueforge.net])
-AC_CONFIG_SRCDIR([armor.c])
+AC_CONFIG_SRCDIR([src/c/armor.c])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_FILES([Makefile rogue.6 rogue.cat rogue.doc rogue.html rogue.me])
 AC_CANONICAL_SYSTEM([])
