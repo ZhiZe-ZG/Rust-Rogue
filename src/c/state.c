@@ -1999,7 +1999,7 @@ rs_save_file(FILE *savef)
 #endif
     rs_write_int(savef,between);                        /* 5.4-daemons.c*/
     rs_write_coord(savef, nh);                          /* 5.4-move.c    */
-    rs_write_int(savef, group);                         /* 5.4-weapons.c */
+    rs_write_int(savef, group);                         /* 5.4-weapons.rs */
 
     rs_write_window(savef,stdscr);
 
@@ -2126,7 +2126,7 @@ rs_restore_file(FILE *inf)
     rs_read_int(inf,&dummyint);  /* total */            /* 5.4-list.c    */
     rs_read_int(inf,&between);                          /* 5.4-daemons.c    */
     rs_read_coord(inf, &nh);                            /* 5.4-move.c       */
-    rs_read_int(inf,&group);                            /* 5.4-weapons.c    */
+    rs_read_int(inf,&group);                            /* 5.4-weapons.rs    */
 
     rs_read_window(inf,stdscr);
 

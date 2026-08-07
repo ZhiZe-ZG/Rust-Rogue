@@ -332,7 +332,6 @@ src/c/command.c      # Command processing and input handling
 **Combat System**:
 ```
 src/c/fight.c          # Combat mechanics
-src/c/weapons.c        # Weapon types and properties
 src/c/armor.c          # Armor types and properties
 ```
 
@@ -390,6 +389,7 @@ src/rust/src/monsters.rs # Monster behavior and save-throw logic
 src/rust/src/rings.rs    # Ring mechanics
 src/rust/src/save.rs     # Save/restore entry points and autosave flow
 src/rust/src/score.rs    # Score file read/write routines
+src/rust/src/weapons.rs  # Weapon handling, projectiles, and wield logic
 ```
 
 ### Build System

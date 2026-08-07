@@ -340,10 +340,6 @@
 				>
 			</File>
 			<File
-				RelativePath="weapons.c"
-				>
-			</File>
-			<File
 				RelativePath="wizard.c"
 				>
 			</File>
