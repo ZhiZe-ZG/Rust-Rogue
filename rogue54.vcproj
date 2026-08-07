@@ -264,10 +264,6 @@
 				>
 			</File>
 			<File
-				RelativePath="monsters.c"
-				>
-			</File>
-			<File
 				RelativePath="move.c"
 				>
 			</File>

@@ -338,7 +338,6 @@ src/c/armor.c          # Armor types and properties
 
 **Monster System**:
 ```
-src/c/monsters.c       # Monster definitions and stats
 src/c/chase.c          # Monster AI and pathfinding
 ```
 
@@ -387,6 +386,7 @@ src/c/mdport.c             # Platform abstraction layer
 
 ```
 src/rust/                # Rust migration workspace (library, FFI, and modules)
+src/rust/src/monsters.rs # Monster behavior and save-throw logic
 src/rust/src/rings.rs    # Ring mechanics
 src/rust/src/save.rs     # Save/restore entry points and autosave flow
 src/rust/src/score.rs    # Score file read/write routines
@@ -476,7 +476,7 @@ main()
 ### Adding New Features
 
 1. **New Monster Type**:
-   - Add entry to `monsters[]` array in `monsters.c`
+   - Add entry to `monsters[]` array in `extern.c`
    - Update monster generation logic in `new_level.c`
 
 2. **New Item Type**:
