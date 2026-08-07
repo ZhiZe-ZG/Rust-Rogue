@@ -41,8 +41,13 @@ bool terse = FALSE;			/* True if we should be short */
 bool to_death = FALSE;			/* Fighting is to the death! */
 bool tombstone = TRUE;			/* Print out tombstone at end */
 #ifdef MASTER
-int wizard = FALSE;			/* True if allows wizard commands */
+/* True when the binary is compiled with wizard-mode support enabled. */
+const bool master_mode_enabled = TRUE;
+#else
+/* False when wizard-mode code paths are compiled out. */
+const bool master_mode_enabled = FALSE;
 #endif
+int wizard = FALSE;			/* True if allows wizard commands */
 bool pack_used[26] = {			/* Is the character used in the pack? */
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
     FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,

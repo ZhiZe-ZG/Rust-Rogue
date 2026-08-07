@@ -117,6 +117,8 @@
  */
 
 extern bool	got_ltc, in_shell;
+/* Compile-time wizard-mode availability exposed as a runtime constant. */
+extern const bool	master_mode_enabled;
 extern int	wizard;
 extern char	fruit[], prbuf[], whoami[];
 extern int orig_dsusp;

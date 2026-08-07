@@ -89,10 +89,7 @@ restore(char *file, char **envp)
      * inode for as long as possible
      */
 
-    if (
-#ifdef MASTER
-	!wizard &&
-#endif
+    if ((!master_mode_enabled || !wizard) &&
         md_unlink_open_file(file, inf) < 0)
     {
 	printf("Cannot unlink file\n");
@@ -107,10 +104,8 @@ restore(char *file, char **envp)
     /*
      * defeat multiple restarting from the same place
      */
-#ifdef MASTER
-    if (!wizard)
-#endif
-	if (sbuf2.st_nlink != 1 || syml)
+    if ((!master_mode_enabled || !wizard) &&
+        (sbuf2.st_nlink != 1 || syml))
 	{
 	    endwin();
 	    printf("\nCannot restore from a linked file\n");
