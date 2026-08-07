@@ -346,7 +346,6 @@ src/c/chase.c          # Monster AI and pathfinding
 ```
 src/c/potions.c        # Potion types and effects
 src/c/scrolls.c        # Scroll types and effects
-src/c/rings.c          # Ring types and effects
 src/c/sticks.c         # Wand/staff types and effects
 src/c/things.c         # General item handling
 ```
@@ -388,6 +387,7 @@ src/c/mdport.c             # Platform abstraction layer
 
 ```
 src/rust/                # Rust migration workspace (library, FFI, and modules)
+src/rust/src/rings.rs    # Ring mechanics
 src/rust/src/save.rs     # Save/restore entry points and autosave flow
 src/rust/src/score.rs    # Score file read/write routines
 ```

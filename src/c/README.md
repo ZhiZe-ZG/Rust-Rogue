@@ -35,8 +35,9 @@ The files are grouped here by primary responsibility. Some files interact across
 - `list.c`: Generic list and item list operations.
 - `potions.c`: Potion effects and potion-specific handling.
 - `scrolls.c`: Scroll effects and scroll-specific handling.
-- `rings.c`: Ring effects and ring-specific handling.
 - `sticks.c`: Wand/staff effects and stick-specific handling.
+
+Ring mechanics are implemented in the Rust FFI module at `src/rust/src/rings.rs`.
 
 ## Runtime Systems and World Updates
 

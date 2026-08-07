@@ -292,10 +292,6 @@
 				>
 			</File>
 			<File
-				RelativePath="rings.c"
-				>
-			</File>
-			<File
 				RelativePath="rip.c"
 				>
 			</File>
