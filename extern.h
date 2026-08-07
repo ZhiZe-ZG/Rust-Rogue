@@ -164,13 +164,11 @@ int	checkout();
 #endif
 
 int	md_chmod(char *filename, int mode);
-char	*md_crypt(char *key, char *salt);
 int	md_dsuspchar();
 int	md_erasechar();
 char	*md_gethomedir();
 char	*md_getusername();
 int	md_getuid();
-char	*md_getpass(char *prompt);
 int	md_getpid();
 char	*md_getrealname(int uid);
 void	md_init();

@@ -494,7 +494,7 @@ main()
 ```bash
 ./configure --enable-wizardmode
 make
-./rogue ""  # Empty string enables wizard password prompt
+./rogue ""  # Empty string enables wizard mode directly
 ```
 
 Wizard mode provides:

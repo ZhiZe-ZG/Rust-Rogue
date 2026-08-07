@@ -232,32 +232,6 @@ teleport()
 
 #ifdef MASTER
 /*
- * passwd:
- *	See if user knows password
- */
-int
-passwd()
-{
-    char *sp, c;
-    static char buf[MAXSTR];
-
-    msg("wizard's Password:");
-    mpos = 0;
-    sp = buf;
-    while ((c = readchar()) != '\n' && c != '\r' && c != ESCAPE)
-	if (c == md_killchar())
-	    sp = buf;
-	else if (c == md_erasechar() && sp > buf)
-	    sp--;
-	else
-	    *sp++ = c;
-    if (sp == buf)
-	return FALSE;
-    *sp = '\0';
-    return (strcmp(PASSWD, md_crypt(buf, "mT")) == 0);
-}
-
-/*
  * show_map:
  *	Print out the map for the wizard
  */

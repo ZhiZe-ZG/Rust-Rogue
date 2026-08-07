@@ -123,12 +123,6 @@
 #define RIGHT		1
 #define BOLT_LENGTH	6
 #define LAMPDIST	3
-#ifdef MASTER
-#ifndef PASSWD
-#define	PASSWD		"mTBellIQOsLNA"
-#endif
-#endif
-
 /*
  * Save against things
  */
@@ -690,7 +684,6 @@ bool	seen_stairs();
 bool	turn_ok(int y, int x);
 bool	turn_see(bool turn_off);
 bool	is_current(THING *obj);
-int	passwd();
 
 char	be_trapped(coord *tc);
 char	floor_ch();

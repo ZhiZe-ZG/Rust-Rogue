@@ -115,9 +115,6 @@ elif test "x$enable_wizardmode" = "x" ; then
 AC_MSG_RESULT([no])
 else
 AC_DEFINE([MASTER], [], [Define to include wizard mode])
-if test "x$enable_wizardmode" != "xyes" ; then
-AC_DEFINE_UNQUOTED([PASSWD],[$enable_wizardmode], [Define crypt(3) wizard mode password])
-fi
 AC_MSG_RESULT([yes])
 fi
 

@@ -59,7 +59,7 @@ The files are grouped here by primary responsibility. Some files interact across
 
 ## Security/Crypto Support
 
-- `xcrypt.c`: Password/crypt-related support and byte-order helpers.
+- `xcrypt.c`: Legacy crypt/password support retained in-tree, but no longer used by the main game build path.
 
 ## Global Definitions Bridge
 
@@ -67,4 +67,4 @@ The files are grouped here by primary responsibility. Some files interact across
 
 ## Notes for Incremental Rust Migration
 
-For a low-risk partial rewrite, start with deterministic, low-coupling code (for example parts of `xcrypt.c`) before curses-heavy and globally-coupled gameplay files.
+For a low-risk partial rewrite, start with deterministic, low-coupling utility code before curses-heavy and globally-coupled gameplay files.

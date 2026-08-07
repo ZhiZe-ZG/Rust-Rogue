@@ -227,9 +227,6 @@
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
 
-/* Define crypt(3) wizard mode password */
-#undef PASSWD
-
 /* Define as the return type of signal handlers (`int' or `void'). */
 #undef RETSIGTYPE
 

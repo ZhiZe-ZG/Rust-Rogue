@@ -29,16 +29,16 @@ main(int argc, char **argv, char **envp)
 
 #ifdef MASTER
     /*
-     * Check to see if he is a wizard
+     * Enable wizard mode immediately when the program is launched with an
+     * empty argument string. This avoids any password gate for debug access.
      */
     if (argc >= 2 && argv[1][0] == '\0')
-	if (strcmp(PASSWD, md_crypt(md_getpass("wizard's password: "), "mT")) == 0)
-	{
-	    wizard = TRUE;
-	    player.t_flags |= SEEMONST;
-	    argv++;
-	    argc--;
-	}
+    {
+	wizard = TRUE;
+	player.t_flags |= SEEMONST;
+	argv++;
+	argc--;
+    }
 
 #endif
 

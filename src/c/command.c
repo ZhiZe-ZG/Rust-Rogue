@@ -325,15 +325,10 @@ over:
 		    }
 		    else
 		    {
-			wizard = passwd();
-			if (wizard) 
-			{
-			    noscore = TRUE;
-			    turn_see(FALSE);
-			    msg("you are suddenly as smart as Ken Arnold in dungeon #%d", dnum);
-			}
-			else
-			    msg("sorry");
+			wizard = TRUE;
+			noscore = TRUE;
+			turn_see(FALSE);
+			msg("you are suddenly as smart as Ken Arnold in dungeon #%d", dnum);
 		    }
 #endif
 		when ESCAPE:	/* Escape */
