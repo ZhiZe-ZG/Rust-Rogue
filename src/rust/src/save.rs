@@ -1,5 +1,6 @@
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
+use std::ptr;
 
 #[repr(C)]
 pub struct CFile {
@@ -17,6 +18,9 @@ extern "C" {
     fn endwin() -> c_int;
     fn resetltchars();
     fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int;
+    fn fopen(path: *const c_char, mode: *const c_char) -> *mut CFile;
+    fn md_ignoreallsignals();
+    fn md_unlink_open_file(file: *mut c_char, inf: *mut CFile) -> c_int;
     fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
     fn rs_save_file(savef: *mut CFile);
     fn fflush(stream: *mut CFile) -> c_int;
@@ -52,5 +56,28 @@ pub unsafe extern "C" fn save_file(savef: *mut CFile) {
     rs_save_file(savef);
     fflush(savef);
     fclose(savef);
+    exit(0)
+}
+
+/// Handles signal-triggered autosave by reusing the regular save-file writer.
+#[no_mangle]
+pub unsafe extern "C" fn auto_save(sig: c_int) {
+    let _ = sig;
+    let file_name_ptr = &raw mut file_name as *mut c_char;
+    let mode = c"w";
+    let mut savef: *mut CFile;
+
+    md_ignoreallsignals();
+    if ptr::read(file_name_ptr) != 0
+        && ((!{
+            savef = fopen(file_name_ptr, mode.as_ptr());
+            savef.is_null()
+        }) || (md_unlink_open_file(file_name_ptr, savef) >= 0 && !{
+            savef = fopen(file_name_ptr, mode.as_ptr());
+            savef.is_null()
+        }))
+    {
+        save_file(savef);
+    }
     exit(0)
 }
