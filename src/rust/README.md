@@ -14,6 +14,7 @@ This directory contains the Rust static library used by the C game via FFI.
 - `src/weapons.rs`: Weapon/projectile handling and formatting (`missile`, `do_motion`, `fall`, `wield`, `num`, etc.).
 - `src/armor.rs`: Armor equip/unequip and pass-turn helper functions (`wear`, `take_off`, `waste_time`).
 - `src/sticks.rs`: Wand/staff behavior and charge formatting (`fix_stick`, `do_zap`, `drain`, `fire_bolt`, `charge_str`).
+- `src/scrolls.rs`: Scroll effects and curses removal (`read_scroll`, `uncurse`).
 
 ## FFI contract
 

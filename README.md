@@ -342,7 +342,7 @@ src/c/chase.c          # Monster AI and pathfinding
 **Item System**:
 ```
 src/c/potions.c        # Potion types and effects
-src/c/scrolls.c        # Scroll types and effects
+src/rust/src/scrolls.rs # Scroll types and effects (Rust FFI implementation)
 src/rust/src/sticks.rs # Wand/staff Rust FFI implementation
 src/c/things.c         # General item handling
 ```
@@ -388,6 +388,7 @@ src/rust/src/monsters.rs # Monster behavior and save-throw logic
 src/rust/src/rings.rs    # Ring mechanics
 src/rust/src/save.rs     # Save/restore entry points and autosave flow
 src/rust/src/score.rs    # Score file read/write routines
+src/rust/src/scrolls.rs  # Scroll reading/effects and uncurse helper
 src/rust/src/weapons.rs  # Weapon handling, projectiles, and wield logic
 src/rust/src/armor.rs    # Armor equip/unequip and pass-turn helpers
 ```

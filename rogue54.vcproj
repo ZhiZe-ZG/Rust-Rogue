@@ -316,10 +316,6 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="scrolls.c"
-				>
-			</File>
-			<File
 				RelativePath="state.c"
 				>
 			</File>
