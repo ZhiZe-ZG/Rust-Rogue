@@ -57,10 +57,6 @@ The files are grouped here by primary responsibility. Some files interact across
 - `mach_dep.c`: Machine-dependent utilities and platform-specific behavior.
 - `mdport.c`: Portability wrappers and OS abstraction functions.
 
-## Security/Crypto Support
-
-- `xcrypt.c`: Legacy crypt/password support retained in-tree, but no longer used by the main game build path.
-
 ## Global Definitions Bridge
 
 - `extern.c`: Definitions for globals declared externally in headers.

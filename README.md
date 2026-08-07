@@ -778,7 +778,6 @@ This project is licensed under a BSD-style license. See [LICENSE.TXT](LICENSE.TX
 
 Portions based on work by:
 - Nicholas J. Kisseberth (state.c, mdport.c)
-- David Burren (xcrypt.c)
 
 ---
 

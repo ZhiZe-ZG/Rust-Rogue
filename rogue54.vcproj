@@ -359,10 +359,6 @@
 				RelativePath="wizard.c"
 				>
 			</File>
-			<File
-				RelativePath="xcrypt.c"
-				>
-			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
