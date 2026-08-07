@@ -304,10 +304,6 @@
 				>
 			</File>
 			<File
-				RelativePath="save.c"
-				>
-			</File>
-			<File
 				RelativePath="scedit.c"
 				>
 				<FileConfiguration

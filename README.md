@@ -372,7 +372,6 @@ src/c/daemon.c             # Background processes (monster movement, hunger, etc
 src/c/daemons.c            # Daemon management
 src/c/move.c               # Player and monster movement
 src/c/pack.c               # Inventory management
-src/c/save.c               # Save/load game state
 src/c/state.c              # Game state management
 src/c/init.c               # Initialization routines
 src/c/extern.c             # Global variable definitions
@@ -388,7 +387,9 @@ src/c/mdport.c             # Platform abstraction layer
 ### Rust Source
 
 ```
-src/rust/            # Rust migration workspace (library, FFI, and modules)
+src/rust/                # Rust migration workspace (library, FFI, and modules)
+src/rust/src/save.rs     # Save/restore entry points and autosave flow
+src/rust/src/score.rs    # Score file read/write routines
 ```
 
 ### Build System

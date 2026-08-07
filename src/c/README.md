@@ -48,9 +48,10 @@ The files are grouped here by primary responsibility. Some files interact across
 ## I/O, Persistence, and UX
 
 - `io.c`: Terminal input/output integration and screen interaction helpers.
-- `save.c`: Save and restore mechanics.
 - `rip.c`: Death screen and end-of-run presentation logic.
 - `vers.c`: Version/build identification strings and metadata.
+
+Save/restore and score persistence entry points are implemented in the Rust FFI modules under `src/rust/src/`.
 
 ## Platform and OS Abstraction
 

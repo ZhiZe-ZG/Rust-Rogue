@@ -1,5 +1,5 @@
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
+use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
 
 const MAXSTR: usize = 1024;
@@ -9,6 +9,37 @@ const QUIT: c_int = 1;
 #[repr(C)]
 pub struct CFile {
     _private: [u8; 0],
+}
+
+#[repr(C)]
+pub struct CCoord {
+    pub x: c_int,
+    pub y: c_int,
+}
+
+#[repr(C)]
+pub struct CStats {
+    pub s_str: c_uint,
+    pub s_exp: c_int,
+    pub s_lvl: c_int,
+    pub s_arm: c_int,
+    pub s_hpt: c_int,
+    pub s_dmg: [c_char; 13],
+    pub s_maxhp: c_int,
+}
+
+#[repr(C)]
+pub struct CThingPlayer {
+    pub l_next: *mut CThingPlayer,
+    pub l_prev: *mut CThingPlayer,
+    pub t_pos: CCoord,
+    pub t_turn: c_uchar,
+    pub t_type: c_char,
+    pub t_disguise: c_char,
+    pub t_oldch: c_char,
+    pub t_dest: *mut CCoord,
+    pub t_flags: c_short,
+    pub t_stats: CStats,
 }
 
 extern "C" {
@@ -23,6 +54,7 @@ extern "C" {
     static mut wizard: c_int;
     static mut environ: *mut *mut c_char;
     static mut master_mode_enabled: c_uchar;
+    static mut player: CThingPlayer;
 
     fn msg(fmt: *const c_char, ...);
     fn readchar() -> c_int;
@@ -47,8 +79,6 @@ extern "C" {
     fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
     fn sscanf(buf: *const c_char, fmt: *const c_char, ...) -> c_int;
     fn rs_restore_file(inf: *mut CFile) -> c_int;
-    fn restore_link_invalid(file: *mut c_char) -> c_int;
-    fn restore_player_dead() -> c_int;
     fn md_getpid() -> c_int;
     fn srand(seed: c_int);
     fn playit();
@@ -83,6 +113,10 @@ unsafe fn copy_cstr(dst: *mut c_char, src: *const c_char, max: usize) {
         i += 1;
     }
     ptr::write(dst.add(max - 1), 0);
+}
+
+unsafe fn restore_player_dead() -> bool {
+    player.t_stats.s_hpt <= 0
 }
 
 /// Implements the interactive save command flow and then delegates the actual write to save_file.
@@ -247,12 +281,6 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
         return 0;
     }
 
-    if (master_mode_enabled == 0 || wizard == 0) && restore_link_invalid(file_ptr) != 0 {
-        endwin();
-        msg(c"\nCannot restore from a linked file\n".as_ptr());
-        return 0;
-    }
-
     hw = newwin(LINES, COLS, 0, 0);
     setup();
     let _ = rs_restore_file(inf);
@@ -265,7 +293,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     mpos = 0;
     clearok(stdscr, 1);
 
-    if restore_player_dead() != 0 {
+    if restore_player_dead() {
         endwin();
         msg(c"\n\"He's dead, Jim\"\n".as_ptr());
         return 0;

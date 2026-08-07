@@ -108,14 +108,14 @@ OBJS1    = vers.$(O) extern.$(O) armor.$(O) chase.$(O) command.$(O) \
            mach_dep.$(O) main.$(O) mdport.$(O) misc.$(O) monsters.$(O) \
            move.$(O) new_level.$(O)
 OBJS2    = options.$(O) pack.$(O) passages.$(O) potions.$(O) rings.$(O) \
-           rip.$(O) rooms.$(O) save.$(O) scrolls.$(O) state.$(O) sticks.$(O) \
+		   rip.$(O) rooms.$(O) scrolls.$(O) state.$(O) sticks.$(O) \
 		   things.$(O) weapons.$(O) wizard.$(O)
 OBJS     = $(OBJS1) $(OBJS2)
 CFILES   = vers.c extern.c armor.c chase.c command.c daemon.c \
            daemons.c fight.c init.c io.c list.c mach_dep.c \
            main.c  mdport.c misc.c monsters.c move.c new_level.c \
            options.c pack.c passages.c potions.c rings.c rip.c \
-           rooms.c save.c scrolls.c state.c sticks.c things.c \
+		   rooms.c scrolls.c state.c sticks.c things.c \
 		   weapons.c wizard.c
 MISC_C   =
 DOCSRC   = rogue.me.in rogue.6.in rogue.doc.in rogue.html.in rogue.cat.in
@@ -137,7 +137,7 @@ MISC     = Makefile.std LICENSE.TXT rogue54.sln rogue54.vcproj rogue.spec \
 $(PROGRAM): $(RUST_LIB) $(HDRS_SRC) $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(RUST_LIB) $(LIBS) -o $@
 
-$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/rip.rs $(RUST_DIR)/src/save.rs
+$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/rip.rs $(RUST_DIR)/src/save.rs $(RUST_DIR)/src/score.rs
 	cd $(RUST_DIR) && cargo build --release
     
 clean:
