@@ -60,7 +60,7 @@ LOCKFILE = @LOCKFILE@
 GROUPOWNER = @GROUPOWNER@
 
 #CPPFLAGS=-DHAVE_CONFIG_H
-CPPFLAGS =@DEFS@ @CPPFLAGS@ -I$(srcdir)
+CPPFLAGS =@DEFS@ @CPPFLAGS@ -I. -I$(srcdir)
 
 #DISTFILE = $(PROGRAM)
 DISTFILE = $(DISTNAME)-@TARGET@
@@ -139,8 +139,7 @@ clean:
 	$(RM) $(OBJS2)
 	$(RM) core a.exe a.out a.exe.stackdump $(PROGRAM) $(PROGRAM).exe
 	$(RM) $(PROGRAM).tar $(PROGRAM).tar.gz $(PROGRAM).zip 
-	$(RM) $(DISTNAME)/*
-	-rmdir $(DISTNAME)
+	-$(RM) -r $(DISTNAME)
     
 maintainer-clean:
 	$(RM) config.h

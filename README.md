@@ -621,6 +621,37 @@ make clean
 make
 ```
 
+**Problem**: Working tree is cluttered with untracked build files
+
+**Solution**: Use `git clean` with a preview first.
+```bash
+# Preview what would be removed (safe)
+git clean -nd
+
+# Remove untracked files and directories
+git clean -fd
+```
+
+To remove ignored files (for example `build/` and generated artifacts) use:
+```bash
+# Preview ignored-file cleanup
+git clean -ndX
+
+# Remove ignored files and directories
+git clean -fdX
+```
+
+To remove both untracked and ignored files in one pass:
+```bash
+# Preview all cleanup
+git clean -ndx
+
+# Remove all untracked + ignored files
+git clean -fdx
+```
+
+**Important**: `git clean` is destructive. Always run a preview command (`-n`) first.
+
 **Problem**: Compilation errors about incomplete type 'WINDOW' or `curscr->_cury` / `curscr->_curx`
 
 **Solution**: This is a known compatibility issue with modern ncurses. The codebase attempts to access internal ncurses structure members that are not available in modern ncurses libraries. See [BUILD_ISSUES.md](BUILD_ISSUES.md) for detailed information about this issue and potential fixes.
