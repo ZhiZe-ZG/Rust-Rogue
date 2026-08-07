@@ -1,3 +1,4 @@
+pub mod armor;
 pub mod rip;
 pub mod rings;
 pub mod save;

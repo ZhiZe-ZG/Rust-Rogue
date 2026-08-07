@@ -196,10 +196,6 @@
 			Filter="cpp;c;cxx;def;odl;idl;hpj;bat;asm"
 			>
 			<File
-				RelativePath="armor.c"
-				>
-			</File>
-			<File
 				RelativePath="chase.c"
 				>
 			</File>

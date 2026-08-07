@@ -12,6 +12,7 @@ This directory contains the Rust static library used by the C game via FFI.
 - `src/rings.rs`: Ring mechanics (`ring_on`, `ring_off`, `gethand`, `ring_eat`, `ring_num`).
 - `src/monsters.rs`: Monster behavior helpers and save checks (`randmonster`, `new_monster`, `wake_monster`, etc.).
 - `src/weapons.rs`: Weapon/projectile handling and formatting (`missile`, `do_motion`, `fall`, `wield`, `num`, etc.).
+- `src/armor.rs`: Armor equip/unequip and pass-turn helper functions (`wear`, `take_off`, `waste_time`).
 
 ## FFI contract
 

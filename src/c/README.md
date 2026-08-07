@@ -24,10 +24,10 @@ The files are grouped here by primary responsibility. Some files interact across
 ## Combat and Creatures
 
 - `fight.c`: Combat resolution, attacks, and damage flow.
-- `armor.c`: Armor behavior and armor-specific mechanics.
 
 Monster behavior helpers are implemented in the Rust FFI module at `src/rust/src/monsters.rs`.
 Weapon behavior helpers are implemented in the Rust FFI module at `src/rust/src/weapons.rs`.
+Armor behavior helpers are implemented in the Rust FFI module at `src/rust/src/armor.rs`.
 
 ## Items and Inventory
 
