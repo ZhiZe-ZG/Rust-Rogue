@@ -5,23 +5,58 @@ const WEAPON: c_int = ')' as c_int;
 const FLAME: c_int = 9;
 const ISKNOW: c_int = 0o000002;
 const ISMISL: c_int = 0o000004;
-const WS_LIGHT: c_int = 0;
-const WS_INVIS: c_int = 1;
-const WS_ELECT: c_int = 2;
-const WS_FIRE: c_int = 3;
-const WS_COLD: c_int = 4;
-const WS_POLYMORPH: c_int = 5;
-const WS_MISSILE: c_int = 6;
-const WS_HASTE_M: c_int = 7;
-const WS_SLOW_M: c_int = 8;
-const WS_DRAIN: c_int = 9;
-const WS_NOP: c_int = 10;
-const WS_TELAWAY: c_int = 11;
-const WS_TELTO: c_int = 12;
-const WS_CANCEL: c_int = 13;
 const VS_MAGIC: c_int = 3;
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
+
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum StickType {
+    Light = 0,
+    Invis = 1,
+    Elect = 2,
+    Fire = 3,
+    Cold = 4,
+    Polymorph = 5,
+    Missile = 6,
+    HasteM = 7,
+    SlowM = 8,
+    Drain = 9,
+    Nop = 10,
+    TelAway = 11,
+    TelTo = 12,
+    Cancel = 13,
+}
+
+impl StickType {
+    const COUNT: usize = 14;
+
+    fn from_raw(value: c_int) -> Option<Self> {
+        match value {
+            0 => Some(Self::Light),
+            1 => Some(Self::Invis),
+            2 => Some(Self::Elect),
+            3 => Some(Self::Fire),
+            4 => Some(Self::Cold),
+            5 => Some(Self::Polymorph),
+            6 => Some(Self::Missile),
+            7 => Some(Self::HasteM),
+            8 => Some(Self::SlowM),
+            9 => Some(Self::Drain),
+            10 => Some(Self::Nop),
+            11 => Some(Self::TelAway),
+            12 => Some(Self::TelTo),
+            13 => Some(Self::Cancel),
+            _ => None,
+        }
+    }
+
+    fn index(self) -> usize {
+        self as usize
+    }
+}
+
+const MAXSTICKS: usize = StickType::COUNT;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -103,7 +138,7 @@ unsafe extern "C" {
     static mut after: c_uchar;
     static mut delta: CCoord;
     static mut cur_weapon: *mut CThing;
-    static mut ws_info: [CObjInfo; 14];
+    static mut ws_info: [CObjInfo; MAXSTICKS];
     static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
     static mut weap_info: [CObjInfo; 10];
@@ -189,6 +224,11 @@ unsafe fn set_c_string(dst: &mut [c_char], src: &str) {
     }
 }
 
+#[inline]
+unsafe fn stick_type(obj: *mut CThing) -> Option<StickType> {
+    StickType::from_raw((*thing_o(obj)).o_which)
+}
+
 /// fix_stick:
 /// Set up a new stick with the expected damage and charge values.
 #[no_mangle]
@@ -197,14 +237,14 @@ pub unsafe extern "C" fn fix_stick(cur: *mut CThing) {
         return;
     }
 
-    if (*thing_o(cur)).o_which == WS_LIGHT {
+    if stick_type(cur) == Some(StickType::Light) {
         set_c_string(&mut (*thing_o(cur)).o_damage, "2x3");
     } else {
         set_c_string(&mut (*thing_o(cur)).o_damage, "1x1");
     }
     set_c_string(&mut (*thing_o(cur)).o_hurldmg, "1x1");
 
-    (*thing_o(cur)).o_arm = if (*thing_o(cur)).o_which == WS_LIGHT {
+    (*thing_o(cur)).o_arm = if stick_type(cur) == Some(StickType::Light) {
         rnd(10) + 10
     } else {
         rnd(5) + 3
@@ -229,19 +269,25 @@ pub unsafe extern "C" fn do_zap() {
         return;
     }
 
-    match (*thing_o(obj)).o_which {
-        WS_LIGHT => {
-            ws_info[WS_LIGHT as usize].oi_know = TRUE;
+    let kind = stick_type(obj);
+
+    match kind {
+        Some(StickType::Light) => {
+            ws_info[StickType::Light.index()].oi_know = TRUE;
             msg(c"the corridor glows and then fades".as_ptr());
         }
-        WS_DRAIN => {
+        Some(StickType::Drain) => {
             if unsafe { (*hero_stats_mut()).s_hpt } < 2 {
                 msg(c"you are too weak to use it".as_ptr());
                 return;
             }
             drain();
         }
-        WS_INVIS | WS_POLYMORPH | WS_TELAWAY | WS_TELTO | WS_CANCEL => {
+        Some(StickType::Invis)
+        | Some(StickType::Polymorph)
+        | Some(StickType::TelAway)
+        | Some(StickType::TelTo)
+        | Some(StickType::Cancel) => {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
@@ -253,8 +299,8 @@ pub unsafe extern "C" fn do_zap() {
                 msg(c"the spell takes effect".as_ptr());
             }
         }
-        WS_MISSILE => {
-            ws_info[WS_MISSILE as usize].oi_know = TRUE;
+        Some(StickType::Missile) => {
+            ws_info[StickType::Missile.index()].oi_know = TRUE;
             let mut bolt = std::mem::zeroed::<CThing>();
             (*thing_o(&mut bolt)).o_type = WEAPON;
             (*thing_o(&mut bolt)).o_which = FLAME;
@@ -277,7 +323,7 @@ pub unsafe extern "C" fn do_zap() {
                 msg(c"the missle vanishes with a puff of smoke".as_ptr());
             }
         }
-        WS_HASTE_M | WS_SLOW_M => {
+        Some(StickType::HasteM) | Some(StickType::SlowM) => {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
@@ -289,18 +335,20 @@ pub unsafe extern "C" fn do_zap() {
                 msg(c"the spell takes effect".as_ptr());
             }
         }
-        WS_ELECT | WS_FIRE | WS_COLD => {
-            let name = match (*thing_o(obj)).o_which {
-                WS_ELECT => c"bolt",
-                WS_FIRE => c"flame",
+        Some(StickType::Elect) | Some(StickType::Fire) | Some(StickType::Cold) => {
+            let name = match kind {
+                Some(StickType::Elect) => c"bolt",
+                Some(StickType::Fire) => c"flame",
                 _ => c"ice",
             };
             let mut hero = hero_pos();
             fire_bolt(&mut hero, &raw mut delta, name.as_ptr() as *mut c_char);
-            ws_info[(*thing_o(obj)).o_which as usize].oi_know = TRUE;
+            if let Some(kind) = kind {
+                ws_info[kind.index()].oi_know = TRUE;
+            }
         }
-        WS_NOP => {}
-        _ => {
+        Some(StickType::Nop) => {}
+        None => {
             msg(c"what a bizarre schtick!".as_ptr());
         }
     }
@@ -324,7 +372,7 @@ pub unsafe extern "C" fn drain() {
 pub unsafe extern "C" fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *mut c_char) {
     let mut pos = *start;
     let mut hero = hero_pos();
-    let mut hit_hero = start != &mut hero;
+    let hit_hero = start != &mut hero;
     let mut bolt = std::mem::zeroed::<CThing>();
 
     (*thing_o(&mut bolt)).o_type = WEAPON;

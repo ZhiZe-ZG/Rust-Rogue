@@ -285,20 +285,22 @@
 /*
  * Rod/Wand/Staff types
  */
-#define WS_LIGHT	0
-#define WS_INVIS	1
-#define WS_ELECT	2
-#define WS_FIRE		3
-#define WS_COLD		4
-#define WS_POLYMORPH	5
-#define WS_MISSILE	6
-#define WS_HASTE_M	7
-#define WS_SLOW_M	8
-#define WS_DRAIN	9
-#define WS_NOP		10
-#define WS_TELAWAY	11
-#define WS_TELTO	12
-#define WS_CANCEL	13
+/*
+ * 0  = light
+ * 1  = invisibility
+ * 2  = lightning
+ * 3  = fire
+ * 4  = cold
+ * 5  = polymorph
+ * 6  = magic missile
+ * 7  = haste monster
+ * 8  = slow monster
+ * 9  = drain life
+ * 10 = nothing
+ * 11 = teleport away
+ * 12 = teleport to
+ * 13 = cancellation
+ */
 #define MAXSTICKS	14
 
 /*

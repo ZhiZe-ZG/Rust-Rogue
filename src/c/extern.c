@@ -310,20 +310,20 @@ struct obj_info weap_info[MAXWEAPONS + 1] = {
     { NULL, 0 },	/* DO NOT REMOVE: fake entry for dragon's breath */
 };
 struct obj_info ws_info[MAXSTICKS] = {
-    { "light",			12, 250, NULL, FALSE },
-    { "invisibility",		 6,   5, NULL, FALSE },
-    { "lightning",		 3, 330, NULL, FALSE },
-    { "fire",			 3, 330, NULL, FALSE },
-    { "cold",			 3, 330, NULL, FALSE },
-    { "polymorph",		15, 310, NULL, FALSE },
-    { "magic missile",		10, 170, NULL, FALSE },
-    { "haste monster",		10,   5, NULL, FALSE },
-    { "slow monster",		11, 350, NULL, FALSE },
-    { "drain life",		 9, 300, NULL, FALSE },
-    { "nothing",		 1,   5, NULL, FALSE },
-    { "teleport away",		 6, 340, NULL, FALSE },
-    { "teleport to",		 6,  50, NULL, FALSE },
-    { "cancellation",		 5, 280, NULL, FALSE },
+    { "light", 			12, 250, NULL, FALSE },        /* 0 */
+    { "invisibility", 		 6,   5, NULL, FALSE },      /* 1 */
+    { "lightning", 		 3, 330, NULL, FALSE },        /* 2 */
+    { "fire", 			 3, 330, NULL, FALSE },          /* 3 */
+    { "cold", 			 3, 330, NULL, FALSE },          /* 4 */
+    { "polymorph", 		15, 310, NULL, FALSE },        /* 5 */
+    { "magic missile", 	10, 170, NULL, FALSE },       /* 6 */
+    { "haste monster", 	10,   5, NULL, FALSE },       /* 7 */
+    { "slow monster", 		11, 350, NULL, FALSE },      /* 8 */
+    { "drain life", 		 9, 300, NULL, FALSE },        /* 9 */
+    { "nothing", 		 1,   5, NULL, FALSE },          /* 10 */
+    { "teleport away", 	 6, 340, NULL, FALSE },       /* 11 */
+    { "teleport to", 		 6,  50, NULL, FALSE },       /* 12 */
+    { "cancellation", 		 5, 280, NULL, FALSE },      /* 13 */
 };
 
 struct h_list helpstr[] = {
