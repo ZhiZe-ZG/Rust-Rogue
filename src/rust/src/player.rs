@@ -1,5 +1,5 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
-use crate::draw::fill_area_with_char;
+use crate::draw::{set_tile_char, place_at};
 use crate::rndmove::rndmove;
 
 const NUMCOLS: c_int = 80;
@@ -187,28 +187,23 @@ unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
 }
 
 #[inline]
-unsafe fn place_at(y: c_int, x: c_int) -> *mut CPlace {
-    places.as_mut_ptr().add(((x as usize) << 5) + (y as usize))
-}
-
-#[inline]
 unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at(y, x)).p_ch
+    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
 }
 
 #[inline]
 unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at(y, x)).p_flags
+    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_flags
 }
 
 #[inline]
 unsafe fn add_flat_flag(y: c_int, x: c_int, flag: c_char) {
-    (*place_at(y, x)).p_flags = (((*place_at(y, x)).p_flags as u8) | (flag as u8)) as c_char;
+    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_flags = (((*place_at((&raw mut places) as *mut CPlace, y, x)).p_flags as u8) | (flag as u8)) as c_char;
 }
 
 #[inline]
 unsafe fn winat(y: c_int, x: c_int) -> c_char {
-    let tp = (*place_at(y, x)).p_monst;
+    let tp = (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst;
     if tp.is_null() {
         chat_at(y, x)
     } else {
@@ -226,7 +221,7 @@ unsafe fn is_upper(ch: c_char) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn turnref() {
     let hero = hero_pos();
-    let place = place_at(hero.y, hero.x);
+    let place = place_at((&raw mut places) as *mut CPlace, hero.y, hero.x);
     if ((*place).p_flags as u8 & F_SEEN as u8) == 0 {
         if jump != 0 {
             leaveok(stdscr, TRUE as c_int);
@@ -241,7 +236,7 @@ pub unsafe extern "C" fn turnref() {
 /// Decide whether it is legal to turn onto the given space.
 #[no_mangle]
 pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
-    let place = place_at(y, x);
+    let place = place_at((&raw mut places) as *mut CPlace, y, x);
     let flags = (*place).p_flags as u8;
     if (*place).p_ch == DOOR || (flags & (F_REAL as u8 | F_PASS as u8)) == (F_REAL as u8 | F_PASS as u8) {
         TRUE
@@ -378,7 +373,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
 
     if (fl as u8 & F_REAL as u8) == 0 && ch == FLOOR {
         if !player_has(ISLEVIT) {
-            fill_area_with_char(next_pos.y, next_pos.x, TRAP);
+            set_tile_char(next_pos.y, next_pos.x, TRAP);
             add_flat_flag(next_pos.y, next_pos.x, F_REAL);
             ch = TRAP;
         }
@@ -418,7 +413,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         STAIRS => {
             seenstairs = TRUE;
             running = FALSE;
-            if is_upper(ch) || !(*place_at(next_pos.y, next_pos.x)).p_monst.is_null() {
+            if is_upper(ch) || !(*place_at((&raw mut places) as *mut CPlace, next_pos.y, next_pos.x)).p_monst.is_null() {
                 fight(&mut next_pos, cur_weapon, FALSE);
             } else {
                 take = ch;
@@ -427,7 +422,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         }
         _ => {
             running = FALSE;
-            if is_upper(ch) || !(*place_at(next_pos.y, next_pos.x)).p_monst.is_null() {
+            if is_upper(ch) || !(*place_at((&raw mut places) as *mut CPlace, next_pos.y, next_pos.x)).p_monst.is_null() {
                 fight(&mut next_pos, cur_weapon, FALSE);
             } else {
                 if ch != STAIRS {

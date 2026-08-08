@@ -1,6 +1,8 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 use std::ptr;
 
+use crate::draw::place_at;
+
 /// Potion and status-effect handling for the Rust FFI bridge.
 /// These helpers implement the C-side potion logic so the game can call
 /// them through exported C entry points.
@@ -260,13 +262,8 @@ unsafe fn next_thing(tp: *mut CThing) -> *mut CThing {
 }
 
 #[inline]
-unsafe fn place_at(y: c_int, x: c_int) -> *mut CPlace {
-    places.as_mut_ptr().add(((x as usize) << 5) + (y as usize))
-}
-
-#[inline]
 unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
-    (*place_at(y, x)).p_monst
+    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst
 }
 
 #[inline]

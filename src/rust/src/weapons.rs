@@ -1,5 +1,7 @@
 use std::os::raw::{c_char, c_int, c_uchar};
 
+use crate::draw::place_at;
+
 const NO_WEAPON: c_int = -1;
 
 const FLOOR: c_int = '.' as c_int;
@@ -173,19 +175,13 @@ unsafe fn hero() -> CCoord {
 }
 
 #[inline]
-unsafe fn place_at(y: c_int, x: c_int) -> *mut CPlace {
-    let idx = ((x << 5) + y) as isize;
-    (&raw mut places as *mut CPlace).offset(idx)
-}
-
-#[inline]
 unsafe fn chat(y: c_int, x: c_int) -> c_int {
-    (*place_at(y, x)).p_ch as c_uchar as c_int
+    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch as c_uchar as c_int
 }
 
 #[inline]
 unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
-    (*place_at(y, x)).p_monst
+    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst
 }
 
 #[inline]
@@ -266,7 +262,7 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
 #[no_mangle]
 pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
     if fallpos(&mut (*thing_o(obj)).o_pos, &raw mut FALL_POS) != 0 {
-        let pp = place_at(FALL_POS.y, FALL_POS.x);
+        let pp = place_at((&raw mut places) as *mut CPlace, FALL_POS.y, FALL_POS.x);
         (*pp).p_ch = (*thing_o(obj)).o_type as c_char;
         (*thing_o(obj)).o_pos = FALL_POS;
 

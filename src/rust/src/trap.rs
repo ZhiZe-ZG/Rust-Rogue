@@ -1,5 +1,6 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::draw::place_at;
 use crate::player::{CCoord, CPlace, CThing, CThingMonster, CThingObject};
 
 const LEFT: usize = 0;
@@ -84,11 +85,6 @@ unsafe fn hero() -> CCoord {
 }
 
 #[inline]
-unsafe fn place_at(y: c_int, x: c_int) -> *mut CPlace {
-    places.as_mut_ptr().add(((x as usize) << 5) + (y as usize))
-}
-
-#[inline]
 unsafe fn ring_is(which: usize, ring_type: c_int) -> bool {
     let ring = cur_ring[which];
     !ring.is_null() && (*thing_o(ring)).o_which == ring_type
@@ -96,7 +92,7 @@ unsafe fn ring_is(which: usize, ring_type: c_int) -> bool {
 
 #[no_mangle]
 pub unsafe extern "C" fn be_trapped(tc: *mut CCoord) -> c_char {
-    let place = place_at((*tc).y, (*tc).x);
+    let place = place_at((&raw mut places) as *mut CPlace, (*tc).y, (*tc).x);
     let trap = (*place).p_flags & F_TMASK;
 
     if ((*thing_t(&raw mut player)).t_flags & ISLEVIT) != 0 {

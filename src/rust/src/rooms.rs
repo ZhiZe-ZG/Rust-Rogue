@@ -1,6 +1,6 @@
 use std::os::raw::{c_char, c_int, c_short};
 
-use crate::draw::fill_area_with_char;
+use crate::draw::{set_tile_char, place_at};
 use crate::player::{CCoord, CPlace, CThing, CThingObject, CRoom};
 use crate::rnd::rnd;
 
@@ -48,18 +48,13 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn place_at(y: c_int, x: c_int) -> *mut CPlace {
-    places.as_mut_ptr().add(((x as usize) << 5) + (y as usize))
-}
-
-#[inline]
 unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at(y, x)).p_ch
+    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
 }
 
 #[inline]
 unsafe fn winat(y: c_int, x: c_int) -> c_char {
-    let tp = (*place_at(y, x)).p_monst;
+    let tp = (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst;
     if tp.is_null() {
         chat_at(y, x)
     } else {
@@ -74,7 +69,7 @@ unsafe fn maze_spot(y: c_int, x: c_int) -> *mut CSpot {
 
 #[inline]
 unsafe fn pass_present(maze_y: c_int, maze_x: c_int) -> bool {
-    let tile = place_at(maze_y + STARTY, maze_x + STARTX);
+    let tile = place_at((&raw mut places) as *mut CPlace, maze_y + STARTY, maze_x + STARTX);
     (((*tile).p_flags as u8) & F_PASS) != 0
 }
 
@@ -183,7 +178,7 @@ pub unsafe extern "C" fn rogue_draw_room(rp: *mut CRoom) {
     while y < (*rp).r_pos.y + (*rp).r_max.y - 1 {
         let mut x = (*rp).r_pos.x + 1;
         while x < (*rp).r_pos.x + (*rp).r_max.x - 1 {
-            fill_area_with_char(y, x, FLOOR);
+            set_tile_char(y, x, FLOOR);
             x += 1;
         }
         y += 1;
@@ -199,7 +194,7 @@ pub unsafe extern "C" fn rogue_vert(rp: *mut CRoom, startx: c_int) {
     let mut y = (*rp).r_pos.y + 1;
     let end = (*rp).r_pos.y + (*rp).r_max.y - 1;
     while y <= end {
-        fill_area_with_char(y, startx, V_WALL);
+        set_tile_char(y, startx, V_WALL);
         y += 1;
     }
 }
@@ -213,7 +208,7 @@ pub unsafe extern "C" fn rogue_horiz(rp: *mut CRoom, starty: c_int) {
     let mut x = (*rp).r_pos.x;
     let end = (*rp).r_pos.x + (*rp).r_max.x - 1;
     while x <= end {
-        fill_area_with_char(starty, x, H_WALL);
+        set_tile_char(starty, x, H_WALL);
         x += 1;
     }
 }

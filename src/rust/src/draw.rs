@@ -7,11 +7,11 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn place_at(y: c_int, x: c_int) -> *mut CPlace {
-	places.as_mut_ptr().add(((x as usize) << 5) + (y as usize))
+pub(crate) unsafe fn place_at<T>(base: *mut T, y: c_int, x: c_int) -> *mut T {
+	base.add(((x as usize) << 5) + (y as usize))
 }
 
 #[inline]
-pub(crate) unsafe fn fill_area_with_char(y: c_int, x: c_int, ch: c_char) {
-	(*place_at(y, x)).p_ch = ch;
+pub(crate) unsafe fn set_tile_char(y: c_int, x: c_int, ch: c_char) {
+	(*place_at((&mut places) as *mut CPlace, y, x)).p_ch = ch;
 }

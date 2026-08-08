@@ -1,6 +1,8 @@
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::draw::place_at;
+
 const AMULETLEVEL: c_int = 26;
 const LAMPDIST: c_int = 3;
 const HUHDURATION: c_int = 20;
@@ -229,11 +231,6 @@ unsafe fn player_t() -> *mut CThingMonster {
 }
 
 #[inline]
-unsafe fn place_at(y: c_int, x: c_int) -> *mut CPlace {
-    &raw mut places[((x as usize) << 5) + (y as usize)]
-}
-
-#[inline]
 unsafe fn has_flag(tp: *mut CThing, flag: c_short) -> bool {
     ((*thing_t(tp)).t_flags & flag) != 0
 }
@@ -282,7 +279,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
     (*thing_t(tp)).t_disguise = monster_type;
     (*thing_t(tp)).t_pos = *cp;
 
-    let place = place_at((*cp).y, (*cp).x);
+    let place = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
     (*thing_t(tp)).t_oldch = (*place).p_ch;
     (*thing_t(tp)).t_room = roomin(cp);
     (*place).p_monst = tp;
@@ -365,7 +362,7 @@ pub unsafe extern "C" fn wanderer() {
 /// Wakes and updates an adjacent monster's pursuit behavior and special gaze logic.
 #[no_mangle]
 pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
-    let tp = (*place_at(y, x)).p_monst;
+    let tp = (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst;
     if tp.is_null() {
         endwin();
         abort();

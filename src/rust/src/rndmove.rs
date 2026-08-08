@@ -1,5 +1,6 @@
 use std::os::raw::{c_char, c_int, c_uchar};
 
+use crate::draw::place_at;
 use crate::player::{CCoord, CPlace, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
@@ -25,18 +26,13 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn place_at(y: c_int, x: c_int) -> *mut CPlace {
-    places.as_mut_ptr().add(((x as usize) << 5) + (y as usize))
-}
-
-#[inline]
 unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at(y, x)).p_ch
+    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
 }
 
 #[inline]
 unsafe fn winat(y: c_int, x: c_int) -> c_char {
-    let tp = (*place_at(y, x)).p_monst;
+    let tp = (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst;
     if tp.is_null() {
         chat_at(y, x)
     } else {

@@ -1,6 +1,8 @@
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::draw::place_at;
+
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
 const SLEEPTIME: c_int = 5;
@@ -206,18 +208,13 @@ unsafe fn proom() -> *mut CRoom {
 }
 
 #[inline]
-unsafe fn place_at(y: c_int, x: c_int) -> *mut CPlace {
-    ((&raw mut places) as *mut CPlace).add(((x as usize) << 5) + (y as usize))
-}
-
-#[inline]
 unsafe fn chat(y: c_int, x: c_int) -> c_int {
-    (*place_at(y, x)).p_ch as c_uchar as c_int
+    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch as c_uchar as c_int
 }
 
 #[inline]
 unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
-    (*place_at(y, x)).p_monst
+    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst
 }
 
 #[inline]
@@ -429,7 +426,7 @@ pub unsafe extern "C" fn read_scroll() {
 
             for y in 1..(NUMLINES - 1) {
                 for x in 0..NUMCOLS {
-                    let pp = place_at(y, x);
+                    let pp = place_at((&raw mut places) as *mut CPlace, y, x);
                     let ch = map_cell_reveal(pp);
                     if ch != SPACE {
                         let tp = (*pp).p_monst;
