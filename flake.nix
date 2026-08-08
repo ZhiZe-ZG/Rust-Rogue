@@ -5,7 +5,8 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 
-  outputs = { self, nixpkgs }:
+  outputs =
+    { self, nixpkgs }:
     let
       systems = [
         "x86_64-linux"
@@ -14,15 +15,18 @@
         "aarch64-darwin"
       ];
 
-      forAllSystems = f:
-        nixpkgs.lib.genAttrs systems (system:
+      forAllSystems =
+        f:
+        nixpkgs.lib.genAttrs systems (
+          system:
           f {
             pkgs = import nixpkgs { inherit system; };
           }
         );
     in
     {
-      packages = forAllSystems ({ pkgs }:
+      packages = forAllSystems (
+        { pkgs }:
         let
           rogue = pkgs.stdenv.mkDerivation {
             pname = "rogue";
@@ -70,18 +74,21 @@
         }
       );
 
-      devShells = forAllSystems ({ pkgs }: {
-        default = pkgs.mkShell {
-          packages = [
-            pkgs.autoconf
-            pkgs.automake
-              pkgs.cargo
-            pkgs.gnumake
-            pkgs.ncurses
-            pkgs.pkg-config
-              pkgs.rustc
-          ];
-        };
-      });
+      devShells = forAllSystems (
+        { pkgs }: {
+          default = pkgs.mkShell {
+            packages = with pkgs; [
+              autoconf
+              automake
+              cargo
+              gnumake
+              ncurses
+              pkg-config
+              rustc
+              rust-analyzer
+            ];
+          };
+        }
+      );
     };
 }
