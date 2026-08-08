@@ -1,4 +1,5 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use crate::draw::set_chat;
 use crate::rndmove::rndmove;
 
 const NUMCOLS: c_int = 80;
@@ -198,11 +199,6 @@ unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
 #[inline]
 unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
     (*place_at(y, x)).p_flags
-}
-
-#[inline]
-unsafe fn set_chat(y: c_int, x: c_int, ch: c_char) {
-    (*place_at(y, x)).p_ch = ch;
 }
 
 #[inline]

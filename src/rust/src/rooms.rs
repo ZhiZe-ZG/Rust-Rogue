@@ -1,5 +1,6 @@
 use std::os::raw::{c_char, c_int, c_short};
 
+use crate::draw::set_chat;
 use crate::player::{CCoord, CPlace, CThing, CThingObject, CRoom};
 use crate::rnd::rnd;
 
@@ -64,11 +65,6 @@ unsafe fn winat(y: c_int, x: c_int) -> c_char {
     } else {
         (*thing_o(tp)).o_packch
     }
-}
-
-#[inline]
-unsafe fn set_chat(y: c_int, x: c_int, ch: c_char) {
-    (*place_at(y, x)).p_ch = ch;
 }
 
 #[inline]

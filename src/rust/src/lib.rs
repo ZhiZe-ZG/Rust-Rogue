@@ -1,4 +1,5 @@
 pub mod armor;
+pub mod draw;
 pub mod potions;
 pub mod player;
 pub mod rndmove;
