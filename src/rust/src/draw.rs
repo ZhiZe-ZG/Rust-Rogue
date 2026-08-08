@@ -12,6 +12,6 @@ unsafe fn place_at(y: c_int, x: c_int) -> *mut CPlace {
 }
 
 #[inline]
-pub(crate) unsafe fn set_chat(y: c_int, x: c_int, ch: c_char) {
+pub(crate) unsafe fn fill_area_with_char(y: c_int, x: c_int, ch: c_char) {
 	(*place_at(y, x)).p_ch = ch;
 }

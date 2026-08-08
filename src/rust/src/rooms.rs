@@ -1,6 +1,6 @@
 use std::os::raw::{c_char, c_int, c_short};
 
-use crate::draw::set_chat;
+use crate::draw::fill_area_with_char;
 use crate::player::{CCoord, CPlace, CThing, CThingObject, CRoom};
 use crate::rnd::rnd;
 
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn rogue_draw_room(rp: *mut CRoom) {
     while y < (*rp).r_pos.y + (*rp).r_max.y - 1 {
         let mut x = (*rp).r_pos.x + 1;
         while x < (*rp).r_pos.x + (*rp).r_max.x - 1 {
-            set_chat(y, x, FLOOR);
+            fill_area_with_char(y, x, FLOOR);
             x += 1;
         }
         y += 1;
@@ -199,7 +199,7 @@ pub unsafe extern "C" fn rogue_vert(rp: *mut CRoom, startx: c_int) {
     let mut y = (*rp).r_pos.y + 1;
     let end = (*rp).r_pos.y + (*rp).r_max.y - 1;
     while y <= end {
-        set_chat(y, startx, V_WALL);
+        fill_area_with_char(y, startx, V_WALL);
         y += 1;
     }
 }
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn rogue_horiz(rp: *mut CRoom, starty: c_int) {
     let mut x = (*rp).r_pos.x;
     let end = (*rp).r_pos.x + (*rp).r_max.x - 1;
     while x <= end {
-        set_chat(starty, x, H_WALL);
+        fill_area_with_char(starty, x, H_WALL);
         x += 1;
     }
 }

@@ -1,5 +1,5 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
-use crate::draw::set_chat;
+use crate::draw::fill_area_with_char;
 use crate::rndmove::rndmove;
 
 const NUMCOLS: c_int = 80;
@@ -378,7 +378,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
 
     if (fl as u8 & F_REAL as u8) == 0 && ch == FLOOR {
         if !player_has(ISLEVIT) {
-            set_chat(next_pos.y, next_pos.x, TRAP);
+            fill_area_with_char(next_pos.y, next_pos.x, TRAP);
             add_flat_flag(next_pos.y, next_pos.x, F_REAL);
             ch = TRAP;
         }
