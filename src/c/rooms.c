@@ -21,8 +21,6 @@ typedef struct spot {		/* position matrix for maze positions */
 } SPOT;
 
 extern void rogue_draw_room(struct room *rp);
-extern void rogue_vert(struct room *rp, int startx);
-extern void rogue_horiz(struct room *rp, int starty);
 extern void rogue_do_maze(struct room *rp);
 
 #define GOLDGRP 1
@@ -161,30 +159,8 @@ draw_room(struct room *rp)
 }
 
 /*
- * vert:
- *	Draw a vertical line
- */
-
-void
-vert(struct room *rp, int startx)
-{
-    rogue_vert(rp, startx);
-}
-
-/*
- * horiz:
- *	Draw a horizontal line
- */
-
-void
-horiz(struct room *rp, int starty)
-{
-    rogue_horiz(rp, starty);
-}
-
-/*
  * do_maze:
- *	Dig a maze
+	Dig a maze
  */
 
 static int	Maxy, Maxx, Starty, Startx;

@@ -4,6 +4,7 @@ use crate::draw::{set_tile_char, place_at};
 use crate::player::{CCoord, CPlace, CThing, CThingObject, CRoom};
 use crate::rnd::rnd;
 use crate::structure::Structure;
+use crate::tile::Tile;
 use glam::IVec2;
 
 const ISGONE: c_short = 0o000002;
@@ -14,6 +15,10 @@ const F_PASS: u8 = 0x80;
 const FLOOR: c_char = b'.' as c_char;
 const H_WALL: c_char = b'-' as c_char;
 const V_WALL: c_char = b'|' as c_char;
+const PASSAGE: c_char = b'#' as c_char;
+const DOOR: c_char = b'+' as c_char;
+const STAIRS: c_char = b'%' as c_char;
+const TRAP: c_char = b'^' as c_char;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Room {
@@ -30,6 +35,81 @@ impl Room {
             structure,
         }
 	}
+}
+
+fn build_room_model(rp: *const CRoom) -> Option<Room> {
+    if rp.is_null() {
+        return None;
+    }
+
+    let width = unsafe { (*rp).r_max.x };
+    let height = unsafe { (*rp).r_max.y };
+    if width <= 0 || height <= 0 {
+        return None;
+    }
+
+    let width_usize = width as usize;
+    let height_usize = height as usize;
+    let mut structure = Structure::new(height_usize, width_usize, Tile::Empty);
+
+    for y in 0..height_usize {
+        for x in 0..width_usize {
+            let is_border = y == 0 || x == 0 || y + 1 == height_usize || x + 1 == width_usize;
+            let tile = if is_border { Tile::Wall } else { Tile::Floor };
+            let _ = structure.set(y, x, tile);
+        }
+    }
+
+    let position = unsafe { IVec2::new((*rp).r_pos.x, (*rp).r_pos.y) };
+    let size = IVec2::new(width, height);
+    Some(Room::new(position, size, structure))
+}
+
+fn room_tile_to_ascii(tile: Tile, local_y: usize, local_x: usize, height: usize) -> Option<c_char> {
+    match tile {
+        Tile::Empty => None,
+        Tile::Floor => Some(FLOOR),
+        Tile::Wall => {
+            if local_y == 0 || local_y + 1 == height {
+                Some(H_WALL)
+            } else {
+                let _ = local_x;
+                Some(V_WALL)
+            }
+        }
+        Tile::Passage => Some(PASSAGE),
+        Tile::Door => Some(DOOR),
+        Tile::Stairs => Some(STAIRS),
+        Tile::Trap => Some(TRAP),
+    }
+}
+
+unsafe fn draw_room_ascii(room: &Room) {
+    let height = room.size.y;
+    let width = room.size.x;
+    if height <= 0 || width <= 0 {
+        return;
+    }
+
+    let height_usize = height as usize;
+    let width_usize = width as usize;
+    for local_y in 0..height_usize {
+        for local_x in 0..width_usize {
+            let tile = match room.structure.get(local_y, local_x) {
+                Some(tile) => tile,
+                None => continue,
+            };
+            let ch = match room_tile_to_ascii(tile, local_y, local_x, height_usize) {
+                Some(ch) => ch,
+                None => continue,
+            };
+            set_tile_char(
+                room.position.y + local_y as c_int,
+                room.position.x + local_x as c_int,
+                ch,
+            );
+        }
+    }
 }
 
 
@@ -189,47 +269,8 @@ pub unsafe extern "C" fn rogue_draw_room(rp: *mut CRoom) {
         return;
     }
 
-    rogue_vert(rp, (*rp).r_pos.x);
-    rogue_vert(rp, (*rp).r_pos.x + (*rp).r_max.x - 1);
-    rogue_horiz(rp, (*rp).r_pos.y);
-    rogue_horiz(rp, (*rp).r_pos.y + (*rp).r_max.y - 1);
-
-    let mut y = (*rp).r_pos.y + 1;
-    while y < (*rp).r_pos.y + (*rp).r_max.y - 1 {
-        let mut x = (*rp).r_pos.x + 1;
-        while x < (*rp).r_pos.x + (*rp).r_max.x - 1 {
-            set_tile_char(y, x, FLOOR);
-            x += 1;
-        }
-        y += 1;
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn rogue_vert(rp: *mut CRoom, startx: c_int) {
-    if rp.is_null() {
-        return;
-    }
-
-    let mut y = (*rp).r_pos.y + 1;
-    let end = (*rp).r_pos.y + (*rp).r_max.y - 1;
-    while y <= end {
-        set_tile_char(y, startx, V_WALL);
-        y += 1;
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn rogue_horiz(rp: *mut CRoom, starty: c_int) {
-    if rp.is_null() {
-        return;
-    }
-
-    let mut x = (*rp).r_pos.x;
-    let end = (*rp).r_pos.x + (*rp).r_max.x - 1;
-    while x <= end {
-        set_tile_char(starty, x, H_WALL);
-        x += 1;
+    if let Some(room) = build_room_model(rp) {
+        draw_room_ascii(&room);
     }
 }
 
