@@ -285,6 +285,8 @@ If the build succeeds, Nix creates a `result` symlink in the repository root poi
 ./rogue -d
 ```
 
+**Important**: Your terminal must be at least **24 rows by 80 columns** for the game to display properly. If you see the error "Sorry, the screen must be at least 24x80", resize your terminal window. See [Troubleshooting](#runtime-issues) for details.
+
 ### In-Game Commands
 
 - **`?`** - Show help/command list
@@ -572,6 +574,23 @@ When reporting bugs, please include:
 ## Troubleshooting
 
 **Note**: For detailed information about known build issues, especially on modern systems, see [BUILD_ISSUES.md](BUILD_ISSUES.md).
+
+### Runtime Issues
+
+**Problem**: Game exits immediately with error "Sorry, the screen must be at least 24x80"
+
+**Solution**: Resize your terminal to at least 24 lines by 80 columns:
+
+```bash
+# Check current terminal size
+stty size
+
+# The game requires a minimum of 24 rows × 80 columns
+# Ensure your terminal (Alacritty, xterm, Terminal.app, etc.) is large enough
+# You can usually resize by dragging the window corner or using terminal commands
+```
+
+**Note**: Most modern terminals default to larger sizes, but in some cases (especially when using smaller fonts or custom terminal configurations), you may need to enlarge the window. The game will fail to start if the terminal is too small.
 
 ### Build Issues
 

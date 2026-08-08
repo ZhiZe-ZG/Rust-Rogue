@@ -114,6 +114,19 @@ main(int argc, char **argv, char **envp)
     fflush(stdout);
 
     initscr();				/* Start up cursor package */
+    
+    /*
+     * The screen must be at least NUMLINES x NUMCOLS
+     * Check this immediately after initscr() to get proper LINES/COLS values
+     */
+    if (LINES < NUMLINES || COLS < NUMCOLS)
+    {
+	endwin();			/* Restore terminal before printing error */
+	fprintf(stderr, "Sorry, the screen must be at least %dx%d\n", NUMLINES, NUMCOLS);
+	fprintf(stderr, "Current terminal size: %dx%d\n", COLS, LINES);
+	my_exit(1);
+    }
+    
     init_probs();			/* Set up prob tables for objects */
     init_player();			/* Set up initial player stats */
     init_names();			/* Set up names of scrolls */
@@ -121,16 +134,6 @@ main(int argc, char **argv, char **envp)
     init_stones();			/* Set up stone settings of rings */
     init_materials();			/* Set up materials of wands */
     setup();
-
-    /*
-     * The screen must be at least NUMLINES x NUMCOLS
-     */
-    if (LINES < NUMLINES || COLS < NUMCOLS)
-    {
-	printf("\nSorry, the screen must be at least %dx%d\n", NUMLINES, NUMCOLS);
-	endwin();
-	my_exit(1);
-    }
 
     /*
      * Set up windows
