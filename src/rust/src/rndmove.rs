@@ -1,6 +1,7 @@
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::player::{CCoord, CPlace, CThing, CThingMonster, CThingObject};
+use crate::rnd::rnd;
 
 const SCROLL: c_char = b'?' as c_char;
 const S_SCARE: c_int = 10;
@@ -9,7 +10,6 @@ unsafe extern "C" {
     static mut places: [CPlace; 32 * 80];
     static mut lvl_obj: *mut CThing;
 
-    fn rnd(range: c_int) -> c_int;
     fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
     fn step_ok(ch: c_int) -> c_int;
 }

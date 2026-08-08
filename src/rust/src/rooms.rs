@@ -1,6 +1,7 @@
 use std::os::raw::{c_char, c_int, c_short};
 
 use crate::player::{CCoord, CPlace, CThing, CThingObject, CRoom};
+use crate::rnd::rnd;
 
 const ISGONE: c_short = 0o000002;
 const ISMAZE: c_short = 0o000004;
@@ -30,7 +31,6 @@ unsafe extern "C" {
     static mut places: [CPlace; 32 * 80];
 
     fn wake_monster(y: c_int, x: c_int);
-    fn rnd(range: c_int) -> c_int;
     fn putpass(cp: *mut CCoord);
 }
 
