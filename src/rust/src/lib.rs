@@ -1,5 +1,7 @@
 pub mod armor;
 pub mod draw;
+pub mod structure;
+pub mod tile;
 pub mod potions;
 pub mod player;
 pub mod rndmove;

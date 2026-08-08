@@ -3,6 +3,8 @@ use std::os::raw::{c_char, c_int, c_short};
 use crate::draw::{set_tile_char, place_at};
 use crate::player::{CCoord, CPlace, CThing, CThingObject, CRoom};
 use crate::rnd::rnd;
+use crate::structure::Structure;
+use glam::IVec2;
 
 const ISGONE: c_short = 0o000002;
 const ISMAZE: c_short = 0o000004;
@@ -12,6 +14,24 @@ const F_PASS: u8 = 0x80;
 const FLOOR: c_char = b'.' as c_char;
 const H_WALL: c_char = b'-' as c_char;
 const V_WALL: c_char = b'|' as c_char;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Room {
+	pub position: IVec2,
+	pub size: IVec2,
+    pub structure: Structure,
+}
+
+impl Room {
+    pub fn new(position: IVec2, size: IVec2, structure: Structure) -> Self {
+        Self {
+            position,
+            size,
+            structure,
+        }
+	}
+}
+
 
 #[repr(C)]
 #[derive(Copy, Clone)]
