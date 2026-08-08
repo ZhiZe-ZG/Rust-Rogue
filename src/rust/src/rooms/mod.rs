@@ -68,4 +68,4 @@ pub(crate) fn room_tile_to_ascii(
 
 mod ffi;
 
-pub use ffi::{door_open, rogue_do_maze, rogue_draw_room};
+pub use ffi::{door_open, draw_room, rogue_do_maze};

@@ -20,7 +20,6 @@ typedef struct spot {		/* position matrix for maze positions */
 	int	used;
 } SPOT;
 
-extern void rogue_draw_room(struct room *rp);
 extern void rogue_do_maze(struct room *rp);
 
 #define GOLDGRP 1
@@ -144,18 +143,6 @@ do_rooms()
 	    give_pack(tp);
 	}
     }
-}
-
-/*
- * draw_room:
- *	Draw a box around a room and lay down the floor for normal
- *	rooms; for maze rooms, draw maze.
- */
-
-void
-draw_room(struct room *rp)
-{
-    rogue_draw_room(rp);
 }
 
 /*

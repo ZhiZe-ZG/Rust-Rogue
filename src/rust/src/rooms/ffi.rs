@@ -200,7 +200,7 @@ unsafe fn draw_room_ascii(room: &Room) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn rogue_draw_room(rp: *mut CRoom) {
+pub unsafe extern "C" fn draw_room(rp: *mut CRoom) {
 	if rp.is_null() {
 		return;
 	}
