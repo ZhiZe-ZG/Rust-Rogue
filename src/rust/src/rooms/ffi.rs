@@ -142,7 +142,7 @@ pub unsafe extern "C" fn draw_room(rp: *mut CRoom) {
 	}
 
 	if ((*rp).r_flags & ISMAZE) != 0 {
-		rogue_do_maze(rp);
+		do_maze(rp);
 		return;
 	}
 
@@ -152,7 +152,7 @@ pub unsafe extern "C" fn draw_room(rp: *mut CRoom) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn rogue_do_maze(rp: *mut CRoom) {
+pub unsafe extern "C" fn do_maze(rp: *mut CRoom) {
 	if rp.is_null() {
 		return;
 	}

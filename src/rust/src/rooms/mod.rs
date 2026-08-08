@@ -139,4 +139,4 @@ pub(crate) fn tile_to_ascii(
 
 mod ffi;
 
-pub use ffi::{door_open, draw_room, rogue_do_maze};
+pub use ffi::{do_maze, door_open, draw_room};
