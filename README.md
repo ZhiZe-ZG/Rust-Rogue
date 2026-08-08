@@ -15,6 +15,7 @@
 - [Building from Source](#building-from-source)
 - [Building with Nix Flake](#building-with-nix-flake)
 - [Running the Game](#running-the-game)
+- [Screen Coordinates](#screen-coordinates)
 - [Project Structure](#project-structure)
 - [Development Guide](#development-guide)
 - [Contributing](#contributing)
@@ -286,6 +287,25 @@ If the build succeeds, Nix creates a `result` symlink in the repository root poi
 ```
 
 **Important**: Your terminal must be at least **24 rows by 80 columns** for the game to display properly. If you see the error "Sorry, the screen must be at least 24x80", resize your terminal window. See [Troubleshooting](#runtime-issues) for details.
+
+### Screen Coordinates
+
+Rogue uses a row/column coordinate system that follows curses conventions:
+
+- **Screen width** = 80 columns
+- **Screen height** = 24 rows
+- **`x`** is the horizontal coordinate (column)
+- **`y`** is the vertical coordinate (row)
+- Origin **`(y=0, x=0)`** is the top-left corner of the terminal
+- Positive direction: **`x` increases to the right**, **`y` increases downward**
+
+Examples:
+
+- Moving right by 1 tile: `(y, x + 1)`
+- Moving down by 1 tile: `(y + 1, x)`
+- Bottom-right screen corner: `(y=23, x=79)`
+
+Most drawing and cursor APIs in this codebase take coordinates in **`(y, x)`** order.
 
 ### In-Game Commands
 
