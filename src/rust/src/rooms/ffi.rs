@@ -85,7 +85,7 @@ unsafe fn winat(y: c_int, x: c_int) -> c_char {
 	}
 }
 
-unsafe fn build_room_model(rp: *const CRoom) -> Option<Room> {
+unsafe fn build_plain_room_model(rp: *const CRoom) -> Option<Room> {
 	if rp.is_null() {
 		return None;
 	}
@@ -255,7 +255,9 @@ pub unsafe extern "C" fn do_rooms() {
 			}
 		}
 
-		draw_room(rp);
+		if let Some(room) = build_room_model(rp) {
+			draw_room_ascii(&room);
+		}
 
 		if rnd(2) == 0 && (amulet == 0 || level >= max_level) {
 			let gold = new_item();
@@ -327,7 +329,7 @@ pub unsafe extern "C" fn treas_room() {
 	level -= 1;
 }
 
-unsafe fn draw_room_ascii(room: &Room) {
+pub unsafe fn draw_room_ascii(room: &Room) {
 	let height = room.size.y;
 	let width = room.size.x;
 	if height <= 0 || width <= 0 {
@@ -342,37 +344,6 @@ unsafe fn draw_room_ascii(room: &Room) {
 				Some(tile) => tile,
 				None => continue,
 			};
-			let ch = match tile_to_ascii(tile, local_y, local_x, height_usize) {
-				Some(ch) => ch,
-				None => continue,
-			};
-			set_tile_char(
-				room.position.y + local_y as c_int,
-				room.position.x + local_x as c_int,
-				ch,
-			);
-		}
-	}
-}
-
-unsafe fn draw_maze_ascii(room: &Room) {
-	let height = room.size.y;
-	let width = room.size.x;
-	if height <= 0 || width <= 0 {
-		return;
-	}
-
-	let height_usize = height as usize;
-	let width_usize = width as usize;
-	for local_y in 0..height_usize {
-		for local_x in 0..width_usize {
-			let tile = match room.structure.get(local_y, local_x) {
-				Some(tile) => tile,
-				None => continue,
-			};
-			if !matches!(tile, crate::tile::Tile::Passage) {
-				continue;
-			}
 			let ch = match tile_to_ascii(tile, local_y, local_x, height_usize) {
 				Some(ch) => ch,
 				None => continue,
@@ -388,35 +359,20 @@ unsafe fn draw_maze_ascii(room: &Room) {
 	}
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn draw_room(rp: *mut CRoom) {
+pub unsafe fn build_room_model(rp: *mut CRoom) -> Option<Room> {
 	if rp.is_null() {
-		return;
+		return None;
 	}
 
 	if ((*rp).r_flags & ISGONE) != 0 {
-		return;
+		return None;
 	}
 
 	if ((*rp).r_flags & ISMAZE) != 0 {
-		do_maze(rp);
-		return;
+		return build_maze_model(rp);
 	}
 
-	if let Some(room) = build_room_model(rp) {
-		draw_room_ascii(&room);
-	}
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn do_maze(rp: *mut CRoom) {
-	if rp.is_null() {
-		return;
-	}
-
-	if let Some(room) = build_maze_model(rp) {
-		draw_maze_ascii(&room);
-	}
+	build_plain_room_model(rp)
 }
 
 /// door_open:
