@@ -230,45 +230,7 @@ pub unsafe extern "C" fn do_rooms() {
 			continue;
 		}
 
-		if rnd(10) < level - 1 {
-			(*rp).r_flags |= ISDARK;
-			if rnd(15) == 0 {
-				(*rp).r_flags = ISMAZE;
-			}
-		}
-
-		if ((*rp).r_flags & ISMAZE) != 0 {
-			(*rp).r_max.x = bsze.x - 1;
-			(*rp).r_max.y = bsze.y - 1;
-			(*rp).r_pos.x = top.x;
-			if (*rp).r_pos.x == 1 {
-				(*rp).r_pos.x = 0;
-			}
-			(*rp).r_pos.y = top.y;
-			if (*rp).r_pos.y == 0 {
-				(*rp).r_pos.y += 1;
-				(*rp).r_max.y -= 1;
-			}
-		} else {
-			let mut placed = false;
-			for _ in 0..MAX_ROOM_TRIES {
-				(*rp).r_max.x = rnd(bsze.x - 4) + 4;
-				(*rp).r_max.y = rnd(bsze.y - 4) + 4;
-				(*rp).r_pos.x = top.x + rnd(bsze.x - (*rp).r_max.x);
-				(*rp).r_pos.y = top.y + rnd(bsze.y - (*rp).r_max.y);
-				if (*rp).r_pos.y != 0 {
-					placed = true;
-					break;
-				}
-			}
-
-			if !placed {
-				(*rp).r_flags |= ISGONE;
-				continue;
-			}
-		}
-
-		room_models[i] = build_room_model(rp);
+		room_models[i] = build_room_model(rp, top, bsze);
 	}
 
 	// Draw prebuilt room models, then place gold and monsters.
@@ -380,13 +342,51 @@ pub unsafe fn draw_room_ascii(room: &Room) {
 	}
 }
 
-pub unsafe fn build_room_model(rp: *mut CRoom) -> Option<Room> {
+pub unsafe fn build_room_model(rp: *mut CRoom, top: CCoord, bsze: CCoord) -> Option<Room> {
 	if rp.is_null() {
 		return None;
 	}
 
 	if ((*rp).r_flags & ISGONE) != 0 {
 		return None;
+	}
+
+	if rnd(10) < level - 1 {
+		(*rp).r_flags |= ISDARK;
+		if rnd(15) == 0 {
+			(*rp).r_flags = ISMAZE;
+		}
+	}
+
+	if ((*rp).r_flags & ISMAZE) != 0 {
+		(*rp).r_max.x = bsze.x - 1;
+		(*rp).r_max.y = bsze.y - 1;
+		(*rp).r_pos.x = top.x;
+		if (*rp).r_pos.x == 1 {
+			(*rp).r_pos.x = 0;
+		}
+		(*rp).r_pos.y = top.y;
+		if (*rp).r_pos.y == 0 {
+			(*rp).r_pos.y += 1;
+			(*rp).r_max.y -= 1;
+		}
+	} else {
+		let mut placed = false;
+		for _ in 0..MAX_ROOM_TRIES {
+			(*rp).r_max.x = rnd(bsze.x - 4) + 4;
+			(*rp).r_max.y = rnd(bsze.y - 4) + 4;
+			(*rp).r_pos.x = top.x + rnd(bsze.x - (*rp).r_max.x);
+			(*rp).r_pos.y = top.y + rnd(bsze.y - (*rp).r_max.y);
+			if (*rp).r_pos.y != 0 {
+				placed = true;
+				break;
+			}
+		}
+
+		if !placed {
+			(*rp).r_flags |= ISGONE;
+			return None;
+		}
 	}
 
 	if ((*rp).r_flags & ISMAZE) != 0 {
