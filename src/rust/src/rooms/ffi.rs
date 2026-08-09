@@ -2,7 +2,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 use crate::draw::{place_at, set_tile_char};
 use crate::passages::putpass;
-use crate::player::{CCoord, CPlace, CThing, CThingObject, CRoom};
+use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
 use crate::tile::Tile;
 
 use super::{build_maze_structure, build_room_structure, Room};
@@ -12,9 +12,13 @@ const ISGONE: c_short = 0o000002;
 const ISMAZE: c_short = 0o000004;
 const ISDARK: c_short = 0o000001;
 const ISMANY: c_int = 0o0000010;
+const ISMEAN: c_short = 0o0004000;
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
 const MAXROOMS: usize = 9;
+const MAXTREAS: c_int = 10;
+const MINTREAS: c_int = 2;
+const MAXTRIES: c_int = 10;
 const GOLDGRP: c_int = 1;
 const GOLD: c_char = b'*' as c_char;
 const FLOOR: c_char = b'.' as c_char;
@@ -38,6 +42,7 @@ unsafe extern "C" {
 	fn wake_monster(y: c_int, x: c_int);
 	fn rnd(range: c_int) -> c_int;
 	fn step_ok(ch: c_int) -> c_int;
+	fn new_thing() -> *mut CThing;
 	fn new_item() -> *mut CThing;
 	fn _attach(list: *mut *mut CThing, item: *mut CThing);
 	fn randmonster(wander: c_uchar) -> c_char;
@@ -58,6 +63,11 @@ pub unsafe extern "C" fn rnd_room() -> c_int {
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 	tp as *mut CThingObject
+}
+
+#[inline]
+unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+	tp as *mut CThingMonster
 }
 
 #[inline]
@@ -272,6 +282,49 @@ pub unsafe extern "C" fn do_rooms() {
 			}
 		}
 	}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn treas_room() {
+	let mut mp = CCoord { x: 0, y: 0 };
+	let rp = &mut rooms[rnd_room() as usize];
+
+	let mut spots = (rp.r_max.y - 2) * (rp.r_max.x - 2) - MINTREAS;
+	if spots > (MAXTREAS - MINTREAS) {
+		spots = MAXTREAS - MINTREAS;
+	}
+
+	let mut nm = rnd(spots) + MINTREAS;
+	let num_monst = nm;
+	while nm > 0 {
+		find_floor(rp as *mut CRoom, &mut mp, 2 * MAXTRIES, FALSE);
+		let tp = new_thing();
+		(*thing_o(tp)).o_pos = mp;
+		_attach((&raw mut lvl_obj) as *mut *mut CThing, tp);
+		(*place_at((&raw mut places) as *mut CPlace, mp.y, mp.x)).p_ch = (*thing_o(tp)).o_type as c_char;
+		nm -= 1;
+	}
+
+	nm = rnd(spots) + MINTREAS;
+	if nm < num_monst + 2 {
+		nm = num_monst + 2;
+	}
+	spots = (rp.r_max.y - 2) * (rp.r_max.x - 2);
+	if nm > spots {
+		nm = spots;
+	}
+
+	level += 1;
+	while nm > 0 {
+		if find_floor(rp as *mut CRoom, &mut mp, MAXTRIES, TRUE) != 0 {
+			let tp = new_item();
+			new_monster(tp, randmonster(FALSE), &mut mp);
+			(*thing_t(tp)).t_flags |= ISMEAN;
+			give_pack(tp);
+		}
+		nm -= 1;
+	}
+	level -= 1;
 }
 
 unsafe fn draw_room_ascii(room: &Room) {
