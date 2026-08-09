@@ -19,6 +19,7 @@ const MAXROOMS: usize = 9;
 const MAXTREAS: c_int = 10;
 const MINTREAS: c_int = 2;
 const MAXTRIES: c_int = 10;
+const MAX_ROOM_TRIES: usize = 100;
 const GOLDGRP: c_int = 1;
 const GOLD: c_char = b'*' as c_char;
 const FLOOR: c_char = b'.' as c_char;
@@ -249,15 +250,21 @@ pub unsafe extern "C" fn do_rooms() {
 				(*rp).r_max.y -= 1;
 			}
 		} else {
-			// Keep rerolling room dimensions and position until y is non-zero.
-			loop {
+			let mut placed = false;
+			for _ in 0..MAX_ROOM_TRIES {
 				(*rp).r_max.x = rnd(bsze.x - 4) + 4;
 				(*rp).r_max.y = rnd(bsze.y - 4) + 4;
 				(*rp).r_pos.x = top.x + rnd(bsze.x - (*rp).r_max.x);
 				(*rp).r_pos.y = top.y + rnd(bsze.y - (*rp).r_max.y);
 				if (*rp).r_pos.y != 0 {
+					placed = true;
 					break;
 				}
+			}
+
+			if !placed {
+				(*rp).r_flags |= ISGONE;
+				continue;
 			}
 		}
 
