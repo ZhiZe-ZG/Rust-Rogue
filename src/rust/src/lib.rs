@@ -1,5 +1,6 @@
 pub mod armor;
 pub mod draw;
+pub mod passages;
 pub mod structure;
 pub mod tile;
 pub mod potions;
