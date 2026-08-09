@@ -8,14 +8,44 @@ pub struct Room {
 	pub position: IVec2,
 	pub size: IVec2,
 	pub structure: Structure,
+	pub entry_points: Vec<IVec2>,
 }
 
 impl Room {
-	pub fn new(position: IVec2, size: IVec2, structure: Structure) -> Self {
+	pub fn new(
+		position: IVec2,
+		size: IVec2,
+		structure: Option<Structure>,
+		entry_points: Option<Vec<IVec2>>,
+	) -> Self {
+		let default_structure = if size.x > 0 && size.y > 0 {
+			build_room_structure(size.y as usize, size.x as usize)
+		} else {
+			Structure::new(0, 0, Tile::Empty)
+		};
+
 		Self {
 			position,
 			size,
-			structure,
+			structure: structure.unwrap_or(default_structure),
+			entry_points: entry_points.unwrap_or_default(),
+		}
+	}
+
+	pub fn add_entry_point(&mut self, relative_pos: IVec2) {
+		self.entry_points.push(relative_pos);
+	}
+
+	pub fn set_entry_points(&mut self, entry_points: Vec<IVec2>) {
+		self.entry_points = entry_points;
+	}
+
+	pub fn delete_entry_point(&mut self, relative_pos: IVec2) -> bool {
+		if let Some(idx) = self.entry_points.iter().position(|&p| p == relative_pos) {
+			self.entry_points.remove(idx);
+			true
+		} else {
+			false
 		}
 	}
 

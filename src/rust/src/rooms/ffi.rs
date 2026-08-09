@@ -80,7 +80,7 @@ unsafe fn build_room_model(rp: *const CRoom) -> Option<Room> {
 	let position = IVec2::new((*rp).r_pos.x, (*rp).r_pos.y);
 	let size = IVec2::new(width, height);
 	let structure = build_room_structure(height as usize, width as usize);
-	Some(Room::new(position, size, structure))
+	Some(Room::new(position, size, Some(structure), None))
 }
 
 unsafe fn build_maze_model(rp: *const CRoom) -> Option<Room> {
@@ -97,7 +97,7 @@ unsafe fn build_maze_model(rp: *const CRoom) -> Option<Room> {
 	let position = IVec2::new((*rp).r_pos.x, (*rp).r_pos.y);
 	let size = IVec2::new(width, height);
 	let structure = build_maze_structure(height as usize, width as usize);
-	Some(Room::new(position, size, structure))
+	Some(Room::new(position, size, Some(structure), None))
 }
 
 fn tile_to_ascii(tile: Tile, local_y: usize, _local_x: usize, height: usize) -> Option<c_char> {
