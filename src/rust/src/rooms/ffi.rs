@@ -190,7 +190,9 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
 pub unsafe extern "C" fn do_rooms() {
 	let mut bsze = CCoord { x: NUMCOLS / 3, y: NUMLINES / 3 };
 	let mut mp = CCoord { x: 0, y: 0 };
+	let mut room_models: [Option<Room>; MAXROOMS] = std::array::from_fn(|_| None);
 
+	// Reset per-room state before generating the level layout.
 	for i in 0..MAXROOMS {
 		let rp = (&raw mut rooms[i]) as *mut CRoom;
 		(*rp).r_goldval = 0;
@@ -199,11 +201,13 @@ pub unsafe extern "C" fn do_rooms() {
 	}
 
 	let left_out = rnd(4);
+	// Randomly mark a few rooms as removed for this level.
 	for _ in 0..left_out {
 		let room_idx = rnd_room() as usize;
 		rooms[room_idx].r_flags |= ISGONE;
 	}
 
+	// Compute geometry and room models for every room slot.
 	for i in 0..MAXROOMS {
 		let rp = (&raw mut rooms[i]) as *mut CRoom;
 		let top = CCoord {
@@ -212,6 +216,7 @@ pub unsafe extern "C" fn do_rooms() {
 		};
 
 		if ((*rp).r_flags & ISGONE) != 0 {
+			// Keep rerolling until the off-map placeholder position is valid.
 			loop {
 				(*rp).r_pos.x = top.x + rnd(bsze.x - 2) + 1;
 				(*rp).r_pos.y = top.y + rnd(bsze.y - 2) + 1;
@@ -244,6 +249,7 @@ pub unsafe extern "C" fn do_rooms() {
 				(*rp).r_max.y -= 1;
 			}
 		} else {
+			// Keep rerolling room dimensions and position until y is non-zero.
 			loop {
 				(*rp).r_max.x = rnd(bsze.x - 4) + 4;
 				(*rp).r_max.y = rnd(bsze.y - 4) + 4;
@@ -255,8 +261,16 @@ pub unsafe extern "C" fn do_rooms() {
 			}
 		}
 
-		if let Some(room) = build_room_model(rp) {
+		room_models[i] = build_room_model(rp);
+	}
+
+	// Draw prebuilt room models, then place gold and monsters.
+	for i in 0..MAXROOMS {
+		let rp = (&raw mut rooms[i]) as *mut CRoom;
+		if let Some(room) = room_models[i].as_ref() {
 			draw_room_ascii(&room);
+		} else {
+			continue;
 		}
 
 		if rnd(2) == 0 && (amulet == 0 || level >= max_level) {
