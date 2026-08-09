@@ -4,6 +4,7 @@ use crate::draw::{place_at, set_tile_char};
 use crate::passages::putpass;
 use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
 use crate::tile::Tile;
+use crate::rnd::rnd;
 
 use super::{build_maze_structure, build_room_structure, Room};
 use glam::IVec2;
@@ -41,7 +42,6 @@ unsafe extern "C" {
 	static mut places: [CPlace; 32 * 80];
 
 	fn wake_monster(y: c_int, x: c_int);
-	fn rnd(range: c_int) -> c_int;
 	fn step_ok(ch: c_int) -> c_int;
 	fn new_thing() -> *mut CThing;
 	fn new_item() -> *mut CThing;
@@ -189,48 +189,14 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
 
 #[no_mangle]
 pub unsafe extern "C" fn do_rooms() {
-	let mut bsze = CCoord { x: NUMCOLS / 3, y: NUMLINES / 3 };
+	let bsze = CCoord { x: NUMCOLS / 3, y: NUMLINES / 3 };
 	let mut mp = CCoord { x: 0, y: 0 };
 	let mut room_models: [Option<Room>; MAXROOMS] = std::array::from_fn(|_| None);
+	determine_room_layouts(bsze);
 
-	// Reset per-room state before generating the level layout.
 	for i in 0..MAXROOMS {
 		let rp = (&raw mut rooms[i]) as *mut CRoom;
-		(*rp).r_goldval = 0;
-		(*rp).r_nexits = 0;
-		(*rp).r_flags = 0;
-	}
-
-	let left_out = rnd(4);
-	// Randomly mark a few rooms as removed for this level.
-	for _ in 0..left_out {
-		let room_idx = rnd_room() as usize;
-		rooms[room_idx].r_flags |= ISGONE;
-	}
-
-	// Compute geometry and room models for every room slot.
-	for i in 0..MAXROOMS {
-		let rp = (&raw mut rooms[i]) as *mut CRoom;
-		let top = CCoord {
-			x: (i as c_int % 3) * bsze.x + 1,
-			y: (i as c_int / 3) * bsze.y,
-		};
-
-		if ((*rp).r_flags & ISGONE) != 0 {
-			// Keep rerolling until the off-map placeholder position is valid.
-			loop {
-				(*rp).r_pos.x = top.x + rnd(bsze.x - 2) + 1;
-				(*rp).r_pos.y = top.y + rnd(bsze.y - 2) + 1;
-				(*rp).r_max.x = -NUMCOLS;
-				(*rp).r_max.y = -NUMLINES;
-				if (*rp).r_pos.y > 0 && (*rp).r_pos.y < NUMLINES - 1 {
-					break;
-				}
-			}
-			continue;
-		}
-
-		room_models[i] = build_room_model(rp, top, bsze);
+		room_models[i] = build_room_model(rp);
 	}
 
 	// Draw prebuilt room models, then place gold and monsters.
@@ -264,6 +230,83 @@ pub unsafe extern "C" fn do_rooms() {
 				find_floor(rp, &mut mp, FALSE as c_int, TRUE);
 				new_monster(tp, randmonster(FALSE), &mut mp);
 				give_pack(tp);
+			}
+		}
+	}
+}
+
+unsafe fn determine_room_layouts(bsze: CCoord) {
+	// Reset per-room state before generating the level layout.
+	for i in 0..MAXROOMS {
+		let rp = (&raw mut rooms[i]) as *mut CRoom;
+		(*rp).r_goldval = 0;
+		(*rp).r_nexits = 0;
+		(*rp).r_flags = 0;
+	}
+
+	let left_out = rnd(4);
+	// Randomly mark a few rooms as removed for this level.
+	for _ in 0..left_out {
+		let room_idx = rnd_room() as usize;
+		rooms[room_idx].r_flags |= ISGONE;
+	}
+
+	// Compute geometry, sizes, and flags for every room slot.
+	for i in 0..MAXROOMS {
+		let rp = (&raw mut rooms[i]) as *mut CRoom;
+		let top = CCoord {
+			x: (i as c_int % 3) * bsze.x + 1,
+			y: (i as c_int / 3) * bsze.y,
+		};
+
+		if ((*rp).r_flags & ISGONE) != 0 {
+			// Keep rerolling until the off-map placeholder position is valid.
+			loop {
+				(*rp).r_pos.x = top.x + rnd(bsze.x - 2) + 1;
+				(*rp).r_pos.y = top.y + rnd(bsze.y - 2) + 1;
+				(*rp).r_max.x = -NUMCOLS;
+				(*rp).r_max.y = -NUMLINES;
+				if (*rp).r_pos.y > 0 && (*rp).r_pos.y < NUMLINES - 1 {
+					break;
+				}
+			}
+			continue;
+		}
+
+		if rnd(10) < level - 1 {
+			(*rp).r_flags |= ISDARK;
+			if rnd(15) == 0 {
+				(*rp).r_flags = ISMAZE;
+			}
+		}
+
+		if ((*rp).r_flags & ISMAZE) != 0 {
+			(*rp).r_max.x = bsze.x - 1;
+			(*rp).r_max.y = bsze.y - 1;
+			(*rp).r_pos.x = top.x;
+			if (*rp).r_pos.x == 1 {
+				(*rp).r_pos.x = 0;
+			}
+			(*rp).r_pos.y = top.y;
+			if (*rp).r_pos.y == 0 {
+				(*rp).r_pos.y += 1;
+				(*rp).r_max.y -= 1;
+			}
+		} else {
+			let mut placed = false;
+			for _ in 0..MAX_ROOM_TRIES {
+				(*rp).r_max.x = rnd(bsze.x - 4) + 4;
+				(*rp).r_max.y = rnd(bsze.y - 4) + 4;
+				(*rp).r_pos.x = top.x + rnd(bsze.x - (*rp).r_max.x);
+				(*rp).r_pos.y = top.y + rnd(bsze.y - (*rp).r_max.y);
+				if (*rp).r_pos.y != 0 {
+					placed = true;
+					break;
+				}
+			}
+
+			if !placed {
+				(*rp).r_flags |= ISGONE;
 			}
 		}
 	}
@@ -342,51 +385,13 @@ pub unsafe fn draw_room_ascii(room: &Room) {
 	}
 }
 
-pub unsafe fn build_room_model(rp: *mut CRoom, top: CCoord, bsze: CCoord) -> Option<Room> {
+pub unsafe fn build_room_model(rp: *mut CRoom) -> Option<Room> {
 	if rp.is_null() {
 		return None;
 	}
 
 	if ((*rp).r_flags & ISGONE) != 0 {
 		return None;
-	}
-
-	if rnd(10) < level - 1 {
-		(*rp).r_flags |= ISDARK;
-		if rnd(15) == 0 {
-			(*rp).r_flags = ISMAZE;
-		}
-	}
-
-	if ((*rp).r_flags & ISMAZE) != 0 {
-		(*rp).r_max.x = bsze.x - 1;
-		(*rp).r_max.y = bsze.y - 1;
-		(*rp).r_pos.x = top.x;
-		if (*rp).r_pos.x == 1 {
-			(*rp).r_pos.x = 0;
-		}
-		(*rp).r_pos.y = top.y;
-		if (*rp).r_pos.y == 0 {
-			(*rp).r_pos.y += 1;
-			(*rp).r_max.y -= 1;
-		}
-	} else {
-		let mut placed = false;
-		for _ in 0..MAX_ROOM_TRIES {
-			(*rp).r_max.x = rnd(bsze.x - 4) + 4;
-			(*rp).r_max.y = rnd(bsze.y - 4) + 4;
-			(*rp).r_pos.x = top.x + rnd(bsze.x - (*rp).r_max.x);
-			(*rp).r_pos.y = top.y + rnd(bsze.y - (*rp).r_max.y);
-			if (*rp).r_pos.y != 0 {
-				placed = true;
-				break;
-			}
-		}
-
-		if !placed {
-			(*rp).r_flags |= ISGONE;
-			return None;
-		}
 	}
 
 	if ((*rp).r_flags & ISMAZE) != 0 {
