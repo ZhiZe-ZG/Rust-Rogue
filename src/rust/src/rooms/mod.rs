@@ -1,15 +1,7 @@
 use crate::structure::Structure;
 use crate::tile::Tile;
 use glam::IVec2;
-use std::os::raw::{c_char, c_int};
-
-pub const FLOOR: c_char = b'.' as c_char;
-pub const H_WALL: c_char = b'-' as c_char;
-pub const V_WALL: c_char = b'|' as c_char;
-pub const PASSAGE: c_char = b'#' as c_char;
-pub const DOOR: c_char = b'+' as c_char;
-pub const STAIRS: c_char = b'%' as c_char;
-pub const TRAP: c_char = b'^' as c_char;
+use std::os::raw::c_int;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Room {
@@ -26,6 +18,14 @@ impl Room {
 			structure,
 		}
 	}
+
+	pub fn place_tile(&mut self, local_y: usize, local_x: usize, tile: Tile) -> bool {
+		self.structure.set(local_y, local_x, tile)
+	}
+}
+
+pub fn place_tile(room: &mut Room, local_y: usize, local_x: usize, tile: Tile) -> bool {
+	room.place_tile(local_y, local_x, tile)
 }
 
 pub(crate) fn build_room_structure(height: usize, width: usize) -> Structure {
@@ -111,30 +111,6 @@ pub(crate) fn build_maze_structure(height: usize, width: usize) -> Structure {
 	let _ = structure.set(start_y as usize, start_x as usize, Tile::Passage);
 	dig_local(&mut structure, start_y, start_x, max_y, max_x);
 	structure
-}
-
-pub(crate) fn tile_to_ascii(
-	tile: Tile,
-	local_y: usize,
-	local_x: usize,
-	height: usize,
-) -> Option<c_char> {
-	match tile {
-		Tile::Empty => None,
-		Tile::Floor => Some(FLOOR),
-		Tile::Wall => {
-			if local_y == 0 || local_y + 1 == height {
-				Some(H_WALL)
-			} else {
-				let _ = local_x;
-				Some(V_WALL)
-			}
-		}
-		Tile::Passage => Some(PASSAGE),
-		Tile::Door => Some(DOOR),
-		Tile::Stairs => Some(STAIRS),
-		Tile::Trap => Some(TRAP),
-	}
 }
 
 mod ffi;

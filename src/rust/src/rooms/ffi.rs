@@ -2,8 +2,9 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 use crate::draw::{place_at, set_tile_char};
 use crate::player::{CCoord, CPlace, CThing, CThingObject, CRoom};
+use crate::tile::Tile;
 
-use super::{build_maze_structure, build_room_structure, tile_to_ascii, Room};
+use super::{build_maze_structure, build_room_structure, Room};
 use glam::IVec2;
 
 const ISGONE: c_short = 0o000002;
@@ -17,6 +18,11 @@ const GOLDGRP: c_int = 1;
 const GOLD: c_char = b'*' as c_char;
 const FLOOR: c_char = b'.' as c_char;
 const PASSAGE: c_char = b'#' as c_char;
+const H_WALL: c_char = b'-' as c_char;
+const V_WALL: c_char = b'|' as c_char;
+const DOOR: c_char = b'+' as c_char;
+const STAIRS: c_char = b'%' as c_char;
+const TRAP: c_char = b'^' as c_char;
 const FALSE: c_uchar = 0;
 const TRUE: c_uchar = 1;
 
@@ -92,6 +98,24 @@ unsafe fn build_maze_model(rp: *const CRoom) -> Option<Room> {
 	let size = IVec2::new(width, height);
 	let structure = build_maze_structure(height as usize, width as usize);
 	Some(Room::new(position, size, structure))
+}
+
+fn tile_to_ascii(tile: Tile, local_y: usize, _local_x: usize, height: usize) -> Option<c_char> {
+	match tile {
+		Tile::Empty => None,
+		Tile::Floor => Some(FLOOR),
+		Tile::Wall => {
+			if local_y == 0 || local_y + 1 == height {
+				Some(H_WALL)
+			} else {
+				Some(V_WALL)
+			}
+		}
+		Tile::Passage => Some(PASSAGE),
+		Tile::Door => Some(DOOR),
+		Tile::Stairs => Some(STAIRS),
+		Tile::Trap => Some(TRAP),
+	}
 }
 
 #[no_mangle]
