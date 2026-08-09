@@ -1,5 +1,7 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::draw::{set_tile_char, place_at};
+use crate::rooms::door_open;
+use crate::trap::be_trapped;
 use crate::rndmove::rndmove;
 
 const NUMCOLS: c_int = 80;
@@ -153,8 +155,6 @@ unsafe extern "C" {
     fn rnd(range: c_int) -> c_int;
     fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
     fn see_monst(mp: *mut CThing) -> c_uchar;
-    fn door_open(rp: *mut CRoom);
-    fn be_trapped(tc: *mut CCoord) -> c_char;
     fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;
     fn roomin(cp: *mut CCoord) -> *mut CRoom;
     fn floor_at() -> c_char;

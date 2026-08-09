@@ -1,6 +1,7 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 use crate::draw::{place_at, set_tile_char};
+use crate::passages::putpass;
 use crate::player::{CCoord, CPlace, CThing, CThingObject, CRoom};
 use crate::tile::Tile;
 
@@ -35,7 +36,6 @@ unsafe extern "C" {
 	static mut places: [CPlace; 32 * 80];
 
 	fn wake_monster(y: c_int, x: c_int);
-	fn putpass(cp: *mut CCoord);
 	fn rnd(range: c_int) -> c_int;
 	fn rnd_room() -> c_int;
 	fn step_ok(ch: c_int) -> c_int;

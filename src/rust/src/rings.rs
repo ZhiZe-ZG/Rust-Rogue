@@ -1,4 +1,5 @@
 use std::os::raw::{c_char, c_int, c_uchar};
+use crate::potions::invis_on;
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
@@ -69,7 +70,6 @@ unsafe extern "C" {
     fn addmsg(fmt: *const c_char, ...);
     fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
     fn chg_str(amt: c_int);
-    fn invis_on();
     fn aggravate();
     fn dropcheck(obj: *mut CThing) -> c_uchar;
     fn readchar() -> c_int;
