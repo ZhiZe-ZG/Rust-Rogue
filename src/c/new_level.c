@@ -100,22 +100,6 @@ new_level()
 }
 
 /*
- * rnd_room:
- *	Pick a room that is really there
- */
-int
-rnd_room()
-{
-    int rm;
-
-    do
-    {
-	rm = rnd(MAXROOMS);
-    } while (rooms[rm].r_flags & ISGONE);
-    return rm;
-}
-
-/*
  * put_things:
  *	Put potions and scrolls on this level
  */

@@ -37,13 +37,22 @@ unsafe extern "C" {
 
 	fn wake_monster(y: c_int, x: c_int);
 	fn rnd(range: c_int) -> c_int;
-	fn rnd_room() -> c_int;
 	fn step_ok(ch: c_int) -> c_int;
 	fn new_item() -> *mut CThing;
 	fn _attach(list: *mut *mut CThing, item: *mut CThing);
 	fn randmonster(wander: c_uchar) -> c_char;
 	fn new_monster(tp: *mut CThing, kind: c_char, cp: *mut CCoord);
 	fn give_pack(tp: *mut CThing);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rnd_room() -> c_int {
+	loop {
+		let rm = rnd(MAXROOMS as c_int);
+		if (rooms[rm as usize].r_flags & ISGONE) == 0 {
+			return rm;
+		}
+	}
 }
 
 #[inline]
