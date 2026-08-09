@@ -86,40 +86,6 @@ unsafe fn winat(y: c_int, x: c_int) -> c_char {
 	}
 }
 
-unsafe fn build_plain_room_model(rp: *const CRoom) -> Option<Room> {
-	if rp.is_null() {
-		return None;
-	}
-
-	let width = (*rp).r_max.x;
-	let height = (*rp).r_max.y;
-	if width <= 0 || height <= 0 {
-		return None;
-	}
-
-	let position = IVec2::new((*rp).r_pos.x, (*rp).r_pos.y);
-	let size = IVec2::new(width, height);
-	let structure = build_room_structure(height as usize, width as usize);
-	Some(Room::new(position, size, Some(structure), None))
-}
-
-unsafe fn build_maze_model(rp: *const CRoom) -> Option<Room> {
-	if rp.is_null() {
-		return None;
-	}
-
-	let width = (*rp).r_max.x;
-	let height = (*rp).r_max.y;
-	if width <= 0 || height <= 0 {
-		return None;
-	}
-
-	let position = IVec2::new((*rp).r_pos.x, (*rp).r_pos.y);
-	let size = IVec2::new(width, height);
-	let structure = build_maze_structure(height as usize, width as usize);
-	Some(Room::new(position, size, Some(structure), None))
-}
-
 fn tile_to_ascii(tile: Tile, local_y: usize, _local_x: usize, height: usize) -> Option<c_char> {
 	match tile {
 		Tile::Empty => None,
@@ -394,11 +360,21 @@ pub unsafe fn build_room_model(rp: *mut CRoom) -> Option<Room> {
 		return None;
 	}
 
-	if ((*rp).r_flags & ISMAZE) != 0 {
-		return build_maze_model(rp);
+	let width = (*rp).r_max.x;
+	let height = (*rp).r_max.y;
+	if width <= 0 || height <= 0 {
+		return None;
 	}
 
-	build_plain_room_model(rp)
+	let position = IVec2::new((*rp).r_pos.x, (*rp).r_pos.y);
+	let size = IVec2::new(width, height);
+	let structure = if ((*rp).r_flags & ISMAZE) != 0 {
+		build_maze_structure(height as usize, width as usize)
+	} else {
+		build_room_structure(height as usize, width as usize)
+	};
+
+	Some(Room::new(position, size, Some(structure), None))
 }
 
 /// door_open:
