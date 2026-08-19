@@ -19,6 +19,9 @@
 /*
  * init_player:
  *	Roll her up
+ *
+ * Uses globals: pstats, max_stats, food_left, cur_armor, cur_weapon,
+ * a_class.
  */
 void
 init_player()
@@ -235,6 +238,8 @@ static bool used[MAX3(NCOLORS, NSTONES, NWOOD)];
 /*
  * init_colors:
  *	Initialize the potion color scheme for this time
+ *
+ * Uses globals: used (static), p_colors, rainbow.
  */
 void
 init_colors()
@@ -256,6 +261,8 @@ init_colors()
 /*
  * init_names:
  *	Generate the names of the various scrolls
+ *
+ * Uses globals: prbuf, s_names, sylls (static).
  */
 #define MAXNAME	40	/* Max number of characters in a name */
 
@@ -292,6 +299,8 @@ init_names()
 /*
  * init_stones:
  *	Initialize the ring stone setting scheme for this time
+ *
+ * Uses globals: used (static), r_stones, stones, ring_info.
  */
 void
 init_stones()
@@ -314,6 +323,8 @@ init_stones()
 /*
  * init_materials:
  *	Initialize the construction materials for wands and staffs
+ *
+ * Uses globals: used (static), ws_type, ws_made, metal, wood.
  */
 void
 init_materials()
@@ -400,6 +411,9 @@ sumprobs(struct obj_info *info, int bound
 /*
  * init_probs:
  *	Initialize the probabilities for the various items
+ *
+ * Uses globals: things, pot_info, scr_info, ring_info, ws_info,
+ * weap_info, arm_info.
  */
 void
 init_probs()
@@ -439,6 +453,8 @@ badcheck(char *name, struct obj_info *info, int bound)
  * pick_color:
  *	If he is halucinating, pick a random color name and return it,
  *	otherwise return the given color.
+ *
+ * Uses globals: player, rainbow.
  */
 char *
 pick_color(char *col)

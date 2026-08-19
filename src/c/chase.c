@@ -21,6 +21,8 @@ static coord ch_ret;				/* Where chasing takes you */
 /*
  * runners:
  *	Make all the running monsters move.
+ *
+ * Uses globals: mlist, hero, to_death, has_hit.
  */
 void
 runners()
@@ -77,6 +79,8 @@ move_monst(THING *tp)
  * relocate:
  *	Make the monster's new location be the specified one, updating
  *	all the relevant state.
+ *
+ * Uses globals: places (via moat), player, see_monst (function).
  */
 void
 relocate(THING *th, coord *new_loc)
@@ -110,6 +114,9 @@ relocate(THING *th, coord *new_loc)
 /*
  * do_chase:
  *	Make one thing chase another.
+ *
+ * Uses globals: hero, proom, passages, places (via flat/chat/moat),
+ * delta, running, count, quiet, to_death, kamikaze, lvl_obj.
  */
 int
 do_chase(THING *th)
@@ -230,6 +237,8 @@ over:
 /*
  * set_oldch:
  *	Set the oldch character for the monster
+ *
+ * Uses globals: player, hero, see_floor, places (via chat).
  */
 void
 set_oldch(THING *tp, coord *cp)
@@ -254,6 +263,8 @@ set_oldch(THING *tp, coord *cp)
 /*
  * see_monst:
  *	Return TRUE if the hero can see the monster
+ *
+ * Uses globals: player, hero, proom, places (via chat).
  */
 bool
 see_monst(THING *mp)
@@ -281,6 +292,8 @@ see_monst(THING *mp)
 /*
  * runto:
  *	Set a monster running after the hero.
+ *
+ * Uses globals: places (via moat).
  */
 void
 runto(coord *runner)
@@ -309,6 +322,8 @@ runto(coord *runner)
  *	Find the spot for the chaser(er) to move closer to the
  *	chasee(ee).  Returns TRUE if we want to keep on chasing later
  *	FALSE if we reach the goal.
+ *
+ * Uses globals: hero, lvl_obj, places (via moat/chat/winat).
  */
 bool
 chase(THING *tp, coord *ee)
@@ -420,6 +435,8 @@ chase(THING *tp, coord *ee)
  * roomin:
  *	Find what room some coordinates are in. NULL means they aren't
  *	in any room.
+ *
+ * Uses globals: places (via flat), passages, rooms, msg.
  */
 struct room *
 roomin(coord *cp)
@@ -449,6 +466,8 @@ roomin(coord *cp)
 /*
  * diag_ok:
  *	Check to see if the move is legal if it is diagonal
+ *
+ * Uses globals: places (via chat).
  */
 bool
 diag_ok(coord *sp, coord *ep)
@@ -463,6 +482,8 @@ diag_ok(coord *sp, coord *ep)
 /*
  * cansee:
  *	Returns true if the hero can see a certain coordinate.
+ *
+ * Uses globals: player, hero, proom, places (via flat/chat).
  */
 bool
 cansee(int y, int x)
@@ -492,6 +513,8 @@ cansee(int y, int x)
 /*
  * find_dest:
  *	find the proper destination for the monster
+ *
+ * Uses globals: monsters, hero, proom, lvl_obj, mlist.
  */
 coord *
 find_dest(THING *tp)

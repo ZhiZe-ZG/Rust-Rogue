@@ -28,6 +28,8 @@ struct delayed_action d_list[MAXDAEMONS] = {
 /*
  * d_slot:
  *	Find an empty slot in the daemon/fuse list
+ *
+ * Uses globals: d_list.
  */
 struct delayed_action *
 d_slot()
@@ -46,6 +48,8 @@ d_slot()
 /*
  * find_slot:
  *	Find a particular slot in the table
+ *
+ * Uses globals: d_list.
  */
 struct delayed_action *
 find_slot(void (*func)())
@@ -61,6 +65,8 @@ find_slot(void (*func)())
 /*
  * start_daemon:
  *	Start a daemon, takes a function.
+ *
+ * Uses globals: d_list (via d_slot).
  */
 void
 start_daemon(void (*func)(int), int arg, int type)
@@ -77,6 +83,8 @@ start_daemon(void (*func)(int), int arg, int type)
 /*
  * kill_daemon:
  *	Remove a daemon from the list
+ *
+ * Uses globals: d_list (via find_slot).
  */
 void
 kill_daemon(void (*func)())
@@ -95,6 +103,8 @@ kill_daemon(void (*func)())
  * do_daemons:
  *	Run all the daemons that are active with the current flag,
  *	passing the argument to the function.
+ *
+ * Uses globals: d_list.
  */
 void
 do_daemons(int flag)
@@ -115,6 +125,8 @@ do_daemons(int flag)
 /*
  * fuse:
  *	Start a fuse to go off in a certain number of turns
+ *
+ * Uses globals: d_list (via d_slot).
  */
 void
 fuse(void (*func)(int), int arg, int time, int type)
@@ -131,6 +143,8 @@ fuse(void (*func)(int), int arg, int time, int type)
 /*
  * lengthen:
  *	Increase the time until a fuse goes off
+ *
+ * Uses globals: d_list (via find_slot).
  */
 void
 lengthen(void (*func)(), int xtime)
@@ -145,6 +159,8 @@ lengthen(void (*func)(), int xtime)
 /*
  * extinguish:
  *	Put out a fuse
+ *
+ * Uses globals: d_list (via find_slot).
  */
 void
 extinguish(void (*func)())
@@ -159,6 +175,8 @@ extinguish(void (*func)())
 /*
  * do_fuses:
  *	Decrement counters and start needed fuses
+ *
+ * Uses globals: d_list.
  */
 void
 do_fuses(int flag)

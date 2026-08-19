@@ -19,6 +19,15 @@
 /*
  * command:
  *	Process the user commands
+ *
+ * Uses globals: player, has_hit, running, door_stop, lastscore,
+ * purse, hero, jump, take, after, wizard (#ifdef MASTER), noscore,
+ * no_command, count, move_on, mpos, runch, to_death, countch,
+ * l_last_comm/last_comm/last_dir/last_pick (via reset_last/last_*),
+ * lvl_obj, terse, mlist (via moat), max_hit, mp/t_flags (via
+ * to_death), dir_ch, delta, q_comm, huh, release, amulet, level,
+ * seenstairs, tr_name, stat_msg, inpack, food_left, cur_weapon,
+ * cur_armor, cur_ring, inv_describe.
  */
 void
 command()
@@ -451,6 +460,8 @@ over:
 /*
  * illcom:
  *	What to do with an illegal command
+ *
+ * Uses globals: save_msg, count.
  */
 void
 illcom(int ch)
@@ -464,6 +475,9 @@ illcom(int ch)
 /*
  * search:
  *	player gropes about him to find hidden things.
+ *
+ * Uses globals: hero, player, places (via chat/flat), count, running,
+ * terse, tr_name.
  */
 void
 search()
@@ -528,6 +542,8 @@ foundone:
 /*
  * help:
  *	Give single character help, or the whole mess if he wants it
+ *
+ * Uses globals: mpos, helpstr, lower_msg, hw.
  */
 void
 help()
@@ -598,6 +614,8 @@ help()
 /*
  * identify:
  *	Tell the player what a certain thing is.
+ *
+ * Uses globals: mpos, monsters.
  */
 void
 identify()
@@ -653,6 +671,8 @@ identify()
 /*
  * d_level:
  *	He wants to go down a level
+ *
+ * Uses globals: hero, places (via chat), level, seenstairs.
  */
 void
 d_level()
@@ -672,6 +692,8 @@ d_level()
 /*
  * u_level:
  *	He wants to go up a level
+ *
+ * Uses globals: hero, places (via chat), amulet, level.
  */
 void
 u_level()
@@ -697,6 +719,8 @@ u_level()
  * levit_check:
  *	Check to see if she's levitating, and if she is, print an
  *	appropriate message.
+ *
+ * Uses globals: player.
  */
 bool
 levit_check()
@@ -710,6 +734,9 @@ levit_check()
 /*
  * call:
  *	Allow a user to call a potion, scroll, or ring something
+ *
+ * Uses globals: ring_info, r_stones, pot_info, p_colors, scr_info,
+ * s_names, ws_info, ws_made, terse, prbuf.
  */
 void
 call()
@@ -787,6 +814,8 @@ norm:
 /*
  * current:
  *	Print the current weapon/armor
+ *
+ * Uses globals: after, terse, inv_describe.
  */
 void
 current(THING *cur, char *how, char *where)

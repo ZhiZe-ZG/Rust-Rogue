@@ -59,6 +59,9 @@ static int add_dam[] = {
 /*
  * fight:
  *	The player attacks the monster.
+ *
+ * Uses globals: places (via moat), count, quiet, player, terse,
+ * to_death, has_hit, cur_ring (via ISRING macro), pick_color.
  */
 int
 fight(coord *mp, THING *weap, bool thrown)
@@ -135,6 +138,11 @@ fight(coord *mp, THING *weap, bool thrown)
 /*
  * attack:
  *	The monster attacks the player
+ *
+ * Uses globals: running, count, quiet, to_death, kamikaze, player,
+ * pstats, max_hit, has_hit, cur_armor, cur_ring, no_command, terse,
+ * e_levels, max_hp, vf_hit, purse, monsters, places (via moat),
+ * fight_flush.
  */
 int
 attack(THING *mp)
@@ -344,6 +352,8 @@ attack(THING *mp)
 /*
  * set_mname:
  *	return the monster name for the given monster
+ *
+ * Uses globals: player, terse, monsters.
  */
 char *
 set_mname(THING *tp)
@@ -386,6 +396,9 @@ swing(int at_lvl, int op_arm, int wplus)
 /*
  * roll_em:
  *	Roll several attacks
+ *
+ * Uses globals: cur_weapon, cur_ring (via ISRING macro), pstats,
+ * cur_armor, str_plus (static), add_dam (static).
  */
 bool
 roll_em(THING *thatt, THING *thdef, THING *weap, bool hurl)
@@ -499,6 +512,8 @@ prname(char *mname, bool upper)
 /*
  * thunk:
  *	A missile hits a monster
+ *
+ * Uses globals: to_death, weap_info.
  */
 void
 thunk(THING *weap, char *mname, bool noend)
@@ -517,6 +532,8 @@ thunk(THING *weap, char *mname, bool noend)
 /*
  * hit:
  *	Print a message to indicate a succesful hit
+ *
+ * Uses globals: to_death, terse, h_names.
  */
 
 void
@@ -548,6 +565,8 @@ hit(char *er, char *ee, bool noend)
 /*
  * miss:
  *	Print a message to indicate a poor swing
+ *
+ * Uses globals: to_death, terse, m_names.
  */
 void
 miss(char *er, char *ee, bool noend)
@@ -574,6 +593,8 @@ miss(char *er, char *ee, bool noend)
 /*
  * bounce:
  *	A missile misses a monster
+ *
+ * Uses globals: to_death, weap_info.
  */
 void
 bounce(THING *weap, char *mname, bool noend)
@@ -592,6 +613,9 @@ bounce(THING *weap, char *mname, bool noend)
 /*
  * remove_mon:
  *	Remove a monster from the screen
+ *
+ * Uses globals: places (via moat), mlist, kamikaze, to_death,
+ * fight_flush.
  */
 void
 remove_mon(coord *mp, THING *tp, bool waskill)
@@ -624,6 +648,9 @@ remove_mon(coord *mp, THING *tp, bool waskill)
 /*
  * killed:
  *	Called to put a monster to death
+ *
+ * Uses globals: pstats, player, vf_hit, monsters, level, max_level,
+ * has_hit, terse, fight_flush.
  */
 void
 killed(THING *tp, bool pr)

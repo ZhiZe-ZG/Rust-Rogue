@@ -18,6 +18,9 @@
 /*
  * main:
  *	The main program, of course
+ *
+ * Uses globals: wizard, player, home, file_name, whoami, dnum, seed,
+ * purse, level, noscore, hw, noscore.
  */
 int
 main(int argc, char **argv, char **envp)
@@ -159,6 +162,8 @@ main(int argc, char **argv, char **envp)
 /*
  * endit:
  *	Exit the program abnormally.
+ *
+ * No globals used directly.
  */
 
 void
@@ -171,6 +176,8 @@ endit(int sig)
 /*
  * fatal:
  *	Exit the program, printing a message.
+ *
+ * No globals used directly.
  */
 
 void
@@ -185,6 +192,8 @@ fatal(char *s)
 /*
  * roll:
  *	Roll a number of dice
+ *
+ * No globals used directly (uses rnd()).
  */
 int
 roll(int number, int sides)
@@ -239,6 +248,9 @@ tstp(int ignored)
  * playit:
  *	The main loop of the program.  Loop until the game is over,
  *	refreshing things and looking at the proper times.
+ *
+ * Uses globals: terse, jump, see_floor, inv_type, oldpos, oldrp,
+ * hero, playing, running.
  */
 
 void
@@ -277,6 +289,8 @@ playit()
 /*
  * quit:
  *	Have player make certain, then exit.
+ *
+ * Uses globals: q_comm, mpos, purse, count, to_death.
  */
 
 void
@@ -343,6 +357,8 @@ leave(int sig)
 /*
  * shell:
  *	Let them escape for a while
+ *
+ * Uses globals: in_shell, after.
  */
 
 void
@@ -378,6 +394,8 @@ shell()
 /*
  * my_exit:
  *	Leave the process properly
+ *
+ * No globals used directly.
  */
 
 void

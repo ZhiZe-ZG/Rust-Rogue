@@ -19,6 +19,10 @@
 /*
  * look:
  *	A quick glance all around the player
+ *
+ * Uses globals: proom, oldpos, oldrp, hero, door_stop, firstmove,
+ * running, player, runch, see_floor, places (via chat), stairs,
+ * seenstairs.
  */
 #undef DEBUG
 
@@ -185,6 +189,8 @@ look(bool wakeup)
  * trip_ch:
  *	Return the character appropriate for this space, taking into
  *	account whether or not the player is tripping.
+ *
+ * Uses globals: player, after, stairs, seenstairs.
  */
 int
 trip_ch(int y, int x, int ch)
@@ -211,6 +217,8 @@ trip_ch(int y, int x, int ch)
 /*
  * erase_lamp:
  *	Erase the area shown by a lamp in a dark room.
+ *
+ * Uses globals: see_floor, player, hero.
  */
 
 void
@@ -239,6 +247,8 @@ erase_lamp(coord *pos, struct room *rp)
 /*
  * show_floor:
  *	Should we show the floor in her room at this time?
+ *
+ * Uses globals: proom, player, see_floor.
  */
 bool
 show_floor()
@@ -252,6 +262,8 @@ show_floor()
 /*
  * find_obj:
  *	Find the unclaimed object at y, x
+ *
+ * Uses globals: lvl_obj, prbuf (#ifdef MASTER).
  */
 THING *
 find_obj(int y, int x)
@@ -276,6 +288,9 @@ find_obj(int y, int x)
 /*
  * eat:
  *	She wants to eat something, so let her try
+ *
+ * Uses globals: terse, food_left, hungry_state, cur_weapon, fruit,
+ * pstats.
  */
 
 void
@@ -317,6 +332,8 @@ eat()
 /*
  * check_level:
  *	Check to see if the guy has gone up a level.
+ *
+ * Uses globals: e_levels, pstats, max_hp.
  */
 
 void
@@ -343,6 +360,8 @@ check_level()
  * chg_str:
  *	used to modify the playes strength.  It keeps track of the
  *	highest it has been, just in case
+ *
+ * Uses globals: pstats, cur_ring (via ISRING macro), max_stats.
  */
 
 void
@@ -378,6 +397,8 @@ add_str(str_t *sp, int amt)
 /*
  * add_haste:
  *	Add a haste to the player
+ *
+ * Uses globals: player, no_command.
  */
 bool
 add_haste(bool potion)
@@ -402,6 +423,8 @@ add_haste(bool potion)
 /*
  * aggravate:
  *	Aggravate all the monsters on this level
+ *
+ * Uses globals: mlist.
  */
 
 void
@@ -434,9 +457,11 @@ vowelstr(char *str)
     }
 }
 
-/* 
+/*
  * is_current:
  *	See if the object is one of the currently used items
+ *
+ * Uses globals: cur_armor, cur_weapon, cur_ring, terse.
  */
 bool
 is_current(THING *obj)
@@ -458,6 +483,8 @@ is_current(THING *obj)
  * get_dir:
  *      Set up the direction co_ordinate for use in varios "prefix"
  *	commands
+ *
+ * Uses globals: again, last_dir, delta, dir_ch, terse, player.
  */
 bool
 get_dir()
@@ -540,6 +567,8 @@ spread(int nm)
 /*
  * call_it:
  *	Call an object something after use.
+ *
+ * Uses globals: terse, prbuf.
  */
 
 void
@@ -569,6 +598,8 @@ call_it(struct obj_info *info)
 /*
  * rnd_thing:
  *	Pick a random thing appropriate for this level
+ *
+ * Uses globals: level.
  */
 char
 rnd_thing()
@@ -589,6 +620,8 @@ rnd_thing()
  str str:
  *	Choose the first or second string depending on whether it the
  *	player is tripping
+ *
+ * Uses globals: player.
  */
 char *
 choose_str(char *ts, char *ns)

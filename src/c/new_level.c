@@ -19,6 +19,13 @@
 #define MAXTREAS 10	/* maximum number of treasures in a treasure room */
 #define MINTREAS 2	/* minimum number of treasures in a treasure room */
 
+/*
+ * new_level:
+ *	Dig and draw a new level.
+ *
+ * Uses globals: player, hero, level, max_level, places, mlist,
+ * lvl_obj, no_food, ntraps, stairs, seenstairs, rooms, passages.
+ */
 void
 new_level()
 {
@@ -102,6 +109,9 @@ new_level()
 /*
  * put_things:
  *	Put potions and scrolls on this level
+ *
+ * Uses globals: amulet, level, max_level, lvl_obj, places (via
+ * chat).
  */
 
 void

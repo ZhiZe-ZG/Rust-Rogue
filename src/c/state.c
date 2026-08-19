@@ -882,6 +882,12 @@ rs_read_stone_index(FILE *inf, STONE master[], int maxindex, char **str)
     return(READSTAT);
 }
 
+/*
+ * rs_write_scrolls:
+ *	Serializes the global scroll names to the save file.
+ *
+ * Uses globals: s_names.
+ */
 int
 rs_write_scrolls(FILE *savef)
 {
@@ -896,6 +902,12 @@ rs_write_scrolls(FILE *savef)
     return(READSTAT);
 }
 
+/*
+ * rs_read_scrolls:
+ *	Restores the global scroll names from the save file.
+ *
+ * Uses globals: s_names.
+ */
 int
 rs_read_scrolls(FILE *inf)
 {
@@ -910,6 +922,12 @@ rs_read_scrolls(FILE *inf)
     return(READSTAT);
 }
 
+/*
+ * rs_write_potions:
+ *	Serializes the global potion colors to the save file.
+ *
+ * Uses globals: rainbow, p_colors.
+ */
 int
 rs_write_potions(FILE *savef)
 {
@@ -924,6 +942,12 @@ rs_write_potions(FILE *savef)
     return(WRITESTAT);
 }
 
+/*
+ * rs_read_potions:
+ *	Restores the global potion colors from the save file.
+ *
+ * Uses globals: rainbow, p_colors.
+ */
 int
 rs_read_potions(FILE *inf)
 {
@@ -938,6 +962,12 @@ rs_read_potions(FILE *inf)
     return(READSTAT);
 }
 
+/*
+ * rs_write_rings:
+ *	Serializes the global ring stone settings to the save file.
+ *
+ * Uses globals: stones, r_stones.
+ */
 int
 rs_write_rings(FILE *savef)
 {
@@ -952,6 +982,12 @@ rs_write_rings(FILE *savef)
     return(WRITESTAT);
 }
 
+/*
+ * rs_read_rings:
+ *	Restores the global ring stone settings from the save file.
+ *
+ * Uses globals: stones, r_stones.
+ */
 int
 rs_read_rings(FILE *inf)
 {
@@ -966,6 +1002,12 @@ rs_read_rings(FILE *inf)
     return(READSTAT);
 }
 
+/*
+ * rs_write_sticks:
+ *	Serializes the global wand/staff descriptions to the save file.
+ *
+ * Uses globals: ws_type, ws_made, wood, metal.
+ */
 int
 rs_write_sticks(FILE *savef)
 {
@@ -991,6 +1033,12 @@ rs_write_sticks(FILE *savef)
     return(WRITESTAT);
 }
 
+/*
+ * rs_read_sticks:
+ *	Restores the global wand/staff descriptions from the save file.
+ *
+ * Uses globals: ws_type, ws_made, wood, metal.
+ */
 int
 rs_read_sticks(FILE *inf)
 {
@@ -1265,6 +1313,12 @@ rs_read_rooms(FILE *inf, struct room *r, int count)
     return(READSTAT);
 }
 
+/*
+ * rs_write_room_reference:
+ *	Writes an index into the global rooms[] table for a room pointer.
+ *
+ * Uses globals: rooms.
+ */
 int
 rs_write_room_reference(FILE *savef, struct room *rp)
 {
@@ -1282,6 +1336,12 @@ rs_write_room_reference(FILE *savef, struct room *rp)
     return(WRITESTAT);
 }
 
+/*
+ * rs_read_room_reference:
+ *	Reads an index into the global rooms[] table, resolving the pointer.
+ *
+ * Uses globals: rooms.
+ */
 int
 rs_read_room_reference(FILE *inf, struct room **rp)
 {
@@ -1520,6 +1580,13 @@ find_object_coord(THING *objlist, coord *c)
     return(-1);
 }
 
+/*
+ * rs_write_thing:
+ *	Serializes a monster/player THING, encoding chase targets as
+ *	references into the global mlist, lvl_obj, rooms or hero.
+ *
+ * Uses globals: hero, mlist, lvl_obj, rooms.
+ */
 int
 rs_write_thing(FILE *savef, THING *t)
 {
@@ -1609,6 +1676,13 @@ rs_write_thing(FILE *savef, THING *t)
     return(WRITESTAT);
 }
 
+/*
+ * rs_read_thing:
+ *	Restores a monster/player THING, resolving chase-target references
+ *	against the global hero, mlist, lvl_obj and rooms tables.
+ *
+ * Uses globals: hero, mlist, lvl_obj, rooms.
+ */
 int
 rs_read_thing(FILE *inf, THING *t)
 {
@@ -1686,6 +1760,12 @@ rs_read_thing(FILE *inf, THING *t)
     return(READSTAT);
 }
 
+/*
+ * rs_fix_thing:
+ *	Resolves a deferred monster chase target stored in t_reserved.
+ *
+ * Uses globals: mlist.
+ */
 void
 rs_fix_thing(THING *t)
 {
@@ -1842,6 +1922,13 @@ rs_read_thing_references(FILE *inf, THING *list, THING *items[], int count)
     return(WRITESTAT);
 }
 
+/*
+ * rs_write_places:
+ *	Serializes the level map, encoding monster links as references
+ *	into the global mlist.
+ *
+ * Uses globals: mlist.
+ */
 int
 rs_write_places(FILE *savef, PLACE *places, int count)
 {
@@ -1860,6 +1947,13 @@ rs_write_places(FILE *savef, PLACE *places, int count)
     return(WRITESTAT);
 }
 
+/*
+ * rs_read_places:
+ *	Restores the level map, resolving monster references against the
+ *	global mlist.
+ *
+ * Uses globals: mlist.
+ */
 int
 rs_read_places(FILE *inf, PLACE *places, int count)
 {
@@ -1878,6 +1972,30 @@ rs_read_places(FILE *inf, PLACE *places, int count)
     return(READSTAT);
 }
 
+/*
+ * rs_save_file:
+ *	Writes the entire game state to the save file.  Serializes nearly
+ *	every global variable: booleans, characters, ints, coords, strings,
+ *	the player, the object/monster lists, the level map, room/passage
+ *	layouts, monster/object info tables, daemons, and the score window.
+ *
+ * Uses globals: after, again, noscore, seenstairs, amulet, door_stop,
+ *	fight_flush, firstmove, got_ltc, has_hit, in_shell, inv_describe,
+ *	jump, kamikaze, lower_msg, move_on, msg_esc, passgo, playing,
+ *	q_comm, running, save_msg, see_floor, stat_msg, terse, to_death,
+ *	tombstone, wizard, pack_used, dir_ch, file_name, huh, p_colors,
+ *	rainbow, prbuf, r_stones, stones, release, runch, s_names, take,
+ *	whoami, ws_made, ws_type, wood, metal, orig_dsusp, fruit, home,
+ *	inv_t_name, l_last_comm, l_last_dir, last_comm, last_dir, tr_name,
+ *	n_objs, ntraps, hungry_state, inpack, inv_type, level, max_level,
+ *	mpos, no_food, a_class, count, food_left, lastscore, no_command,
+ *	no_move, purse, quiet, vf_hit, dnum, seed, e_levels, delta, oldpos,
+ *	stairs, player, cur_armor, cur_ring, cur_weapon, l_last_pick,
+ *	last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
+ *	passages, monsters, things, arm_info, pot_info, ring_info,
+ *	scr_info, weap_info, ws_info, d_list, total, between, nh, group,
+ *	stdscr.
+ */
 int
 rs_save_file(FILE *savef)
 {
@@ -2006,6 +2124,28 @@ rs_save_file(FILE *savef)
     return(WRITESTAT);
 }
 
+/*
+ * rs_restore_file:
+ *	Reads the entire game state back from the save file, restoring all
+ *	of the global variables written by rs_save_file().
+ *
+ * Uses globals: after, again, noscore, seenstairs, amulet, door_stop,
+ *	fight_flush, firstmove, got_ltc, has_hit, in_shell, inv_describe,
+ *	jump, kamikaze, lower_msg, move_on, msg_esc, passgo, playing,
+ *	q_comm, running, save_msg, see_floor, stat_msg, terse, to_death,
+ *	tombstone, wizard, pack_used, dir_ch, file_name, huh, p_colors,
+ *	rainbow, prbuf, r_stones, stones, release, runch, s_names, take,
+ *	whoami, ws_made, ws_type, wood, metal, orig_dsusp, fruit, home,
+ *	inv_t_name, l_last_comm, l_last_dir, last_comm, last_dir, tr_name,
+ *	n_objs, ntraps, hungry_state, inpack, inv_type, level, max_level,
+ *	mpos, no_food, a_class, count, food_left, lastscore, no_command,
+ *	no_move, purse, quiet, vf_hit, dnum, seed, e_levels, delta, oldpos,
+ *	stairs, player, cur_armor, cur_ring, cur_weapon, l_last_pick,
+ *	last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
+ *	passages, monsters, things, arm_info, pot_info, ring_info,
+ *	scr_info, weap_info, ws_info, d_list, total, between, nh, group,
+ *	stdscr.
+ */
 int
 rs_restore_file(FILE *inf)
 {

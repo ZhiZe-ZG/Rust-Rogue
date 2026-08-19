@@ -20,6 +20,11 @@
  * inv_name:
  *	Return the name of something as it would appear in an
  *	inventory.
+ *
+ * Uses globals: prbuf, p_colors, pot_info, r_stones, ring_info,
+ * ws_type, ws_made, ws_info, scr_info, s_names, fruit, weap_info,
+ * arm_info, a_class, terse, inv_describe, cur_armor, cur_weapon,
+ * cur_ring.
  */
 char *
 inv_name(THING *obj, bool drop)
@@ -136,6 +141,8 @@ inv_name(THING *obj, bool drop)
 /*
  * drop:
  *	Put something down
+ *
+ * Uses globals: hero, places (via chat), after, lvl_obj, amulet.
  */
 
 void
@@ -171,6 +178,8 @@ drop()
 /*
  * dropcheck:
  *	Do special checks for dropping or unweilding|unwearing|unringing
+ *
+ * Uses globals: cur_armor, cur_weapon, cur_ring.
  */
 bool
 dropcheck(THING *obj)
@@ -212,6 +221,9 @@ dropcheck(THING *obj)
 /*
  * new_thing:
  *	Return a new thing
+ *
+ * Uses globals: no_food, things, pot_info, scr_info, weap_info,
+ * arm_info, ring_info, ws_info, a_class.
  */
 THING *
 new_thing()
@@ -301,6 +313,8 @@ new_thing()
 /*
  * pick_one:
  *	Pick an item out of a list of nitems possible objects
+ *
+ * Uses globals: wizard (#ifdef MASTER).
  */
 int
 pick_one(struct obj_info *info, int nitems)
@@ -331,6 +345,9 @@ pick_one(struct obj_info *info, int nitems)
 /*
  * discovered:
  *	list what the player has discovered in this game of a certain type
+ *
+ * Uses globals: terse, line_cnt (static), newpage (static),
+ * lastfmt/lastarg (static) via add_line().
  */
 static int line_cnt = 0;
 
@@ -394,6 +411,8 @@ discovered()
 /*
  * print_disc:
  *	Print what we've discovered of type 'type'
+ *
+ * Uses globals: scr_info, pot_info, ring_info, ws_info.
  */
 
 #define MAX4(a,b,c,d)	(a > b ? (a > c ? (a > d ? a : d) : (c > d ? c : d)) : (b > c ? (b > d ? b : d) : (c > d ? c : d)))
@@ -445,6 +464,8 @@ print_disc(char type)
 /*
  * set_order:
  *	Set up order for list
+ *
+ * No globals used directly.
  */
 
 void
@@ -467,6 +488,9 @@ set_order(int *order, int numthings)
 /*
  * add_line:
  *	Add a line to the list of discoveries
+ *
+ * Uses globals: hw, inv_type, mpos, line_cnt (static), newpage
+ * (static), lastfmt/lastarg (static).
  */
 /* VARARGS1 */
 char
@@ -562,6 +586,9 @@ add_line(char *fmt, char *arg)
 /*
  * end_line:
  *	End the list of lines
+ *
+ * Uses globals: inv_type, line_cnt (static), newpage (static), mpos,
+ * lastfmt/lastarg (static).
  */
 
 void
@@ -584,6 +611,8 @@ end_line()
 /*
  * nothing:
  *	Set up prbuf so that message for "nothing found" is there
+ *
+ * Uses globals: terse, prbuf.
  */
 char *
 nothing(char type)
@@ -612,6 +641,8 @@ nothing(char type)
 /*
  * nameit:
  *	Give the proper name to a potion, stick, or ring
+ *
+ * Uses globals: prbuf.
  */
 
 void
@@ -641,6 +672,8 @@ nameit(THING *obj, char *type, char *which, struct obj_info *op,
 /*
  * nullstr:
  *	Return a pointer to a null-length string
+ *
+ * No globals used directly.
  */
 char *
 nullstr(THING *ignored)
@@ -653,6 +686,8 @@ nullstr(THING *ignored)
 /*
  * pr_list:
  *	List possible potions, scrolls, etc. for wizard.
+ *
+ * Uses globals: terse.
  */
 
 void
@@ -689,6 +724,8 @@ pr_list()
 /*
  * pr_spec:
  *	Print specific list of possible items to choose from
+ *
+ * Uses globals: prbuf.
  */
 
 void

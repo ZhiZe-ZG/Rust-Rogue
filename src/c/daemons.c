@@ -16,6 +16,8 @@
 /*
  * doctor:
  *	A healing daemon that restors hit points after rest
+ *
+ * Uses globals: pstats, max_hp, quiet, cur_ring (via ISRING).
  */
 void
 doctor()
@@ -58,6 +60,8 @@ swander()
 /*
  * rollwand:
  *	Called to roll to see if a wandering monster starts up
+ *
+ * Uses globals: between (defined above).
  */
 int between = 0;
 void
@@ -79,6 +83,8 @@ rollwand()
 /*
  * unconfuse:
  *	Release the poor player from his confusion
+ *
+ * Uses globals: player.
  */
 void
 unconfuse()
@@ -90,6 +96,8 @@ unconfuse()
 /*
  * unsee:
  *	Turn off the ability to see invisible
+ *
+ * Uses globals: mlist, player, places (via chat).
  */
 void
 unsee()
@@ -105,6 +113,8 @@ unsee()
 /*
  * sight:
  *	He gets his sight back
+ *
+ * Uses globals: player, proom, hero.
  */
 void
 sight()
@@ -123,6 +133,8 @@ sight()
 /*
  * nohaste:
  *	End the hasting
+ *
+ * Uses globals: player.
  */
 void
 nohaste()
@@ -134,6 +146,9 @@ nohaste()
 /*
  * stomach:
  *	Digest the hero's food
+ *
+ * Uses globals: hungry_state, food_left, no_command, terse,
+ * cur_ring (via ring_eat), amulet, player, running, to_death, count.
  */
 void
 stomach()
@@ -189,6 +204,8 @@ stomach()
 /*
  * come_down:
  *	Take the hero down off her acid trip.
+ *
+ * Uses globals: player, lvl_obj, mlist, places (via chat).
  */
 void
 come_down()
@@ -237,6 +254,9 @@ come_down()
 /*
  * visuals:
  *	change the characters for the player
+ *
+ * Uses globals: after, running, jump, lvl_obj, seenstairs, stairs,
+ * player, mlist, places (via chat).
  */
 void
 visuals()
@@ -285,6 +305,8 @@ visuals()
 /*
  * land:
  *	Land from a levitation potion
+ *
+ * Uses globals: player.
  */
 void
 land()

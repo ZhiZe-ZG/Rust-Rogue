@@ -21,6 +21,8 @@ int total = 0;			/* total dynamic memory bytes */
 /*
  * detach:
  *	takes an item out of whatever linked list it might be in
+ *
+ * No globals used directly.
  */
 
 void
@@ -79,6 +81,8 @@ _free_list(THING **ptr)
 /*
  * discard:
  *	Free up an item
+ *
+ * Uses globals: total (#ifdef MASTER).
  */
 
 void
@@ -93,6 +97,8 @@ discard(THING *item)
 /*
  * new_item
  *	Get a new item with a specified size
+ *
+ * Uses globals: total (#ifdef MASTER).
  */
 THING *
 new_item()

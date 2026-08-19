@@ -254,6 +254,12 @@ md_onsignal_autosave()
 #endif
 }
 
+/*
+ * md_hasclreol:
+ *	Return TRUE if the terminal supports clear-to-end-of-line.
+ *
+ * Uses globals: cur_term, clr_eol (curses/terminfo library globals).
+ */
 int
 md_hasclreol()
 {
@@ -282,6 +288,12 @@ md_putchar(int c)
 static int md_standout_mode = 0;
 #endif
 
+/*
+ * md_raw_standout:
+ *	Turn on standout/reverse-video in raw mode.
+ *
+ * Uses globals: md_standout_mode (file-scope static).
+ */
 void
 md_raw_standout()
 {
@@ -305,6 +317,12 @@ md_raw_standout()
 #endif
 }
 
+/*
+ * md_raw_standend:
+ *	Turn off standout/reverse-video in raw mode.
+ *
+ * Uses globals: md_standout_mode (file-scope static).
+ */
 void
 md_raw_standend()
 {
@@ -1261,6 +1279,13 @@ struct nlist avenrun = {
     "_avenrun"
 };
 
+/*
+ * md_loadav:
+ *	Look up the load average from the kernel, either via the system
+ *	call or by reading the avenrun symbol out of /dev/kmem.
+ *
+ * Uses globals: avenrun (file-scope struct nlist).
+ */
 void
 md_loadav(double *avg)
 {

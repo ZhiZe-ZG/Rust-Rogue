@@ -72,6 +72,8 @@ static int num_checks;		/* times we've gone over in checkout() */
 /*
  * init_check:
  *	Check out too see if it is proper to play the game now
+ *
+ * Uses globals: whoami, fruit, wizard (#ifdef MASTER, via author()).
  */
 
 void
@@ -94,6 +96,8 @@ init_check()
 /*
  * open_score:
  *	Open up the score file for future use
+ *
+ * Uses globals: scoreboard.
  */
 
 void
@@ -131,6 +135,8 @@ open_score()
 /*
  * setup:
  *	Get starting setup for all games
+ *
+ * Uses globals: stdscr (curses).
  */
 
 void
@@ -160,6 +166,8 @@ setup()
 /*
  * getltchars:
  *	Get the local tty chars for later use
+ *
+ * Uses globals: got_ltc, orig_dsusp.
  */
 
 void
@@ -173,6 +181,8 @@ getltchars()
 /* 
  * resetltchars: 
  *      Reset the local tty chars to original values. 
+ *
+ * Uses globals: got_ltc, orig_dsusp.
  */ 
 void 
 resetltchars(void) 
@@ -185,6 +195,8 @@ resetltchars(void)
 /* 
  * playltchars: 
  *      Set local tty chars to the values we use when playing. 
+ *
+ * Uses globals: got_ltc.
  */ 
 void 
 playltchars(void) 
@@ -256,6 +268,8 @@ too_much()
 /*
  * author:
  *	See if a user is an author of the program
+ *
+ * Uses globals: wizard (#ifdef MASTER).
  */
 bool
 author()
@@ -278,6 +292,8 @@ author()
 /*
  * checkout:
  *	Check each CHECKTIME seconds to see if the load is too high
+ *
+ * Uses globals: num_checks (static), in_shell.
  */
 
 checkout(int sig)
@@ -318,6 +334,8 @@ checkout(int sig)
  * chmsg:
  *	checkout()'s version of msg.  If we are in the middle of a
  *	shell, do a printf instead of a msg to a the refresh.
+ *
+ * Uses globals: in_shell.
  */
 /* VARARGS1 */
 
@@ -338,6 +356,8 @@ chmsg(char *fmt, int arg)
 /*
  * ucount:
  *	count number of users on the system
+ *
+ * Uses globals: buf (file-scope struct utmp).
  */
 #include <utmp.h>
 
@@ -368,6 +388,8 @@ ucount()
  * lock_sc:
  *	lock the score file.  If it takes too long, ask the user if
  *	they care to wait.  Return TRUE if the lock is successful.
+ *
+ * Uses globals: lfd (static), prbuf.
  */
 static FILE *lfd = NULL;
 bool
@@ -432,6 +454,8 @@ over:
 /*
  * unlock_sc:
  *	Unlock the score file
+ *
+ * Uses globals: lfd (static).
  */
 
 void

@@ -65,6 +65,8 @@ OPTION	optlist[] = {
 /*
  * option:
  *	Print and then set options from the terminal
+ *
+ * Uses globals: hw, after.
  */
 
 void
@@ -122,6 +124,8 @@ option()
 /*
  * pr_optname:
  *	Print out the option name prompt
+ *
+ * Uses globals: hw.
  */
 
 void
@@ -133,6 +137,8 @@ pr_optname(OPTION *op)
 /*
  * put_bool
  *	Put out a boolean
+ *
+ * Uses globals: hw.
  */
 
 void
@@ -144,6 +150,8 @@ put_bool(void *b)
 /*
  * put_str:
  *	Put out a string
+ *
+ * Uses globals: hw.
  */
 
 void
@@ -155,6 +163,8 @@ put_str(void *str)
 /*
  * put_inv_t:
  *	Put out an inventory type
+ *
+ * Uses globals: hw, inv_t_name.
  */
 
 void
@@ -166,6 +176,8 @@ put_inv_t(void *ip)
 /*
  * get_bool:
  *	Allow changing a boolean option and print it out
+ *
+ * No globals used directly.
  */
 int
 get_bool(void *vp, WINDOW *win)
@@ -216,6 +228,8 @@ get_bool(void *vp, WINDOW *win)
  * get_sf:
  *	Change value and handle transition problems from see_floor to
  *	!see_floor.
+ *
+ * Uses globals: see_floor, hero, proom.
  */
 int
 get_sf(void *vp, WINDOW *win)
@@ -243,6 +257,8 @@ get_sf(void *vp, WINDOW *win)
 /*
  * get_str:
  *	Set a string option
+ *
+ * Uses globals: home, mpos.
  */
 #define MAXINP	50	/* max string to read from terminal or environment */
 
@@ -320,6 +336,8 @@ get_str(void *vopt, WINDOW *win)
 /*
  * get_inv_t
  *	Get an inventory type name
+ *
+ * Uses globals: inv_t_name.
  */
 int
 get_inv_t(void *vp, WINDOW *win)
@@ -374,6 +392,8 @@ get_inv_t(void *vp, WINDOW *win)
 /*
  * get_num:
  *	Get a numeric option
+ *
+ * No globals used directly.
  */
 int
 get_num(void *vp, WINDOW *win)
@@ -395,6 +415,8 @@ get_num(void *vp, WINDOW *win)
  *	being stated as "name" (true) or "noname" (false), and strings
  *	being "name=....", with the string being defined up to a comma
  *	or the end of the entire option string.
+ *
+ * Uses globals: home, inv_t_name, inv_type.
  */
 
 void
@@ -484,6 +506,8 @@ parse_opts(char *str)
 /*
  * strucpy:
  *	Copy string using unctrl for things
+ *
+ * No globals used directly.
  */
 
 void

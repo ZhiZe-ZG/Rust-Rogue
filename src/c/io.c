@@ -13,6 +13,8 @@
 /*
  * msg:
  *	Display a message at the top of the screen.
+ *
+ * Uses globals: mpos, msgbuf (static), newpos (static).
  */
 #define MAXMSG	(NUMCOLS - sizeof "--More--")
 
@@ -47,6 +49,8 @@ msg(char *fmt, ...)
 /*
  * addmsg:
  *	Add things to the current message
+ *
+ * Uses globals: msgbuf (static), newpos (static), via doadd().
  */
 /* VARARGS1 */
 void
@@ -63,6 +67,9 @@ addmsg(char *fmt, ...)
  * endmsg:
  *	Display a new msg (giving him a chance to see the previous one
  *	if it is up there with the --More--)
+ *
+ * Uses globals: save_msg, huh, mpos, msg_esc, msgbuf (static),
+ * newpos (static), lower_msg.
  */
 int
 endmsg()
@@ -109,6 +116,8 @@ endmsg()
 /*
  * doadd:
  *	Perform an add onto the message buffer
+ *
+ * Uses globals: msgbuf (static), newpos (static).
  */
 void
 doadd(char *fmt, va_list args)
@@ -128,6 +137,8 @@ doadd(char *fmt, va_list args)
 /*
  * step_ok:
  *	Returns true if it is ok to step on ch
+ *
+ * No globals used directly.
  */
 int
 step_ok(int ch)
@@ -166,6 +177,9 @@ readchar()
 /*
  * status:
  *	Display the important stats line.  Keep the cursor where it was.
+ *
+ * Uses globals: cur_armor, pstats, purse, level, hungry_state,
+ * max_hp, max_stats, stat_msg.
  */
 void
 status()
@@ -242,6 +256,8 @@ status()
 /*
  * wait_for
  *	Sit around until the guy types the right key
+ *
+ * No globals used directly.
  */
 void
 wait_for(int ch)
@@ -259,6 +275,8 @@ wait_for(int ch)
 /*
  * show_win:
  *	Function used to display a window and wait before returning
+ *
+ * Uses globals: hw, hero.
  */
 void
 show_win(char *message)

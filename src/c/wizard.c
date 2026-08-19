@@ -20,6 +20,9 @@
 /*
  * whatis:
  *	What a certin object is
+ *
+ * Uses globals: pack, n_objs, scr_info, pot_info, ws_info,
+ * ring_info.
  */
 
 void
@@ -75,6 +78,8 @@ whatis(bool insist, int type)
 /*
  * set_know:
  *	Set things up when we really know what a thing is
+ *
+ * No globals used directly (operates on passed info array).
  */
 
 void
@@ -95,6 +100,8 @@ set_know(THING *obj, struct obj_info *info)
 /*
  * type_name:
  *	Return a pointer to the name of the type
+ *
+ * No globals used directly.
  */
 char *
 type_name(int type)
@@ -122,6 +129,8 @@ type_name(int type)
 /*
  * create_obj:
  *	wizard command for getting anything he wants
+ *
+ * Uses globals: mpos, a_class.
  */
 
 void
@@ -194,6 +203,9 @@ create_obj()
 /*
  * telport:
  *	Bamf the hero someplace else
+ *
+ * Uses globals: hero, proom, player, monsters, vf_hit, no_move,
+ * count, running, places (via chat/moat).
  */
 
 void
@@ -234,6 +246,8 @@ teleport()
 /*
  * show_map:
  *	Print out the map for the wizard
+ *
+ * Uses globals: hw, places (via flat/chat).
  */
 
 void

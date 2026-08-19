@@ -20,6 +20,9 @@
  *	Pick up an object and add it to the pack.  If the argument is
  *	non-null use it as the linked_list pointer instead of gettting
  *	it off the ground.
+ *
+ * Uses globals: hero, lvl_obj, places (via chat), proom, pack,
+ * inpack, mlist, amulet, terse.
  */
 
 void
@@ -161,6 +164,9 @@ out:
  * pack_room:
  *	See if there's room in the pack.  If not, print out an
  *	appropriate message
+ *
+ * Uses globals: inpack, terse, hero, lvl_obj, places (via chat),
+ * proom.
  */
 bool
 pack_room(bool from_floor, THING *obj)
@@ -192,6 +198,8 @@ pack_room(bool from_floor, THING *obj)
 /*
  * leave_pack:
  *	take an item out of the pack
+ *
+ * Uses globals: inpack, last_pick, pack_used, pack.
  */
 THING *
 leave_pack(THING *obj, bool newobj, bool all)
@@ -227,6 +235,8 @@ leave_pack(THING *obj, bool newobj, bool all)
 /*
  * pack_char:
  *	Return the next unused pack character.
+ *
+ * Uses globals: pack_used.
  */
 char
 pack_char()
@@ -243,6 +253,8 @@ pack_char()
  * inventory:
  *	List what is in the pack.  Return TRUE if there is something of
  *	the given type.
+ *
+ * Uses globals: n_objs, msg_esc, terse.
  */
 bool
 inventory(THING *list, int type)
@@ -289,6 +301,8 @@ inventory(THING *list, int type)
 /*
  * pick_up:
  *	Add something to characters pack.
+ *
+ * Uses globals: player, hero, move_on, lvl_obj, proom.
  */
 
 void
@@ -333,6 +347,8 @@ pick_up(char ch)
 /*
  * move_msg:
  *	Print out the message if you are just moving onto an object
+ *
+ * Uses globals: terse.
  */
 
 void
@@ -346,6 +362,8 @@ move_msg(THING *obj)
 /*
  * picky_inven:
  *	Allow player to inventory a single item
+ *
+ * Uses globals: pack, terse, mpos.
  */
 
 void
@@ -380,6 +398,8 @@ picky_inven()
 /*
  * get_item:
  *	Pick something out of a pack for a purpose
+ *
+ * Uses globals: pack, again, last_pick, terse, mpos, after, n_objs.
  */
 THING *
 get_item(char *purpose, int type)
@@ -445,6 +465,8 @@ get_item(char *purpose, int type)
 /*
  * money:
  *	Add or subtract gold from the pack
+ *
+ * Uses globals: purse, hero, places (via chat), proom, terse.
  */
 
 void
@@ -464,6 +486,8 @@ money(int value)
 /*
  * floor_ch:
  *	Return the appropriate floor character for her room
+ *
+ * Uses globals: proom.
  */
 char
 floor_ch()
@@ -477,6 +501,8 @@ floor_ch()
  * floor_at:
  *	Return the character at hero's position, taking see_floor
  *	into account
+ *
+ * Uses globals: hero, places (via chat).
  */
 char
 floor_at()
@@ -492,6 +518,9 @@ floor_at()
 /*
  * reset_last:
  *	Reset the last command when the current one is aborted
+ *
+ * Uses globals: last_comm, l_last_comm, last_dir, l_last_dir,
+ * last_pick, l_last_pick.
  */
 
 void

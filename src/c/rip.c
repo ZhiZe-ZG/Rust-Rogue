@@ -28,6 +28,9 @@ extern const char *rogue_rip_line(size_t index);
 /*
  * score:
  *	Figure score and post it.
+ *
+ * Uses globals: hw, prbuf, wizard (#ifdef MASTER), noscore, whoami,
+ * max_level, level, allscore, Numname, purse, tombstone (via death).
  */
 /* VARARGS2 */
 
@@ -208,6 +211,8 @@ score(int amount, int flags, char monst)
 /*
  * death:
  *	Do something really fun when he dies
+ *
+ * Uses globals: purse, tombstone, whoami, prbuf, amulet.
  */
 
 void
@@ -262,6 +267,8 @@ death(char monst)
 /*
  * center:
  *	Return the index to center the given string
+ *
+ * No globals used directly.
  */
 int
 center(char *str)
@@ -272,6 +279,9 @@ center(char *str)
 /*
  * total_winner:
  *	Code for a winner
+ *
+ * Uses globals: purse, pack, weap_info, arm_info, a_class, scr_info,
+ * pot_info, ring_info, ws_info.
  */
 
 void
@@ -373,6 +383,8 @@ total_winner()
 /*
  * killname:
  *	Convert a code to a monster name
+ *
+ * Uses globals: monsters, prbuf.
  */
 char *
 killname(char monst, bool doart)
@@ -417,6 +429,8 @@ killname(char monst, bool doart)
 /*
  * death_monst:
  *	Return a monster appropriate for a random death.
+ *
+ * No globals used directly (uses rnd()).
  */
 char
 death_monst()
