@@ -21,7 +21,11 @@ const MAXTREAS: c_int = 10;
 const MINTREAS: c_int = 2;
 const MAXTRIES: c_int = 10;
 const MAX_ROOM_TRIES: usize = 100;
+const MAXOBJ: c_int = 9;
+const TREAS_ROOM: c_int = 20;
+const AMULETLEVEL: c_int = 26;
 const GOLDGRP: c_int = 1;
+const AMULET: c_char = b',' as c_char;
 const GOLD: c_char = b'*' as c_char;
 const FLOOR: c_char = b'.' as c_char;
 const PASSAGE: c_char = b'#' as c_char;
@@ -319,6 +323,64 @@ pub unsafe extern "C" fn treas_room() {
 		nm -= 1;
 	}
 	level -= 1;
+}
+
+/// put_things:
+/// Put potions and scrolls on this level.
+///
+/// Places random objects (up to `MAXOBJ`) onto the current level, and if the
+/// player is deep enough (at least `AMULETLEVEL`) without having found the
+/// Amulet yet, places the Amulet on the floor.
+///
+/// Uses globals: amulet, level, max_level, lvl_obj, places (via chat).
+#[no_mangle]
+pub unsafe extern "C" fn put_things() {
+    // Once you have found the amulet, the only way to get new stuff is
+    // go down into the dungeon.
+    if amulet != 0 && level < max_level {
+        return;
+    }
+
+    // Check for treasure rooms, and if so, put it in.
+    if rnd(TREAS_ROOM as c_int) == 0 {
+        treas_room();
+    }
+
+    // Do MAXOBJ attempts to put things on a level.
+    for _ in 0..MAXOBJ {
+        if rnd(100) < 36 {
+            // Pick a new object and link it in the list.
+            let obj = new_thing();
+            _attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
+            // Put it somewhere.
+            let og = thing_o(obj);
+            let pos = &raw mut (*og).o_pos;
+            find_floor(std::ptr::null_mut(), pos, FALSE as c_int, FALSE);
+            let pp = place_at((&raw mut places) as *mut CPlace, (*og).o_pos.y, (*og).o_pos.x);
+            (*pp).p_ch = (*og).o_type as c_char;
+        }
+    }
+
+    // If he is really deep in the dungeon and he hasn't found the amulet
+    // yet, put it somewhere on the ground.
+    if level >= AMULETLEVEL && amulet == 0 {
+        let obj = new_item();
+        _attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
+        let og = thing_o(obj);
+        (*og).o_hplus = 0;
+        (*og).o_dplus = 0;
+        // Copy "0x0" into the 8-byte damage strings (zero-padded), matching
+        // C's strncpy(obj->o_damage, "0x0", sizeof(obj->o_damage)).
+        (*og).o_damage = [b'0' as c_char, b'x' as c_char, b'0' as c_char, 0, 0, 0, 0, 0];
+        (*og).o_hurldmg = [b'0' as c_char, b'x' as c_char, b'0' as c_char, 0, 0, 0, 0, 0];
+        (*og).o_arm = 11;
+        (*og).o_type = AMULET as c_int;
+        // Put it somewhere.
+        let pos = &raw mut (*og).o_pos;
+        find_floor(std::ptr::null_mut(), pos, FALSE as c_int, FALSE);
+        let pp = place_at((&raw mut places) as *mut CPlace, (*og).o_pos.y, (*og).o_pos.x);
+        (*pp).p_ch = AMULET;
+    }
 }
 
 pub unsafe fn draw_room_ascii(room: &Room) {
