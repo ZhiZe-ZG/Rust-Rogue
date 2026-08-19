@@ -16,7 +16,7 @@ HDRS     = rogue.h extern.h score.h
 RUST_DIR = src/rust
 RUST_LIB = $(RUST_DIR)/target/release/librogue_rust.a
 OBJS1    = vers.$(O) extern.$(O) chase.$(O) command.$(O) \
-           daemon.$(O) daemons.$(O) fight.$(O) init.$(O) io.$(O) list.$(O) \
+           daemon.$(O) daemons.$(O) fight.$(O) init.$(O) io.$(O) \
 	   mach_dep.$(O) main.$(O) mdport.$(O) misc.$(O) \
 	   move.$(O) new_level.$(O)
 OBJS2    = options.$(O) pack.$(O) \
@@ -24,7 +24,7 @@ OBJS2    = options.$(O) pack.$(O) \
 	   things.$(O) wizard.$(O)
 OBJS     = $(OBJS1) $(OBJS2)
 CFILES   = vers.c extern.c chase.c command.c daemon.c \
-	   daemons.c fight.c init.c io.c list.c mach_dep.c \
+	   daemons.c fight.c init.c io.c mach_dep.c \
 	   main.c  mdport.c misc.c move.c new_level.c \
 	   options.c pack.c rip.c \
 	   state.c things.c \
@@ -61,7 +61,7 @@ EXE      =
 $(PROGRAM): $(RUST_LIB) $(HDRS) $(OBJS) fixdocs
 	$(CC) $(LDFLAGS) $(OBJS) $(RUST_LIB) $(LIBS) $(OUTFLAG)$@$(EXE)
 
-$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/armor.rs $(RUST_DIR)/src/monsters.rs $(RUST_DIR)/src/passages.rs $(RUST_DIR)/src/player.rs $(RUST_DIR)/src/potions.rs $(RUST_DIR)/src/rip.rs $(RUST_DIR)/src/rings.rs $(RUST_DIR)/src/rooms/mod.rs $(RUST_DIR)/src/rooms/ffi.rs $(RUST_DIR)/src/save.rs $(RUST_DIR)/src/score.rs $(RUST_DIR)/src/scrolls.rs $(RUST_DIR)/src/sticks.rs $(RUST_DIR)/src/structure.rs $(RUST_DIR)/src/tile.rs $(RUST_DIR)/src/weapons.rs
+$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/armor.rs $(RUST_DIR)/src/list.rs $(RUST_DIR)/src/monsters.rs $(RUST_DIR)/src/passages.rs $(RUST_DIR)/src/player.rs $(RUST_DIR)/src/potions.rs $(RUST_DIR)/src/rip.rs $(RUST_DIR)/src/rings.rs $(RUST_DIR)/src/rooms/mod.rs $(RUST_DIR)/src/rooms/ffi.rs $(RUST_DIR)/src/save.rs $(RUST_DIR)/src/score.rs $(RUST_DIR)/src/scrolls.rs $(RUST_DIR)/src/sticks.rs $(RUST_DIR)/src/structure.rs $(RUST_DIR)/src/tile.rs $(RUST_DIR)/src/weapons.rs
 	cd $(RUST_DIR) && cargo build --release
  
 clean:

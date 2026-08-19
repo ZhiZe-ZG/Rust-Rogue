@@ -240,10 +240,6 @@
 				>
 			</File>
 			<File
-				RelativePath="list.c"
-				>
-			</File>
-			<File
 				RelativePath="mach_dep.c"
 				>
 			</File>
