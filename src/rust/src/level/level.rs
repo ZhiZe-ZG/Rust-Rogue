@@ -7,7 +7,7 @@
 use glam::IVec2;
 
 use super::passages::Passage;
-use super::roomgraph::{generate_room_grid, RoomGraph, MAX_ROOMS};
+use super::roomgraph::{RoomGraph, MAX_ROOMS};
 use super::rooms::{build_generated_rooms, Room};
 use super::structure::Structure;
 use super::tile::Tile;
@@ -77,15 +77,15 @@ impl Level {
         rooms: [Room; MAX_ROOMS],
         bsze: IVec2,
     ) -> [Room; MAX_ROOMS] {
-        let rooms = generate_room_grid(rooms, bsze, self.depth);
-        let rooms = build_generated_rooms(rooms);
+        let room_graph = RoomGraph::for_level(rooms, bsze, self.depth);
+        self.room_connections = room_graph.generate_for_rooms();
+        let rooms = build_generated_rooms(room_graph.into_rooms());
 
         self.rooms = rooms
             .iter()
             .filter(|room| !room.is_gone())
             .cloned()
             .collect();
-        self.room_connections = RoomGraph::new().generate_for_rooms(&rooms);
 
         rooms
     }

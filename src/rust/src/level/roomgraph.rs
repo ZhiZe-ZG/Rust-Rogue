@@ -2,10 +2,9 @@
 //!
 //! The legacy C engine kept a per-level `rdes` array describing which of the
 //! nine rooms are geometrically adjacent and which of those connections have
-//! actually been dug. This module provides a pure-Rust [`RoomGraph`] wrapper
-//! around that data so the level generator can work with a self-contained
-//! adjacency structure. No C code consumes `rdes` anymore, so the graph is
-//! purely a Rust-side abstraction.
+//! actually been dug. This module provides a pure-Rust [`RoomGraph`] that owns
+//! room slots, fixed adjacency, and per-level connection state so level
+//! generation can run without C globals.
 
 use std::os::raw::c_int;
 use std::os::raw::c_uchar;
@@ -18,31 +17,34 @@ use super::rooms::Room;
 /// Maximum number of rooms on a level.
 pub const MAX_ROOMS: usize = 9;
 
-/// Fixed adjacency of the 3x3 room grid (each room is adjacent to its
-/// orthogonal neighbours in the grid).
-const BASE_CONN: [[c_uchar; MAX_ROOMS]; MAX_ROOMS] = [
-    [0, 1, 0, 1, 0, 0, 0, 0, 0],
-    [1, 0, 1, 0, 1, 0, 0, 0, 0],
-    [0, 1, 0, 0, 0, 1, 0, 0, 0],
-    [1, 0, 0, 0, 1, 0, 1, 0, 0],
-    [0, 1, 0, 1, 0, 1, 0, 1, 0],
-    [0, 0, 1, 0, 1, 0, 0, 0, 1],
-    [0, 0, 0, 1, 0, 0, 0, 1, 0],
-    [0, 0, 0, 0, 1, 0, 1, 0, 1],
-    [0, 0, 0, 0, 0, 1, 0, 1, 0],
-];
-
 const NUMCOLS: i32 = 80;
 const NUMLINES: i32 = 24;
 const MAX_ROOM_TRIES: usize = 100;
 
-/// Generate room geometry/flags for the current level grid.
-pub(crate) fn generate_room_grid(
-    room_states: [Room; MAX_ROOMS],
-    bsze: IVec2,
-    depth: i32,
-) -> [Room; MAX_ROOMS] {
-    determine_room_layouts(room_states, bsze, depth)
+type AdjacentArray = [[c_uchar; MAX_ROOMS]; MAX_ROOMS];
+
+fn build_base_adjacency() -> AdjacentArray {
+    let mut adjacent = [[0; MAX_ROOMS]; MAX_ROOMS];
+
+    for idx in 0..MAX_ROOMS {
+        let row = idx / 3;
+        let col = idx % 3;
+
+        if col > 0 {
+            adjacent[idx][idx - 1] = 1;
+        }
+        if col < 2 {
+            adjacent[idx][idx + 1] = 1;
+        }
+        if row > 0 {
+            adjacent[idx][idx - 3] = 1;
+        }
+        if row < 2 {
+            adjacent[idx][idx + 3] = 1;
+        }
+    }
+
+    adjacent
 }
 
 fn rnd_room_from_state(room_states: &[Room; MAX_ROOMS]) -> usize {
@@ -54,94 +56,11 @@ fn rnd_room_from_state(room_states: &[Room; MAX_ROOMS]) -> usize {
     }
 }
 
-fn determine_room_layouts(
-    mut room_states: [Room; MAX_ROOMS],
-    bsze: IVec2,
-    depth: i32,
-) -> [Room; MAX_ROOMS] {
-    // Reset per-room state before generating the level layout.
-    for room in &mut room_states {
-        room.goldval = 0;
-        room.entry_point_count = 0;
-        room.clear_flags();
-    }
-
-    let left_out = rnd(4);
-    // Randomly mark a few rooms as removed for this level.
-    for _ in 0..left_out {
-        let room_idx = rnd_room_from_state(&room_states);
-        room_states[room_idx].mark_gone();
-    }
-
-    // Compute geometry, sizes, and flags for every room slot.
-    for i in 0..MAX_ROOMS {
-        let room = &mut room_states[i];
-        let top = IVec2::new((i as i32 % 3) * bsze.x + 1, (i as i32 / 3) * bsze.y);
-
-        if room.is_gone() {
-            // Keep rerolling until the off-map placeholder position is valid.
-            loop {
-                room.position.x = top.x + rnd(bsze.x - 2) + 1;
-                room.position.y = top.y + rnd(bsze.y - 2) + 1;
-                room.size = IVec2::new(-NUMCOLS, -NUMLINES);
-                if room.position.y > 0 && room.position.y < NUMLINES - 1 {
-                    break;
-                }
-            }
-            continue;
-        }
-
-        if rnd(10) < depth - 1 {
-            room.mark_dark();
-            if rnd(15) == 0 {
-                room.set_maze();
-            }
-        }
-
-        if room.is_maze() {
-            room.size.x = bsze.x - 1;
-            room.size.y = bsze.y - 1;
-            room.position.x = top.x;
-            if room.position.x == 1 {
-                room.position.x = 0;
-            }
-            room.position.y = top.y;
-            if room.position.y == 0 {
-                room.position.y += 1;
-                room.size.y -= 1;
-            }
-        } else {
-            let mut placed = false;
-            for _ in 0..MAX_ROOM_TRIES {
-                room.size.x = rnd(bsze.x - 4) + 4;
-                room.size.y = rnd(bsze.y - 4) + 4;
-                room.position.x = top.x + rnd(bsze.x - room.size.x);
-                room.position.y = top.y + rnd(bsze.y - room.size.y);
-                if room.position.y != 0 {
-                    placed = true;
-                    break;
-                }
-            }
-
-            if !placed {
-                room.mark_gone();
-            }
-        }
-    }
-
-    room_states
-}
-
-/// Pure-Rust abstraction of the room-connection adjacency graph.
-///
-/// Owns the fixed grid adjacency plus the per-level connection state, and
-/// exposes the same random-growth operations the legacy `do_passages` used
-/// directly on the `rdes` array. [`RoomGraph::generate`] decides which room
-/// pairs get connected; the caller is responsible for actually digging each
-/// corridor.
+/// Room grid plus adjacency and connection state for one generation pass.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomGraph {
-    conn: [[c_uchar; MAX_ROOMS]; MAX_ROOMS],
+    rooms: [Room; MAX_ROOMS],
+    adjacent: AdjacentArray,
     isconn: [[c_uchar; MAX_ROOMS]; MAX_ROOMS],
     ingraph: [c_uchar; MAX_ROOMS],
 }
@@ -153,12 +72,105 @@ impl Default for RoomGraph {
 }
 
 impl RoomGraph {
-    /// Build a fresh graph for the fixed 3x3 room grid.
+    /// Build an empty graph with default room slots.
     pub fn new() -> Self {
+        Self::from_adjacency(build_base_adjacency())
+    }
+
+    fn from_adjacency(conn: AdjacentArray) -> Self {
         Self {
-            conn: BASE_CONN,
+            rooms: std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO, None, None)),
+            adjacent: conn,
             isconn: [[0; MAX_ROOMS]; MAX_ROOMS],
             ingraph: [0; MAX_ROOMS],
+        }
+    }
+
+    /// Build and populate room layout/flags for one level generation pass.
+    pub(crate) fn for_level(rooms: [Room; MAX_ROOMS], bsze: IVec2, depth: i32) -> Self {
+        let mut graph = Self {
+            rooms,
+            adjacent: build_base_adjacency(),
+            isconn: [[0; MAX_ROOMS]; MAX_ROOMS],
+            ingraph: [0; MAX_ROOMS],
+        };
+        graph.determine_room_layouts(bsze, depth);
+        graph
+    }
+
+    pub(crate) fn into_rooms(self) -> [Room; MAX_ROOMS] {
+        self.rooms
+    }
+
+    fn determine_room_layouts(&mut self, bsze: IVec2, depth: i32) {
+        // Reset per-room state before generating the level layout.
+        for room in &mut self.rooms {
+            room.goldval = 0;
+            room.entry_point_count = 0;
+            room.clear_flags();
+        }
+
+        let left_out = rnd(4);
+        // Randomly mark a few rooms as removed for this level.
+        for _ in 0..left_out {
+            let room_idx = rnd_room_from_state(&self.rooms);
+            self.rooms[room_idx].mark_gone();
+        }
+
+        // Compute geometry, sizes, and flags for every room slot.
+        for i in 0..MAX_ROOMS {
+            let room = &mut self.rooms[i];
+            let top = IVec2::new((i as i32 % 3) * bsze.x + 1, (i as i32 / 3) * bsze.y);
+
+            if room.is_gone() {
+                // Keep rerolling until the off-map placeholder position is valid.
+                loop {
+                    room.position.x = top.x + rnd(bsze.x - 2) + 1;
+                    room.position.y = top.y + rnd(bsze.y - 2) + 1;
+                    room.size = IVec2::new(-NUMCOLS, -NUMLINES);
+                    if room.position.y > 0 && room.position.y < NUMLINES - 1 {
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            if rnd(10) < depth - 1 {
+                room.mark_dark();
+                if rnd(15) == 0 {
+                    room.set_maze();
+                }
+            }
+
+            if room.is_maze() {
+                room.size.x = bsze.x - 1;
+                room.size.y = bsze.y - 1;
+                room.position.x = top.x;
+                if room.position.x == 1 {
+                    room.position.x = 0;
+                }
+                room.position.y = top.y;
+                if room.position.y == 0 {
+                    room.position.y += 1;
+                    room.size.y -= 1;
+                }
+            } else {
+                let mut placed = false;
+                for _ in 0..MAX_ROOM_TRIES {
+                    room.size.x = rnd(bsze.x - 4) + 4;
+                    room.size.y = rnd(bsze.y - 4) + 4;
+                    room.position.x = top.x + rnd(bsze.x - room.size.x);
+                    room.position.y = top.y + rnd(bsze.y - room.size.y);
+                    if room.position.y != 0 {
+                        placed = true;
+                        break;
+                    }
+                }
+
+                if !placed {
+                    room.mark_gone();
+                }
+            }
         }
     }
 
@@ -196,7 +208,7 @@ impl RoomGraph {
         let mut count = 0;
         let mut pick = None;
         for i in 0..MAX_ROOMS {
-            if self.conn[from][i] != 0 && self.ingraph[i] == 0 {
+            if self.adjacent[from][i] != 0 && self.ingraph[i] == 0 {
                 count += 1;
                 if rnd(count as c_int) == 0 {
                     pick = Some(i);
@@ -213,7 +225,7 @@ impl RoomGraph {
         let mut count = 0;
         let mut pick = None;
         for i in 0..MAX_ROOMS {
-            if self.conn[from][i] != 0 && self.isconn[from][i] == 0 {
+            if self.adjacent[from][i] != 0 && self.isconn[from][i] == 0 {
                 count += 1;
                 if rnd(count as c_int) == 0 {
                     pick = Some(i);
@@ -302,14 +314,15 @@ impl RoomGraph {
         connections
     }
 
-    /// Decide which room pairs get connected, using the generated room grid.
+    /// Decide which room pairs get connected, using this graph's room layout.
     ///
-    /// This variant treats "gone" rooms as pass-through cells in the 3x3 grid
-    /// so remaining rooms can still be connected through them, but only requires
+    /// This treats "gone" rooms as pass-through cells in the 3x3 grid so
+    /// remaining rooms can still be connected through them, but only requires
     /// non-gone rooms to be fully reachable in the spanning stage.
-    pub fn generate_for_rooms(&self, room_states: &[Room; MAX_ROOMS]) -> Vec<(usize, usize)> {
+    pub(crate) fn generate_for_rooms(&self) -> Vec<(usize, usize)> {
         let mut graph = self.clone();
         let mut connections = Vec::new();
+        let room_states = &self.rooms;
 
         let non_gone_total = Self::non_gone_count(room_states);
         if non_gone_total <= 1 {
