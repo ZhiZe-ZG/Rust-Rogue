@@ -1,4 +1,4 @@
-use std::os::raw::{c_char, c_int, c_short, c_uchar};
+use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::draw::{place_at, set_tile_char};
 use crate::passages::putpass;
@@ -37,6 +37,16 @@ const TRAP: c_char = b'^' as c_char;
 const FALSE: c_uchar = 0;
 const TRUE: c_uchar = 1;
 
+const ISHELD: c_short = 0o0000400;
+const SEEMONST: c_short = 0o040000;
+const ISHALU: c_short = 0o0004000;
+const F_REAL: c_char = 0x10u8 as c_char;
+const PLAYER: c_char = b'@' as c_char;
+const MAXCOLS: c_int = 80;
+const MAXLINES: c_int = 32;
+const MAXTRAPS: c_int = 10;
+const NTRAPS: c_int = 8;
+
 unsafe extern "C" {
 	static mut level: c_int;
 	static mut max_level: c_int;
@@ -44,6 +54,12 @@ unsafe extern "C" {
 	static mut rooms: [CRoom; MAXROOMS];
 	static mut lvl_obj: *mut CThing;
 	static mut places: [CPlace; 32 * 80];
+	static mut player: CThing;
+	static mut mlist: *mut CThing;
+	static mut no_food: c_int;
+	static mut ntraps: c_int;
+	static mut stairs: CCoord;
+	static mut seenstairs: c_uchar;
 
 	fn wake_monster(y: c_int, x: c_int);
 	fn step_ok(ch: c_int) -> c_int;
@@ -53,6 +69,15 @@ unsafe extern "C" {
 	fn randmonster(wander: c_uchar) -> c_char;
 	fn new_monster(tp: *mut CThing, kind: c_char, cp: *mut CCoord);
 	fn give_pack(tp: *mut CThing);
+
+	fn clear() -> c_int;
+	fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
+	fn do_passages();
+	fn enter_room(cp: *mut CCoord);
+	fn turn_see(turn_off: c_uchar) -> c_uchar;
+	fn _free_list(ptr: *mut *mut CThing);
+	fn roomin(cp: *mut CCoord) -> *mut CRoom;
+	fn visuals();
 }
 
 #[no_mangle]
@@ -461,4 +486,114 @@ pub unsafe extern "C" fn door_open(rp: *mut CRoom) {
 		}
 		y += 1;
 	}
+}
+
+/// new_level:
+/// Dig and draw a new level.
+///
+/// Called whenever the hero enters a new dungeon depth.  It clears the
+/// previous level's map, monsters, and objects; digs the rooms and
+/// passages; places objects, traps, and the down staircase; and then
+/// moves the hero to a random open floor and draws the new screen.
+///
+/// Uses globals: player, hero (player.t_pos), level, max_level, places,
+/// mlist, lvl_obj, no_food, ntraps, stairs, seenstairs, rooms (via
+/// do_rooms), passages (via do_passages), player.t_flags (via
+/// enter_room / turn_see / visuals).
+#[no_mangle]
+pub unsafe extern "C" fn new_level() {
+	let mut tp: *mut CThing;
+	let mut pp: *mut CPlace;
+	let mut sp: *mut c_char;
+
+	(*thing_t(&raw mut player)).t_flags &= !ISHELD; /* unhold when you go down just in case */
+	if level > max_level {
+		max_level = level;
+	}
+
+	// Clean things off from last level.
+	for y in 0..MAXLINES {
+		for x in 0..MAXCOLS {
+			pp = place_at((&raw mut places) as *mut CPlace, y, x);
+			(*pp).p_ch = b' ' as c_char;
+			(*pp).p_flags = F_REAL;
+			(*pp).p_monst = std::ptr::null_mut();
+		}
+	}
+	clear();
+
+	// Free up the monsters on the last level.
+	tp = mlist;
+	while !tp.is_null() {
+		let next_tp = (*thing_t(tp)).l_next;
+		_free_list((&raw mut (*thing_t(tp)).t_pack) as *mut *mut CThing);
+		tp = next_tp;
+	}
+	_free_list((&raw mut mlist) as *mut *mut CThing);
+
+	// Throw away stuff left on the previous level (if anything).
+	_free_list((&raw mut lvl_obj) as *mut *mut CThing);
+
+	do_rooms(); /* Draw rooms */
+	do_passages(); /* Draw passages */
+	no_food += 1;
+	put_things(); /* Place objects (if any) */
+
+	// Place the traps.
+	if rnd(10) < level {
+		ntraps = rnd(level / 4) + 1;
+		if ntraps > MAXTRAPS {
+			ntraps = MAXTRAPS;
+		}
+		let mut i = ntraps;
+		while i > 0 {
+			/*
+			 * Not only wouldn't it be NICE to have traps in mazes
+			 * (not that we care about being nice), since the trap
+			 * number is stored where the passage number is, we
+			 * can't actually do it.
+			 */
+			loop {
+				find_floor(std::ptr::null_mut(), &raw mut stairs, FALSE as c_int, FALSE);
+				if chat_at(stairs.y, stairs.x) == FLOOR {
+					break;
+				}
+			}
+			sp = &raw mut (*place_at((&raw mut places) as *mut CPlace, stairs.y, stairs.x)).p_flags;
+			*sp = ((*sp as u8) & !(F_REAL as u8)) as c_char;
+			*sp = ((*sp as u8) | rnd(NTRAPS) as u8) as c_char;
+			i -= 1;
+		}
+	}
+
+	// Place the staircase down.
+	find_floor(std::ptr::null_mut(), &raw mut stairs, FALSE as c_int, FALSE);
+	*chat_at_mut(stairs.y, stairs.x) = STAIRS;
+	seenstairs = FALSE;
+
+	tp = mlist;
+	while !tp.is_null() {
+		let t = thing_t(tp);
+		(*t).t_room = roomin(&raw mut (*t).t_pos);
+		tp = (*t).l_next;
+	}
+
+	find_floor(std::ptr::null_mut(), &raw mut (*thing_t(&raw mut player)).t_pos, FALSE as c_int, TRUE);
+	enter_room(&raw mut (*thing_t(&raw mut player)).t_pos);
+	mvaddch(
+		(*thing_t(&raw mut player)).t_pos.y,
+		(*thing_t(&raw mut player)).t_pos.x,
+		PLAYER as c_uint,
+	);
+	if ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0 {
+		turn_see(FALSE);
+	}
+	if ((*thing_t(&raw mut player)).t_flags & ISHALU) != 0 {
+		visuals();
+	}
+}
+
+#[inline]
+unsafe fn chat_at_mut(y: c_int, x: c_int) -> *mut c_char {
+	&raw mut (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
 }

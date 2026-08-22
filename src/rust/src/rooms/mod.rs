@@ -145,4 +145,4 @@ pub(crate) fn build_maze_structure(height: usize, width: usize) -> Structure {
 
 mod ffi;
 
-pub use ffi::{build_room_model, door_open, draw_room_ascii, put_things};
+pub use ffi::{build_room_model, door_open, draw_room_ascii, new_level, put_things};
