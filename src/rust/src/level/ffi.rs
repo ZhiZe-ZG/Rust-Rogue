@@ -6,7 +6,7 @@ use crate::rnd::rnd;
 
 use super::ffitools::{tile_to_ascii, FLOOR, PASSAGE, STAIRS};
 use super::passages::{do_passages, putpass};
-use super::rooms::{GeneratedRooms, Room, RoomState};
+use super::rooms::Room;
 
 use super::{current_level_mut};
 use super::tile::Tile;
@@ -156,26 +156,27 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
 	}
 }
 
-unsafe fn read_c_room_data() -> [RoomState; MAXROOMS] {
+unsafe fn read_c_room_data() -> [Room; MAXROOMS] {
 	std::array::from_fn(|i| {
 		let rp = (&raw mut rooms[i]) as *const CRoom;
-		room_state_from_c(rp)
+		room_from_c(rp)
 	})
 }
 
-unsafe fn write_rust_data_back_to_c_and_ncurses(generated: &GeneratedRooms) {
+unsafe fn write_rust_data_back_to_c_and_ncurses(generated: &[Room; MAXROOMS]) {
 	let mut mp = CCoord { x: 0, y: 0 };
 
 	// Draw prebuilt room models, then place gold and monsters.
 	for i in 0..MAXROOMS {
 		let rp = (&raw mut rooms[i]) as *mut CRoom;
-		apply_room_state_to_c(&generated.room_states[i], rp);
+		let room = &generated[i];
+		apply_room_to_c(room, rp);
 
-		if let Some(room) = generated.room_models[i].as_ref() {
-			draw_room_ascii(&room);
-		} else {
+		if room.is_gone() {
 			continue;
 		}
+
+		draw_room_ascii(room);
 
 		if rnd(2) == 0 && (amulet == 0 || level >= max_level) {
 			let gold = new_item();
@@ -204,23 +205,26 @@ unsafe fn write_rust_data_back_to_c_and_ncurses(generated: &GeneratedRooms) {
 	}
 }
 
-unsafe fn room_state_from_c(rp: *const CRoom) -> RoomState {
-	RoomState {
-		pos: IVec2::new((*rp).r_pos.x, (*rp).r_pos.y),
-		size: IVec2::new((*rp).r_max.x, (*rp).r_max.y),
-		gold: IVec2::new((*rp).r_gold.x, (*rp).r_gold.y),
-		goldval: (*rp).r_goldval,
-		gone: ((*rp).r_flags & ISGONE) != 0,
-		dark: ((*rp).r_flags & ISDARK) != 0,
-		maze: ((*rp).r_flags & ISMAZE) != 0,
-		entry_point_count: (*rp).r_nexits,
-	}
+unsafe fn room_from_c(rp: *const CRoom) -> Room {
+	let mut room = Room::new(
+		IVec2::new((*rp).r_pos.x, (*rp).r_pos.y),
+		IVec2::new((*rp).r_max.x, (*rp).r_max.y),
+		None,
+		None,
+	);
+	room.gold = IVec2::new((*rp).r_gold.x, (*rp).r_gold.y);
+	room.goldval = (*rp).r_goldval;
+	room.gone = ((*rp).r_flags & ISGONE) != 0;
+	room.dark = ((*rp).r_flags & ISDARK) != 0;
+	room.maze = ((*rp).r_flags & ISMAZE) != 0;
+	room.entry_point_count = (*rp).r_nexits;
+	room
 }
 
-unsafe fn apply_room_state_to_c(state: &RoomState, rp: *mut CRoom) {
+unsafe fn apply_room_to_c(state: &Room, rp: *mut CRoom) {
 	(*rp).r_pos = CCoord {
-		x: state.pos.x,
-		y: state.pos.y,
+		x: state.position.x,
+		y: state.position.y,
 	};
 	(*rp).r_max = CCoord {
 		x: state.size.x,

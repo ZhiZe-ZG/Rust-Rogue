@@ -13,7 +13,7 @@ use std::os::raw::c_uchar;
 use crate::rnd::rnd;
 use glam::IVec2;
 
-use super::rooms::RoomState;
+use super::rooms::Room;
 
 /// Maximum number of rooms on a level.
 pub const MAX_ROOMS: usize = 9;
@@ -38,14 +38,14 @@ const MAX_ROOM_TRIES: usize = 100;
 
 /// Generate room geometry/flags for the current level grid.
 pub(crate) fn generate_room_grid(
-    room_states: [RoomState; MAX_ROOMS],
+    room_states: [Room; MAX_ROOMS],
     bsze: IVec2,
     depth: i32,
-) -> [RoomState; MAX_ROOMS] {
+) -> [Room; MAX_ROOMS] {
     determine_room_layouts(room_states, bsze, depth)
 }
 
-fn rnd_room_from_state(room_states: &[RoomState; MAX_ROOMS]) -> usize {
+fn rnd_room_from_state(room_states: &[Room; MAX_ROOMS]) -> usize {
     loop {
         let rm = rnd(MAX_ROOMS as c_int) as usize;
         if !room_states[rm].is_gone() {
@@ -55,10 +55,10 @@ fn rnd_room_from_state(room_states: &[RoomState; MAX_ROOMS]) -> usize {
 }
 
 fn determine_room_layouts(
-    mut room_states: [RoomState; MAX_ROOMS],
+    mut room_states: [Room; MAX_ROOMS],
     bsze: IVec2,
     depth: i32,
-) -> [RoomState; MAX_ROOMS] {
+) -> [Room; MAX_ROOMS] {
     // Reset per-room state before generating the level layout.
     for room in &mut room_states {
         room.goldval = 0;
@@ -81,10 +81,10 @@ fn determine_room_layouts(
         if room.is_gone() {
             // Keep rerolling until the off-map placeholder position is valid.
             loop {
-                room.pos.x = top.x + rnd(bsze.x - 2) + 1;
-                room.pos.y = top.y + rnd(bsze.y - 2) + 1;
+                room.position.x = top.x + rnd(bsze.x - 2) + 1;
+                room.position.y = top.y + rnd(bsze.y - 2) + 1;
                 room.size = IVec2::new(-NUMCOLS, -NUMLINES);
-                if room.pos.y > 0 && room.pos.y < NUMLINES - 1 {
+                if room.position.y > 0 && room.position.y < NUMLINES - 1 {
                     break;
                 }
             }
@@ -101,13 +101,13 @@ fn determine_room_layouts(
         if room.is_maze() {
             room.size.x = bsze.x - 1;
             room.size.y = bsze.y - 1;
-            room.pos.x = top.x;
-            if room.pos.x == 1 {
-                room.pos.x = 0;
+            room.position.x = top.x;
+            if room.position.x == 1 {
+                room.position.x = 0;
             }
-            room.pos.y = top.y;
-            if room.pos.y == 0 {
-                room.pos.y += 1;
+            room.position.y = top.y;
+            if room.position.y == 0 {
+                room.position.y += 1;
                 room.size.y -= 1;
             }
         } else {
@@ -115,9 +115,9 @@ fn determine_room_layouts(
             for _ in 0..MAX_ROOM_TRIES {
                 room.size.x = rnd(bsze.x - 4) + 4;
                 room.size.y = rnd(bsze.y - 4) + 4;
-                room.pos.x = top.x + rnd(bsze.x - room.size.x);
-                room.pos.y = top.y + rnd(bsze.y - room.size.y);
-                if room.pos.y != 0 {
+                room.position.x = top.x + rnd(bsze.x - room.size.x);
+                room.position.y = top.y + rnd(bsze.y - room.size.y);
+                if room.position.y != 0 {
                     placed = true;
                     break;
                 }
@@ -238,18 +238,18 @@ impl RoomGraph {
         rnd(MAX_ROOMS as c_int) as usize
     }
 
-    fn room_is_gone(room: &RoomState) -> bool {
+    fn room_is_gone(room: &Room) -> bool {
         room.is_gone()
     }
 
-    fn non_gone_count(room_states: &[RoomState; MAX_ROOMS]) -> usize {
+    fn non_gone_count(room_states: &[Room; MAX_ROOMS]) -> usize {
         room_states
             .iter()
             .filter(|room| !Self::room_is_gone(room))
             .count()
     }
 
-    fn pick_non_gone(&self, room_states: &[RoomState; MAX_ROOMS]) -> usize {
+    fn pick_non_gone(&self, room_states: &[Room; MAX_ROOMS]) -> usize {
         loop {
             let idx = rnd(MAX_ROOMS as c_int) as usize;
             if !Self::room_is_gone(&room_states[idx]) {
@@ -307,7 +307,7 @@ impl RoomGraph {
     /// This variant treats "gone" rooms as pass-through cells in the 3x3 grid
     /// so remaining rooms can still be connected through them, but only requires
     /// non-gone rooms to be fully reachable in the spanning stage.
-    pub fn generate_for_rooms(&self, room_states: &[RoomState; MAX_ROOMS]) -> Vec<(usize, usize)> {
+    pub fn generate_for_rooms(&self, room_states: &[Room; MAX_ROOMS]) -> Vec<(usize, usize)> {
         let mut graph = self.clone();
         let mut connections = Vec::new();
 

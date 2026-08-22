@@ -14,13 +14,6 @@ pub struct Room {
 	pub size: IVec2,
 	pub structure: Structure,
 	pub entry_points: Vec<IVec2>,
-}
-
-/// Rust mirror of the legacy C room state used during generation.
-#[derive(Copy, Clone)]
-pub(crate) struct RoomState {
-	pub(crate) pos: IVec2,
-	pub(crate) size: IVec2,
 	pub(crate) gold: IVec2,
 	pub(crate) goldval: i32,
 	pub(crate) gone: bool,
@@ -29,7 +22,7 @@ pub(crate) struct RoomState {
 	pub(crate) entry_point_count: i32,
 }
 
-impl RoomState {
+impl Room {
 	/// Whether this room slot is removed for the level.
 	pub(crate) fn is_gone(&self) -> bool {
 		self.gone
@@ -65,19 +58,19 @@ impl RoomState {
 	}
 }
 
-/// Output bundle from room-grid generation.
-pub(crate) struct GeneratedRooms {
-	pub(crate) room_states: [RoomState; MAX_ROOMS],
-	pub(crate) room_models: [Option<Room>; MAX_ROOMS],
-}
+/// Fill each active room's tile structure from its geometry/flags.
+pub(crate) fn build_generated_rooms(mut rooms: [Room; MAX_ROOMS]) -> [Room; MAX_ROOMS] {
+	for room in &mut rooms {
+		if room.is_gone() {
+			continue;
+		}
 
-/// Build room models for each room state slot.
-pub(crate) fn build_generated_rooms(room_states: [RoomState; MAX_ROOMS]) -> GeneratedRooms {
-	let room_models = std::array::from_fn(|i| build_room_model_from_state(&room_states[i]));
-	GeneratedRooms {
-		room_states,
-		room_models,
+		if let Some(model) = build_room_model(room.position, room.size, room.is_maze()) {
+			room.structure = model.structure;
+		}
 	}
+
+	rooms
 }
 
 impl Room {
@@ -98,6 +91,12 @@ impl Room {
 			size,
 			structure: structure.unwrap_or(default_structure),
 			entry_points: entry_points.unwrap_or_default(),
+			gold: IVec2::ZERO,
+			goldval: 0,
+			gone: false,
+			dark: false,
+			maze: false,
+			entry_point_count: 0,
 		}
 	}
 
@@ -125,15 +124,6 @@ impl Room {
 
 pub fn place_tile(room: &mut Room, local_y: usize, local_x: usize, tile: Tile) -> bool {
 	room.place_tile(local_y, local_x, tile)
-}
-
-/// Build a room model when the slot is active, otherwise skip it.
-fn build_room_model_from_state(room: &RoomState) -> Option<Room> {
-	if room.is_gone() {
-		return None;
-	}
-
-	build_room_model(room.pos, room.size, room.is_maze())
 }
 
 pub(crate) fn build_room_structure(height: usize, width: usize) -> Structure {
