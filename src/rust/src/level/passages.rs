@@ -26,8 +26,6 @@ const F_SEEN: c_char = 0x40u8 as c_char;
 const FALSE: c_uchar = 0;
 const TRUE: c_uchar = 1;
 
-use super::roomgraph::RoomGraph;
-
 /// A corridor connecting two rooms.
 ///
 /// Mirrors the [`Room`](super::rooms::Room) abstraction: a bounding box
@@ -119,16 +117,13 @@ unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
 
 /// Dig all corridors that connect the rooms of the current level.
 ///
-/// The room graph decides which room pairs are connected (see
-/// [`RoomGraph::generate`]); for each pair, [`conn`] digs an actual
-/// corridor into the C map. Finally [`passnum`] numbers the resulting
-/// passage network.
-pub(super) unsafe fn do_passages() {
-    // Decide which room pairs get connected (spanning tree + extras).
-    let connections = RoomGraph::new().generate();
-
+/// `connections` lists the room pairs to connect, as produced by
+/// `RoomGraph::generate` (which the caller is responsible for invoking).
+/// For each pair, [`conn`] digs an actual corridor into the C map.
+/// Finally [`passnum`] numbers the resulting passage network.
+pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
     for (r1, r2) in connections {
-        conn(r1 as c_int, r2 as c_int);
+        conn(*r1 as c_int, *r2 as c_int);
     }
 
     passnum();

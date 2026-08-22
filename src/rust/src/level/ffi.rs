@@ -6,7 +6,9 @@ use crate::rnd::rnd;
 
 use super::ffitools::{tile_to_ascii, FLOOR, PASSAGE, STAIRS};
 use super::passages::{do_passages, putpass};
+use super::roomgraph::RoomGraph;
 use super::rooms::{build_room_model, Room};
+
 use super::{current_level_mut};
 use super::tile::Tile;
 use glam::IVec2;
@@ -507,8 +509,13 @@ pub unsafe extern "C" fn new_level() {
 	_free_list((&raw mut lvl_obj) as *mut *mut CThing);
 
 	do_rooms(); /* Draw rooms */
-	do_passages(); /* Draw passages */
+
+	// Decide which room pairs get connected, then dig each corridor.
+	let connections = RoomGraph::new().generate();
+	do_passages(&connections); /* Draw passages */
+
 	no_food += 1;
+
 	put_things(); /* Place objects (if any) */
 
 	// Place the traps.
