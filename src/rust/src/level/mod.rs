@@ -10,7 +10,7 @@ pub mod rooms;
 pub mod structure;
 pub mod tile;
 
-pub use ffi::{build_room_model, door_open, draw_room_ascii, new_level, put_things};
+pub use ffi::{door_open, new_level};
 pub use rooms::{place_tile, Room};
 pub use structure::Structure;
 pub use tile::Tile;

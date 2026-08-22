@@ -11,7 +11,13 @@ legacy symbol names where practical.
 - `Cargo.toml`: Rust crate definition for the FFI library.
 - `src/lib.rs`: Rust module root that exports migrated subsystems.
 - `src/rnd.rs`: Random number generator state and legacy RNG symbols (`rnd`, `set_seed`) backed by the `rand` crate.
-- `src/rooms.rs`: Room drawing, maze generation, and room wakeup helpers (`draw_room` support, `rogue_do_maze`, `door_open`).
+- `src/level/`: Level generation subsystem.
+  - `src/level/ffi.rs`: Level creation entrypoints (`new_level`, `find_floor`) and internal room/passage drawing.
+  - `src/level/rooms.rs`: Rust room model (`Room`, `Structure` layout) and maze building.
+  - `src/level/passages.rs`: Corridor/passage digging and passage numbering (internal helpers).
+  - `src/level/structure.rs`: Generic 2D tile grid (`Structure`).
+  - `src/level/tile.rs`: Tile enum used by the level model.
+  - `src/level/mod.rs`: Level module root and public re-exports.
 - `src/rndmove.rs`: Random movement helper used by monster/player logic.
 - `src/trap.rs`: Trap effects and trap-side status messaging.
 - `src/rip.rs`: RIP tombstone art provider (`rogue_rip_count`, `rogue_rip_line`).

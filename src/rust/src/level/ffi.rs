@@ -4,7 +4,7 @@ use crate::draw::{place_at, set_tile_char};
 use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
-use super::passages::putpass;
+use super::passages::{do_passages, putpass};
 use super::rooms::{build_maze_structure, build_room_structure, Room};
 use super::tile::Tile;
 use glam::IVec2;
@@ -72,7 +72,6 @@ unsafe extern "C" {
 
 	fn clear() -> c_int;
 	fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
-	fn do_passages();
 	fn enter_room(cp: *mut CCoord);
 	fn turn_see(turn_off: c_uchar) -> c_uchar;
 	fn _free_list(ptr: *mut *mut CThing);
@@ -80,8 +79,7 @@ unsafe extern "C" {
 	fn visuals();
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn rnd_room() -> c_int {
+unsafe fn rnd_room() -> c_int {
 	loop {
 		let rm = rnd(MAXROOMS as c_int);
 		if (rooms[rm as usize].r_flags & ISGONE) == 0 {
@@ -133,8 +131,7 @@ fn tile_to_ascii(tile: Tile, local_y: usize, _local_x: usize, height: usize) -> 
 	}
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn rnd_pos(rp: *mut CRoom, cp: *mut CCoord) {
+unsafe fn rnd_pos(rp: *mut CRoom, cp: *mut CCoord) {
 	if rp.is_null() || cp.is_null() {
 		return;
 	}
@@ -182,8 +179,7 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
 	}
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn do_rooms() {
+unsafe fn do_rooms() {
 	let bsze = CCoord { x: NUMCOLS / 3, y: NUMLINES / 3 };
 	let mut mp = CCoord { x: 0, y: 0 };
 	let mut room_models: [Option<Room>; MAXROOMS] = std::array::from_fn(|_| None);
@@ -307,8 +303,7 @@ unsafe fn determine_room_layouts(bsze: CCoord) {
 	}
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn treas_room() {
+unsafe fn treas_room() {
 	let mut mp = CCoord { x: 0, y: 0 };
 	let rp = &mut rooms[rnd_room() as usize];
 
@@ -358,8 +353,7 @@ pub unsafe extern "C" fn treas_room() {
 /// Amulet yet, places the Amulet on the floor.
 ///
 /// Uses globals: amulet, level, max_level, lvl_obj, places (via chat).
-#[no_mangle]
-pub unsafe extern "C" fn put_things() {
+unsafe fn put_things() {
     // Once you have found the amulet, the only way to get new stuff is
     // go down into the dungeon.
     if amulet != 0 && level < max_level {
@@ -408,7 +402,7 @@ pub unsafe extern "C" fn put_things() {
     }
 }
 
-pub unsafe fn draw_room_ascii(room: &Room) {
+unsafe fn draw_room_ascii(room: &Room) {
 	let height = room.size.y;
 	let width = room.size.x;
 	if height <= 0 || width <= 0 {
@@ -438,7 +432,7 @@ pub unsafe fn draw_room_ascii(room: &Room) {
 	}
 }
 
-pub unsafe fn build_room_model(rp: *mut CRoom) -> Option<Room> {
+unsafe fn build_room_model(rp: *mut CRoom) -> Option<Room> {
 	if rp.is_null() {
 		return None;
 	}
@@ -466,8 +460,7 @@ pub unsafe fn build_room_model(rp: *mut CRoom) -> Option<Room> {
 
 /// door_open:
 /// Called to illuminate a room. If it is dark, wake anything that might move.
-#[no_mangle]
-pub unsafe extern "C" fn door_open(rp: *mut CRoom) {
+pub unsafe fn door_open(rp: *mut CRoom) {
 	if ((*rp).r_flags & ISGONE) != 0 {
 		return;
 	}

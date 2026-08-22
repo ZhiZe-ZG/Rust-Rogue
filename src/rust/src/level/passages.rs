@@ -57,12 +57,6 @@ unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
 }
 
 #[inline]
-unsafe fn set_flat_flag(y: c_int, x: c_int, flag: c_char) {
-    let pp = place_at((&raw mut places) as *mut CPlace, y, x);
-    (*pp).p_flags = (((*pp).p_flags as u8) | (flag as u8)) as c_char;
-}
-
-#[inline]
 unsafe fn clear_flat_flag(y: c_int, x: c_int, flag: c_char) {
     let pp = place_at((&raw mut places) as *mut CPlace, y, x);
     (*pp).p_flags = (((*pp).p_flags as u8) & !(flag as u8)) as c_char;
@@ -73,8 +67,7 @@ unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
     a.x == b.x && a.y == b.y
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn do_passages() {
+pub(super) unsafe fn do_passages() {
     let mut rdes: [RDes; MAXROOMS] = [
         RDes { conn: [0, 1, 0, 1, 0, 0, 0, 0, 0], isconn: [0; MAXROOMS], ingraph: 0 },
         RDes { conn: [1, 0, 1, 0, 1, 0, 0, 0, 0], isconn: [0; MAXROOMS], ingraph: 0 },
@@ -158,14 +151,13 @@ pub unsafe extern "C" fn do_passages() {
     passnum();
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn conn(r1: c_int, r2: c_int) {
+unsafe fn conn(r1: c_int, r2: c_int) {
     let mut rmt: c_int = 0;
     let mut distance = 0;
-    let mut turn_spot = 0;
+    let mut turn_spot;
     let mut turn_distance = 0;
-    let mut rm: usize = 0;
     let mut direc = 'd';
+    let rm: usize;
 
     let mut del = CCoord { x: 0, y: 0 };
     let mut curr = CCoord { x: 0, y: 0 };
@@ -293,8 +285,7 @@ pub unsafe extern "C" fn conn(r1: c_int, r2: c_int) {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn putpass(cp: *mut CCoord) {
+pub(super) unsafe fn putpass(cp: *mut CCoord) {
     if cp.is_null() {
         return;
     }
@@ -308,8 +299,7 @@ pub unsafe extern "C" fn putpass(cp: *mut CCoord) {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn door(rm: *mut CRoom, cp: *mut CCoord) {
+unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) {
     if rm.is_null() || cp.is_null() {
         return;
     }
@@ -367,8 +357,7 @@ pub unsafe extern "C" fn add_pass() {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn passnum() {
+unsafe fn passnum() {
     PNUM = 0;
     NEW_PNUM = FALSE;
     for rp in &mut passages[..MAXPASS] {
@@ -382,8 +371,7 @@ pub unsafe extern "C" fn passnum() {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn numpass(y: c_int, x: c_int) {
+unsafe fn numpass(y: c_int, x: c_int) {
     if x >= NUMCOLS || x < 0 || y >= NUMLINES || y <= 0 {
         return;
     }
