@@ -363,7 +363,7 @@ unsafe fn draw_room_ascii(room: &Room) {
 				Some(tile) => tile,
 				None => continue,
 			};
-			let ch = match tile_to_ascii(tile, local_y, local_x, height_usize) {
+			let ch = match tile_to_ascii(tile) {
 				Some(ch) => ch,
 				None => continue,
 			};

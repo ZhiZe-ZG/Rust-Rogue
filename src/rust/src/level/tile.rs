@@ -2,6 +2,8 @@
 ///
 /// These values describe logical map content, independent of the concrete
 /// glyphs rendered by the C/ncurses side.
+/// Deliberate `H_Wall`/`V_Wall` naming, so silence the camel-case lint.
+#[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Tile {
     /// Outside playable geometry / uninitialized map cell.
@@ -12,8 +14,10 @@ pub enum Tile {
     Passage,
     /// Doorway at a room/corridor boundary.
     Door,
-    /// Solid room boundary wall.
-    Wall,
+    /// Horizontal room boundary wall segment.
+    H_Wall,
+    /// Vertical room boundary wall segment.
+    V_Wall,
     /// Down staircase to the next dungeon level.
     Stairs,
     /// Trap tile that can trigger gameplay effects.

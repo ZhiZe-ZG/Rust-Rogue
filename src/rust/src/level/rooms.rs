@@ -131,8 +131,13 @@ pub(crate) fn build_room_structure(height: usize, width: usize) -> Structure {
 
 	for y in 0..height {
 		for x in 0..width {
-			let is_border = y == 0 || x == 0 || y + 1 == height || x + 1 == width;
-			let tile = if is_border { Tile::Wall } else { Tile::Floor };
+			let tile = if y == 0 || y + 1 == height {
+				Tile::H_Wall
+			} else if x == 0 || x + 1 == width {
+				Tile::V_Wall
+			} else {
+				Tile::Floor
+			};
 			let _ = structure.set(y, x, tile);
 		}
 	}
