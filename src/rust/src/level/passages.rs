@@ -5,6 +5,9 @@ use crate::player::{CCoord, CPlace, CRoom, CThingMonster};
 
 use glam::IVec2;
 
+use super::structure::Structure;
+use super::tile::Tile;
+
 const MAXROOMS: usize = 9;
 const MAXPASS: usize = 13;
 const NUMCOLS: c_int = 80;
@@ -27,19 +30,47 @@ use super::roomgraph::RoomGraph;
 
 /// A corridor connecting two rooms.
 ///
-/// Tracks every tile that makes up the passage plus the enter points where
-/// it joins rooms. `tiles` holds the full set of passage tiles; `entry_points`
-/// holds the door/exit coordinates at each end.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// Mirrors the [`Room`](super::rooms::Room) abstraction: a bounding box
+/// (`position`/`size`) plus a [`Structure`] holding all passage tiles, and
+/// the entry points where the corridor joins rooms (relative to `position`).
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Passage {
-    pub tiles: Vec<IVec2>,
+    pub position: IVec2,
+    pub size: IVec2,
+    pub structure: Structure,
     pub entry_points: Vec<IVec2>,
 }
 
-/// The current passage being built.
-static mut CURRENT_PASSAGE: Option<Passage> = None;
+impl Default for Passage {
+    fn default() -> Self {
+        Self {
+            position: IVec2::ZERO,
+            size: IVec2::ZERO,
+            structure: Structure::new(0, 0, Tile::Empty),
+            entry_points: Vec::new(),
+        }
+    }
+}
+
+impl Passage {
+    pub fn add_entry_point(&mut self, relative_pos: IVec2) {
+        self.entry_points.push(relative_pos);
+    }
+
+    pub fn place_tile(&mut self, local_y: usize, local_x: usize, tile: Tile) -> bool {
+        self.structure.set(local_y, local_x, tile)
+    }
+}
+
+/// Absolute coordinates of the current passage being built.
+///
+/// `putpass`/`door` accumulate here as the corridor is dug; when `conn`
+/// finishes, the bounding box is computed and wrapped into a [`Passage`].
+static mut CURRENT_TILES: Vec<IVec2> = Vec::new();
+static mut CURRENT_ENTRY_POINTS: Vec<IVec2> = Vec::new();
 
 static mut PNUM: c_int = 0;
+
 static mut NEW_PNUM: c_uchar = FALSE;
 
 unsafe extern "C" {
@@ -117,24 +148,28 @@ pub(super) unsafe fn do_passages() {
 unsafe fn conn(r1: c_int, r2: c_int) {
     let mut rmt: c_int = 0;
     let mut distance = 0;
-    let mut turn_spot;
+    let turn_spot;
     let mut turn_distance = 0;
     let mut direc = 'd';
     let rm: usize;
 
     let mut del = CCoord { x: 0, y: 0 };
     let mut curr = CCoord { x: 0, y: 0 };
+
     let mut turn_delta = CCoord { x: 0, y: 0 };
     let mut spos = CCoord { x: 0, y: 0 };
     let mut epos = CCoord { x: 0, y: 0 };
 
-    // Start a fresh passage; `putpass`/`door` append to it as the corridor
-    // is dug. Accessed through a raw pointer to avoid creating references
-    // to the mutable static (matches the codebase's FFI-driven style).
-    *std::ptr::addr_of_mut!(CURRENT_PASSAGE) = Some(Passage::default());
+    // Start a fresh passage; `putpass`/`door` append to the accumulator
+    // statics as the corridor is dug. Accessed through raw pointers to avoid
+    // creating references to the mutable statics (matches the codebase's
+    // FFI-driven style).
+    *std::ptr::addr_of_mut!(CURRENT_TILES) = Vec::new();
+    *std::ptr::addr_of_mut!(CURRENT_ENTRY_POINTS) = Vec::new();
 
     if r1 < r2 {
         rm = r1 as usize;
+
         if r1 + 1 == r2 {
             direc = 'r';
         }
@@ -252,9 +287,49 @@ unsafe fn conn(r1: c_int, r2: c_int) {
         msg(b"warning, connectivity problem on this level\0".as_ptr() as *const c_char);
     }
 
-    if let Some(passage) = (*std::ptr::addr_of_mut!(CURRENT_PASSAGE)).take() {
-        super::current_level_mut().add_passage(passage);
+    finish_passage();
+}
+
+/// Compute the bounding box of the accumulated tiles and wrap them into a
+/// [`Passage`] backed by a [`Structure`], then store it on the current level.
+unsafe fn finish_passage() {
+    let tiles = std::mem::take(&mut *std::ptr::addr_of_mut!(CURRENT_TILES));
+    let entry_points = std::mem::take(&mut *std::ptr::addr_of_mut!(CURRENT_ENTRY_POINTS));
+
+    if tiles.is_empty() {
+        return;
     }
+
+    let min_x = tiles.iter().map(|p| p.x).min().unwrap_or(0);
+    let max_x = tiles.iter().map(|p| p.x).max().unwrap_or(0);
+    let min_y = tiles.iter().map(|p| p.y).min().unwrap_or(0);
+    let max_y = tiles.iter().map(|p| p.y).max().unwrap_or(0);
+
+    let width = (max_x - min_x + 1) as usize;
+    let height = (max_y - min_y + 1) as usize;
+    let position = IVec2::new(min_x, min_y);
+    let size = IVec2::new(max_x - min_x + 1, max_y - min_y + 1);
+
+    let mut structure = Structure::new(height, width, Tile::Empty);
+    for pos in &tiles {
+        let _ = structure.set((pos.y - min_y) as usize, (pos.x - min_x) as usize, Tile::Passage);
+    }
+    for pos in &entry_points {
+        let _ = structure.set((pos.y - min_y) as usize, (pos.x - min_x) as usize, Tile::Door);
+    }
+
+    let relative_entry_points = entry_points
+        .into_iter()
+        .map(|p| IVec2::new(p.x - min_x, p.y - min_y))
+        .collect();
+
+    let passage = Passage {
+        position,
+        size,
+        structure,
+        entry_points: relative_entry_points,
+    };
+    super::current_level_mut().add_passage(passage);
 }
 
 pub(super) unsafe fn putpass(cp: *mut CCoord) {
@@ -262,11 +337,10 @@ pub(super) unsafe fn putpass(cp: *mut CCoord) {
         return;
     }
 
-    if let Some(passage) = (*std::ptr::addr_of_mut!(CURRENT_PASSAGE)).as_mut() {
-        passage.tiles.push(IVec2::new((*cp).x, (*cp).y));
-    }
+    (*std::ptr::addr_of_mut!(CURRENT_TILES)).push(IVec2::new((*cp).x, (*cp).y));
 
     let pp = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
+
     (*pp).p_flags = (((*pp).p_flags as u8) | (F_PASS as u8)) as c_char;
     if rnd(10) + 1 < level && rnd(40) == 0 {
         clear_flat_flag((*cp).y, (*cp).x, F_REAL);
@@ -284,17 +358,16 @@ unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) {
     rm_ref.r_exit[rm_ref.r_nexits as usize] = *cp;
     rm_ref.r_nexits += 1;
 
-    if let Some(passage) = (*std::ptr::addr_of_mut!(CURRENT_PASSAGE)).as_mut() {
-        let pos = IVec2::new((*cp).x, (*cp).y);
-        passage.tiles.push(pos);
-        passage.entry_points.push(pos);
-    }
+    let pos = IVec2::new((*cp).x, (*cp).y);
+    (*std::ptr::addr_of_mut!(CURRENT_TILES)).push(pos);
+    (*std::ptr::addr_of_mut!(CURRENT_ENTRY_POINTS)).push(pos);
 
     if (rm_ref.r_flags & ISMAZE) != 0 {
         return;
     }
 
     let pp = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
+
     if rnd(10) + 1 < level && rnd(5) == 0 {
         if (*cp).y == rm_ref.r_pos.y || (*cp).y == rm_ref.r_pos.y + rm_ref.r_max.y - 1 {
             (*pp).p_ch = b'-' as c_char;
