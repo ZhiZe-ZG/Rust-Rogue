@@ -19,7 +19,7 @@ pub use level::{
     MAX_LEVEL_PASSAGES, MAX_LEVEL_ROOMS,
 };
 pub use passages::Passage;
-pub use roomgraph::{rdes, RDes, RoomGraph, MAX_ROOMS};
+pub use roomgraph::{RoomGraph, MAX_ROOMS};
 pub use rooms::{place_tile, Room};
 pub use structure::Structure;
 pub use tile::Tile;

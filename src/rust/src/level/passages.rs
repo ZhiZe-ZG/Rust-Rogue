@@ -112,10 +112,6 @@ pub(super) unsafe fn do_passages() {
     }
 
     passnum();
-
-    // Mirror the abstract graph back into the C-visible `rdes` global so
-    // legacy C code that reads it still sees an up-to-date level graph.
-    graph.write_to_c();
 }
 
 unsafe fn conn(r1: c_int, r2: c_int) {

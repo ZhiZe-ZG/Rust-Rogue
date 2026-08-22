@@ -1,12 +1,11 @@
 //! Room-connection adjacency graph.
 //!
-//! The legacy engine keeps a per-level `rdes` array describing which of the
+//! The legacy C engine kept a per-level `rdes` array describing which of the
 //! nine rooms are geometrically adjacent and which of those connections have
 //! actually been dug. This module provides a pure-Rust [`RoomGraph`] wrapper
 //! around that data so the level generator can work with a self-contained
-//! adjacency structure, while still exposing the C-visible `rdes` global for
-//! any C code that still reads it. The graph is copied back into `rdes` when
-//! level creation finishes.
+//! adjacency structure. No C code consumes `rdes` anymore, so the graph is
+//! purely a Rust-side abstraction.
 
 use std::os::raw::c_int;
 use std::os::raw::c_uchar;
@@ -15,19 +14,6 @@ use crate::rnd::rnd;
 
 /// Maximum number of rooms on a level.
 pub const MAX_ROOMS: usize = 9;
-
-/// A single room descriptor in the legacy `rdes` array.
-///
-/// `conn` holds which rooms are adjacent in the 3x3 grid, `isconn` records
-/// which of those connections have been dug, and `ingraph` marks whether the
-/// room is part of the connected passage graph.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RDes {
-    pub conn: [c_uchar; MAX_ROOMS],
-    pub isconn: [c_uchar; MAX_ROOMS],
-    pub ingraph: c_uchar,
-}
 
 /// Fixed adjacency of the 3x3 room grid (each room is adjacent to its
 /// orthogonal neighbours in the grid).
@@ -41,24 +27,6 @@ const BASE_CONN: [[c_uchar; MAX_ROOMS]; MAX_ROOMS] = [
     [0, 0, 0, 1, 0, 0, 0, 1, 0],
     [0, 0, 0, 0, 1, 0, 1, 0, 1],
     [0, 0, 0, 0, 0, 1, 0, 1, 0],
-];
-
-/// C-visible global mirroring the current level's room graph.
-///
-/// Kept exported with the C ABI so legacy C code that reads `rdes` still
-/// finds it. The Rust generator works through [`RoomGraph`] and copies the
-/// result back here when level creation finishes.
-#[no_mangle]
-pub static mut rdes: [RDes; MAX_ROOMS] = [
-    RDes { conn: [0, 1, 0, 1, 0, 0, 0, 0, 0], isconn: [0; MAX_ROOMS], ingraph: 0 },
-    RDes { conn: [1, 0, 1, 0, 1, 0, 0, 0, 0], isconn: [0; MAX_ROOMS], ingraph: 0 },
-    RDes { conn: [0, 1, 0, 0, 0, 1, 0, 0, 0], isconn: [0; MAX_ROOMS], ingraph: 0 },
-    RDes { conn: [1, 0, 0, 0, 1, 0, 1, 0, 0], isconn: [0; MAX_ROOMS], ingraph: 0 },
-    RDes { conn: [0, 1, 0, 1, 0, 1, 0, 1, 0], isconn: [0; MAX_ROOMS], ingraph: 0 },
-    RDes { conn: [0, 0, 1, 0, 1, 0, 0, 0, 1], isconn: [0; MAX_ROOMS], ingraph: 0 },
-    RDes { conn: [0, 0, 0, 1, 0, 0, 0, 1, 0], isconn: [0; MAX_ROOMS], ingraph: 0 },
-    RDes { conn: [0, 0, 0, 0, 1, 0, 1, 0, 1], isconn: [0; MAX_ROOMS], ingraph: 0 },
-    RDes { conn: [0, 0, 0, 0, 0, 1, 0, 1, 0], isconn: [0; MAX_ROOMS], ingraph: 0 },
 ];
 
 /// Pure-Rust abstraction of the room-connection adjacency graph.
@@ -163,20 +131,5 @@ impl RoomGraph {
     /// Pick a uniformly random room index (0..MAX_ROOMS).
     pub fn pick_any(&self) -> usize {
         rnd(MAX_ROOMS as c_int) as usize
-    }
-
-    /// Copy this graph back into the C-visible `rdes` global.
-    ///
-    /// # Safety
-    ///
-    /// Writes to the shared `static mut rdes`; callers must ensure no other
-    /// code is reading or writing it concurrently.
-    pub unsafe fn write_to_c(&self) {
-        let rdes_ptr = std::ptr::addr_of_mut!(rdes);
-        for i in 0..MAX_ROOMS {
-            (*rdes_ptr)[i].conn = self.conn[i];
-            (*rdes_ptr)[i].isconn = self.isconn[i];
-            (*rdes_ptr)[i].ingraph = self.ingraph[i];
-        }
     }
 }
