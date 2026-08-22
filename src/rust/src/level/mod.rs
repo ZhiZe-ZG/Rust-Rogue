@@ -17,6 +17,7 @@ pub use level::{
     create_level, current_level_mut, set_current_level, Level, LEVEL_HEIGHT, LEVEL_WIDTH,
     MAX_LEVEL_PASSAGES, MAX_LEVEL_ROOMS,
 };
+pub use passages::Passage;
 pub use rooms::{place_tile, Room};
 pub use structure::Structure;
 pub use tile::Tile;

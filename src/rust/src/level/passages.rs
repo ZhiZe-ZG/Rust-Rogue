@@ -3,6 +3,8 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::draw::place_at;
 use crate::player::{CCoord, CPlace, CRoom, CThingMonster};
 
+use glam::IVec2;
+
 const MAXROOMS: usize = 9;
 const MAXPASS: usize = 13;
 const NUMCOLS: c_int = 80;
@@ -28,6 +30,20 @@ struct RDes {
     isconn: [c_uchar; MAXROOMS],
     ingraph: c_uchar,
 }
+
+/// A corridor connecting two rooms.
+///
+/// Tracks every tile that makes up the passage plus the enter points where
+/// it joins rooms. `tiles` holds the full set of passage tiles; `entry_points`
+/// holds the door/exit coordinates at each end.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Passage {
+    pub tiles: Vec<IVec2>,
+    pub entry_points: Vec<IVec2>,
+}
+
+/// The current passage being built.
+static mut CURRENT_PASSAGE: Option<Passage> = None;
 
 static mut PNUM: c_int = 0;
 static mut NEW_PNUM: c_uchar = FALSE;
@@ -165,6 +181,11 @@ unsafe fn conn(r1: c_int, r2: c_int) {
     let mut spos = CCoord { x: 0, y: 0 };
     let mut epos = CCoord { x: 0, y: 0 };
 
+    // Start a fresh passage; `putpass`/`door` append to it as the corridor
+    // is dug. Accessed through a raw pointer to avoid creating references
+    // to the mutable static (matches the codebase's FFI-driven style).
+    *std::ptr::addr_of_mut!(CURRENT_PASSAGE) = Some(Passage::default());
+
     if r1 < r2 {
         rm = r1 as usize;
         if r1 + 1 == r2 {
@@ -283,11 +304,19 @@ unsafe fn conn(r1: c_int, r2: c_int) {
     if !coord_eq(curr, epos) {
         msg(b"warning, connectivity problem on this level\0".as_ptr() as *const c_char);
     }
+
+    if let Some(passage) = (*std::ptr::addr_of_mut!(CURRENT_PASSAGE)).take() {
+        super::current_level_mut().add_passage(passage);
+    }
 }
 
 pub(super) unsafe fn putpass(cp: *mut CCoord) {
     if cp.is_null() {
         return;
+    }
+
+    if let Some(passage) = (*std::ptr::addr_of_mut!(CURRENT_PASSAGE)).as_mut() {
+        passage.tiles.push(IVec2::new((*cp).x, (*cp).y));
     }
 
     let pp = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
@@ -307,6 +336,12 @@ unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) {
     let rm_ref = &mut *rm;
     rm_ref.r_exit[rm_ref.r_nexits as usize] = *cp;
     rm_ref.r_nexits += 1;
+
+    if let Some(passage) = (*std::ptr::addr_of_mut!(CURRENT_PASSAGE)).as_mut() {
+        let pos = IVec2::new((*cp).x, (*cp).y);
+        passage.tiles.push(pos);
+        passage.entry_points.push(pos);
+    }
 
     if (rm_ref.r_flags & ISMAZE) != 0 {
         return;

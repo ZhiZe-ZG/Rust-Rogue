@@ -6,6 +6,7 @@
 
 use glam::IVec2;
 
+use super::passages::Passage;
 use super::rooms::Room;
 use super::structure::Structure;
 use super::tile::Tile;
@@ -20,7 +21,7 @@ pub struct Level {
     pub depth: i32,
     pub rooms: Vec<Room>,
     pub room_connections: Vec<(usize, usize)>,
-    pub passages: Vec<IVec2>,
+    pub passages: Vec<Passage>,
     pub map: Structure,
 }
 
@@ -66,8 +67,8 @@ impl Level {
         self.room_connections.push((from, to));
     }
 
-    pub fn add_passage(&mut self, position: IVec2) {
-        self.passages.push(position);
+    pub fn add_passage(&mut self, passage: Passage) {
+        self.passages.push(passage);
     }
 }
 
