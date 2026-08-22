@@ -7,24 +7,21 @@ use crate::rnd::rnd;
 use super::ffitools::{tile_to_ascii, FLOOR, PASSAGE, STAIRS};
 use super::passages::{do_passages, putpass};
 use super::roomgraph::RoomGraph;
-use super::rooms::{build_room_model, Room};
+use super::roomgrid::{generate_room_grid_and_rooms, GeneratedRooms, RoomState, MAXROOMS};
+use super::rooms::Room;
 
 use super::{current_level_mut};
 use super::tile::Tile;
-use glam::IVec2;
 
 const ISGONE: c_short = 0o000002;
 const ISMAZE: c_short = 0o000004;
-const ISDARK: c_short = 0o000001;
 const ISMANY: c_int = 0o0000010;
 const ISMEAN: c_short = 0o0004000;
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
-const MAXROOMS: usize = 9;
 const MAXTREAS: c_int = 10;
 const MINTREAS: c_int = 2;
 const MAXTRIES: c_int = 10;
-const MAX_ROOM_TRIES: usize = 100;
 const MAXOBJ: c_int = 9;
 const TREAS_ROOM: c_int = 20;
 const AMULETLEVEL: c_int = 26;
@@ -165,21 +162,6 @@ unsafe fn do_rooms() {
 	write_rust_data_back_to_c_and_ncurses(&generated);
 }
 
-#[derive(Copy, Clone)]
-struct RoomState {
-	pos: CCoord,
-	max: CCoord,
-	gold: CCoord,
-	goldval: c_int,
-	flags: c_short,
-	nexits: c_int,
-}
-
-struct GeneratedRooms {
-	room_states: [RoomState; MAXROOMS],
-	room_models: [Option<Room>; MAXROOMS],
-}
-
 unsafe fn read_c_room_data() -> [RoomState; MAXROOMS] {
 	std::array::from_fn(|i| {
 		let rp = (&raw mut rooms[i]) as *const CRoom;
@@ -246,111 +228,6 @@ unsafe fn apply_room_state_to_c(state: &RoomState, rp: *mut CRoom) {
 	(*rp).r_goldval = state.goldval;
 	(*rp).r_flags = state.flags;
 	(*rp).r_nexits = state.nexits;
-}
-
-fn generate_room_grid_and_rooms(
-	room_states: [RoomState; MAXROOMS],
-	bsze: CCoord,
-	depth: c_int,
-) -> GeneratedRooms {
-	let room_states = determine_room_layouts_rust(room_states, bsze, depth);
-	let room_models = std::array::from_fn(|i| build_room_model_from_state(&room_states[i]));
-
-	GeneratedRooms {
-		room_states,
-		room_models,
-	}
-}
-
-fn rnd_room_from_state(room_states: &[RoomState; MAXROOMS]) -> usize {
-	loop {
-		let rm = rnd(MAXROOMS as c_int) as usize;
-		if (room_states[rm].flags & ISGONE) == 0 {
-			return rm;
-		}
-	}
-}
-
-fn determine_room_layouts_rust(
-	mut room_states: [RoomState; MAXROOMS],
-	bsze: CCoord,
-	depth: c_int,
-) -> [RoomState; MAXROOMS] {
-	// Reset per-room state before generating the level layout.
-	for room in &mut room_states {
-		room.goldval = 0;
-		room.nexits = 0;
-		room.flags = 0;
-	}
-
-	let left_out = rnd(4);
-	// Randomly mark a few rooms as removed for this level.
-	for _ in 0..left_out {
-		let room_idx = rnd_room_from_state(&room_states);
-		room_states[room_idx].flags |= ISGONE;
-	}
-
-	// Compute geometry, sizes, and flags for every room slot.
-	for i in 0..MAXROOMS {
-		let room = &mut room_states[i];
-		let top = CCoord {
-			x: (i as c_int % 3) * bsze.x + 1,
-			y: (i as c_int / 3) * bsze.y,
-		};
-
-		if (room.flags & ISGONE) != 0 {
-			// Keep rerolling until the off-map placeholder position is valid.
-			loop {
-				room.pos.x = top.x + rnd(bsze.x - 2) + 1;
-				room.pos.y = top.y + rnd(bsze.y - 2) + 1;
-				room.max.x = -NUMCOLS;
-				room.max.y = -NUMLINES;
-				if room.pos.y > 0 && room.pos.y < NUMLINES - 1 {
-					break;
-				}
-			}
-			continue;
-		}
-
-		if rnd(10) < depth - 1 {
-			room.flags |= ISDARK;
-			if rnd(15) == 0 {
-				room.flags = ISMAZE;
-			}
-		}
-
-		if (room.flags & ISMAZE) != 0 {
-			room.max.x = bsze.x - 1;
-			room.max.y = bsze.y - 1;
-			room.pos.x = top.x;
-			if room.pos.x == 1 {
-				room.pos.x = 0;
-			}
-			room.pos.y = top.y;
-			if room.pos.y == 0 {
-				room.pos.y += 1;
-				room.max.y -= 1;
-			}
-		} else {
-			let mut placed = false;
-			for _ in 0..MAX_ROOM_TRIES {
-				room.max.x = rnd(bsze.x - 4) + 4;
-				room.max.y = rnd(bsze.y - 4) + 4;
-				room.pos.x = top.x + rnd(bsze.x - room.max.x);
-				room.pos.y = top.y + rnd(bsze.y - room.max.y);
-				if room.pos.y != 0 {
-					placed = true;
-					break;
-				}
-			}
-
-			if !placed {
-				room.flags |= ISGONE;
-			}
-		}
-	}
-
-	room_states
 }
 
 unsafe fn treas_room() {
@@ -480,23 +357,6 @@ unsafe fn draw_room_ascii(room: &Room) {
 			set_tile_char(abs_y, abs_x, ch);
 		}
 	}
-}
-
-/// Transfer a C `CRoom` into a Rust [`Room`] model.
-///
-/// Step 1: pull the geometry out of the C struct (position, size, maze
-/// flag). Step 2 is delegated to the pure-Rust [`build_room_model`], which
-/// constructs the tile structure with no C dependencies.
-fn build_room_model_from_state(room: &RoomState) -> Option<Room> {
-	if (room.flags & ISGONE) != 0 {
-		return None;
-	}
-
-	let position = IVec2::new(room.pos.x, room.pos.y);
-	let size = IVec2::new(room.max.x, room.max.y);
-	let is_maze = (room.flags & ISMAZE) != 0;
-
-	build_room_model(position, size, is_maze)
 }
 
 /// door_open:
