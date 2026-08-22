@@ -134,154 +134,216 @@ pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
     passnum();
 }
 
-/// Dig a single corridor between two adjacent rooms `r1` and `r2`.
+/// Reset the static accumulators so a fresh corridor can be dug.
 ///
-/// Picks a vertical (`d`) or horizontal (`r`) corridor from the room
-/// layout, chooses a random entry point on each room boundary, then walks
-/// a straight or L-shaped path, laying passage tiles via [`putpass`] and
-/// doors via [`door`]. The accumulated tiles are wrapped into a
-/// [`Passage`] by [`finish_passage`].
-/// Uses globals: `CURRENT_TILES`, `CURRENT_ENTRY_POINTS`, `rooms`, `places`.
-unsafe fn conn(r1: c_int, r2: c_int) {
-    let mut rmt: c_int = 0;
-    let mut distance = 0;
-    let turn_spot;
-    let mut turn_distance = 0;
-    let mut direc = 'd';
-    let rm: usize;
-
-    let mut del = CCoord { x: 0, y: 0 };
-    let mut curr = CCoord { x: 0, y: 0 };
-
-    let mut turn_delta = CCoord { x: 0, y: 0 };
-    let mut spos = CCoord { x: 0, y: 0 };
-    let mut epos = CCoord { x: 0, y: 0 };
-
-    // Start a fresh passage; `putpass`/`door` append to the accumulator
-    // statics as the corridor is dug. Accessed through raw pointers to avoid
-    // creating references to the mutable statics (matches the codebase's
-    // FFI-driven style).
+/// `putpass`/`door` append to these statics as the corridor is dug; they
+/// are cleared before every [`conn`] call. Accessed through raw pointers to
+/// avoid creating references to the mutable statics (matches the codebase's
+/// FFI-driven style).
+/// Uses globals: `CURRENT_TILES`, `CURRENT_ENTRY_POINTS`.
+unsafe fn reset_passage_builder() {
     *std::ptr::addr_of_mut!(CURRENT_TILES) = Vec::new();
     *std::ptr::addr_of_mut!(CURRENT_ENTRY_POINTS) = Vec::new();
+}
 
+/// Geometric plan of the L-shaped corridor between two rooms.
+///
+/// Produced by [`plan_corridor`] and consumed by [`conn`] to register the
+/// corridor's doors and lay its tiles. All coordinates are absolute C-map
+/// coordinates.
+struct CorridorPlan {
+    /// Index of the room the corridor leaves (the lower room index).
+    base_room: usize,
+    /// Index of the room the corridor enters (the room paired with `base_room`).
+    partner_room: usize,
+    /// Per-cell step of the straight run: `(0, 1)` for vertical corridors,
+    /// `(1, 0)` for horizontal ones.
+    step: CCoord,
+    /// Entry point on `base_room`'s boundary.
+    start: CCoord,
+    /// Exit point on `partner_room`'s boundary.
+    end: CCoord,
+    /// Number of cells laid along `step` before the turn.
+    distance: c_int,
+    /// Per-cell step of the perpendicular turn.
+    turn_step: CCoord,
+    /// Number of cells laid along `turn_step`.
+    turn_distance: c_int,
+    /// Position along the straight run at which the turn begins.
+    turn_spot: c_int,
+}
+
+/// Determine the direction of the corridor between rooms `r1` and `r2`.
+///
+/// Rooms side by side (indices differing by one) are connected by a
+/// horizontal corridor (`'r'`); rooms stacked (any other pair) by a
+/// vertical corridor (`'d'`). Also returns the smaller index, which anchors
+/// the corridor's start.
+/// Uses globals: none.
+fn corridor_direction(r1: c_int, r2: c_int) -> (char, usize) {
     if r1 < r2 {
-        rm = r1 as usize;
-        if r1 + 1 == r2 {
-            direc = 'r';
-        }
+        let direc = if r1 + 1 == r2 { 'r' } else { 'd' };
+        (direc, r1 as usize)
     } else {
-        rm = r2 as usize;
-        if r2 + 1 == r1 {
-            direc = 'r';
-        }
+        let direc = if r2 + 1 == r1 { 'r' } else { 'd' };
+        (direc, r2 as usize)
     }
+}
 
-    let rpf = &mut rooms[rm];
-
-    if direc == 'd' {
-        rmt = rm as c_int + 3;
-        let rpt = &mut rooms[rmt as usize];
-        del.x = 0;
-        del.y = 1;
-        spos.x = rpf.r_pos.x;
-        spos.y = rpf.r_pos.y;
-        epos.x = rpt.r_pos.x;
-        epos.y = rpt.r_pos.y;
-        if (rpf.r_flags & ISGONE) == 0 {
-            loop {
-                spos.x = rpf.r_pos.x + rnd(rpf.r_max.x - 2) + 1;
-                spos.y = rpf.r_pos.y + rpf.r_max.y - 1;
-                if (rpf.r_flags & ISMAZE) == 0 || (flat_at(spos.y, spos.x) as u8 & F_PASS as u8) != 0 {
-                    break;
-                }
+/// Pick the point where the corridor meets `room`'s boundary.
+///
+/// For a vertical corridor (`direc == 'd'`) the point sits on the room's
+/// bottom wall when `start` is set (the room the corridor leaves) or on its
+/// top wall otherwise, randomizing the x coordinate. For a horizontal
+/// corridor it sits on the right (`start`) or left wall, randomizing the y
+/// coordinate. In maze rooms the point is redrawn until it lands on an
+/// existing passage so the corridor always joins the maze. If the room was
+/// removed (`ISGONE`), its top-left corner is returned unchanged.
+/// Uses globals: `places`.
+unsafe fn entry_point(room: &CRoom, direc: char, start: bool) -> CCoord {
+    let mut p = CCoord {
+        x: room.r_pos.x,
+        y: room.r_pos.y,
+    };
+    if (room.r_flags & ISGONE) == 0 {
+        loop {
+            if direc == 'd' {
+                p.x = room.r_pos.x + rnd(room.r_max.x - 2) + 1;
+                p.y = if start { room.r_pos.y + room.r_max.y - 1 } else { room.r_pos.y };
+            } else {
+                p.y = room.r_pos.y + rnd(room.r_max.y - 2) + 1;
+                p.x = if start { room.r_pos.x + room.r_max.x - 1 } else { room.r_pos.x };
+            }
+            if (room.r_flags & ISMAZE) == 0 || (flat_at(p.y, p.x) as u8 & F_PASS as u8) != 0 {
+                break;
             }
         }
-        if (rpt.r_flags & ISGONE) == 0 {
-            loop {
-                epos.x = rpt.r_pos.x + rnd(rpt.r_max.x - 2) + 1;
-                if (rpt.r_flags & ISMAZE) == 0 || (flat_at(epos.y, epos.x) as u8 & F_PASS as u8) != 0 {
-                    break;
-                }
-            }
-        }
-        distance = (spos.y - epos.y).abs() - 1;
-        turn_delta.y = 0;
-        turn_delta.x = if spos.x < epos.x { 1 } else { -1 };
-        turn_distance = (spos.x - epos.x).abs();
-    } else if direc == 'r' {
-        rmt = rm as c_int + 1;
-        let rpt = &mut rooms[rmt as usize];
-        del.x = 1;
-        del.y = 0;
-        spos.x = rpf.r_pos.x;
-        spos.y = rpf.r_pos.y;
-        epos.x = rpt.r_pos.x;
-        epos.y = rpt.r_pos.y;
-        if (rpf.r_flags & ISGONE) == 0 {
-            loop {
-                spos.x = rpf.r_pos.x + rpf.r_max.x - 1;
-                spos.y = rpf.r_pos.y + rnd(rpf.r_max.y - 2) + 1;
-                if (rpf.r_flags & ISMAZE) == 0 || (flat_at(spos.y, spos.x) as u8 & F_PASS as u8) != 0 {
-                    break;
-                }
-            }
-        }
-        if (rpt.r_flags & ISGONE) == 0 {
-            loop {
-                epos.y = rpt.r_pos.y + rnd(rpt.r_max.y - 2) + 1;
-                if (rpt.r_flags & ISMAZE) == 0 || (flat_at(epos.y, epos.x) as u8 & F_PASS as u8) != 0 {
-                    break;
-                }
-            }
-        }
-        distance = (spos.x - epos.x).abs() - 1;
-        turn_delta.y = if spos.y < epos.y { 1 } else { -1 };
-        turn_delta.x = 0;
-        turn_distance = (spos.y - epos.y).abs();
     }
+    p
+}
 
-    if distance > 1 {
-        turn_spot = rnd(distance - 1) + 1;
+/// Compute the full geometric plan for a corridor between rooms `r1`/`r2`.
+///
+/// Determines the corridor direction from the room indices, picks random
+/// entry points on both room boundaries, and derives the straight run, the
+/// perpendicular turn, and the random position of the turn.
+/// Uses globals: `rooms`, `places`.
+unsafe fn plan_corridor(r1: c_int, r2: c_int) -> CorridorPlan {
+    let (direc, base_room) = corridor_direction(r1, r2);
+    let partner_room = if direc == 'd' { base_room + 3 } else { base_room + 1 };
+
+    let base = &rooms[base_room];
+    let partner = &rooms[partner_room];
+
+    let step = if direc == 'd' {
+        CCoord { x: 0, y: 1 }
     } else {
-        turn_spot = 1;
-    }
+        CCoord { x: 1, y: 0 }
+    };
 
-    if (rpf.r_flags & ISGONE) == 0 {
-        door(rpf, &mut spos);
+    let start = entry_point(base, direc, true);
+    let end = entry_point(partner, direc, false);
+
+    let (distance, turn_step, turn_distance) = if direc == 'd' {
+        (
+            (start.y - end.y).abs() - 1,
+            CCoord {
+                x: if start.x < end.x { 1 } else { -1 },
+                y: 0,
+            },
+            (start.x - end.x).abs(),
+        )
     } else {
-        putpass(&mut spos);
-    }
+        (
+            (start.x - end.x).abs() - 1,
+            CCoord {
+                x: 0,
+                y: if start.y < end.y { 1 } else { -1 },
+            },
+            (start.y - end.y).abs(),
+        )
+    };
 
-    let rpt = &rooms[rmt as usize];
-    if (rpt.r_flags & ISGONE) == 0 {
-        door(&raw const rooms[rmt as usize] as *mut CRoom, &mut epos);
+    let turn_spot = if distance > 1 { rnd(distance - 1) + 1 } else { 1 };
+
+    CorridorPlan {
+        base_room,
+        partner_room,
+        step,
+        start,
+        end,
+        distance,
+        turn_step,
+        turn_distance,
+        turn_spot,
+    }
+}
+
+/// Place one end of the corridor on `room`'s boundary.
+///
+/// If the room is still present, a door is registered on its boundary via
+/// [`door`]; if it was removed (`ISGONE`), a plain passage tile is laid
+/// instead.
+/// Uses globals: `rooms`, `places`, `level`.
+unsafe fn place_corridor_end(room: *mut CRoom, pos: &mut CCoord) {
+    if room.is_null() || ((*room).r_flags & ISGONE) != 0 {
+        putpass(pos);
     } else {
-        putpass(&mut epos);
+        door(room, pos);
     }
+}
 
-    curr.x = spos.x;
-    curr.y = spos.y;
+/// Lay the passage tiles of the corridor described by `plan`.
+///
+/// Walks an L-shaped path: from `start` it steps along `step` for
+/// `distance` cells, making a perpendicular run of `turn_distance` cells
+/// starting at `turn_spot`, so the corridor ends up aligned with `end`. A
+/// final check warns if the path did not reach the expected end point.
+/// Uses globals: `CURRENT_TILES`, `places`, `level`.
+unsafe fn dig_corridor(plan: &CorridorPlan) {
+    let mut curr = plan.start;
+    let mut distance = plan.distance;
+
     while distance > 0 {
-        curr.x += del.x;
-        curr.y += del.y;
-        if distance == turn_spot {
-            let mut remaining = turn_distance;
+        curr.x += plan.step.x;
+        curr.y += plan.step.y;
+
+        if distance == plan.turn_spot {
+            let mut remaining = plan.turn_distance;
             while remaining > 0 {
                 putpass(&mut curr);
-                curr.x += turn_delta.x;
-                curr.y += turn_delta.y;
+                curr.x += plan.turn_step.x;
+                curr.y += plan.turn_step.y;
                 remaining -= 1;
             }
         }
+
         putpass(&mut curr);
         distance -= 1;
     }
 
-    curr.x += del.x;
-    curr.y += del.y;
-    if !coord_eq(curr, epos) {
+    curr.x += plan.step.x;
+    curr.y += plan.step.y;
+    if !coord_eq(curr, plan.end) {
         msg(b"warning, connectivity problem on this level\0".as_ptr() as *const c_char);
     }
+}
+
+/// Dig a single corridor between two adjacent rooms `r1` and `r2`.
+///
+/// Plans an L-shaped corridor (see [`plan_corridor`]), registers its doors
+/// on both room boundaries, and lays its tiles (see [`dig_corridor`]). The
+/// accumulated tiles are wrapped into a [`Passage`] by [`finish_passage`].
+/// Uses globals: `CURRENT_TILES`, `CURRENT_ENTRY_POINTS`, `rooms`, `places`.
+unsafe fn conn(r1: c_int, r2: c_int) {
+    reset_passage_builder();
+
+    let mut plan = plan_corridor(r1, r2);
+
+    place_corridor_end(&raw mut rooms[plan.base_room], &mut plan.start);
+    place_corridor_end(&raw mut rooms[plan.partner_room], &mut plan.end);
+
+    dig_corridor(&plan);
 
     finish_passage();
 }
