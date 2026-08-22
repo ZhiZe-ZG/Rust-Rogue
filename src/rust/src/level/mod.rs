@@ -7,6 +7,7 @@
 use glam::IVec2;
 
 mod ffi;
+mod ffitools;
 pub mod passages;
 pub mod rooms;
 pub mod structure;

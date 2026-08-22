@@ -4,6 +4,7 @@ use crate::draw::{place_at, set_tile_char};
 use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
+use super::ffitools::{tile_to_ascii, FLOOR, PASSAGE, STAIRS};
 use super::passages::{do_passages, putpass};
 use super::rooms::{build_maze_structure, build_room_structure, Room};
 use super::{current_level_mut};
@@ -28,13 +29,6 @@ const AMULETLEVEL: c_int = 26;
 const GOLDGRP: c_int = 1;
 const AMULET: c_char = b',' as c_char;
 const GOLD: c_char = b'*' as c_char;
-const FLOOR: c_char = b'.' as c_char;
-const PASSAGE: c_char = b'#' as c_char;
-const H_WALL: c_char = b'-' as c_char;
-const V_WALL: c_char = b'|' as c_char;
-const DOOR: c_char = b'+' as c_char;
-const STAIRS: c_char = b'%' as c_char;
-const TRAP: c_char = b'^' as c_char;
 const FALSE: c_uchar = 0;
 const TRUE: c_uchar = 1;
 
@@ -111,24 +105,6 @@ unsafe fn winat(y: c_int, x: c_int) -> c_char {
 		chat_at(y, x)
 	} else {
 		(*thing_o(tp)).o_packch
-	}
-}
-
-fn tile_to_ascii(tile: Tile, local_y: usize, _local_x: usize, height: usize) -> Option<c_char> {
-	match tile {
-		Tile::Empty => None,
-		Tile::Floor => Some(FLOOR),
-		Tile::Wall => {
-			if local_y == 0 || local_y + 1 == height {
-				Some(H_WALL)
-			} else {
-				Some(V_WALL)
-			}
-		}
-		Tile::Passage => Some(PASSAGE),
-		Tile::Door => Some(DOOR),
-		Tile::Stairs => Some(STAIRS),
-		Tile::Trap => Some(TRAP),
 	}
 }
 
