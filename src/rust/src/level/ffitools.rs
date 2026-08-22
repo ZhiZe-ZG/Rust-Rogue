@@ -24,8 +24,8 @@ pub fn tile_to_ascii(tile: Tile) -> Option<c_char> {
 	match tile {
 		Tile::Empty => None,
 		Tile::Floor => Some(FLOOR),
-		Tile::H_Wall => Some(H_WALL),
-		Tile::V_Wall => Some(V_WALL),
+		Tile::HWall => Some(H_WALL),
+		Tile::VWall => Some(V_WALL),
 		Tile::Passage => Some(PASSAGE),
 		Tile::Door => Some(DOOR),
 		Tile::Stairs => Some(STAIRS),

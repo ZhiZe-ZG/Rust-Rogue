@@ -132,9 +132,9 @@ pub(crate) fn build_room_structure(height: usize, width: usize) -> Structure {
 	for y in 0..height {
 		for x in 0..width {
 			let tile = if y == 0 || y + 1 == height {
-				Tile::H_Wall
+				Tile::HWall
 			} else if x == 0 || x + 1 == width {
-				Tile::V_Wall
+				Tile::VWall
 			} else {
 				Tile::Floor
 			};
