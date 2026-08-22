@@ -607,7 +607,7 @@ void	pr_list();
 void	put_bool(void *b);
 void	put_inv_t(void *ip);
 void	put_str(void *str);
-void	put_things();	/* implemented in Rust: src/rust/src/rooms/ffi.rs */
+void	put_things();	/* implemented in Rust: src/rust/src/level/ffi.rs */
 void	putpass(coord *cp);
 void	quaff();
 void	raise_level();

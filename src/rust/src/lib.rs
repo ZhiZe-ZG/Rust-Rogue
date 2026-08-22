@@ -1,15 +1,12 @@
 pub mod armor;
 pub mod chase;
 pub mod draw;
+pub mod level;
 pub mod list;
-pub mod passages;
-pub mod structure;
-pub mod tile;
 pub mod potions;
 pub mod player;
 pub mod rndmove;
 pub mod rnd;
-pub mod rooms;
 pub mod trap;
 pub mod rip;
 pub mod rings;

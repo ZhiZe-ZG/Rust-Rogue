@@ -373,7 +373,7 @@ src/c/things.c         # General item handling
 ```
 src/c/rooms.c          # Room generation
 src/c/passages.c       # Corridor generation
-src/rust/src/rooms/ffi.rs # Level creation (new_level), room layout, object/trap placement (Rust FFI implementation)
+src/rust/src/level/ffi.rs # Level creation (new_level), room layout, object/trap placement (Rust FFI implementation)
 ```
 
 **User Interface**:
@@ -500,7 +500,7 @@ main()
 
 1. **New Monster Type**:
    - Add entry to `monsters[]` array in `extern.c`
-   - Update monster generation logic in `src/rust/src/rooms/ffi.rs` (new_level)
+   - Update monster generation logic in `src/rust/src/level/ffi.rs` (new_level)
 
 2. **New Item Type**:
    - Add type constant to `rogue.h`

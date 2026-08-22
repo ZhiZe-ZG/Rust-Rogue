@@ -1,4 +1,4 @@
-use crate::tile::Tile;
+use super::tile::Tile;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Structure {

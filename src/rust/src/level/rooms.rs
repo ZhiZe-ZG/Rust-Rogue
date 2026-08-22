@@ -1,7 +1,8 @@
-use crate::structure::Structure;
-use crate::tile::Tile;
 use glam::IVec2;
 use std::os::raw::c_int;
+
+use super::structure::Structure;
+use super::tile::Tile;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Room {
@@ -142,7 +143,3 @@ pub(crate) fn build_maze_structure(height: usize, width: usize) -> Structure {
 	dig_local(&mut structure, start_y, start_x, max_y, max_x);
 	structure
 }
-
-mod ffi;
-
-pub use ffi::{build_room_model, door_open, draw_room_ascii, new_level, put_things};

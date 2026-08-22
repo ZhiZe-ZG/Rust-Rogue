@@ -136,7 +136,7 @@ MISC     = Makefile.std LICENSE.TXT rogue54.sln rogue54.vcproj rogue.spec \
 $(PROGRAM): $(RUST_LIB) $(HDRS_SRC) $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(RUST_LIB) $(LIBS) -o $@
 
-$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/armor.rs $(RUST_DIR)/src/chase.rs $(RUST_DIR)/src/list.rs $(RUST_DIR)/src/monsters.rs $(RUST_DIR)/src/passages.rs $(RUST_DIR)/src/player.rs $(RUST_DIR)/src/potions.rs $(RUST_DIR)/src/rip.rs $(RUST_DIR)/src/rings.rs $(RUST_DIR)/src/rooms/mod.rs $(RUST_DIR)/src/rooms/ffi.rs $(RUST_DIR)/src/save.rs $(RUST_DIR)/src/score.rs $(RUST_DIR)/src/scrolls.rs $(RUST_DIR)/src/sticks.rs $(RUST_DIR)/src/structure.rs $(RUST_DIR)/src/tile.rs $(RUST_DIR)/src/weapons.rs
+$(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/armor.rs $(RUST_DIR)/src/chase.rs $(RUST_DIR)/src/list.rs $(RUST_DIR)/src/monsters.rs $(RUST_DIR)/src/player.rs $(RUST_DIR)/src/potions.rs $(RUST_DIR)/src/rip.rs $(RUST_DIR)/src/rings.rs $(RUST_DIR)/src/save.rs $(RUST_DIR)/src/score.rs $(RUST_DIR)/src/scrolls.rs $(RUST_DIR)/src/sticks.rs $(RUST_DIR)/src/weapons.rs $(RUST_DIR)/src/level/mod.rs $(RUST_DIR)/src/level/ffi.rs $(RUST_DIR)/src/level/rooms.rs $(RUST_DIR)/src/level/passages.rs $(RUST_DIR)/src/level/structure.rs $(RUST_DIR)/src/level/tile.rs
 	cd $(RUST_DIR) && cargo build --release
     
 clean:

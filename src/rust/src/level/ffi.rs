@@ -1,12 +1,12 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::draw::{place_at, set_tile_char};
-use crate::passages::putpass;
 use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
-use crate::tile::Tile;
 use crate::rnd::rnd;
 
-use super::{build_maze_structure, build_room_structure, Room};
+use super::passages::putpass;
+use super::rooms::{build_maze_structure, build_room_structure, Room};
+use super::tile::Tile;
 use glam::IVec2;
 
 const ISGONE: c_short = 0o000002;
@@ -429,7 +429,7 @@ pub unsafe fn draw_room_ascii(room: &Room) {
 			};
 			let abs_y = room.position.y + local_y as c_int;
 			let abs_x = room.position.x + local_x as c_int;
-			if matches!(tile, crate::tile::Tile::Passage) {
+			if matches!(tile, Tile::Passage) {
 				let mut pos = CCoord { y: abs_y, x: abs_x };
 				putpass(&mut pos);
 			}

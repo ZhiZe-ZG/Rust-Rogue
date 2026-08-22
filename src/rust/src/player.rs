@@ -1,6 +1,6 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::draw::{set_tile_char, place_at};
-use crate::rooms::door_open;
+use crate::level::door_open;
 use crate::trap::be_trapped;
 use crate::rndmove::rndmove;
 
