@@ -160,19 +160,42 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
 
 unsafe fn do_rooms() {
 	let bsze = CCoord { x: NUMCOLS / 3, y: NUMLINES / 3 };
-	let mut mp = CCoord { x: 0, y: 0 };
-	let mut room_models: [Option<Room>; MAXROOMS] = std::array::from_fn(|_| None);
-	determine_room_layouts(bsze);
+	let c_rooms = read_c_room_data();
+	let generated = generate_room_grid_and_rooms(c_rooms, bsze, level);
+	write_rust_data_back_to_c_and_ncurses(&generated);
+}
 
-	for i in 0..MAXROOMS {
-		let rp = (&raw mut rooms[i]) as *mut CRoom;
-		room_models[i] = build_room_model_from_c(rp);
-	}
+#[derive(Copy, Clone)]
+struct RoomState {
+	pos: CCoord,
+	max: CCoord,
+	gold: CCoord,
+	goldval: c_int,
+	flags: c_short,
+	nexits: c_int,
+}
+
+struct GeneratedRooms {
+	room_states: [RoomState; MAXROOMS],
+	room_models: [Option<Room>; MAXROOMS],
+}
+
+unsafe fn read_c_room_data() -> [RoomState; MAXROOMS] {
+	std::array::from_fn(|i| {
+		let rp = (&raw mut rooms[i]) as *const CRoom;
+		room_state_from_c(rp)
+	})
+}
+
+unsafe fn write_rust_data_back_to_c_and_ncurses(generated: &GeneratedRooms) {
+	let mut mp = CCoord { x: 0, y: 0 };
 
 	// Draw prebuilt room models, then place gold and monsters.
 	for i in 0..MAXROOMS {
 		let rp = (&raw mut rooms[i]) as *mut CRoom;
-		if let Some(room) = room_models[i].as_ref() {
+		apply_room_state_to_c(&generated.room_states[i], rp);
+
+		if let Some(room) = generated.room_models[i].as_ref() {
 			draw_room_ascii(&room);
 		} else {
 			continue;
@@ -205,81 +228,129 @@ unsafe fn do_rooms() {
 	}
 }
 
-unsafe fn determine_room_layouts(bsze: CCoord) {
+unsafe fn room_state_from_c(rp: *const CRoom) -> RoomState {
+	RoomState {
+		pos: (*rp).r_pos,
+		max: (*rp).r_max,
+		gold: (*rp).r_gold,
+		goldval: (*rp).r_goldval,
+		flags: (*rp).r_flags,
+		nexits: (*rp).r_nexits,
+	}
+}
+
+unsafe fn apply_room_state_to_c(state: &RoomState, rp: *mut CRoom) {
+	(*rp).r_pos = state.pos;
+	(*rp).r_max = state.max;
+	(*rp).r_gold = state.gold;
+	(*rp).r_goldval = state.goldval;
+	(*rp).r_flags = state.flags;
+	(*rp).r_nexits = state.nexits;
+}
+
+fn generate_room_grid_and_rooms(
+	room_states: [RoomState; MAXROOMS],
+	bsze: CCoord,
+	depth: c_int,
+) -> GeneratedRooms {
+	let room_states = determine_room_layouts_rust(room_states, bsze, depth);
+	let room_models = std::array::from_fn(|i| build_room_model_from_state(&room_states[i]));
+
+	GeneratedRooms {
+		room_states,
+		room_models,
+	}
+}
+
+fn rnd_room_from_state(room_states: &[RoomState; MAXROOMS]) -> usize {
+	loop {
+		let rm = rnd(MAXROOMS as c_int) as usize;
+		if (room_states[rm].flags & ISGONE) == 0 {
+			return rm;
+		}
+	}
+}
+
+fn determine_room_layouts_rust(
+	mut room_states: [RoomState; MAXROOMS],
+	bsze: CCoord,
+	depth: c_int,
+) -> [RoomState; MAXROOMS] {
 	// Reset per-room state before generating the level layout.
-	for i in 0..MAXROOMS {
-		let rp = (&raw mut rooms[i]) as *mut CRoom;
-		(*rp).r_goldval = 0;
-		(*rp).r_nexits = 0;
-		(*rp).r_flags = 0;
+	for room in &mut room_states {
+		room.goldval = 0;
+		room.nexits = 0;
+		room.flags = 0;
 	}
 
 	let left_out = rnd(4);
 	// Randomly mark a few rooms as removed for this level.
 	for _ in 0..left_out {
-		let room_idx = rnd_room() as usize;
-		rooms[room_idx].r_flags |= ISGONE;
+		let room_idx = rnd_room_from_state(&room_states);
+		room_states[room_idx].flags |= ISGONE;
 	}
 
 	// Compute geometry, sizes, and flags for every room slot.
 	for i in 0..MAXROOMS {
-		let rp = (&raw mut rooms[i]) as *mut CRoom;
+		let room = &mut room_states[i];
 		let top = CCoord {
 			x: (i as c_int % 3) * bsze.x + 1,
 			y: (i as c_int / 3) * bsze.y,
 		};
 
-		if ((*rp).r_flags & ISGONE) != 0 {
+		if (room.flags & ISGONE) != 0 {
 			// Keep rerolling until the off-map placeholder position is valid.
 			loop {
-				(*rp).r_pos.x = top.x + rnd(bsze.x - 2) + 1;
-				(*rp).r_pos.y = top.y + rnd(bsze.y - 2) + 1;
-				(*rp).r_max.x = -NUMCOLS;
-				(*rp).r_max.y = -NUMLINES;
-				if (*rp).r_pos.y > 0 && (*rp).r_pos.y < NUMLINES - 1 {
+				room.pos.x = top.x + rnd(bsze.x - 2) + 1;
+				room.pos.y = top.y + rnd(bsze.y - 2) + 1;
+				room.max.x = -NUMCOLS;
+				room.max.y = -NUMLINES;
+				if room.pos.y > 0 && room.pos.y < NUMLINES - 1 {
 					break;
 				}
 			}
 			continue;
 		}
 
-		if rnd(10) < level - 1 {
-			(*rp).r_flags |= ISDARK;
+		if rnd(10) < depth - 1 {
+			room.flags |= ISDARK;
 			if rnd(15) == 0 {
-				(*rp).r_flags = ISMAZE;
+				room.flags = ISMAZE;
 			}
 		}
 
-		if ((*rp).r_flags & ISMAZE) != 0 {
-			(*rp).r_max.x = bsze.x - 1;
-			(*rp).r_max.y = bsze.y - 1;
-			(*rp).r_pos.x = top.x;
-			if (*rp).r_pos.x == 1 {
-				(*rp).r_pos.x = 0;
+		if (room.flags & ISMAZE) != 0 {
+			room.max.x = bsze.x - 1;
+			room.max.y = bsze.y - 1;
+			room.pos.x = top.x;
+			if room.pos.x == 1 {
+				room.pos.x = 0;
 			}
-			(*rp).r_pos.y = top.y;
-			if (*rp).r_pos.y == 0 {
-				(*rp).r_pos.y += 1;
-				(*rp).r_max.y -= 1;
+			room.pos.y = top.y;
+			if room.pos.y == 0 {
+				room.pos.y += 1;
+				room.max.y -= 1;
 			}
 		} else {
 			let mut placed = false;
 			for _ in 0..MAX_ROOM_TRIES {
-				(*rp).r_max.x = rnd(bsze.x - 4) + 4;
-				(*rp).r_max.y = rnd(bsze.y - 4) + 4;
-				(*rp).r_pos.x = top.x + rnd(bsze.x - (*rp).r_max.x);
-				(*rp).r_pos.y = top.y + rnd(bsze.y - (*rp).r_max.y);
-				if (*rp).r_pos.y != 0 {
+				room.max.x = rnd(bsze.x - 4) + 4;
+				room.max.y = rnd(bsze.y - 4) + 4;
+				room.pos.x = top.x + rnd(bsze.x - room.max.x);
+				room.pos.y = top.y + rnd(bsze.y - room.max.y);
+				if room.pos.y != 0 {
 					placed = true;
 					break;
 				}
 			}
 
 			if !placed {
-				(*rp).r_flags |= ISGONE;
+				room.flags |= ISGONE;
 			}
 		}
 	}
+
+	room_states
 }
 
 unsafe fn treas_room() {
@@ -416,18 +487,14 @@ unsafe fn draw_room_ascii(room: &Room) {
 /// Step 1: pull the geometry out of the C struct (position, size, maze
 /// flag). Step 2 is delegated to the pure-Rust [`build_room_model`], which
 /// constructs the tile structure with no C dependencies.
-unsafe fn build_room_model_from_c(rp: *mut CRoom) -> Option<Room> {
-	if rp.is_null() {
+fn build_room_model_from_state(room: &RoomState) -> Option<Room> {
+	if (room.flags & ISGONE) != 0 {
 		return None;
 	}
 
-	if ((*rp).r_flags & ISGONE) != 0 {
-		return None;
-	}
-
-	let position = IVec2::new((*rp).r_pos.x, (*rp).r_pos.y);
-	let size = IVec2::new((*rp).r_max.x, (*rp).r_max.y);
-	let is_maze = ((*rp).r_flags & ISMAZE) != 0;
+	let position = IVec2::new(room.pos.x, room.pos.y);
+	let size = IVec2::new(room.max.x, room.max.y);
+	let is_maze = (room.flags & ISMAZE) != 0;
 
 	build_room_model(position, size, is_maze)
 }
