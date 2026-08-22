@@ -14,14 +14,14 @@ use super::tile::Tile;
 
 pub const LEVEL_HEIGHT: usize = 24;
 pub const LEVEL_WIDTH: usize = 80;
-pub const MAX_LEVEL_ROOMS: usize = 9;
+pub const MAX_LEVEL_ROOMS: usize = MAX_ROOMS;
 pub const MAX_LEVEL_PASSAGES: usize = 13;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Level {
     pub depth: i32,
     pub rooms: Vec<Room>,
-    pub room_connections: Vec<(usize, usize)>,
+    pub room_graph: RoomGraph,
     pub passages: Vec<Passage>,
     pub map: Structure,
 }
@@ -31,7 +31,7 @@ impl Default for Level {
         Self {
             depth: 0,
             rooms: Vec::new(),
-            room_connections: Vec::new(),
+            room_graph: RoomGraph::new(),
             passages: Vec::new(),
             map: Structure::new(LEVEL_HEIGHT, LEVEL_WIDTH, Tile::Empty),
         }
@@ -55,17 +55,13 @@ impl Level {
     pub fn reset(&mut self) {
         self.depth = 0;
         self.rooms.clear();
-        self.room_connections.clear();
+        self.room_graph.reset();
         self.passages.clear();
         self.map = Structure::new(LEVEL_HEIGHT, LEVEL_WIDTH, Tile::Empty);
     }
 
     pub fn add_room(&mut self, room: Room) {
         self.rooms.push(room);
-    }
-
-    pub fn add_connection(&mut self, from: usize, to: usize) {
-        self.room_connections.push((from, to));
     }
 
     pub fn add_passage(&mut self, passage: Passage) {
@@ -77,17 +73,17 @@ impl Level {
         rooms: [Room; MAX_ROOMS],
         bsze: IVec2,
     ) -> [Room; MAX_ROOMS] {
-        let room_graph = RoomGraph::for_level(rooms, bsze, self.depth);
-        self.room_connections = room_graph.generate_for_rooms();
-        let rooms = build_generated_rooms(room_graph.into_rooms());
+        self.room_graph = RoomGraph::for_level(rooms, bsze, self.depth);
+        self.room_graph.generate_connections_for_rooms();
 
-        self.rooms = rooms
+        let generated_rooms = build_generated_rooms(self.room_graph.clone().into_rooms());
+        self.rooms = generated_rooms
             .iter()
             .filter(|room| !room.is_gone())
             .cloned()
             .collect();
 
-        rooms
+        generated_rooms
     }
 }
 

@@ -54,6 +54,7 @@ pub struct RoomGraph {
     adjacent: AdjacentArray,
     isconn: [[c_uchar; MAX_ROOMS]; MAX_ROOMS],
     ingraph: [c_uchar; MAX_ROOMS],
+    connections: Vec<(usize, usize)>,
 }
 
 impl Default for RoomGraph {
@@ -74,6 +75,7 @@ impl RoomGraph {
             adjacent: conn,
             isconn: [[0; MAX_ROOMS]; MAX_ROOMS],
             ingraph: [0; MAX_ROOMS],
+            connections: Vec::new(),
         }
     }
 
@@ -84,6 +86,7 @@ impl RoomGraph {
             adjacent: build_base_adjacency(),
             isconn: [[0; MAX_ROOMS]; MAX_ROOMS],
             ingraph: [0; MAX_ROOMS],
+            connections: Vec::new(),
         };
         graph.determine_room_layouts(bsze, depth);
         graph
@@ -91,6 +94,14 @@ impl RoomGraph {
 
     pub(crate) fn into_rooms(self) -> [Room; MAX_ROOMS] {
         self.rooms
+    }
+
+    pub(crate) fn connections(&self) -> &[(usize, usize)] {
+        &self.connections
+    }
+
+    pub(crate) fn generate_connections_for_rooms(&mut self) {
+        self.connections = self.generate_for_rooms();
     }
 
     fn determine_room_layouts(&mut self, bsze: IVec2, depth: i32) {
@@ -168,6 +179,7 @@ impl RoomGraph {
     pub fn reset(&mut self) {
         self.isconn = [[0; MAX_ROOMS]; MAX_ROOMS];
         self.ingraph = [0; MAX_ROOMS];
+        self.connections.clear();
     }
 
     /// Mark `room` as part of the connected passage graph.
