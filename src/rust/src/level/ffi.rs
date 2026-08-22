@@ -6,6 +6,7 @@ use crate::rnd::rnd;
 
 use super::passages::{do_passages, putpass};
 use super::rooms::{build_maze_structure, build_room_structure, Room};
+use super::{current_level_mut};
 use super::tile::Tile;
 use glam::IVec2;
 
@@ -495,6 +496,13 @@ pub unsafe fn door_open(rp: *mut CRoom) {
 /// enter_room / turn_see / visuals).
 #[no_mangle]
 pub unsafe extern "C" fn new_level() {
+	let current = current_level_mut();
+	current.depth = level;
+	current.map = super::Structure::new(NUMLINES as usize, NUMCOLS as usize, Tile::Empty);
+	current.rooms.clear();
+	current.room_connections.clear();
+	current.passages.clear();
+
 	let mut tp: *mut CThing;
 	let mut pp: *mut CPlace;
 	let mut sp: *mut c_char;
