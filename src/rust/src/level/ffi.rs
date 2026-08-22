@@ -402,6 +402,144 @@ pub unsafe fn door_open(rp: *mut CRoom) {
 	}
 }
 
+/// Reset the in-memory level and the C screen for a fresh dungeon depth.
+///
+/// Stores the current depth, clears the Rust-side level state (rooms, room
+/// graph, passages, and the full map), blanks the C `places` grid, and
+/// unholds the hero.
+/// Uses globals: `level`, `max_level`, `places`, `player`.
+unsafe fn begin_new_level() {
+	let current = current_level_mut();
+	current.depth = level;
+	current.map = super::Structure::new(NUMLINES as usize, NUMCOLS as usize, Tile::Empty);
+	current.rooms.clear();
+	current.room_graph.reset();
+	current.passages.clear();
+
+	(*thing_t(&raw mut player)).t_flags &= !ISHELD; /* unhold when you go down just in case */
+	if level > max_level {
+		max_level = level;
+	}
+
+	// Clean things off from last level.
+	for y in 0..MAXLINES {
+		for x in 0..MAXCOLS {
+			let pp = place_at((&raw mut places) as *mut CPlace, y, x);
+			(*pp).p_ch = b' ' as c_char;
+			(*pp).p_flags = F_REAL;
+			(*pp).p_monst = std::ptr::null_mut();
+		}
+	}
+	clear();
+}
+
+/// Release the monsters and objects left on the previous level.
+///
+/// Frees every monster's pack, then the monster list itself, and finally
+/// the level-object list.
+/// Uses globals: `mlist`, `lvl_obj`.
+unsafe fn clear_previous_level_items() {
+	// Free up the monsters on the last level.
+	let mut tp = mlist;
+	while !tp.is_null() {
+		let next_tp = (*thing_t(tp)).l_next;
+		_free_list((&raw mut (*thing_t(tp)).t_pack) as *mut *mut CThing);
+		tp = next_tp;
+	}
+	_free_list((&raw mut mlist) as *mut *mut CThing);
+
+	// Throw away stuff left on the previous level (if anything).
+	_free_list((&raw mut lvl_obj) as *mut *mut CThing);
+}
+
+/// Generate this depth's room grid, models, and room-to-room connections.
+///
+/// Reads the room state from C, asks the current level to generate room
+/// models and connections, then writes the result back to C and draws it to
+/// ncurses/places.
+/// Uses globals: `places` (via [`write_rust_data_back_to_c_and_ncurses`]).
+unsafe fn generate_rooms_and_connections() {
+	let current = current_level_mut();
+	// Step 1: Read room state from C into Rust-owned data.
+	let c_rooms = read_c_room_data();
+	// Step 2: Ask Level to generate room grid/models and room connections.
+	let bsze = IVec2::new(NUMCOLS / 3, NUMLINES / 3);
+	let generated = current.generate_rooms_and_connections(c_rooms, bsze);
+	// Step 3: Write generated room state back to C and draw to ncurses/places.
+	write_rust_data_back_to_c_and_ncurses(&generated);
+}
+
+/// Place the traps on this depth.
+///
+/// Scatters a random number of traps (scaled by depth) on floor cells. Each
+/// trap is stored in the cell's flags, so the trap number shares storage
+/// with the passage number — hence traps are never placed in maze passages.
+/// Uses globals: `level`, `ntraps`, `places`, `stairs`.
+unsafe fn place_traps() {
+	if rnd(10) >= level {
+		return;
+	}
+
+	ntraps = rnd(level / 4) + 1;
+	if ntraps > MAXTRAPS {
+		ntraps = MAXTRAPS;
+	}
+
+	let mut i = ntraps;
+	while i > 0 {
+		loop {
+			find_floor(std::ptr::null_mut(), &raw mut stairs, FALSE as c_int, FALSE);
+			if chat_at(stairs.y, stairs.x) == FLOOR {
+				break;
+			}
+		}
+		let sp = &raw mut (*place_at((&raw mut places) as *mut CPlace, stairs.y, stairs.x)).p_flags;
+		*sp = ((*sp as u8) & !(F_REAL as u8)) as c_char;
+		*sp = ((*sp as u8) | rnd(NTRAPS) as u8) as c_char;
+		i -= 1;
+	}
+}
+
+/// Place the down staircase on a floor cell.
+/// Uses globals: `stairs`, `places`, `seenstairs`.
+unsafe fn place_stairs() {
+	find_floor(std::ptr::null_mut(), &raw mut stairs, FALSE as c_int, FALSE);
+	*chat_at_mut(stairs.y, stairs.x) = STAIRS;
+	seenstairs = FALSE;
+}
+
+/// Link every monster on the level to the room its position falls in.
+/// Uses globals: `mlist`.
+unsafe fn link_monsters_to_rooms() {
+	let mut tp = mlist;
+	while !tp.is_null() {
+		let t = thing_t(tp);
+		(*t).t_room = roomin(&raw mut (*t).t_pos);
+		tp = (*t).l_next;
+	}
+}
+
+/// Place the hero on an open floor cell and finalize the screen.
+///
+/// Moves the hero to a random walkable cell, triggers room entry, draws the
+/// hero, and refreshes the display according to the hero's current flags.
+/// Uses globals: `player`, `places` (via `find_floor`).
+unsafe fn place_hero() {
+	find_floor(std::ptr::null_mut(), &raw mut (*thing_t(&raw mut player)).t_pos, FALSE as c_int, TRUE);
+	enter_room(&raw mut (*thing_t(&raw mut player)).t_pos);
+	mvaddch(
+		(*thing_t(&raw mut player)).t_pos.y,
+		(*thing_t(&raw mut player)).t_pos.x,
+		PLAYER as c_uint,
+	);
+	if ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0 {
+		turn_see(FALSE);
+	}
+	if ((*thing_t(&raw mut player)).t_flags & ISHALU) != 0 {
+		visuals();
+	}
+}
+
 /// new_level:
 /// Dig and draw a new level.
 ///
@@ -416,112 +554,21 @@ pub unsafe fn door_open(rp: *mut CRoom) {
 /// enter_room / turn_see / visuals).
 #[no_mangle]
 pub unsafe extern "C" fn new_level() {
-	let current = current_level_mut();
-	current.depth = level;
-	current.map = super::Structure::new(NUMLINES as usize, NUMCOLS as usize, Tile::Empty);
-	current.rooms.clear();
-	current.room_graph.reset();
-	current.passages.clear();
-
-	let mut tp: *mut CThing;
-	let mut pp: *mut CPlace;
-	let mut sp: *mut c_char;
-
-	(*thing_t(&raw mut player)).t_flags &= !ISHELD; /* unhold when you go down just in case */
-	if level > max_level {
-		max_level = level;
-	}
-
-	// Clean things off from last level.
-	for y in 0..MAXLINES {
-		for x in 0..MAXCOLS {
-			pp = place_at((&raw mut places) as *mut CPlace, y, x);
-			(*pp).p_ch = b' ' as c_char;
-			(*pp).p_flags = F_REAL;
-			(*pp).p_monst = std::ptr::null_mut();
-		}
-	}
-	clear();
-
-	// Free up the monsters on the last level.
-	tp = mlist;
-	while !tp.is_null() {
-		let next_tp = (*thing_t(tp)).l_next;
-		_free_list((&raw mut (*thing_t(tp)).t_pack) as *mut *mut CThing);
-		tp = next_tp;
-	}
-	_free_list((&raw mut mlist) as *mut *mut CThing);
-
-	// Throw away stuff left on the previous level (if anything).
-	_free_list((&raw mut lvl_obj) as *mut *mut CThing);
-
-	// Step 1: Read room state from C into Rust-owned data.
-	let c_rooms = read_c_room_data();
-	// Step 2: Ask Level to generate room grid/models and room connections.
-	let bsze = IVec2::new(NUMCOLS / 3, NUMLINES / 3);
-	let generated = current.generate_rooms_and_connections(c_rooms, bsze);
-	// Step 3: Write generated room state back to C and draw to ncurses/places.
-	write_rust_data_back_to_c_and_ncurses(&generated);
+	begin_new_level();
+	clear_previous_level_items();
+	generate_rooms_and_connections();
 
 	// Dig corridors for the room-connection plan generated by Level.
-	do_passages(current.room_graph.connections()); /* Draw passages */
+	do_passages(current_level_mut().room_graph.connections()); /* Draw passages */
 
 	no_food += 1;
 
 	put_things(); /* Place objects (if any) */
 
-	// Place the traps.
-	if rnd(10) < level {
-		ntraps = rnd(level / 4) + 1;
-		if ntraps > MAXTRAPS {
-			ntraps = MAXTRAPS;
-		}
-		let mut i = ntraps;
-		while i > 0 {
-			/*
-			 * Not only wouldn't it be NICE to have traps in mazes
-			 * (not that we care about being nice), since the trap
-			 * number is stored where the passage number is, we
-			 * can't actually do it.
-			 */
-			loop {
-				find_floor(std::ptr::null_mut(), &raw mut stairs, FALSE as c_int, FALSE);
-				if chat_at(stairs.y, stairs.x) == FLOOR {
-					break;
-				}
-			}
-			sp = &raw mut (*place_at((&raw mut places) as *mut CPlace, stairs.y, stairs.x)).p_flags;
-			*sp = ((*sp as u8) & !(F_REAL as u8)) as c_char;
-			*sp = ((*sp as u8) | rnd(NTRAPS) as u8) as c_char;
-			i -= 1;
-		}
-	}
-
-	// Place the staircase down.
-	find_floor(std::ptr::null_mut(), &raw mut stairs, FALSE as c_int, FALSE);
-	*chat_at_mut(stairs.y, stairs.x) = STAIRS;
-	seenstairs = FALSE;
-
-	tp = mlist;
-	while !tp.is_null() {
-		let t = thing_t(tp);
-		(*t).t_room = roomin(&raw mut (*t).t_pos);
-		tp = (*t).l_next;
-	}
-
-	find_floor(std::ptr::null_mut(), &raw mut (*thing_t(&raw mut player)).t_pos, FALSE as c_int, TRUE);
-	enter_room(&raw mut (*thing_t(&raw mut player)).t_pos);
-	mvaddch(
-		(*thing_t(&raw mut player)).t_pos.y,
-		(*thing_t(&raw mut player)).t_pos.x,
-		PLAYER as c_uint,
-	);
-	if ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0 {
-		turn_see(FALSE);
-	}
-	if ((*thing_t(&raw mut player)).t_flags & ISHALU) != 0 {
-		visuals();
-	}
+	place_traps();
+	place_stairs();
+	link_monsters_to_rooms();
+	place_hero();
 }
 
 #[inline]
