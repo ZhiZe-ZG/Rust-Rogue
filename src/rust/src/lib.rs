@@ -1,4 +1,5 @@
 pub mod armor;
+pub mod chase;
 pub mod draw;
 pub mod list;
 pub mod passages;
