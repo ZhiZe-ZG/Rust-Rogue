@@ -47,15 +47,6 @@ fn build_base_adjacency() -> AdjacentArray {
     adjacent
 }
 
-fn rnd_room_from_state(room_states: &[Room; MAX_ROOMS]) -> usize {
-    loop {
-        let rm = rnd(MAX_ROOMS as c_int) as usize;
-        if !room_states[rm].is_gone() {
-            return rm;
-        }
-    }
-}
-
 /// Room grid plus adjacency and connection state for one generation pass.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomGraph {
@@ -113,8 +104,7 @@ impl RoomGraph {
         let left_out = rnd(4);
         // Randomly mark a few rooms as removed for this level.
         for _ in 0..left_out {
-            let room_idx = rnd_room_from_state(&self.rooms);
-            self.rooms[room_idx].mark_gone();
+            self.rooms[Self::pick_non_gone_from(&self.rooms)].mark_gone();
         }
 
         // Compute geometry, sizes, and flags for every room slot.
@@ -262,6 +252,10 @@ impl RoomGraph {
     }
 
     fn pick_non_gone(&self, room_states: &[Room; MAX_ROOMS]) -> usize {
+        Self::pick_non_gone_from(room_states)
+    }
+
+    fn pick_non_gone_from(room_states: &[Room; MAX_ROOMS]) -> usize {
         loop {
             let idx = rnd(MAX_ROOMS as c_int) as usize;
             if !Self::room_is_gone(&room_states[idx]) {
