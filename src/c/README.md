@@ -15,7 +15,6 @@ The files are grouped here by primary responsibility. Some files interact across
 
 ## Dungeon and Movement
 
-- `new_level.c`: Creates and initializes new dungeon levels.
 - `rooms.c`: Room generation and room layout helpers.
 - `passages.c`: Corridor/passage creation and related logic.
 - `move.c`: Player and monster movement processing.

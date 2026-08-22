@@ -260,10 +260,6 @@
 				>
 			</File>
 			<File
-				RelativePath="new_level.c"
-				>
-			</File>
-			<File
 				RelativePath="options.c"
 				>
 			</File>

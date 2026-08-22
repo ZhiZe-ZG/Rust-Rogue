@@ -105,15 +105,14 @@ RUST_DIR = $(srcdir)/src/rust
 RUST_LIB = $(RUST_DIR)/target/release/librogue_rust.a
 OBJS1    = vers.$(O) extern.$(O) chase.$(O) command.$(O) \
            daemon.$(O) daemons.$(O) fight.$(O) init.$(O) io.$(O) \
-		   mach_dep.$(O) main.$(O) mdport.$(O) misc.$(O) \
-           new_level.$(O)
+		   mach_dep.$(O) main.$(O) mdport.$(O) misc.$(O)
 OBJS2    = options.$(O) pack.$(O) \
 		   rip.$(O) state.$(O) \
 		   things.$(O) wizard.$(O)
 OBJS     = $(OBJS1) $(OBJS2)
 CFILES   = vers.c extern.c chase.c command.c daemon.c \
            daemons.c fight.c init.c io.c mach_dep.c \
-		   main.c  mdport.c misc.c new_level.c \
+		   main.c  mdport.c misc.c \
 		   options.c pack.c rip.c \
 		   state.c things.c \
            wizard.c

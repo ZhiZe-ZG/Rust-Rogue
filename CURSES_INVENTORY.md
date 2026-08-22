@@ -61,7 +61,7 @@ grouped by purpose, with call sites and suggested crossterm equivalents.
 | Function | C call sites | Rust call sites | crossterm equivalent |
 |---|---|---|---|
 | `addch(ch)` | `chase.c:101`, `chase.c:105`, `daemons.c:224`, `daemons.c:226`, `daemons.c:230`, `daemons.c:272`, `daemons.c:274`, `daemons.c:279`, `misc.c:123`, `passages.c:343`, `passages.c:347`, `rip.c:287-301` (multi) | `monsters.rs:345`, `monsters.rs:347`, `player.rs:271`, `player.rs:280`, `player.rs:283`, `player.rs:286`, `player.rs:337`, `player.rs:342`, `player.rs:347`, `potions.rs:567`, `potions.rs:574`, `potions.rs:576` | `print!("{}", ch)` at current cursor position |
-| `mvaddch(y, x, ch)` | `chase.c:88`, `daemons.c:101`, `daemons.c:213`, `daemons.c:254`, `daemons.c:260`, `fight.c:95`, `fight.c:161`, `fight.c:612`, `io.c:~100` (via msg), `main.c:179`, `misc.c:178`, `new_level.c:95`, `pack.c:185`, `pack.c:454`, `pack.c:46`, `passages.c:~340`, `rip.c:243`, `rip.c:245`, `rip.c:246`, `rip.c:251`, `rip.c:301`, `rip.c:305`, `wizard.c:204`, `wizard.c:217` | `player.rs:390`, `potions.rs:549`, `scrolls.rs:437`, `sticks.rs:404`, `trap.rs:159`, `weapons.rs:243`, `weapons.rs:252`, `weapons.rs:273` | `execute!(stdout, MoveTo(x,y))` + `print!("{}", ch)` |
+| `mvaddch(y, x, ch)` | `chase.c:88`, `daemons.c:101`, `daemons.c:213`, `daemons.c:254`, `daemons.c:260`, `fight.c:95`, `fight.c:161`, `fight.c:612`, `io.c:~100` (via msg), `main.c:179`, `misc.c:178`, `pack.c:185`, `pack.c:454`, `pack.c:46`, `passages.c:~340`, `rip.c:243`, `rip.c:245`, `rip.c:246`, `rip.c:251`, `rip.c:301`, `rip.c:305`, `wizard.c:204`, `wizard.c:217` | `rooms/ffi.rs:583`, `player.rs:390`, `potions.rs:549`, `scrolls.rs:437`, `sticks.rs:404`, `trap.rs:159`, `weapons.rs:243`, `weapons.rs:252`, `weapons.rs:273` | `execute!(stdout, MoveTo(x,y))` + `print!("{}", ch)` |
 | `waddch(win, ch)` | `options.c:84`, `options.c:211`, `options.c:275` | `potions.rs:416`, `potions.rs:428`, `scrolls.rs:451` | Write `ch` into off-screen buffer at current position |
 | `mvwaddch(win, y, x, ch)` | `state.c:764` | — | Write `ch` into off-screen buffer at `(y,x)` |
 | `inch()` | `fight.c:360`, `misc.c:122`, `misc.c:234` | `player.rs:233`, `potions.rs:602` | Read character from a virtual screen buffer at current cursor |
@@ -87,7 +87,7 @@ grouped by purpose, with call sites and suggested crossterm equivalents.
 
 | Function | C call sites | Rust call sites | crossterm equivalent |
 |---|---|---|---|
-| `clear()` | `new_level.c:42`, `rip.c:224`, `rip.c:285`, `rip.c:304` | — | `execute!(stdout, Clear(ClearType::All))` |
+| `clear()` | `rooms/ffi.rs:523`, `rip.c:224`, `rip.c:285`, `rip.c:304` | — | `execute!(stdout, Clear(ClearType::All))` |
 | `clrtoeol()` | `io.c:101`, `io.c:238`, `main.c:309` | — | `execute!(stdout, Clear(ClearType::UntilNewLine))` |
 | `wclear(win)` | `command.c:573`, `options.c:76`, `things.c:482`, `things.c:542` | `potions.rs:410`, `scrolls.rs:445` | Clear off-screen buffer |
 | `wclrtoeol(win)` | `options.c:265` | — | Clear off-screen buffer from cursor to end of line |
