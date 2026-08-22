@@ -8,6 +8,7 @@ mod ffi;
 mod ffitools;
 mod level;
 pub mod passages;
+pub mod roomgraph;
 pub mod rooms;
 pub mod structure;
 pub mod tile;
@@ -18,6 +19,7 @@ pub use level::{
     MAX_LEVEL_PASSAGES, MAX_LEVEL_ROOMS,
 };
 pub use passages::Passage;
+pub use roomgraph::{rdes, RDes, RoomGraph, MAX_ROOMS};
 pub use rooms::{place_tile, Room};
 pub use structure::Structure;
 pub use tile::Tile;

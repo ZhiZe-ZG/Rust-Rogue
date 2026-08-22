@@ -23,13 +23,7 @@ const F_SEEN: c_char = 0x40u8 as c_char;
 const FALSE: c_uchar = 0;
 const TRUE: c_uchar = 1;
 
-#[repr(C)]
-#[derive(Copy, Clone)]
-struct RDes {
-    conn: [c_uchar; MAXROOMS],
-    isconn: [c_uchar; MAXROOMS],
-    ingraph: c_uchar,
-}
+use super::roomgraph::RoomGraph;
 
 /// A corridor connecting two rooms.
 ///
@@ -84,55 +78,21 @@ unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
 }
 
 pub(super) unsafe fn do_passages() {
-    let mut rdes: [RDes; MAXROOMS] = [
-        RDes { conn: [0, 1, 0, 1, 0, 0, 0, 0, 0], isconn: [0; MAXROOMS], ingraph: 0 },
-        RDes { conn: [1, 0, 1, 0, 1, 0, 0, 0, 0], isconn: [0; MAXROOMS], ingraph: 0 },
-        RDes { conn: [0, 1, 0, 0, 0, 1, 0, 0, 0], isconn: [0; MAXROOMS], ingraph: 0 },
-        RDes { conn: [1, 0, 0, 0, 1, 0, 1, 0, 0], isconn: [0; MAXROOMS], ingraph: 0 },
-        RDes { conn: [0, 1, 0, 1, 0, 1, 0, 1, 0], isconn: [0; MAXROOMS], ingraph: 0 },
-        RDes { conn: [0, 0, 1, 0, 1, 0, 0, 0, 1], isconn: [0; MAXROOMS], ingraph: 0 },
-        RDes { conn: [0, 0, 0, 1, 0, 0, 0, 1, 0], isconn: [0; MAXROOMS], ingraph: 0 },
-        RDes { conn: [0, 0, 0, 0, 1, 0, 1, 0, 1], isconn: [0; MAXROOMS], ingraph: 0 },
-        RDes { conn: [0, 0, 0, 0, 0, 1, 0, 1, 0], isconn: [0; MAXROOMS], ingraph: 0 },
-    ];
+    let mut graph = RoomGraph::new();
 
-    for r1 in rdes.iter_mut() {
-        for j in 0..MAXROOMS {
-            r1.isconn[j] = 0;
-        }
-        r1.ingraph = 0;
-    }
-
+    // Grow a connected spanning tree of the room graph.
     let mut roomcount = 1;
-    let mut r1_idx = rnd(MAXROOMS as c_int) as usize;
-    rdes[r1_idx].ingraph = 1;
+    let mut r1_idx = graph.pick_any();
+    graph.mark_in_graph(r1_idx);
 
     loop {
-        let mut j = 0;
-        let mut r2_idx = None;
-        for i in 0..MAXROOMS {
-            if rdes[r1_idx].conn[i] != 0 && rdes[i].ingraph == 0 {
-                j += 1;
-                if rnd(j as c_int) == 0 {
-                    r2_idx = Some(i);
-                }
-            }
-        }
-
-        if j == 0 {
-            loop {
-                r1_idx = rnd(MAXROOMS as c_int) as usize;
-                if rdes[r1_idx].ingraph != 0 {
-                    break;
-                }
-            }
-        } else {
-            let idx = r2_idx.unwrap();
-            rdes[idx].ingraph = 1;
+        if let Some(idx) = graph.next_unreached(r1_idx) {
+            graph.mark_in_graph(idx);
             conn(r1_idx as c_int, idx as c_int);
-            rdes[r1_idx].isconn[idx] = 1;
-            rdes[idx].isconn[r1_idx] = 1;
+            graph.connect(r1_idx, idx);
             roomcount += 1;
+        } else {
+            r1_idx = graph.pick_in_graph();
         }
 
         if roomcount >= MAXROOMS as c_int {
@@ -140,31 +100,22 @@ pub(super) unsafe fn do_passages() {
         }
     }
 
+    // Add a few extra connecting passages so the maze isn't a pure tree.
     let mut roomcount = rnd(5);
     while roomcount > 0 {
-        r1_idx = rnd(MAXROOMS as c_int) as usize;
-        let mut j = 0;
-        let mut r2_idx = None;
-        for i in 0..MAXROOMS {
-            if rdes[r1_idx].conn[i] != 0 && rdes[r1_idx].isconn[i] == 0 {
-                j += 1;
-                if rnd(j as c_int) == 0 {
-                    r2_idx = Some(i);
-                }
-            }
-        }
-
-        if j != 0 {
-            let idx = r2_idx.unwrap();
+        let r1_idx = graph.pick_any();
+        if let Some(idx) = graph.next_unconnected(r1_idx) {
             conn(r1_idx as c_int, idx as c_int);
-            rdes[r1_idx].isconn[idx] = 1;
-            rdes[idx].isconn[r1_idx] = 1;
+            graph.connect(r1_idx, idx);
         }
-
         roomcount -= 1;
     }
 
     passnum();
+
+    // Mirror the abstract graph back into the C-visible `rdes` global so
+    // legacy C code that reads it still sees an up-to-date level graph.
+    graph.write_to_c();
 }
 
 unsafe fn conn(r1: c_int, r2: c_int) {
