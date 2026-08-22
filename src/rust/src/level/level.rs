@@ -7,6 +7,8 @@
 use glam::IVec2;
 
 use super::passages::Passage;
+use super::roomgraph::RoomGraph;
+use super::roomgrid::{generate_room_grid_and_rooms, GeneratedRooms, RoomState, MAXROOMS};
 use super::rooms::Room;
 use super::structure::Structure;
 use super::tile::Tile;
@@ -69,6 +71,23 @@ impl Level {
 
     pub fn add_passage(&mut self, passage: Passage) {
         self.passages.push(passage);
+    }
+
+    pub(crate) fn generate_rooms_and_connections(
+        &mut self,
+        room_states: [RoomState; MAXROOMS],
+        bsze: IVec2,
+    ) -> GeneratedRooms {
+        let generated = generate_room_grid_and_rooms(room_states, bsze, self.depth);
+
+        self.rooms = generated
+            .room_models
+            .iter()
+            .filter_map(|room| room.clone())
+            .collect();
+        self.room_connections = RoomGraph::new().generate_for_rooms(&generated.room_states);
+
+        generated
     }
 }
 

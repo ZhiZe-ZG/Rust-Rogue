@@ -12,6 +12,8 @@ use std::os::raw::c_uchar;
 
 use crate::rnd::rnd;
 
+use super::roomgrid::RoomState;
+
 /// Maximum number of rooms on a level.
 pub const MAX_ROOMS: usize = 9;
 
@@ -135,6 +137,26 @@ impl RoomGraph {
         rnd(MAX_ROOMS as c_int) as usize
     }
 
+    fn room_is_gone(room: &RoomState) -> bool {
+        room.is_gone()
+    }
+
+    fn non_gone_count(room_states: &[RoomState; MAX_ROOMS]) -> usize {
+        room_states
+            .iter()
+            .filter(|room| !Self::room_is_gone(room))
+            .count()
+    }
+
+    fn pick_non_gone(&self, room_states: &[RoomState; MAX_ROOMS]) -> usize {
+        loop {
+            let idx = rnd(MAX_ROOMS as c_int) as usize;
+            if !Self::room_is_gone(&room_states[idx]) {
+                return idx;
+            }
+        }
+    }
+
     /// Decide which room pairs get connected on this level.
     ///
     /// Grows a connected spanning tree of the room graph, then adds a few
@@ -174,6 +196,53 @@ impl RoomGraph {
                 graph.connect(r1_idx, idx);
             }
             roomcount -= 1;
+        }
+
+        connections
+    }
+
+    /// Decide which room pairs get connected, using the generated room grid.
+    ///
+    /// This variant treats "gone" rooms as pass-through cells in the 3x3 grid
+    /// so remaining rooms can still be connected through them, but only requires
+    /// non-gone rooms to be fully reachable in the spanning stage.
+    pub fn generate_for_rooms(&self, room_states: &[RoomState; MAX_ROOMS]) -> Vec<(usize, usize)> {
+        let mut graph = self.clone();
+        let mut connections = Vec::new();
+
+        let non_gone_total = Self::non_gone_count(room_states);
+        if non_gone_total <= 1 {
+            return connections;
+        }
+
+        // Grow passages until all non-gone rooms are reachable.
+        let mut reached_non_gone = 1;
+        let mut r1_idx = graph.pick_non_gone(room_states);
+        graph.mark_in_graph(r1_idx);
+
+        while reached_non_gone < non_gone_total {
+            if let Some(idx) = graph.next_unreached(r1_idx) {
+                graph.mark_in_graph(idx);
+                if !Self::room_is_gone(&room_states[idx]) {
+                    reached_non_gone += 1;
+                }
+                connections.push((r1_idx, idx));
+                graph.connect(r1_idx, idx);
+                r1_idx = idx;
+            } else {
+                r1_idx = graph.pick_in_graph();
+            }
+        }
+
+        // Add a few extra connecting passages for loopiness.
+        let mut extra = rnd(5);
+        while extra > 0 {
+            let r1_idx = graph.pick_non_gone(room_states);
+            if let Some(idx) = graph.next_unconnected(r1_idx) {
+                connections.push((r1_idx, idx));
+                graph.connect(r1_idx, idx);
+            }
+            extra -= 1;
         }
 
         connections
