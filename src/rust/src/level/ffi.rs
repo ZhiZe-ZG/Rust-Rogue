@@ -373,6 +373,7 @@ unsafe fn draw_room_ascii(room: &Room) {
 				let mut pos = CCoord { y: abs_y, x: abs_x };
 				putpass(&mut pos);
 			}
+
 			set_tile_char(abs_y, abs_x, ch);
 		}
 	}

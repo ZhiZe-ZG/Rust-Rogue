@@ -29,13 +29,16 @@ const TRUE: c_uchar = 1;
 /// A corridor connecting two rooms.
 ///
 /// Mirrors the [`Room`](super::rooms::Room) abstraction: a bounding box
-/// (`position`/`size`) plus a [`Structure`] holding all passage tiles, and
-/// the entry points where the corridor joins rooms (relative to `position`).
+/// (`position`/`size`) plus the relative coordinates of every passage tile
+/// and entry point. Use [`Passage::to_structure`] to derive the tile
+/// [`Structure`] from those coordinates.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Passage {
     pub position: IVec2,
     pub size: IVec2,
-    pub structure: Structure,
+    /// Coordinates of every passage tile, relative to `position`.
+    pub tiles: Vec<IVec2>,
+    /// Coordinates of the doors joining adjacent rooms, relative to `position`.
     pub entry_points: Vec<IVec2>,
 }
 
@@ -44,7 +47,7 @@ impl Default for Passage {
         Self {
             position: IVec2::ZERO,
             size: IVec2::ZERO,
-            structure: Structure::new(0, 0, Tile::Empty),
+            tiles: Vec::new(),
             entry_points: Vec::new(),
         }
     }
@@ -57,18 +60,28 @@ impl Passage {
         self.entry_points.push(relative_pos);
     }
 
-    /// Place `tile` at `(local_y, local_x)` inside this passage's structure.
-    pub fn place_tile(&mut self, local_y: usize, local_x: usize, tile: Tile) -> bool {
-        self.structure.set(local_y, local_x, tile)
+    /// Record a passage tile coordinate, relative to the passage's `position`.
+    pub fn add_tile(&mut self, relative_pos: IVec2) {
+        self.tiles.push(relative_pos);
+    }
+
+    /// Build the tile [`Structure`] described by this passage.
+    ///
+    /// Returns a `size`-sized grid with every recorded tile laid as
+    /// `Tile::Passage` and every entry point laid as `Tile::Door`.
+    pub fn to_structure(&self) -> Structure {
+        let height = self.size.y as usize;
+        let width = self.size.x as usize;
+        let mut structure = Structure::new(height, width, Tile::Empty);
+        for pos in &self.tiles {
+            let _ = structure.set(pos.y as usize, pos.x as usize, Tile::Passage);
+        }
+        for pos in &self.entry_points {
+            let _ = structure.set(pos.y as usize, pos.x as usize, Tile::Door);
+        }
+        structure
     }
 }
-
-/// Absolute coordinates of the current passage being built.
-///
-/// `putpass`/`door` accumulate here as the corridor is dug; when `conn`
-/// finishes, the bounding box is computed and wrapped into a [`Passage`].
-static mut CURRENT_TILES: Vec<IVec2> = Vec::new();
-static mut CURRENT_ENTRY_POINTS: Vec<IVec2> = Vec::new();
 
 /// Number of the passage currently being scanned by [`passnum`]/[`numpass`].
 static mut PNUM: c_int = 0;
@@ -132,18 +145,6 @@ pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
     }
 
     passnum();
-}
-
-/// Reset the static accumulators so a fresh corridor can be dug.
-///
-/// `putpass`/`door` append to these statics as the corridor is dug; they
-/// are cleared before every [`conn`] call. Accessed through raw pointers to
-/// avoid creating references to the mutable statics (matches the codebase's
-/// FFI-driven style).
-/// Uses globals: `CURRENT_TILES`, `CURRENT_ENTRY_POINTS`.
-unsafe fn reset_passage_builder() {
-    *std::ptr::addr_of_mut!(CURRENT_TILES) = Vec::new();
-    *std::ptr::addr_of_mut!(CURRENT_ENTRY_POINTS) = Vec::new();
 }
 
 /// Geometric plan of the L-shaped corridor between two rooms.
@@ -283,13 +284,22 @@ unsafe fn plan_corridor(r1: c_int, r2: c_int) -> CorridorPlan {
 ///
 /// If the room is still present, a door is registered on its boundary via
 /// [`door`]; if it was removed (`ISGONE`), a plain passage tile is laid
-/// instead.
+/// instead. The placed coordinate is recorded into `tiles` (and into
+/// `entry_points` for doors) so [`finish_passage`] can reconstruct the
+/// corridor.
 /// Uses globals: `rooms`, `places`, `level`.
-unsafe fn place_corridor_end(room: *mut CRoom, pos: &mut CCoord) {
+unsafe fn place_corridor_end(
+    room: *mut CRoom,
+    pos: &mut CCoord,
+    tiles: &mut Vec<IVec2>,
+    entry_points: &mut Vec<IVec2>,
+) {
     if room.is_null() || ((*room).r_flags & ISGONE) != 0 {
-        putpass(pos);
+        tiles.push(putpass(pos));
     } else {
-        door(room, pos);
+        let door_pos = door(room, pos);
+        tiles.push(door_pos);
+        entry_points.push(door_pos);
     }
 }
 
@@ -299,8 +309,9 @@ unsafe fn place_corridor_end(room: *mut CRoom, pos: &mut CCoord) {
 /// `distance` cells, making a perpendicular run of `turn_distance` cells
 /// starting at `turn_spot`, so the corridor ends up aligned with `end`. A
 /// final check warns if the path did not reach the expected end point.
-/// Uses globals: `CURRENT_TILES`, `places`, `level`.
-unsafe fn dig_corridor(plan: &CorridorPlan) {
+/// Every laid tile is recorded into `tiles`.
+/// Uses globals: `places`, `level`.
+unsafe fn dig_corridor(plan: &CorridorPlan, tiles: &mut Vec<IVec2>) {
     let mut curr = plan.start;
     let mut distance = plan.distance;
 
@@ -311,14 +322,14 @@ unsafe fn dig_corridor(plan: &CorridorPlan) {
         if distance == plan.turn_spot {
             let mut remaining = plan.turn_distance;
             while remaining > 0 {
-                putpass(&mut curr);
+                tiles.push(putpass(&mut curr));
                 curr.x += plan.turn_step.x;
                 curr.y += plan.turn_step.y;
                 remaining -= 1;
             }
         }
 
-        putpass(&mut curr);
+        tiles.push(putpass(&mut curr));
         distance -= 1;
     }
 
@@ -333,31 +344,31 @@ unsafe fn dig_corridor(plan: &CorridorPlan) {
 ///
 /// Plans an L-shaped corridor (see [`plan_corridor`]), registers its doors
 /// on both room boundaries, and lays its tiles (see [`dig_corridor`]). The
-/// accumulated tiles are wrapped into a [`Passage`] by [`finish_passage`].
-/// Uses globals: `CURRENT_TILES`, `CURRENT_ENTRY_POINTS`, `rooms`, `places`.
+/// laid tiles are collected locally and wrapped into a [`Passage`] by
+/// [`finish_passage`].
+/// Uses globals: `rooms`, `places`.
 unsafe fn conn(r1: c_int, r2: c_int) {
-    reset_passage_builder();
+    let mut tiles = Vec::new();
+    let mut entry_points = Vec::new();
 
     let mut plan = plan_corridor(r1, r2);
 
-    place_corridor_end(&raw mut rooms[plan.base_room], &mut plan.start);
-    place_corridor_end(&raw mut rooms[plan.partner_room], &mut plan.end);
+    place_corridor_end(&raw mut rooms[plan.base_room], &mut plan.start, &mut tiles, &mut entry_points);
+    place_corridor_end(&raw mut rooms[plan.partner_room], &mut plan.end, &mut tiles, &mut entry_points);
 
-    dig_corridor(&plan);
+    dig_corridor(&plan, &mut tiles);
 
-    finish_passage();
+    finish_passage(tiles, entry_points);
 }
 
-/// Wrap the tiles accumulated by [`conn`] into a [`Passage`].
+/// Wrap the tiles laid by [`conn`] into a [`Passage`].
 ///
-/// Takes the tiles and entry points collected in the static accumulators,
-/// computes their bounding box, lays them into a [`Structure`], and stores
-/// the resulting [`Passage`] on the current level.
-/// Uses globals: `CURRENT_TILES`, `CURRENT_ENTRY_POINTS`.
-unsafe fn finish_passage() {
-    let tiles = std::mem::take(&mut *std::ptr::addr_of_mut!(CURRENT_TILES));
-    let entry_points = std::mem::take(&mut *std::ptr::addr_of_mut!(CURRENT_ENTRY_POINTS));
-
+/// Takes the tile and entry-point coordinates collected while digging the
+/// corridor, computes their bounding box, and stores the resulting
+/// [`Passage`] with its coordinates made relative to the bounding box
+/// origin.
+/// Uses globals: none.
+unsafe fn finish_passage(tiles: Vec<IVec2>, entry_points: Vec<IVec2>) {
     if tiles.is_empty() {
         return;
     }
@@ -367,19 +378,13 @@ unsafe fn finish_passage() {
     let min_y = tiles.iter().map(|p| p.y).min().unwrap_or(0);
     let max_y = tiles.iter().map(|p| p.y).max().unwrap_or(0);
 
-    let width = (max_x - min_x + 1) as usize;
-    let height = (max_y - min_y + 1) as usize;
     let position = IVec2::new(min_x, min_y);
     let size = IVec2::new(max_x - min_x + 1, max_y - min_y + 1);
 
-    let mut structure = Structure::new(height, width, Tile::Empty);
-    for pos in &tiles {
-        let _ = structure.set((pos.y - min_y) as usize, (pos.x - min_x) as usize, Tile::Passage);
-    }
-    for pos in &entry_points {
-        let _ = structure.set((pos.y - min_y) as usize, (pos.x - min_x) as usize, Tile::Door);
-    }
-
+    let relative_tiles = tiles
+        .into_iter()
+        .map(|p| IVec2::new(p.x - min_x, p.y - min_y))
+        .collect();
     let relative_entry_points = entry_points
         .into_iter()
         .map(|p| IVec2::new(p.x - min_x, p.y - min_y))
@@ -388,7 +393,7 @@ unsafe fn finish_passage() {
     let passage = Passage {
         position,
         size,
-        structure,
+        tiles: relative_tiles,
         entry_points: relative_entry_points,
     };
     super::current_level_mut().add_passage(passage);
@@ -396,16 +401,17 @@ unsafe fn finish_passage() {
 
 /// Place a passage tile at `cp`.
 ///
-/// Records the coordinate in `CURRENT_TILES` so [`finish_passage`] can
-/// reconstruct the corridor, marks the cell as a passage (`F_PASS`), and
-/// occasionally renders it as a real wall (`-`/`|`) instead of `#`.
-/// Uses globals: `CURRENT_TILES`, `places`, `level`.
-pub(super) unsafe fn putpass(cp: *mut CCoord) {
+/// Marks the cell as a passage (`F_PASS`) and occasionally renders it as a
+/// real wall (`-`/`|`) instead of `#`. Returns the absolute coordinate of
+/// the placed tile so callers that need to reconstruct the corridor can
+/// record it.
+/// Uses globals: `places`, `level`.
+pub(super) unsafe fn putpass(cp: *mut CCoord) -> IVec2 {
     if cp.is_null() {
-        return;
+        return IVec2::ZERO;
     }
 
-    (*std::ptr::addr_of_mut!(CURRENT_TILES)).push(IVec2::new((*cp).x, (*cp).y));
+    let pos = IVec2::new((*cp).x, (*cp).y);
 
     let pp = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
 
@@ -415,17 +421,20 @@ pub(super) unsafe fn putpass(cp: *mut CCoord) {
     } else {
         (*pp).p_ch = PASSAGE;
     }
+
+    pos
 }
 
 /// Place a door at `cp` on the boundary of room `rm`.
 ///
-/// Records the coordinate both as a passage tile and as an entry point of
-/// the current corridor, registers it as an exit of the room, and draws a
-/// `+` door or a real wall segment depending on depth and randomness.
-/// Uses globals: `CURRENT_TILES`, `CURRENT_ENTRY_POINTS`, `places`, `level`.
-unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) {
+/// Registers the coordinate as an exit of the room and draws a `+` door or
+/// a real wall segment depending on depth and randomness. Returns the
+/// absolute coordinate so the caller can record it both as a passage tile
+/// and as an entry point of the current corridor.
+/// Uses globals: `places`, `level`.
+unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) -> IVec2 {
     if rm.is_null() || cp.is_null() {
-        return;
+        return IVec2::ZERO;
     }
 
     let rm_ref = &mut *rm;
@@ -433,11 +442,9 @@ unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) {
     rm_ref.r_nexits += 1;
 
     let pos = IVec2::new((*cp).x, (*cp).y);
-    (*std::ptr::addr_of_mut!(CURRENT_TILES)).push(pos);
-    (*std::ptr::addr_of_mut!(CURRENT_ENTRY_POINTS)).push(pos);
 
     if (rm_ref.r_flags & ISMAZE) != 0 {
-        return;
+        return pos;
     }
 
     let pp = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
@@ -452,6 +459,8 @@ unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) {
     } else {
         (*pp).p_ch = DOOR;
     }
+
+    pos
 }
 
 /// Draw all passage and door tiles for the current level (FFI export).
