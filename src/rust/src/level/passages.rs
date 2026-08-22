@@ -109,37 +109,11 @@ unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
 }
 
 pub(super) unsafe fn do_passages() {
-    let mut graph = RoomGraph::new();
+    // Decide which room pairs get connected (spanning tree + extras).
+    let connections = RoomGraph::new().generate();
 
-    // Grow a connected spanning tree of the room graph.
-    let mut roomcount = 1;
-    let mut r1_idx = graph.pick_any();
-    graph.mark_in_graph(r1_idx);
-
-    loop {
-        if let Some(idx) = graph.next_unreached(r1_idx) {
-            graph.mark_in_graph(idx);
-            conn(r1_idx as c_int, idx as c_int);
-            graph.connect(r1_idx, idx);
-            roomcount += 1;
-        } else {
-            r1_idx = graph.pick_in_graph();
-        }
-
-        if roomcount >= MAXROOMS as c_int {
-            break;
-        }
-    }
-
-    // Add a few extra connecting passages so the maze isn't a pure tree.
-    let mut roomcount = rnd(5);
-    while roomcount > 0 {
-        let r1_idx = graph.pick_any();
-        if let Some(idx) = graph.next_unconnected(r1_idx) {
-            conn(r1_idx as c_int, idx as c_int);
-            graph.connect(r1_idx, idx);
-        }
-        roomcount -= 1;
+    for (r1, r2) in connections {
+        conn(r1 as c_int, r2 as c_int);
     }
 
     passnum();
@@ -169,7 +143,6 @@ unsafe fn conn(r1: c_int, r2: c_int) {
 
     if r1 < r2 {
         rm = r1 as usize;
-
         if r1 + 1 == r2 {
             direc = 'r';
         }
@@ -184,6 +157,7 @@ unsafe fn conn(r1: c_int, r2: c_int) {
 
     if direc == 'd' {
         rmt = rm as c_int + 3;
+
         let rpt = &mut rooms[rmt as usize];
         del.x = 0;
         del.y = 1;
