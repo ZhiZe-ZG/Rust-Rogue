@@ -53,10 +53,13 @@ impl Default for Passage {
 }
 
 impl Passage {
+    /// Register `relative_pos` as an entry point where this corridor joins a
+    /// room. Entry points are stored relative to the passage's `position`.
     pub fn add_entry_point(&mut self, relative_pos: IVec2) {
         self.entry_points.push(relative_pos);
     }
 
+    /// Place `tile` at `(local_y, local_x)` inside this passage's structure.
     pub fn place_tile(&mut self, local_y: usize, local_x: usize, tile: Tile) -> bool {
         self.structure.set(local_y, local_x, tile)
     }
@@ -69,8 +72,10 @@ impl Passage {
 static mut CURRENT_TILES: Vec<IVec2> = Vec::new();
 static mut CURRENT_ENTRY_POINTS: Vec<IVec2> = Vec::new();
 
+/// Number of the passage currently being scanned by [`passnum`]/[`numpass`].
 static mut PNUM: c_int = 0;
 
+/// Whether the next cell reached by [`numpass`] starts a new passage number.
 static mut NEW_PNUM: c_uchar = FALSE;
 
 unsafe extern "C" {
@@ -87,27 +92,37 @@ unsafe extern "C" {
     fn standend() -> c_int;
 }
 
+/// Read the character at `(y, x)` from the C `places` grid.
 #[inline]
 unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
     (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
 }
 
+/// Read the flat flags at `(y, x)` from the C `places` grid.
 #[inline]
 unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
     (*place_at((&raw mut places) as *mut CPlace, y, x)).p_flags
 }
 
+/// Clear `flag` from the flat flags of the `places` cell at `(y, x)`.
 #[inline]
 unsafe fn clear_flat_flag(y: c_int, x: c_int, flag: c_char) {
     let pp = place_at((&raw mut places) as *mut CPlace, y, x);
     (*pp).p_flags = (((*pp).p_flags as u8) & !(flag as u8)) as c_char;
 }
 
+/// Whether two coordinates are equal.
 #[inline]
 unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
     a.x == b.x && a.y == b.y
 }
 
+/// Dig all corridors that connect the rooms of the current level.
+///
+/// The room graph decides which room pairs are connected (see
+/// [`RoomGraph::generate`]); for each pair, [`conn`] digs an actual
+/// corridor into the C map. Finally [`passnum`] numbers the resulting
+/// passage network.
 pub(super) unsafe fn do_passages() {
     // Decide which room pairs get connected (spanning tree + extras).
     let connections = RoomGraph::new().generate();
@@ -119,6 +134,13 @@ pub(super) unsafe fn do_passages() {
     passnum();
 }
 
+/// Dig a single corridor between two adjacent rooms `r1` and `r2`.
+///
+/// Picks a vertical (`d`) or horizontal (`r`) corridor from the room
+/// layout, chooses a random entry point on each room boundary, then walks
+/// a straight or L-shaped path, laying passage tiles via [`putpass`] and
+/// doors via [`door`]. The accumulated tiles are wrapped into a
+/// [`Passage`] by [`finish_passage`].
 unsafe fn conn(r1: c_int, r2: c_int) {
     let mut rmt: c_int = 0;
     let mut distance = 0;
@@ -157,7 +179,6 @@ unsafe fn conn(r1: c_int, r2: c_int) {
 
     if direc == 'd' {
         rmt = rm as c_int + 3;
-
         let rpt = &mut rooms[rmt as usize];
         del.x = 0;
         del.y = 1;
@@ -264,8 +285,11 @@ unsafe fn conn(r1: c_int, r2: c_int) {
     finish_passage();
 }
 
-/// Compute the bounding box of the accumulated tiles and wrap them into a
-/// [`Passage`] backed by a [`Structure`], then store it on the current level.
+/// Wrap the tiles accumulated by [`conn`] into a [`Passage`].
+///
+/// Takes the tiles and entry points collected in the static accumulators,
+/// computes their bounding box, lays them into a [`Structure`], and stores
+/// the resulting [`Passage`] on the current level.
 unsafe fn finish_passage() {
     let tiles = std::mem::take(&mut *std::ptr::addr_of_mut!(CURRENT_TILES));
     let entry_points = std::mem::take(&mut *std::ptr::addr_of_mut!(CURRENT_ENTRY_POINTS));
@@ -306,6 +330,11 @@ unsafe fn finish_passage() {
     super::current_level_mut().add_passage(passage);
 }
 
+/// Place a passage tile at `cp`.
+///
+/// Records the coordinate in `CURRENT_TILES` so [`finish_passage`] can
+/// reconstruct the corridor, marks the cell as a passage (`F_PASS`), and
+/// occasionally renders it as a real wall (`-`/`|`) instead of `#`.
 pub(super) unsafe fn putpass(cp: *mut CCoord) {
     if cp.is_null() {
         return;
@@ -323,6 +352,11 @@ pub(super) unsafe fn putpass(cp: *mut CCoord) {
     }
 }
 
+/// Place a door at `cp` on the boundary of room `rm`.
+///
+/// Records the coordinate both as a passage tile and as an entry point of
+/// the current corridor, registers it as an exit of the room, and draws a
+/// `+` door or a real wall segment depending on depth and randomness.
 unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) {
     if rm.is_null() || cp.is_null() {
         return;
@@ -354,6 +388,11 @@ unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) {
     }
 }
 
+/// Draw all passage and door tiles for the current level (FFI export).
+///
+/// Iterates the C `places` grid and redraws every cell marked as a passage
+/// or a door, marking it seen (`F_SEEN`). Exported with `#[no_mangle]` so
+/// the C engine can call it during screen redraw.
 #[no_mangle]
 pub unsafe extern "C" fn add_pass() {
     for y in 1..NUMLINES - 1 {
@@ -386,6 +425,11 @@ pub unsafe extern "C" fn add_pass() {
     }
 }
 
+/// Number the passages reachable from every room exit.
+///
+/// Resets the passage table, then flood-fills from each room exit using
+/// [`numpass`]. Every contiguous passage network is assigned a number used
+/// to index the C `passages` array.
 unsafe fn passnum() {
     PNUM = 0;
     NEW_PNUM = FALSE;
@@ -400,6 +444,12 @@ unsafe fn passnum() {
     }
 }
 
+/// Recursively flood-fill a passage network, numbering its cells.
+///
+/// Stops at the screen edge, already-numbered cells, or tiles that are
+/// neither passages nor doors, then recurses into the four neighbours.
+/// Each new contiguous component increments the current passage number and
+/// its exits are registered in the C `passages` array.
 unsafe fn numpass(y: c_int, x: c_int) {
     if x >= NUMCOLS || x < 0 || y >= NUMLINES || y <= 0 {
         return;
