@@ -1,8 +1,12 @@
 use glam::IVec2;
 use std::os::raw::c_int;
 
+use super::roomgraph::MAX_ROOMS;
 use super::structure::Structure;
 use super::tile::Tile;
+
+const ISGONE: i16 = 0o000002;
+const ISMAZE: i16 = 0o000004;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Room {
@@ -10,6 +14,51 @@ pub struct Room {
 	pub size: IVec2,
 	pub structure: Structure,
 	pub entry_points: Vec<IVec2>,
+}
+
+#[derive(Copy, Clone)]
+pub(crate) struct RoomState {
+	pub(crate) pos: IVec2,
+	pub(crate) size: IVec2,
+	pub(crate) gold: IVec2,
+	pub(crate) goldval: i32,
+	pub(crate) flags: i16,
+	pub(crate) nexits: i32,
+}
+
+impl RoomState {
+	pub(crate) fn is_gone(&self) -> bool {
+		(self.flags & ISGONE) != 0
+	}
+
+	pub(crate) fn is_maze(&self) -> bool {
+		(self.flags & ISMAZE) != 0
+	}
+
+	pub(crate) fn mark_gone(&mut self) {
+		self.flags |= ISGONE;
+	}
+
+	pub(crate) fn mark_dark(&mut self) {
+		self.flags |= 0o000001;
+	}
+
+	pub(crate) fn set_maze(&mut self) {
+		self.flags = ISMAZE;
+	}
+}
+
+pub(crate) struct GeneratedRooms {
+	pub(crate) room_states: [RoomState; MAX_ROOMS],
+	pub(crate) room_models: [Option<Room>; MAX_ROOMS],
+}
+
+pub(crate) fn build_generated_rooms(room_states: [RoomState; MAX_ROOMS]) -> GeneratedRooms {
+	let room_models = std::array::from_fn(|i| build_room_model_from_state(&room_states[i]));
+	GeneratedRooms {
+		room_states,
+		room_models,
+	}
 }
 
 impl Room {
@@ -57,6 +106,14 @@ impl Room {
 
 pub fn place_tile(room: &mut Room, local_y: usize, local_x: usize, tile: Tile) -> bool {
 	room.place_tile(local_y, local_x, tile)
+}
+
+fn build_room_model_from_state(room: &RoomState) -> Option<Room> {
+	if room.is_gone() {
+		return None;
+	}
+
+	build_room_model(room.pos, room.size, room.is_maze())
 }
 
 pub(crate) fn build_room_structure(height: usize, width: usize) -> Structure {

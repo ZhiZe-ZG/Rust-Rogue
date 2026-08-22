@@ -9,7 +9,6 @@ mod ffitools;
 mod level;
 pub mod passages;
 pub mod roomgraph;
-mod roomgrid;
 pub mod rooms;
 pub mod structure;
 pub mod tile;

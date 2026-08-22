@@ -6,8 +6,7 @@ use crate::rnd::rnd;
 
 use super::ffitools::{tile_to_ascii, FLOOR, PASSAGE, STAIRS};
 use super::passages::{do_passages, putpass};
-use super::roomgrid::{GeneratedRooms, RoomState, MAXROOMS};
-use super::rooms::Room;
+use super::rooms::{GeneratedRooms, Room, RoomState};
 
 use super::{current_level_mut};
 use super::tile::Tile;
@@ -19,6 +18,7 @@ const ISMANY: c_int = 0o0000010;
 const ISMEAN: c_short = 0o0004000;
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
+const MAXROOMS: usize = 9;
 const MAXTREAS: c_int = 10;
 const MINTREAS: c_int = 2;
 const MAXTRIES: c_int = 10;

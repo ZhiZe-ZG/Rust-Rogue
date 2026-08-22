@@ -11,8 +11,9 @@ use std::os::raw::c_int;
 use std::os::raw::c_uchar;
 
 use crate::rnd::rnd;
+use glam::IVec2;
 
-use super::roomgrid::RoomState;
+use super::rooms::RoomState;
 
 /// Maximum number of rooms on a level.
 pub const MAX_ROOMS: usize = 9;
@@ -30,6 +31,106 @@ const BASE_CONN: [[c_uchar; MAX_ROOMS]; MAX_ROOMS] = [
     [0, 0, 0, 0, 1, 0, 1, 0, 1],
     [0, 0, 0, 0, 0, 1, 0, 1, 0],
 ];
+
+const NUMCOLS: i32 = 80;
+const NUMLINES: i32 = 24;
+const MAX_ROOM_TRIES: usize = 100;
+
+/// Generate room geometry/flags for the current level grid.
+pub(crate) fn generate_room_grid(
+    room_states: [RoomState; MAX_ROOMS],
+    bsze: IVec2,
+    depth: i32,
+) -> [RoomState; MAX_ROOMS] {
+    determine_room_layouts(room_states, bsze, depth)
+}
+
+fn rnd_room_from_state(room_states: &[RoomState; MAX_ROOMS]) -> usize {
+    loop {
+        let rm = rnd(MAX_ROOMS as c_int) as usize;
+        if !room_states[rm].is_gone() {
+            return rm;
+        }
+    }
+}
+
+fn determine_room_layouts(
+    mut room_states: [RoomState; MAX_ROOMS],
+    bsze: IVec2,
+    depth: i32,
+) -> [RoomState; MAX_ROOMS] {
+    // Reset per-room state before generating the level layout.
+    for room in &mut room_states {
+        room.goldval = 0;
+        room.nexits = 0;
+        room.flags = 0;
+    }
+
+    let left_out = rnd(4);
+    // Randomly mark a few rooms as removed for this level.
+    for _ in 0..left_out {
+        let room_idx = rnd_room_from_state(&room_states);
+        room_states[room_idx].mark_gone();
+    }
+
+    // Compute geometry, sizes, and flags for every room slot.
+    for i in 0..MAX_ROOMS {
+        let room = &mut room_states[i];
+        let top = IVec2::new((i as i32 % 3) * bsze.x + 1, (i as i32 / 3) * bsze.y);
+
+        if room.is_gone() {
+            // Keep rerolling until the off-map placeholder position is valid.
+            loop {
+                room.pos.x = top.x + rnd(bsze.x - 2) + 1;
+                room.pos.y = top.y + rnd(bsze.y - 2) + 1;
+                room.size = IVec2::new(-NUMCOLS, -NUMLINES);
+                if room.pos.y > 0 && room.pos.y < NUMLINES - 1 {
+                    break;
+                }
+            }
+            continue;
+        }
+
+        if rnd(10) < depth - 1 {
+            room.mark_dark();
+            if rnd(15) == 0 {
+                room.set_maze();
+            }
+        }
+
+        if room.is_maze() {
+            room.size.x = bsze.x - 1;
+            room.size.y = bsze.y - 1;
+            room.pos.x = top.x;
+            if room.pos.x == 1 {
+                room.pos.x = 0;
+            }
+            room.pos.y = top.y;
+            if room.pos.y == 0 {
+                room.pos.y += 1;
+                room.size.y -= 1;
+            }
+        } else {
+            let mut placed = false;
+            for _ in 0..MAX_ROOM_TRIES {
+                room.size.x = rnd(bsze.x - 4) + 4;
+                room.size.y = rnd(bsze.y - 4) + 4;
+                room.pos.x = top.x + rnd(bsze.x - room.size.x);
+                room.pos.y = top.y + rnd(bsze.y - room.size.y);
+                if room.pos.y != 0 {
+                    placed = true;
+                    break;
+                }
+            }
+
+            if !placed {
+                room.mark_gone();
+            }
+        }
+    }
+
+    room_states
+}
 
 /// Pure-Rust abstraction of the room-connection adjacency graph.
 ///
