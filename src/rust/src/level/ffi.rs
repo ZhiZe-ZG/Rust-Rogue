@@ -155,13 +155,6 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
 	}
 }
 
-unsafe fn do_rooms() {
-	let bsze = CCoord { x: NUMCOLS / 3, y: NUMLINES / 3 };
-	let c_rooms = read_c_room_data();
-	let generated = generate_room_grid_and_rooms(c_rooms, bsze, level);
-	write_rust_data_back_to_c_and_ncurses(&generated);
-}
-
 unsafe fn read_c_room_data() -> [RoomState; MAXROOMS] {
 	std::array::from_fn(|i| {
 		let rp = (&raw mut rooms[i]) as *const CRoom;
@@ -391,8 +384,8 @@ pub unsafe fn door_open(rp: *mut CRoom) {
 /// moves the hero to a random open floor and draws the new screen.
 ///
 /// Uses globals: player, hero (player.t_pos), level, max_level, places,
-/// mlist, lvl_obj, no_food, ntraps, stairs, seenstairs, rooms (via
-/// do_rooms), passages (via do_passages), player.t_flags (via
+/// mlist, lvl_obj, no_food, ntraps, stairs, seenstairs, rooms, passages
+/// (via do_passages), player.t_flags (via
 /// enter_room / turn_see / visuals).
 #[no_mangle]
 pub unsafe extern "C" fn new_level() {
@@ -435,7 +428,13 @@ pub unsafe extern "C" fn new_level() {
 	// Throw away stuff left on the previous level (if anything).
 	_free_list((&raw mut lvl_obj) as *mut *mut CThing);
 
-	do_rooms(); /* Draw rooms */
+	// Step 1: Read room state from C into Rust-owned data.
+	let c_rooms = read_c_room_data();
+	// Step 2: Generate room grid and room models in pure Rust.
+	let bsze = CCoord { x: NUMCOLS / 3, y: NUMLINES / 3 };
+	let generated = generate_room_grid_and_rooms(c_rooms, bsze, level);
+	// Step 3: Write generated room state back to C and draw to ncurses/places.
+	write_rust_data_back_to_c_and_ncurses(&generated);
 
 	// Decide which room pairs get connected, then dig each corridor.
 	let connections = RoomGraph::new().generate();
