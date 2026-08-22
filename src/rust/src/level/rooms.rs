@@ -5,9 +5,9 @@ use super::roomgraph::MAX_ROOMS;
 use super::structure::Structure;
 use super::tile::Tile;
 
-const ISGONE: i16 = 0o000002;
-const ISMAZE: i16 = 0o000004;
-
+/// Logical room model used by Rust-side level generation.
+///
+/// Coordinates are absolute map positions; `structure` stores room-local tiles.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Room {
 	pub position: IVec2,
@@ -16,43 +16,62 @@ pub struct Room {
 	pub entry_points: Vec<IVec2>,
 }
 
+/// Rust mirror of the legacy C room state used during generation.
 #[derive(Copy, Clone)]
 pub(crate) struct RoomState {
 	pub(crate) pos: IVec2,
 	pub(crate) size: IVec2,
 	pub(crate) gold: IVec2,
 	pub(crate) goldval: i32,
-	pub(crate) flags: i16,
-	pub(crate) nexits: i32,
+	pub(crate) gone: bool,
+	pub(crate) dark: bool,
+	pub(crate) maze: bool,
+	pub(crate) entry_point_count: i32,
 }
 
 impl RoomState {
+	/// Whether this room slot is removed for the level.
 	pub(crate) fn is_gone(&self) -> bool {
-		(self.flags & ISGONE) != 0
+		self.gone
 	}
 
+	/// Whether this room should be generated as a maze room.
 	pub(crate) fn is_maze(&self) -> bool {
-		(self.flags & ISMAZE) != 0
+		self.maze
 	}
 
+	/// Mark this room slot as gone.
 	pub(crate) fn mark_gone(&mut self) {
-		self.flags |= ISGONE;
+		self.gone = true;
 	}
 
+	/// Mark this room as dark.
 	pub(crate) fn mark_dark(&mut self) {
-		self.flags |= 0o000001;
+		self.dark = true;
 	}
 
+	/// Convert this room into a maze room (overrides other room flags).
 	pub(crate) fn set_maze(&mut self) {
-		self.flags = ISMAZE;
+		self.maze = true;
+		self.dark = false;
+		self.gone = false;
+	}
+
+	/// Clear all generation flags before layout generation starts.
+	pub(crate) fn clear_flags(&mut self) {
+		self.gone = false;
+		self.dark = false;
+		self.maze = false;
 	}
 }
 
+/// Output bundle from room-grid generation.
 pub(crate) struct GeneratedRooms {
 	pub(crate) room_states: [RoomState; MAX_ROOMS],
 	pub(crate) room_models: [Option<Room>; MAX_ROOMS],
 }
 
+/// Build room models for each room state slot.
 pub(crate) fn build_generated_rooms(room_states: [RoomState; MAX_ROOMS]) -> GeneratedRooms {
 	let room_models = std::array::from_fn(|i| build_room_model_from_state(&room_states[i]));
 	GeneratedRooms {
@@ -108,6 +127,7 @@ pub fn place_tile(room: &mut Room, local_y: usize, local_x: usize, tile: Tile) -
 	room.place_tile(local_y, local_x, tile)
 }
 
+/// Build a room model when the slot is active, otherwise skip it.
 fn build_room_model_from_state(room: &RoomState) -> Option<Room> {
 	if room.is_gone() {
 		return None;

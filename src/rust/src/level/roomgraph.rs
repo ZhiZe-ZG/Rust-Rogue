@@ -62,8 +62,8 @@ fn determine_room_layouts(
     // Reset per-room state before generating the level layout.
     for room in &mut room_states {
         room.goldval = 0;
-        room.nexits = 0;
-        room.flags = 0;
+        room.entry_point_count = 0;
+        room.clear_flags();
     }
 
     let left_out = rnd(4);

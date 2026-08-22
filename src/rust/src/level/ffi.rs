@@ -14,6 +14,7 @@ use glam::IVec2;
 
 const ISGONE: c_short = 0o000002;
 const ISMAZE: c_short = 0o000004;
+const ISDARK: c_short = 0o000001;
 const ISMANY: c_int = 0o0000010;
 const ISMEAN: c_short = 0o0004000;
 const NUMCOLS: c_int = 80;
@@ -209,8 +210,10 @@ unsafe fn room_state_from_c(rp: *const CRoom) -> RoomState {
 		size: IVec2::new((*rp).r_max.x, (*rp).r_max.y),
 		gold: IVec2::new((*rp).r_gold.x, (*rp).r_gold.y),
 		goldval: (*rp).r_goldval,
-		flags: (*rp).r_flags,
-		nexits: (*rp).r_nexits,
+		gone: ((*rp).r_flags & ISGONE) != 0,
+		dark: ((*rp).r_flags & ISDARK) != 0,
+		maze: ((*rp).r_flags & ISMAZE) != 0,
+		entry_point_count: (*rp).r_nexits,
 	}
 }
 
@@ -228,8 +231,18 @@ unsafe fn apply_room_state_to_c(state: &RoomState, rp: *mut CRoom) {
 		y: state.gold.y,
 	};
 	(*rp).r_goldval = state.goldval;
-	(*rp).r_flags = state.flags;
-	(*rp).r_nexits = state.nexits;
+	let mut flags: c_short = 0;
+	if state.gone {
+		flags |= ISGONE;
+	}
+	if state.dark {
+		flags |= ISDARK;
+	}
+	if state.maze {
+		flags |= ISMAZE;
+	}
+	(*rp).r_flags = flags;
+	(*rp).r_nexits = state.entry_point_count;
 }
 
 unsafe fn treas_room() {
