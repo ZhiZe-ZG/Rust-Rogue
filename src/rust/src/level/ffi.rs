@@ -6,7 +6,7 @@ use crate::rnd::rnd;
 
 use super::ffitools::{tile_to_ascii, FLOOR, PASSAGE, STAIRS};
 use super::passages::{do_passages, putpass};
-use super::rooms::{build_maze_structure, build_room_structure, Room};
+use super::rooms::{build_room_model, Room};
 use super::{current_level_mut};
 use super::tile::Tile;
 use glam::IVec2;
@@ -164,7 +164,7 @@ unsafe fn do_rooms() {
 
 	for i in 0..MAXROOMS {
 		let rp = (&raw mut rooms[i]) as *mut CRoom;
-		room_models[i] = build_room_model(rp);
+		room_models[i] = build_room_model_from_c(rp);
 	}
 
 	// Draw prebuilt room models, then place gold and monsters.
@@ -409,7 +409,12 @@ unsafe fn draw_room_ascii(room: &Room) {
 	}
 }
 
-unsafe fn build_room_model(rp: *mut CRoom) -> Option<Room> {
+/// Transfer a C `CRoom` into a Rust [`Room`] model.
+///
+/// Step 1: pull the geometry out of the C struct (position, size, maze
+/// flag). Step 2 is delegated to the pure-Rust [`build_room_model`], which
+/// constructs the tile structure with no C dependencies.
+unsafe fn build_room_model_from_c(rp: *mut CRoom) -> Option<Room> {
 	if rp.is_null() {
 		return None;
 	}
@@ -418,21 +423,11 @@ unsafe fn build_room_model(rp: *mut CRoom) -> Option<Room> {
 		return None;
 	}
 
-	let width = (*rp).r_max.x;
-	let height = (*rp).r_max.y;
-	if width <= 0 || height <= 0 {
-		return None;
-	}
-
 	let position = IVec2::new((*rp).r_pos.x, (*rp).r_pos.y);
-	let size = IVec2::new(width, height);
-	let structure = if ((*rp).r_flags & ISMAZE) != 0 {
-		build_maze_structure(height as usize, width as usize)
-	} else {
-		build_room_structure(height as usize, width as usize)
-	};
+	let size = IVec2::new((*rp).r_max.x, (*rp).r_max.y);
+	let is_maze = ((*rp).r_flags & ISMAZE) != 0;
 
-	Some(Room::new(position, size, Some(structure), None))
+	build_room_model(position, size, is_maze)
 }
 
 /// door_open:

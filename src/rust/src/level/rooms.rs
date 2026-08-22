@@ -73,6 +73,25 @@ pub(crate) fn build_room_structure(height: usize, width: usize) -> Structure {
 	structure
 }
 
+/// Build a [`Room`] model from Rust-native geometry.
+///
+/// Pure-Rust half of the FFI `build_room_model` split: given a room's
+/// position, size, and whether it is a maze, construct the tile structure
+/// and wrap everything in a [`Room`]. No C types are involved here.
+pub(crate) fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room> {
+	if size.x <= 0 || size.y <= 0 {
+		return None;
+	}
+
+	let structure = if is_maze {
+		build_maze_structure(size.y as usize, size.x as usize)
+	} else {
+		build_room_structure(size.y as usize, size.x as usize)
+	};
+
+	Some(Room::new(position, size, Some(structure), None))
+}
+
 pub(crate) fn build_maze_structure(height: usize, width: usize) -> Structure {
 	let mut structure = Structure::new(height, width, Tile::Empty);
 
