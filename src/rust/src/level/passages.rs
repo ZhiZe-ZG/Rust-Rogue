@@ -7,6 +7,7 @@ use glam::IVec2;
 
 use super::structure::Structure;
 use super::tile::Tile;
+use super::Level;
 
 
 
@@ -92,7 +93,6 @@ static mut PNUM: c_int = 0;
 static mut NEW_PNUM: c_uchar = FALSE;
 
 unsafe extern "C" {
-    static mut level: c_int;
     static mut rooms: [CRoom; MAXROOMS];
     static mut passages: [CRoom; MAXPASS];
     static mut places: [CPlace; 32 * 80];
@@ -149,6 +149,7 @@ pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
 
     super::current_level_mut().draw_doors();
     sync_rooms_to_c();
+    sync_passages_to_c();
 
     passnum();
 }
@@ -291,19 +292,19 @@ unsafe fn plan_corridor(r1: c_int, r2: c_int) -> CorridorPlan {
 ///
 /// If the room is still present, a door is registered on its boundary via
 /// [`Level::door`](super::level::Level::door); if it was removed (`ISGONE`),
-/// a plain passage tile is laid instead. The placed coordinate is recorded
-/// into `tiles` (and into `entry_points` for doors) so [`finish_passage`] can
-/// reconstruct the corridor.
-/// Uses globals: `places`, `level`.
+/// a plain passage tile is laid instead (see [`Level::putpass`]). The placed
+/// coordinate is recorded into `tiles` (and into `entry_points` for doors) so
+/// [`finish_passage`] can reconstruct the corridor.
+/// Uses globals: none.
 unsafe fn place_corridor_end(
+    current: &mut Level,
     room_index: usize,
     pos: &mut CCoord,
     tiles: &mut Vec<IVec2>,
     entry_points: &mut Vec<IVec2>,
 ) {
-    let current = super::current_level_mut();
     if current.rooms[room_index].is_gone() {
-        tiles.push(putpass(pos));
+        tiles.push(current.putpass(IVec2::new(pos.x, pos.y)));
     } else {
         let door_pos = current.door(room_index, IVec2::new(pos.x, pos.y));
         tiles.push(door_pos);
@@ -318,8 +319,8 @@ unsafe fn place_corridor_end(
 /// starting at `turn_spot`, so the corridor ends up aligned with `end`. A
 /// final check warns if the path did not reach the expected end point.
 /// Every laid tile is recorded into `tiles`.
-/// Uses globals: `places`, `level`.
-unsafe fn dig_corridor(plan: &CorridorPlan, tiles: &mut Vec<IVec2>) {
+/// Uses globals: none.
+unsafe fn dig_corridor(current: &mut Level, plan: &CorridorPlan, tiles: &mut Vec<IVec2>) {
     let mut curr = plan.start;
     let mut distance = plan.distance;
 
@@ -330,14 +331,14 @@ unsafe fn dig_corridor(plan: &CorridorPlan, tiles: &mut Vec<IVec2>) {
         if distance == plan.turn_spot {
             let mut remaining = plan.turn_distance;
             while remaining > 0 {
-                tiles.push(putpass(&mut curr));
+                tiles.push(current.putpass(IVec2::new(curr.x, curr.y)));
                 curr.x += plan.turn_step.x;
                 curr.y += plan.turn_step.y;
                 remaining -= 1;
             }
         }
 
-        tiles.push(putpass(&mut curr));
+        tiles.push(current.putpass(IVec2::new(curr.x, curr.y)));
         distance -= 1;
     }
 
@@ -360,11 +361,12 @@ unsafe fn conn(r1: c_int, r2: c_int) {
     let mut entry_points = Vec::new();
 
     let mut plan = plan_corridor(r1, r2);
+    let current = super::current_level_mut();
 
-    place_corridor_end(plan.base_room, &mut plan.start, &mut tiles, &mut entry_points);
-    place_corridor_end(plan.partner_room, &mut plan.end, &mut tiles, &mut entry_points);
+    place_corridor_end(current, plan.base_room, &mut plan.start, &mut tiles, &mut entry_points);
+    place_corridor_end(current, plan.partner_room, &mut plan.end, &mut tiles, &mut entry_points);
 
-    dig_corridor(&plan, &mut tiles);
+    dig_corridor(current, &plan, &mut tiles);
 
     finish_passage(tiles, entry_points);
 }
@@ -407,30 +409,30 @@ unsafe fn finish_passage(tiles: Vec<IVec2>, entry_points: Vec<IVec2>) {
     super::current_level_mut().add_passage(passage);
 }
 
-/// Place a passage tile at `cp`.
+/// Mirror the level map's passage tiles onto the C `places` grid.
 ///
-/// Marks the cell as a passage (`F_PASS`) and occasionally renders it as a
-/// real wall (`-`/`|`) instead of `#`. Returns the absolute coordinate of
-/// the placed tile so callers that need to reconstruct the corridor can
-/// record it.
-/// Uses globals: `places`, `level`.
-pub(super) unsafe fn putpass(cp: *mut CCoord) -> IVec2 {
-    if cp.is_null() {
-        return IVec2::ZERO;
+/// Marks every passage cell with the `F_PASS` flag so [`passnum`] and the
+/// C-side screen redraw ([`add_pass`]) can find it. Matching the legacy
+/// `putpass`, a cell is occasionally hidden by clearing `F_REAL` so it
+/// renders as a wall glyph (`-`/`|`) instead of `#`.
+/// Uses globals: `places`.
+unsafe fn sync_passages_to_c() {
+    let current = super::current_level_mut();
+    let depth = current.depth;
+    for y in 0..current.map.height() {
+        for x in 0..current.map.width() {
+            if !matches!(current.map.get(y, x), Some(Tile::Passage)) {
+                continue;
+            }
+            let pp = place_at((&raw mut places) as *mut CPlace, y as c_int, x as c_int);
+            (*pp).p_flags = (((*pp).p_flags as u8) | (F_PASS as u8)) as c_char;
+            if rnd(10) + 1 < depth && rnd(40) == 0 {
+                clear_flat_flag(y as c_int, x as c_int, F_REAL);
+            } else {
+                (*pp).p_ch = PASSAGE;
+            }
+        }
     }
-
-    let pos = IVec2::new((*cp).x, (*cp).y);
-
-    let pp = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
-
-    (*pp).p_flags = (((*pp).p_flags as u8) | (F_PASS as u8)) as c_char;
-    if rnd(10) + 1 < level && rnd(40) == 0 {
-        clear_flat_flag((*cp).y, (*cp).x, F_REAL);
-    } else {
-        (*pp).p_ch = PASSAGE;
-    }
-
-    pos
 }
 
 

@@ -117,6 +117,20 @@ impl Level {
         self.doors.push(door);
     }
 
+    /// Stamp a passage tile at absolute map position `pos`.
+    ///
+    /// Marks the cell as [`Tile::Passage`] in the level map so it becomes
+    /// part of the canonical grid (mirrored to the C `places` grid by
+    /// `sync_passages_to_c`). Returns `pos` so callers can record it both as
+    /// a tile of the current corridor and, when applicable, an entry point.
+    pub(crate) fn putpass(&mut self, pos: IVec2) -> IVec2 {
+        let (y, x) = (pos.y, pos.x);
+        if y >= 0 && x >= 0 {
+            let _ = self.map.set(y as usize, x as usize, Tile::Passage);
+        }
+        pos
+    }
+
     /// Place a door at `pos` on the boundary of `self.rooms[room_index]`.
     ///
     /// Registers `pos` as an exit of the room and, unless the room is a maze,
@@ -274,5 +288,29 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Stamping a passage tile records it in the level map and returns it.
+    #[test]
+    fn putpass_stamps_passage_into_map() {
+        let mut level = Level::new();
+        let pos = level.putpass(IVec2::new(5, 7));
+
+        assert_eq!(pos, IVec2::new(5, 7));
+        assert_eq!(level.map.get(7, 5), Some(Tile::Passage));
+    }
+
+    /// Out-of-bounds passage placement is ignored without panicking.
+    #[test]
+    fn putpass_ignores_out_of_bounds_positions() {
+        let mut level = Level::new();
+
+        let pos = level.putpass(IVec2::new(-1, 7));
+        assert_eq!(pos, IVec2::new(-1, 7));
+        assert_eq!(level.map.get(7, 0), Some(Tile::Empty));
+
+        let pos = level.putpass(IVec2::new(5, -3));
+        assert_eq!(pos, IVec2::new(5, -3));
+        assert_eq!(level.map.get(0, 5), Some(Tile::Empty));
     }
 }

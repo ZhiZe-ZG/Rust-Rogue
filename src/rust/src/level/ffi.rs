@@ -5,7 +5,7 @@ use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
 use super::ffitools::{tile_to_ascii, FLOOR, PASSAGE, STAIRS};
-use super::passages::{do_passages, putpass};
+use super::passages::do_passages;
 use super::rooms::Room;
 
 use super::{current_level_mut};
@@ -218,10 +218,10 @@ unsafe fn write_rust_data_back_to_c_and_ncurses(generated: &[Room; MAXROOMS]) {
 /// Draw the whole level map to the C `places` grid in one pass.
 ///
 /// Iterates the merged tile map of [`current_level_mut()`] once and converts
-/// every non-empty tile to its ASCII character. Passage tiles are also
-/// registered via [`putpass`] so they carry the `F_PASS` flag used by the C
-/// side.
-/// Uses globals: `places` (via `set_tile_char`/`putpass`).
+/// every non-empty tile to its ASCII character. Passage tiles are flagged
+/// with `F_PASS` separately by `sync_passages_to_c` during passage
+/// generation.
+/// Uses globals: `places` (via `set_tile_char`).
 unsafe fn draw_map_ascii() {
 	let current = current_level_mut();
 	let map = &current.map;
@@ -232,14 +232,6 @@ unsafe fn draw_map_ascii() {
 				Some(ch) => ch,
 				None => continue,
 			};
-
-			if matches!(map.get(y, x), Some(Tile::Passage)) {
-				let mut pos = CCoord {
-					y: y as c_int,
-					x: x as c_int,
-				};
-				putpass(&mut pos);
-			}
 
 			set_tile_char(y as c_int, x as c_int, ch);
 		}
