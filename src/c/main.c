@@ -402,6 +402,13 @@ void
 my_exit(int st)
 {
     resetltchars();
+    if (stdscr != NULL)
+    {
+	echo();
+	endwin();
+    }
+    fflush(stdout);
+    fflush(stderr);
     exit(st);
 }
 
