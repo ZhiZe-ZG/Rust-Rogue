@@ -9,6 +9,7 @@ use std::os::raw::{c_char, c_int};
 use glam::IVec2;
 
 use crate::draw::{clear_tile_flag, set_tile_char};
+use crate::player::CCoord;
 use crate::rnd::rnd;
 
 use super::ffitools::{DOOR, H_WALL, V_WALL};
@@ -231,6 +232,146 @@ impl Level {
         }
     }
 
+    /// Pick the point where the corridor meets `self.rooms[room_index]`'s boundary.
+    ///
+    /// For a vertical corridor (`direc == 'd'`) the point sits on the room's
+    /// bottom wall when `start` is set (the room the corridor leaves) or on its
+    /// top wall otherwise, randomizing the x coordinate. For a horizontal
+    /// corridor it sits on the right (`start`) or left wall, randomizing the y
+    /// coordinate. In maze rooms the point is redrawn until it lands on an
+    /// existing passage so the corridor always joins the maze. If the room was
+    /// removed ([`Room::is_gone`]), its top-left corner is returned unchanged.
+    pub(crate) fn entry_point(&self, room_index: usize, direc: char, start: bool) -> CCoord {
+        let room = &self.rooms[room_index];
+        let mut p = CCoord {
+            x: room.position.x,
+            y: room.position.y,
+        };
+        if !room.is_gone() {
+            loop {
+                if direc == 'd' {
+                    p.x = room.position.x + rnd(room.size.x - 2) + 1;
+                    p.y = if start { room.position.y + room.size.y - 1 } else { room.position.y };
+                } else {
+                    p.y = room.position.y + rnd(room.size.y - 2) + 1;
+                    p.x = if start { room.position.x + room.size.x - 1 } else { room.position.x };
+                }
+                if !room.is_maze()
+                    || matches!(self.map.get(p.y as usize, p.x as usize), Some(Tile::Passage))
+                {
+                    break;
+                }
+            }
+        }
+        p
+    }
+
+    /// Determine the direction of the corridor between rooms `r1` and `r2`.
+    ///
+    /// Rooms side by side (indices differing by one) are connected by a
+    /// horizontal corridor (`'r'`); rooms stacked (any other pair) by a
+    /// vertical corridor (`'d'`). Also returns the smaller index, which anchors
+    /// the corridor's start.
+    pub(crate) fn corridor_direction(r1: c_int, r2: c_int) -> (char, usize) {
+        if r1 < r2 {
+            let direc = if r1 + 1 == r2 { 'r' } else { 'd' };
+            (direc, r1 as usize)
+        } else {
+            let direc = if r2 + 1 == r1 { 'r' } else { 'd' };
+            (direc, r2 as usize)
+        }
+    }
+
+    /// Compute the full geometric plan for a corridor between rooms `r1`/`r2`.
+    ///
+    /// Determines the corridor direction from the room indices, picks random
+    /// entry points on both room boundaries, and derives the straight run, the
+    /// perpendicular turn, and the random position of the turn.
+    pub(crate) fn plan_corridor(&self, r1: c_int, r2: c_int) -> CorridorPlan {
+        let (direc, base_room) = Self::corridor_direction(r1, r2);
+        let partner_room = if direc == 'd' { base_room + 3 } else { base_room + 1 };
+
+        let step = if direc == 'd' {
+            CCoord { x: 0, y: 1 }
+        } else {
+            CCoord { x: 1, y: 0 }
+        };
+
+        let start = self.entry_point(base_room, direc, true);
+        let end = self.entry_point(partner_room, direc, false);
+
+        let (distance, turn_step, turn_distance) = if direc == 'd' {
+            (
+                (start.y - end.y).abs() - 1,
+                CCoord {
+                    x: if start.x < end.x { 1 } else { -1 },
+                    y: 0,
+                },
+                (start.x - end.x).abs(),
+            )
+        } else {
+            (
+                (start.x - end.x).abs() - 1,
+                CCoord {
+                    x: 0,
+                    y: if start.y < end.y { 1 } else { -1 },
+                },
+                (start.y - end.y).abs(),
+            )
+        };
+
+        let turn_spot = if distance > 1 { rnd(distance - 1) + 1 } else { 1 };
+
+        CorridorPlan {
+            base_room,
+            partner_room,
+            step,
+            start,
+            end,
+            distance,
+            turn_step,
+            turn_distance,
+            turn_spot,
+        }
+    }
+
+    /// Wrap the tiles laid while digging a corridor into a [`Passage`].
+    ///
+    /// Takes the tile and entry-point coordinates collected while digging the
+    /// corridor, computes their bounding box, and stores the resulting
+    /// [`Passage`] with its coordinates made relative to the bounding box
+    /// origin.
+    pub(crate) fn finish_passage(&mut self, tiles: Vec<IVec2>, entry_points: Vec<IVec2>) {
+        if tiles.is_empty() {
+            return;
+        }
+
+        let min_x = tiles.iter().map(|p| p.x).min().unwrap_or(0);
+        let max_x = tiles.iter().map(|p| p.x).max().unwrap_or(0);
+        let min_y = tiles.iter().map(|p| p.y).min().unwrap_or(0);
+        let max_y = tiles.iter().map(|p| p.y).max().unwrap_or(0);
+
+        let position = IVec2::new(min_x, min_y);
+        let size = IVec2::new(max_x - min_x + 1, max_y - min_y + 1);
+
+        let relative_tiles = tiles
+            .into_iter()
+            .map(|p| IVec2::new(p.x - min_x, p.y - min_y))
+            .collect();
+        let relative_entry_points = entry_points
+            .into_iter()
+            .map(|p| IVec2::new(p.x - min_x, p.y - min_y))
+            .collect();
+
+        let passage = Passage {
+            position,
+            size,
+            tiles: relative_tiles,
+            entry_points: relative_entry_points,
+        };
+        self.add_passage(passage);
+    }
+
     /// Draw this level's registered doors onto the C `places` grid.
     ///
     /// Each door is written at its absolute map position: an open door as
@@ -378,5 +519,53 @@ mod tests {
         let pos = level.putpass(IVec2::new(5, -3));
         assert_eq!(pos, IVec2::new(5, -3));
         assert_eq!(level.map.get(0, 5), Some(Tile::Empty));
+    }
+
+    /// `finish_passage` wraps laid tiles into a [`Passage`] with coordinates
+    /// made relative to the bounding-box origin.
+    #[test]
+    fn finish_passage_builds_relative_passage() {
+        let mut level = Level::new();
+        level.finish_passage(
+            vec![IVec2::new(2, 3), IVec2::new(3, 3), IVec2::new(4, 3), IVec2::new(4, 4)],
+            vec![IVec2::new(2, 3)],
+        );
+
+        assert_eq!(level.passages.len(), 1);
+        let passage = &level.passages[0];
+        assert_eq!(passage.position, IVec2::new(2, 3));
+        assert_eq!(passage.size, IVec2::new(3, 2));
+        assert_eq!(
+            passage.tiles,
+            vec![IVec2::new(0, 0), IVec2::new(1, 0), IVec2::new(2, 0), IVec2::new(2, 1)]
+        );
+        assert_eq!(passage.entry_points, vec![IVec2::new(0, 0)]);
+    }
+
+    /// `finish_passage` ignores empty tile lists without storing a passage.
+    #[test]
+    fn finish_passage_ignores_empty_tiles() {
+        let mut level = Level::new();
+        level.finish_passage(Vec::new(), Vec::new());
+        assert!(level.passages.is_empty());
+    }
+
+    /// `plan_corridor` anchors the plan at the two rooms' boundaries.
+    #[test]
+    fn plan_corridor_anchors_at_room_boundaries() {
+        let mut level = Level::new();
+        level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4), None, None);
+        level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4), None, None);
+
+        let plan = level.plan_corridor(0, 1);
+
+        assert_eq!(plan.base_room, 0);
+        assert_eq!(plan.partner_room, 1);
+        assert_eq!((plan.step.x, plan.step.y), (1, 0));
+        // Start on the base room's right wall; end on the partner's left wall.
+        assert_eq!(plan.start.x, 15);
+        assert_eq!(plan.end.x, 18);
+        assert!((11..=12).contains(&plan.start.y));
+        assert!((11..=12).contains(&plan.end.y));
     }
 }
