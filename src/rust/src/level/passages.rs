@@ -5,8 +5,11 @@ use crate::player::{CCoord, CPlace, CRoom, CThingMonster};
 
 use glam::IVec2;
 
+use super::{Door, DoorKind};
 use super::structure::Structure;
 use super::tile::Tile;
+
+
 
 const MAXROOMS: usize = 9;
 const MAXPASS: usize = 13;
@@ -136,16 +139,20 @@ unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
 ///
 /// `connections` lists the room pairs to connect, as produced by
 /// `RoomGraph::generate` (which the caller is responsible for invoking).
-/// For each pair, [`conn`] digs an actual corridor into the C map.
-/// Finally [`passnum`] numbers the resulting passage network.
+/// For each pair, [`conn`] digs an actual corridor into the C map, then the
+/// current level draws its registered doors onto `places`. Finally
+/// [`passnum`] numbers the resulting passage network.
 /// Uses globals: none directly.
 pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
     for (r1, r2) in connections {
         conn(*r1 as c_int, *r2 as c_int);
     }
 
+    super::current_level_mut().draw_doors();
+
     passnum();
 }
+
 
 /// Geometric plan of the L-shaped corridor between two rooms.
 ///
@@ -427,11 +434,13 @@ pub(super) unsafe fn putpass(cp: *mut CCoord) -> IVec2 {
 
 /// Place a door at `cp` on the boundary of room `rm`.
 ///
-/// Registers the coordinate as an exit of the room and draws a `+` door or
-/// a real wall segment depending on depth and randomness. Returns the
-/// absolute coordinate so the caller can record it both as a passage tile
-/// and as an entry point of the current corridor.
-/// Uses globals: `places`, `level`.
+/// Registers the coordinate as an exit of the room and records the door on
+/// the current [`Level`](super::level::Level). The door's kind (open `+` or
+/// a wall segment depending on depth and randomness) is decided here, and the
+/// level later draws it to `places`. Returns the absolute coordinate so the
+/// caller can record it both as a passage tile and as an entry point of the
+/// current corridor.
+/// Uses globals: `level`.
 unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) -> IVec2 {
     if rm.is_null() || cp.is_null() {
         return IVec2::ZERO;
@@ -447,21 +456,22 @@ unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) -> IVec2 {
         return pos;
     }
 
-    let pp = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
-
-    if rnd(10) + 1 < level && rnd(5) == 0 {
+    let kind = if rnd(10) + 1 < level && rnd(5) == 0 {
         if (*cp).y == rm_ref.r_pos.y || (*cp).y == rm_ref.r_pos.y + rm_ref.r_max.y - 1 {
-            (*pp).p_ch = b'-' as c_char;
+            DoorKind::WallH
         } else {
-            (*pp).p_ch = b'|' as c_char;
+            DoorKind::WallV
         }
-        clear_flat_flag((*cp).y, (*cp).x, F_REAL);
     } else {
-        (*pp).p_ch = DOOR;
-    }
+        DoorKind::Open
+    };
+
+    super::current_level_mut().place_door(Door { position: pos, kind });
 
     pos
 }
+
+
 
 /// Draw all passage and door tiles for the current level (FFI export).
 ///
