@@ -12,7 +12,7 @@ use crate::draw::{clear_tile_flag, set_tile_char};
 use crate::rnd::rnd;
 
 use super::ffitools::{DOOR, H_WALL, V_WALL};
-use super::passages::{CorridorPlan, Passage};
+use super::passages::{passnum, sync_passages_to_c, sync_rooms_to_c, CorridorPlan, Passage};
 use super::roomgraph::{RoomGraph, MAX_ROOMS};
 use super::rooms::{build_generated_rooms, Room};
 use super::structure::Structure;
@@ -345,6 +345,28 @@ impl Level {
         self.dig_corridor(&plan, &mut tiles);
 
         self.finish_passage(tiles, entry_points);
+    }
+
+    /// Dig all corridors that connect the rooms of this level.
+    ///
+    /// Consumes the room-connection plan recorded in this level's room graph:
+    /// for each pair, [`Level::conn`] digs an actual corridor into the level
+    /// map. The level then draws its registered doors onto the C `places`
+    /// grid, mirrors the rooms' entry points and the map's passage tiles back
+    /// to C, and finally numbers the resulting passage network.
+    /// Uses globals: `places` (via [`Level::draw_doors`]),
+    /// `rooms`/`passages` (via `sync_rooms_to_c`/`passnum`).
+    pub unsafe fn do_passages(&mut self) {
+        let connections = self.room_graph.connections().to_vec();
+        for (r1, r2) in &connections {
+            self.conn(*r1, *r2);
+        }
+
+        self.draw_doors();
+        sync_rooms_to_c(self);
+        sync_passages_to_c(self);
+
+        passnum();
     }
 
     /// Wrap the tiles laid while digging a corridor into a [`Passage`].

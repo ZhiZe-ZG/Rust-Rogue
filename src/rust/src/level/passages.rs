@@ -5,6 +5,7 @@ use crate::player::{CCoord, CPlace, CRoom, CThingMonster};
 
 use glam::IVec2;
 
+use super::level::Level;
 use super::structure::Structure;
 use super::tile::Tile;
 
@@ -122,27 +123,6 @@ unsafe fn clear_flat_flag(y: c_int, x: c_int, flag: c_char) {
     (*pp).p_flags = (((*pp).p_flags as u8) & !(flag as u8)) as c_char;
 }
 
-/// Dig all corridors that connect the rooms of the current level.
-///
-/// `connections` lists the room pairs to connect, as produced by
-/// `RoomGraph::generate` (which the caller is responsible for invoking).
-/// For each pair, [`Level::conn`] digs an actual corridor into the current
-/// level's map, then the current level draws its registered doors onto
-/// `places`. Finally [`passnum`] numbers the resulting passage network.
-/// Uses globals: none directly.
-pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
-    for (r1, r2) in connections {
-        super::current_level_mut().conn(*r1, *r2);
-    }
-
-    super::current_level_mut().draw_doors();
-    sync_rooms_to_c();
-    sync_passages_to_c();
-
-    passnum();
-}
-
-
 /// Geometric plan of the L-shaped corridor between two rooms.
 ///
 /// Produced by [`Level::plan_corridor`] and consumed by [`Level::dig_corridor`]
@@ -170,19 +150,18 @@ pub(crate) struct CorridorPlan {
     pub(crate) turn_spot: i32,
 }
 
-/// Mirror the level map's passage tiles onto the C `places` grid.
+/// Mirror `level.map`'s passage tiles onto the C `places` grid.
 ///
 /// Marks every passage cell with the `F_PASS` flag so [`passnum`] and the
 /// C-side screen redraw ([`add_pass`]) can find it. Matching the legacy
 /// `putpass`, a cell is occasionally hidden by clearing `F_REAL` so it
 /// renders as a wall glyph (`-`/`|`) instead of `#`.
 /// Uses globals: `places`.
-unsafe fn sync_passages_to_c() {
-    let current = super::current_level_mut();
-    let depth = current.depth;
-    for y in 0..current.map.height() {
-        for x in 0..current.map.width() {
-            if !matches!(current.map.get(y, x), Some(Tile::Passage)) {
+pub(crate) unsafe fn sync_passages_to_c(level: &Level) {
+    let depth = level.depth;
+    for y in 0..level.map.height() {
+        for x in 0..level.map.width() {
+            if !matches!(level.map.get(y, x), Some(Tile::Passage)) {
                 continue;
             }
             let pp = place_at((&raw mut places) as *mut CPlace, y as c_int, x as c_int);
@@ -235,12 +214,12 @@ pub unsafe extern "C" fn add_pass() {
     }
 }
 
-/// Copy each room's Rust-side entry points into the C `rooms` array so that
-/// [`passnum`] can flood-fill the passage network from the registered exits.
+/// Copy `level`'s rooms' Rust-side entry points into the C `rooms` array so
+/// that [`passnum`] can flood-fill the passage network from the registered
+/// exits.
 /// Uses globals: `rooms`.
-unsafe fn sync_rooms_to_c() {
-    let current = super::current_level_mut();
-    for (i, room) in current.rooms.iter().enumerate() {
+pub(crate) unsafe fn sync_rooms_to_c(level: &Level) {
+    for (i, room) in level.rooms.iter().enumerate() {
         let rp = &raw mut rooms[i];
         (*rp).r_nexits = room.entry_point_count;
         for j in 0..room.entry_point_count as usize {
@@ -258,7 +237,7 @@ unsafe fn sync_rooms_to_c() {
 /// [`numpass`]. Every contiguous passage network is assigned a number used
 /// to index the C `passages` array.
 /// Uses globals: `PNUM`, `NEW_PNUM`, `passages`, `rooms`.
-unsafe fn passnum() {
+pub(crate) unsafe fn passnum() {
     PNUM = 0;
     NEW_PNUM = FALSE;
     for rp in &mut passages[..MAXPASS] {
