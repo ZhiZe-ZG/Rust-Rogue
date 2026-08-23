@@ -335,6 +335,38 @@ impl Level {
         }
     }
 
+    /// Dig a single corridor between two adjacent rooms `r1` and `r2`.
+    ///
+    /// Plans an L-shaped corridor (see [`Level::plan_corridor`]), registers
+    /// its doors on both room boundaries (see [`Level::place_corridor_end`]),
+    /// and lays its tiles (see [`Level::dig_corridor`]). The laid tiles are
+    /// collected locally and wrapped into a [`Passage`] by
+    /// [`Level::finish_passage`]. All of the digging happens against this
+    /// level's own rooms and tile map.
+    pub(crate) fn conn(&mut self, r1: c_int, r2: c_int) {
+        let mut tiles = Vec::new();
+        let mut entry_points = Vec::new();
+
+        let plan = self.plan_corridor(r1, r2);
+
+        self.place_corridor_end(
+            plan.base_room,
+            IVec2::new(plan.start.x, plan.start.y),
+            &mut tiles,
+            &mut entry_points,
+        );
+        self.place_corridor_end(
+            plan.partner_room,
+            IVec2::new(plan.end.x, plan.end.y),
+            &mut tiles,
+            &mut entry_points,
+        );
+
+        self.dig_corridor(&plan, &mut tiles);
+
+        self.finish_passage(tiles, entry_points);
+    }
+
     /// Wrap the tiles laid while digging a corridor into a [`Passage`].
     ///
     /// Takes the tile and entry-point coordinates collected while digging the

@@ -126,13 +126,13 @@ unsafe fn clear_flat_flag(y: c_int, x: c_int, flag: c_char) {
 ///
 /// `connections` lists the room pairs to connect, as produced by
 /// `RoomGraph::generate` (which the caller is responsible for invoking).
-/// For each pair, [`conn`] digs an actual corridor into the C map, then the
-/// current level draws its registered doors onto `places`. Finally
-/// [`passnum`] numbers the resulting passage network.
+/// For each pair, [`Level::conn`] digs an actual corridor into the current
+/// level's map, then the current level draws its registered doors onto
+/// `places`. Finally [`passnum`] numbers the resulting passage network.
 /// Uses globals: none directly.
 pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
     for (r1, r2) in connections {
-        conn(*r1 as c_int, *r2 as c_int);
+        super::current_level_mut().conn(*r1 as c_int, *r2 as c_int);
     }
 
     super::current_level_mut().draw_doors();
@@ -168,28 +168,6 @@ pub(crate) struct CorridorPlan {
     pub(crate) turn_distance: c_int,
     /// Position along the straight run at which the turn begins.
     pub(crate) turn_spot: c_int,
-}
-
-/// Dig a single corridor between two adjacent rooms `r1` and `r2`.
-///
-/// Plans an L-shaped corridor (see [`Level::plan_corridor`]), registers its
-/// doors on both room boundaries, and lays its tiles (see
-/// [`Level::dig_corridor`]). The laid tiles are collected locally and wrapped
-/// into a [`Passage`] by [`Level::finish_passage`].
-/// Uses globals: `rooms`, `places`.
-unsafe fn conn(r1: c_int, r2: c_int) {
-    let mut tiles = Vec::new();
-    let mut entry_points = Vec::new();
-
-    let current = super::current_level_mut();
-    let plan = current.plan_corridor(r1, r2);
-
-    current.place_corridor_end(plan.base_room, IVec2::new(plan.start.x, plan.start.y), &mut tiles, &mut entry_points);
-    current.place_corridor_end(plan.partner_room, IVec2::new(plan.end.x, plan.end.y), &mut tiles, &mut entry_points);
-
-    current.dig_corridor(&plan, &mut tiles);
-
-    current.finish_passage(tiles, entry_points);
 }
 
 /// Mirror the level map's passage tiles onto the C `places` grid.
