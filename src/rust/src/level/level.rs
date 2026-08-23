@@ -12,8 +12,12 @@ use super::rooms::{build_generated_rooms, Room};
 use super::structure::Structure;
 use super::tile::Tile;
 
-pub const LEVEL_HEIGHT: usize = 24;
+/// Map height in cells. Matches the C `places` grid (32 rows), the largest
+/// on-screen area a dungeon level can occupy.
+pub const LEVEL_HEIGHT: usize = 32;
+/// Map width in cells. Matches the C `places` grid (80 columns).
 pub const LEVEL_WIDTH: usize = 80;
+
 pub const MAX_LEVEL_ROOMS: usize = MAX_ROOMS;
 pub const MAX_LEVEL_PASSAGES: usize = 13;
 
@@ -83,6 +87,14 @@ impl Level {
             .cloned()
             .collect();
 
+        // Stamp every active room's tile model onto the level map.
+        for room in &generated_rooms {
+            if room.is_gone() {
+                continue;
+            }
+            let _ = self.map.put_sub_structure(room.position, &room.structure);
+        }
+
         generated_rooms
     }
 }
@@ -103,4 +115,41 @@ pub unsafe fn current_level_mut() -> &'static mut Level {
 pub unsafe fn set_current_level(level: Level) -> &'static mut Level {
     CURRENT_LEVEL = Some(level);
     CURRENT_LEVEL.as_mut().unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Generate a level with a fixed depth and verify that every active
+    /// room's tile model was stamped into the level map.
+    #[test]
+    fn generation_stamps_rooms_into_map() {
+        let mut level = Level::new();
+        level.depth = 1;
+
+        // 9 room slots with default geometry (0 size → skipped as gone).
+        let rooms = std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO, None, None));
+        let bsze = IVec2::new(26, 8);
+
+        let generated = level.generate_rooms_and_connections(rooms, bsze);
+
+        // Every non-gone room must appear in the map at its position.
+        for room in generated.iter().filter(|r| !r.is_gone()) {
+            for local_y in 0..room.size.y as usize {
+                for local_x in 0..room.size.x as usize {
+                    let expected = room.structure.get(local_y, local_x).unwrap();
+                    let actual = level
+                        .map
+                        .get(room.position.y as usize + local_y, room.position.x as usize + local_x)
+                        .unwrap();
+                    assert_eq!(
+                        actual, expected,
+                        "room at {:?} cell ({local_y},{local_x}) not stamped",
+                        room.position
+                    );
+                }
+            }
+        }
+    }
 }

@@ -166,22 +166,32 @@ unsafe fn read_c_room_data() -> [Room; MAXROOMS] {
 unsafe fn write_rust_data_back_to_c_and_ncurses(generated: &[Room; MAXROOMS]) {
 	let mut mp = CCoord { x: 0, y: 0 };
 
-	// Draw prebuilt room models, then place gold and monsters.
+	// Write room geometry/flags back to C, then draw the whole map in a
+	// single pass. This must happen before placing gold and monsters,
+	// because find_floor looks for floor cells already drawn in `places`.
 	for i in 0..MAXROOMS {
 		let rp = (&raw mut rooms[i]) as *mut CRoom;
 		let room = &generated[i];
 		apply_room_to_c(room, rp);
+	}
+
+	draw_map_ascii();
+
+	// Place gold and monsters.
+	for i in 0..MAXROOMS {
+		let rp = (&raw mut rooms[i]) as *mut CRoom;
+		let room = &generated[i];
 
 		if room.is_gone() {
 			continue;
 		}
 
-		draw_room_ascii(room);
-
 		if rnd(2) == 0 && (amulet == 0 || level >= max_level) {
 			let gold = new_item();
+
 			if !gold.is_null() {
 				let og = thing_o(gold);
+
 				(*og).o_arm = rnd(50 + 10 * level) + 2;
 				(*rp).r_goldval = (*og).o_arm;
 				find_floor(rp, &mut (*rp).r_gold, FALSE as c_int, FALSE);
@@ -205,7 +215,40 @@ unsafe fn write_rust_data_back_to_c_and_ncurses(generated: &[Room; MAXROOMS]) {
 	}
 }
 
+/// Draw the whole level map to the C `places` grid in one pass.
+///
+/// Iterates the merged tile map of [`current_level_mut()`] once and converts
+/// every non-empty tile to its ASCII character. Passage tiles are also
+/// registered via [`putpass`] so they carry the `F_PASS` flag used by the C
+/// side.
+/// Uses globals: `places` (via `set_tile_char`/`putpass`).
+unsafe fn draw_map_ascii() {
+	let current = current_level_mut();
+	let map = &current.map;
+
+	for y in 0..map.height() {
+		for x in 0..map.width() {
+			let ch = match tile_to_ascii(map.get(y, x).unwrap_or(Tile::Empty)) {
+				Some(ch) => ch,
+				None => continue,
+			};
+
+			if matches!(map.get(y, x), Some(Tile::Passage)) {
+				let mut pos = CCoord {
+					y: y as c_int,
+					x: x as c_int,
+				};
+				putpass(&mut pos);
+			}
+
+			set_tile_char(y as c_int, x as c_int, ch);
+		}
+	}
+}
+
 unsafe fn room_from_c(rp: *const CRoom) -> Room {
+
+
 	let mut room = Room::new(
 		IVec2::new((*rp).r_pos.x, (*rp).r_pos.y),
 		IVec2::new((*rp).r_max.x, (*rp).r_max.y),
@@ -348,40 +391,10 @@ unsafe fn put_things() {
     }
 }
 
-unsafe fn draw_room_ascii(room: &Room) {
-	let height = room.size.y;
-	let width = room.size.x;
-	if height <= 0 || width <= 0 {
-		return;
-	}
-
-	let height_usize = height as usize;
-	let width_usize = width as usize;
-	for local_y in 0..height_usize {
-		for local_x in 0..width_usize {
-			let tile = match room.structure.get(local_y, local_x) {
-				Some(tile) => tile,
-				None => continue,
-			};
-			let ch = match tile_to_ascii(tile) {
-				Some(ch) => ch,
-				None => continue,
-			};
-			let abs_y = room.position.y + local_y as c_int;
-			let abs_x = room.position.x + local_x as c_int;
-			if matches!(tile, Tile::Passage) {
-				let mut pos = CCoord { y: abs_y, x: abs_x };
-				putpass(&mut pos);
-			}
-
-			set_tile_char(abs_y, abs_x, ch);
-		}
-	}
-}
-
 /// door_open:
 /// Called to illuminate a room. If it is dark, wake anything that might move.
 pub unsafe fn door_open(rp: *mut CRoom) {
+
 	if ((*rp).r_flags & ISGONE) != 0 {
 		return;
 	}
