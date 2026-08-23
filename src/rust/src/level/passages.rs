@@ -288,30 +288,6 @@ unsafe fn plan_corridor(r1: c_int, r2: c_int) -> CorridorPlan {
     }
 }
 
-/// Place one end of the corridor on `room_index`'s boundary.
-///
-/// If the room is still present, a door is registered on its boundary via
-/// [`Level::door`](super::level::Level::door); if it was removed (`ISGONE`),
-/// a plain passage tile is laid instead (see [`Level::putpass`]). The placed
-/// coordinate is recorded into `tiles` (and into `entry_points` for doors) so
-/// [`finish_passage`] can reconstruct the corridor.
-/// Uses globals: none.
-unsafe fn place_corridor_end(
-    current: &mut Level,
-    room_index: usize,
-    pos: &mut CCoord,
-    tiles: &mut Vec<IVec2>,
-    entry_points: &mut Vec<IVec2>,
-) {
-    if current.rooms[room_index].is_gone() {
-        tiles.push(current.putpass(IVec2::new(pos.x, pos.y)));
-    } else {
-        let door_pos = current.door(room_index, IVec2::new(pos.x, pos.y));
-        tiles.push(door_pos);
-        entry_points.push(door_pos);
-    }
-}
-
 /// Lay the passage tiles of the corridor described by `plan`.
 ///
 /// Walks an L-shaped path: from `start` it steps along `step` for
@@ -360,11 +336,11 @@ unsafe fn conn(r1: c_int, r2: c_int) {
     let mut tiles = Vec::new();
     let mut entry_points = Vec::new();
 
-    let mut plan = plan_corridor(r1, r2);
+    let plan = plan_corridor(r1, r2);
     let current = super::current_level_mut();
 
-    place_corridor_end(current, plan.base_room, &mut plan.start, &mut tiles, &mut entry_points);
-    place_corridor_end(current, plan.partner_room, &mut plan.end, &mut tiles, &mut entry_points);
+    current.place_corridor_end(plan.base_room, IVec2::new(plan.start.x, plan.start.y), &mut tiles, &mut entry_points);
+    current.place_corridor_end(plan.partner_room, IVec2::new(plan.end.x, plan.end.y), &mut tiles, &mut entry_points);
 
     dig_corridor(current, &plan, &mut tiles);
 

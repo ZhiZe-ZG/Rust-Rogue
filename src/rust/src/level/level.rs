@@ -165,6 +165,29 @@ impl Level {
         pos
     }
 
+    /// Place one end of a corridor on the boundary of `self.rooms[room_index]`.
+    ///
+    /// If the room is still present, a door is registered on its boundary via
+    /// [`Level::door`]; if it was removed (`ISGONE`), a plain passage tile is
+    /// laid instead (see [`Level::putpass`]). The placed coordinate is
+    /// recorded into `tiles` (and into `entry_points` for doors) so the
+    /// caller can reconstruct the corridor as a [`Passage`].
+    pub(crate) fn place_corridor_end(
+        &mut self,
+        room_index: usize,
+        pos: IVec2,
+        tiles: &mut Vec<IVec2>,
+        entry_points: &mut Vec<IVec2>,
+    ) {
+        if self.rooms[room_index].is_gone() {
+            tiles.push(self.putpass(pos));
+        } else {
+            let door_pos = self.door(room_index, pos);
+            tiles.push(door_pos);
+            entry_points.push(door_pos);
+        }
+    }
+
     /// Draw this level's registered doors onto the C `places` grid.
     ///
     /// Each door is written at its absolute map position: an open door as
