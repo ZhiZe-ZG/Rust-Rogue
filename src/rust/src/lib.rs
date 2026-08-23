@@ -16,3 +16,4 @@ pub mod monsters;
 pub mod weapons;
 pub mod sticks;
 pub mod scrolls;
+pub mod wizard;

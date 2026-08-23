@@ -30,6 +30,7 @@ legacy symbol names where practical.
 - `src/armor.rs`: Armor equip/unequip and pass-turn helper functions (`wear`, `take_off`, `waste_time`).
 - `src/sticks.rs`: Wand/staff behavior and charge formatting (`fix_stick`, `do_zap`, `drain`, `fire_bolt`, `charge_str`).
 - `src/scrolls.rs`: Scroll effects and curses removal (`read_scroll`, `uncurse`).
+- `src/wizard.rs`: Wizard helpers and debug commands (`whatis`, `teleport`, `create_obj`, `show_map`) with runtime global gating instead of `#ifdef` guards.
 - `src/player.rs`: Shared C-layout bindings and player-facing helpers used across modules.
 
 ## FFI contract

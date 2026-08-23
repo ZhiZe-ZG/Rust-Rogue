@@ -412,6 +412,7 @@ src/rust/src/save.rs     # Save/restore entry points and autosave flow
 src/rust/src/score.rs    # Score file read/write routines
 src/rust/src/scrolls.rs  # Scroll reading/effects and uncurse helper
 src/rust/src/weapons.rs  # Weapon handling, projectiles, and wield logic
+src/rust/src/wizard.rs   # Wizard/debug helpers and runtime mode gating
 src/rust/src/armor.rs    # Armor equip/unequip and pass-turn helpers
 ```
 
@@ -524,7 +525,7 @@ make
 Wizard mode provides:
 - See all monsters (`SEEMONST` flag)
 - Set dungeon seed via `SEED` environment variable
-- Debug commands (see `wizard.c`)
+- Debug commands implemented in `src/rust/src/wizard.rs` with runtime toggles instead of compile-time `#ifdef` guards
 
 #### Compile with Debug Symbols
 
