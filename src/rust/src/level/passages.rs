@@ -7,7 +7,6 @@ use glam::IVec2;
 
 use super::structure::Structure;
 use super::tile::Tile;
-use super::Level;
 
 
 
@@ -98,7 +97,6 @@ unsafe extern "C" {
     static mut places: [CPlace; 32 * 80];
 
     fn rnd(range: c_int) -> c_int;
-    fn msg(fmt: *const c_char, ...);
     fn r#move(y: c_int, x: c_int) -> c_int;
     fn addch(ch: c_uint) -> c_int;
     fn standout() -> c_int;
@@ -127,13 +125,6 @@ unsafe fn clear_flat_flag(y: c_int, x: c_int, flag: c_char) {
     (*pp).p_flags = (((*pp).p_flags as u8) & !(flag as u8)) as c_char;
 }
 
-/// Whether two coordinates are equal.
-/// Uses globals: none.
-#[inline]
-unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
-    a.x == b.x && a.y == b.y
-}
-
 /// Dig all corridors that connect the rooms of the current level.
 ///
 /// `connections` lists the room pairs to connect, as produced by
@@ -160,26 +151,26 @@ pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
 /// Produced by [`plan_corridor`] and consumed by [`conn`] to register the
 /// corridor's doors and lay its tiles. All coordinates are absolute C-map
 /// coordinates.
-struct CorridorPlan {
+pub(crate) struct CorridorPlan {
     /// Index of the room the corridor leaves (the lower room index).
-    base_room: usize,
+    pub(crate) base_room: usize,
     /// Index of the room the corridor enters (the room paired with `base_room`).
-    partner_room: usize,
+    pub(crate) partner_room: usize,
     /// Per-cell step of the straight run: `(0, 1)` for vertical corridors,
     /// `(1, 0)` for horizontal ones.
-    step: CCoord,
+    pub(crate) step: CCoord,
     /// Entry point on `base_room`'s boundary.
-    start: CCoord,
+    pub(crate) start: CCoord,
     /// Exit point on `partner_room`'s boundary.
-    end: CCoord,
+    pub(crate) end: CCoord,
     /// Number of cells laid along `step` before the turn.
-    distance: c_int,
+    pub(crate) distance: c_int,
     /// Per-cell step of the perpendicular turn.
-    turn_step: CCoord,
+    pub(crate) turn_step: CCoord,
     /// Number of cells laid along `turn_step`.
-    turn_distance: c_int,
+    pub(crate) turn_distance: c_int,
     /// Position along the straight run at which the turn begins.
-    turn_spot: c_int,
+    pub(crate) turn_spot: c_int,
 }
 
 /// Determine the direction of the corridor between rooms `r1` and `r2`.
@@ -288,43 +279,6 @@ unsafe fn plan_corridor(r1: c_int, r2: c_int) -> CorridorPlan {
     }
 }
 
-/// Lay the passage tiles of the corridor described by `plan`.
-///
-/// Walks an L-shaped path: from `start` it steps along `step` for
-/// `distance` cells, making a perpendicular run of `turn_distance` cells
-/// starting at `turn_spot`, so the corridor ends up aligned with `end`. A
-/// final check warns if the path did not reach the expected end point.
-/// Every laid tile is recorded into `tiles`.
-/// Uses globals: none.
-unsafe fn dig_corridor(current: &mut Level, plan: &CorridorPlan, tiles: &mut Vec<IVec2>) {
-    let mut curr = plan.start;
-    let mut distance = plan.distance;
-
-    while distance > 0 {
-        curr.x += plan.step.x;
-        curr.y += plan.step.y;
-
-        if distance == plan.turn_spot {
-            let mut remaining = plan.turn_distance;
-            while remaining > 0 {
-                tiles.push(current.putpass(IVec2::new(curr.x, curr.y)));
-                curr.x += plan.turn_step.x;
-                curr.y += plan.turn_step.y;
-                remaining -= 1;
-            }
-        }
-
-        tiles.push(current.putpass(IVec2::new(curr.x, curr.y)));
-        distance -= 1;
-    }
-
-    curr.x += plan.step.x;
-    curr.y += plan.step.y;
-    if !coord_eq(curr, plan.end) {
-        msg(b"warning, connectivity problem on this level\0".as_ptr() as *const c_char);
-    }
-}
-
 /// Dig a single corridor between two adjacent rooms `r1` and `r2`.
 ///
 /// Plans an L-shaped corridor (see [`plan_corridor`]), registers its doors
@@ -342,7 +296,7 @@ unsafe fn conn(r1: c_int, r2: c_int) {
     current.place_corridor_end(plan.base_room, IVec2::new(plan.start.x, plan.start.y), &mut tiles, &mut entry_points);
     current.place_corridor_end(plan.partner_room, IVec2::new(plan.end.x, plan.end.y), &mut tiles, &mut entry_points);
 
-    dig_corridor(current, &plan, &mut tiles);
+    current.dig_corridor(&plan, &mut tiles);
 
     finish_passage(tiles, entry_points);
 }

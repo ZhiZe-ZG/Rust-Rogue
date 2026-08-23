@@ -12,7 +12,7 @@ use crate::draw::{clear_tile_flag, set_tile_char};
 use crate::rnd::rnd;
 
 use super::ffitools::{DOOR, H_WALL, V_WALL};
-use super::passages::Passage;
+use super::passages::{CorridorPlan, Passage};
 use super::roomgraph::{RoomGraph, MAX_ROOMS};
 use super::rooms::{build_generated_rooms, Room};
 use super::structure::Structure;
@@ -20,6 +20,10 @@ use super::tile::Tile;
 
 /// Flag bit marking a non-real wall segment.
 const F_REAL: c_int = 0x10;
+
+unsafe extern "C" {
+    fn msg(fmt: *const c_char, ...);
+}
 
 /// Map height in cells. Matches the C `places` grid (32 rows), the largest
 /// on-screen area a dungeon level can occupy.
@@ -185,6 +189,45 @@ impl Level {
             let door_pos = self.door(room_index, pos);
             tiles.push(door_pos);
             entry_points.push(door_pos);
+        }
+    }
+
+    /// Lay the passage tiles of the corridor described by `plan`.
+    ///
+    /// Walks an L-shaped path: from `plan.start` it steps along `plan.step`
+    /// for `plan.distance` cells, making a perpendicular run of
+    /// `plan.turn_distance` cells starting at `plan.turn_spot`, so the
+    /// corridor ends up aligned with `plan.end`. A final check warns if the
+    /// path did not reach the expected end point. Every laid tile is
+    /// recorded into `tiles`.
+    pub(crate) fn dig_corridor(&mut self, plan: &CorridorPlan, tiles: &mut Vec<IVec2>) {
+        let mut curr = plan.start;
+        let mut distance = plan.distance;
+
+        while distance > 0 {
+            curr.x += plan.step.x;
+            curr.y += plan.step.y;
+
+            if distance == plan.turn_spot {
+                let mut remaining = plan.turn_distance;
+                while remaining > 0 {
+                    tiles.push(self.putpass(IVec2::new(curr.x, curr.y)));
+                    curr.x += plan.turn_step.x;
+                    curr.y += plan.turn_step.y;
+                    remaining -= 1;
+                }
+            }
+
+            tiles.push(self.putpass(IVec2::new(curr.x, curr.y)));
+            distance -= 1;
+        }
+
+        curr.x += plan.step.x;
+        curr.y += plan.step.y;
+        if curr.x != plan.end.x || curr.y != plan.end.y {
+            unsafe {
+                msg(b"warning, connectivity problem on this level\0".as_ptr() as *const c_char);
+            }
         }
     }
 
