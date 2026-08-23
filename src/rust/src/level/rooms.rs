@@ -120,10 +120,104 @@ impl Room {
 	pub fn place_tile(&mut self, local_y: usize, local_x: usize, tile: Tile) -> bool {
 		self.structure.set(local_y, local_x, tile)
 	}
+
+	/// Place a door on one of this room's walls.
+	///
+	/// `pos` is an absolute map coordinate. Returns `true` when `pos` lands
+	/// exactly on this room's outer wall row/column: the wall cell is replaced
+	/// with a [`Tile::Door`] and its room-local coordinate is registered as an
+	/// entry point. Returns `false` when `pos` lies outside the room or in its
+	/// interior, leaving the room unchanged.
+	pub fn place_door(&mut self, pos: IVec2) -> bool {
+		let local = pos - self.position;
+		let (local_y, local_x) = (local.y, local.x);
+		if local_y < 0 || local_x < 0 || local_y >= self.size.y || local_x >= self.size.x {
+			return false;
+		}
+
+		let on_boundary = local_y == 0
+			|| local_y + 1 == self.size.y
+			|| local_x == 0
+			|| local_x + 1 == self.size.x;
+		if !on_boundary {
+			return false;
+		}
+
+		if !self.structure.set(local_y as usize, local_x as usize, Tile::Door) {
+			return false;
+		}
+		self.add_entry_point(local);
+		true
+	}
 }
 
-pub fn place_tile(room: &mut Room, local_y: usize, local_x: usize, tile: Tile) -> bool {
-	room.place_tile(local_y, local_x, tile)
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn test_room() -> Room {
+		Room::new(
+			IVec2::new(10, 20),
+			IVec2::new(6, 4),
+			None,
+			None,
+		)
+	}
+
+	#[test]
+	fn place_door_replaces_wall_and_registers_entry_point() {
+		let mut room = test_room();
+
+		// Top wall (y = position.y).
+		assert!(room.place_door(IVec2::new(11, 20)));
+		// Right wall (x = position.x + size.x - 1).
+		assert!(room.place_door(IVec2::new(15, 21)));
+		// Bottom wall (y = position.y + size.y - 1).
+		assert!(room.place_door(IVec2::new(12, 23)));
+		// Left wall (x = position.x).
+		assert!(room.place_door(IVec2::new(10, 22)));
+
+		assert_eq!(room.entry_points.len(), 4);
+		assert_eq!(
+			room.structure.get(0, 1),
+			Some(Tile::Door),
+			"top wall should become a door"
+		);
+		assert_eq!(
+			room.structure.get(1, 5),
+			Some(Tile::Door),
+			"right wall should become a door"
+		);
+		assert_eq!(
+			room.structure.get(3, 2),
+			Some(Tile::Door),
+			"bottom wall should become a door"
+		);
+		assert_eq!(
+			room.structure.get(2, 0),
+			Some(Tile::Door),
+			"left wall should become a door"
+		);
+	}
+
+	#[test]
+	fn place_door_rejects_interior_and_out_of_bounds() {
+		let mut room = test_room();
+
+		// Interior floor cell (2, 2).
+		assert!(!room.place_door(IVec2::new(12, 22)));
+		// Out of bounds: left of the room.
+		assert!(!room.place_door(IVec2::new(9, 21)));
+		// Out of bounds: right of the room.
+		assert!(!room.place_door(IVec2::new(16, 21)));
+		// Out of bounds: above the room.
+		assert!(!room.place_door(IVec2::new(11, 19)));
+		// Out of bounds: below the room.
+		assert!(!room.place_door(IVec2::new(11, 24)));
+
+		assert!(room.entry_points.is_empty());
+		assert_eq!(room.structure.get(2, 2), Some(Tile::Floor));
+	}
 }
 
 pub(crate) fn build_room_structure(height: usize, width: usize) -> Structure {

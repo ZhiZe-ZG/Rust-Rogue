@@ -21,6 +21,6 @@ pub use level::{
 
 pub use passages::Passage;
 pub use roomgraph::{RoomGraph, MAX_ROOMS};
-pub use rooms::{place_tile, Room};
+pub use rooms::Room;
 pub use structure::Structure;
 pub use tile::Tile;
