@@ -9,7 +9,6 @@ use std::os::raw::{c_char, c_int};
 use glam::IVec2;
 
 use crate::draw::{clear_tile_flag, set_tile_char};
-use crate::player::CCoord;
 use crate::rnd::rnd;
 
 use super::ffitools::{DOOR, H_WALL, V_WALL};
@@ -241,12 +240,9 @@ impl Level {
     /// coordinate. In maze rooms the point is redrawn until it lands on an
     /// existing passage so the corridor always joins the maze. If the room was
     /// removed ([`Room::is_gone`]), its top-left corner is returned unchanged.
-    pub(crate) fn entry_point(&self, room_index: usize, direc: char, start: bool) -> CCoord {
+    pub(crate) fn entry_point(&self, room_index: usize, direc: char, start: bool) -> IVec2 {
         let room = &self.rooms[room_index];
-        let mut p = CCoord {
-            x: room.position.x,
-            y: room.position.y,
-        };
+        let mut p = room.position;
         if !room.is_gone() {
             loop {
                 if direc == 'd' {
@@ -272,13 +268,13 @@ impl Level {
     /// horizontal corridor (`'r'`); rooms stacked (any other pair) by a
     /// vertical corridor (`'d'`). Also returns the smaller index, which anchors
     /// the corridor's start.
-    pub(crate) fn corridor_direction(r1: c_int, r2: c_int) -> (char, usize) {
+    pub(crate) fn corridor_direction(r1: usize, r2: usize) -> (char, usize) {
         if r1 < r2 {
             let direc = if r1 + 1 == r2 { 'r' } else { 'd' };
-            (direc, r1 as usize)
+            (direc, r1)
         } else {
             let direc = if r2 + 1 == r1 { 'r' } else { 'd' };
-            (direc, r2 as usize)
+            (direc, r2)
         }
     }
 
@@ -287,14 +283,14 @@ impl Level {
     /// Determines the corridor direction from the room indices, picks random
     /// entry points on both room boundaries, and derives the straight run, the
     /// perpendicular turn, and the random position of the turn.
-    pub(crate) fn plan_corridor(&self, r1: c_int, r2: c_int) -> CorridorPlan {
+    pub(crate) fn plan_corridor(&self, r1: usize, r2: usize) -> CorridorPlan {
         let (direc, base_room) = Self::corridor_direction(r1, r2);
         let partner_room = if direc == 'd' { base_room + 3 } else { base_room + 1 };
 
         let step = if direc == 'd' {
-            CCoord { x: 0, y: 1 }
+            IVec2::new(0, 1)
         } else {
-            CCoord { x: 1, y: 0 }
+            IVec2::new(1, 0)
         };
 
         let start = self.entry_point(base_room, direc, true);
@@ -303,19 +299,13 @@ impl Level {
         let (distance, turn_step, turn_distance) = if direc == 'd' {
             (
                 (start.y - end.y).abs() - 1,
-                CCoord {
-                    x: if start.x < end.x { 1 } else { -1 },
-                    y: 0,
-                },
+                IVec2::new(if start.x < end.x { 1 } else { -1 }, 0),
                 (start.x - end.x).abs(),
             )
         } else {
             (
                 (start.x - end.x).abs() - 1,
-                CCoord {
-                    x: 0,
-                    y: if start.y < end.y { 1 } else { -1 },
-                },
+                IVec2::new(0, if start.y < end.y { 1 } else { -1 }),
                 (start.y - end.y).abs(),
             )
         };
@@ -343,24 +333,14 @@ impl Level {
     /// collected locally and wrapped into a [`Passage`] by
     /// [`Level::finish_passage`]. All of the digging happens against this
     /// level's own rooms and tile map.
-    pub(crate) fn conn(&mut self, r1: c_int, r2: c_int) {
+    pub(crate) fn conn(&mut self, r1: usize, r2: usize) {
         let mut tiles = Vec::new();
         let mut entry_points = Vec::new();
 
         let plan = self.plan_corridor(r1, r2);
 
-        self.place_corridor_end(
-            plan.base_room,
-            IVec2::new(plan.start.x, plan.start.y),
-            &mut tiles,
-            &mut entry_points,
-        );
-        self.place_corridor_end(
-            plan.partner_room,
-            IVec2::new(plan.end.x, plan.end.y),
-            &mut tiles,
-            &mut entry_points,
-        );
+        self.place_corridor_end(plan.base_room, plan.start, &mut tiles, &mut entry_points);
+        self.place_corridor_end(plan.partner_room, plan.end, &mut tiles, &mut entry_points);
 
         self.dig_corridor(&plan, &mut tiles);
 
@@ -473,6 +453,17 @@ pub unsafe fn set_current_level(level: Level) -> &'static mut Level {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Test-only definition of the C `msg` symbol.
+    ///
+    /// Test builds link without the C engine, so `dig_corridor`'s connectivity
+    /// warning (which calls the variadic C `msg`) needs a local symbol. The
+    /// non-variadic stub matches the single-argument call site; its body is
+    /// never reached in the current tests.
+    #[no_mangle]
+    extern "C" fn msg(_fmt: *const c_char) -> c_int {
+        0
+    }
 
     /// Registering a door stores it and leaves it drawable.
     #[test]
@@ -599,5 +590,51 @@ mod tests {
         assert_eq!(plan.end.x, 18);
         assert!((11..=12).contains(&plan.start.y));
         assert!((11..=12).contains(&plan.end.y));
+    }
+
+    /// `conn` digs a corridor between two side-by-side rooms, registering
+    /// doors on both boundaries and storing one passage with both entry
+    /// points reachable.
+    #[test]
+    fn conn_digs_corridor_between_adjacent_rooms() {
+        let mut level = Level::new();
+        level.depth = 1;
+        level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4), None, None);
+        level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4), None, None);
+
+        level.conn(0, 1);
+
+        // A passage was recorded.
+        assert_eq!(level.passages.len(), 1);
+        let passage = &level.passages[0];
+        assert_eq!(passage.entry_points.len(), 2);
+
+        // Doors were registered on both rooms' boundaries.
+        assert_eq!(level.doors.len(), 2);
+        assert_eq!(level.rooms[0].entry_point_count, 1);
+        assert_eq!(level.rooms[1].entry_point_count, 1);
+
+        // The interior passage tiles were stamped into the level map as
+        // passages (the door cells themselves are `Tile::Door`).
+        let interior = passage.tiles.len() - passage.entry_points.len();
+        let mut count = 0;
+        for y in 0..LEVEL_HEIGHT {
+            for x in 0..LEVEL_WIDTH {
+                if matches!(level.map.get(y, x), Some(Tile::Passage)) {
+                    count += 1;
+                }
+            }
+        }
+        assert_eq!(count, interior, "expected {interior} interior passage tiles, found {count}");
+
+        // The two entry points lie on the two rooms' facing walls.
+        for ep in &passage.entry_points {
+            let abs = *ep + passage.position;
+            assert!(
+                (abs.x == 15 && (11..=12).contains(&abs.y))
+                    || (abs.x == 18 && (11..=12).contains(&abs.y)),
+                "entry point {abs:?} not on a facing wall"
+            );
+        }
     }
 }

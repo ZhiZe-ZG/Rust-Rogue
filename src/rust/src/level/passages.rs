@@ -132,7 +132,7 @@ unsafe fn clear_flat_flag(y: c_int, x: c_int, flag: c_char) {
 /// Uses globals: none directly.
 pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
     for (r1, r2) in connections {
-        super::current_level_mut().conn(*r1 as c_int, *r2 as c_int);
+        super::current_level_mut().conn(*r1, *r2);
     }
 
     super::current_level_mut().draw_doors();
@@ -147,7 +147,7 @@ pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
 ///
 /// Produced by [`Level::plan_corridor`] and consumed by [`Level::dig_corridor`]
 /// to register the corridor's doors and lay its tiles. All coordinates are
-/// absolute C-map coordinates.
+/// absolute map coordinates in the level's Rust tile grid.
 pub(crate) struct CorridorPlan {
     /// Index of the room the corridor leaves (the lower room index).
     pub(crate) base_room: usize,
@@ -155,19 +155,19 @@ pub(crate) struct CorridorPlan {
     pub(crate) partner_room: usize,
     /// Per-cell step of the straight run: `(0, 1)` for vertical corridors,
     /// `(1, 0)` for horizontal ones.
-    pub(crate) step: CCoord,
+    pub(crate) step: IVec2,
     /// Entry point on `base_room`'s boundary.
-    pub(crate) start: CCoord,
+    pub(crate) start: IVec2,
     /// Exit point on `partner_room`'s boundary.
-    pub(crate) end: CCoord,
+    pub(crate) end: IVec2,
     /// Number of cells laid along `step` before the turn.
-    pub(crate) distance: c_int,
+    pub(crate) distance: i32,
     /// Per-cell step of the perpendicular turn.
-    pub(crate) turn_step: CCoord,
+    pub(crate) turn_step: IVec2,
     /// Number of cells laid along `turn_step`.
-    pub(crate) turn_distance: c_int,
+    pub(crate) turn_distance: i32,
     /// Position along the straight run at which the turn begins.
-    pub(crate) turn_spot: c_int,
+    pub(crate) turn_spot: i32,
 }
 
 /// Mirror the level map's passage tiles onto the C `places` grid.
