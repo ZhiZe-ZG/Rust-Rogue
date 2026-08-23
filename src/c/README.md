@@ -43,7 +43,7 @@ Ring mechanics are implemented in the Rust FFI module at `src/rust/src/rings.rs`
 
 - `daemon.c`: Background recurring tasks (daemons/fuses) framework.
 - `daemons.c`: Concrete daemon/fuse routines (hunger, healing, etc.).
-- `misc.c`: Miscellaneous gameplay and map-visibility helpers.
+- `misc.rs`: Miscellaneous gameplay and map-visibility helpers, hosted in the Rust FFI layer.
 - `options.c`: Runtime option parsing and option-state handling.
 
 ## I/O, Persistence, and UX

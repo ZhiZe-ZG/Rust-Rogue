@@ -3,6 +3,7 @@ pub mod chase;
 pub mod draw;
 pub mod level;
 pub mod list;
+pub mod misc;
 pub mod potions;
 pub mod player;
 pub mod rndmove;
