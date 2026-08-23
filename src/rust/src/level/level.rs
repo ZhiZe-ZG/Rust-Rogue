@@ -9,6 +9,7 @@ use std::os::raw::{c_char, c_int};
 use glam::IVec2;
 
 use crate::draw::{clear_tile_flag, set_tile_char};
+use crate::rnd::rnd;
 
 use super::ffitools::{DOOR, H_WALL, V_WALL};
 use super::passages::Passage;
@@ -116,6 +117,40 @@ impl Level {
         self.doors.push(door);
     }
 
+    /// Place a door at `pos` on the boundary of `self.rooms[room_index]`.
+    ///
+    /// Registers `pos` as an exit of the room and, unless the room is a maze,
+    /// records a door on this level for later drawing. The door's kind (open
+    /// `+` or a wall segment depending on depth and randomness) is decided
+    /// here. Returns `pos` so the caller can record it both as a passage tile
+    /// and as an entry point of the current corridor.
+    pub(crate) fn door(&mut self, room_index: usize, pos: IVec2) -> IVec2 {
+        let depth = self.depth;
+        let room = &mut self.rooms[room_index];
+        room.add_entry_point(pos - room.position);
+        room.entry_point_count += 1;
+
+        if room.is_maze() {
+            return pos;
+        }
+
+        let kind = if rnd(10) + 1 < depth && rnd(5) == 0 {
+            if pos.y == room.position.y || pos.y == room.position.y + room.size.y - 1 {
+                DoorKind::WallH
+            } else {
+                DoorKind::WallV
+            }
+        } else {
+            DoorKind::Open
+        };
+
+        drop(room);
+
+        self.place_door(Door { position: pos, kind });
+
+        pos
+    }
+
     /// Draw this level's registered doors onto the C `places` grid.
     ///
     /// Each door is written at its absolute map position: an open door as
@@ -150,11 +185,7 @@ impl Level {
         self.room_graph.generate_connections_for_rooms();
 
         let generated_rooms = build_generated_rooms(self.room_graph.clone().into_rooms());
-        self.rooms = generated_rooms
-            .iter()
-            .filter(|room| !room.is_gone())
-            .cloned()
-            .collect();
+        self.rooms = generated_rooms.to_vec();
 
         // Stamp every active room's tile model onto the level map.
         for room in &generated_rooms {

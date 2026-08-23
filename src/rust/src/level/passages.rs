@@ -5,7 +5,6 @@ use crate::player::{CCoord, CPlace, CRoom, CThingMonster};
 
 use glam::IVec2;
 
-use super::{Door, DoorKind};
 use super::structure::Structure;
 use super::tile::Tile;
 
@@ -149,6 +148,7 @@ pub(super) unsafe fn do_passages(connections: &[(usize, usize)]) {
     }
 
     super::current_level_mut().draw_doors();
+    sync_rooms_to_c();
 
     passnum();
 }
@@ -287,24 +287,25 @@ unsafe fn plan_corridor(r1: c_int, r2: c_int) -> CorridorPlan {
     }
 }
 
-/// Place one end of the corridor on `room`'s boundary.
+/// Place one end of the corridor on `room_index`'s boundary.
 ///
 /// If the room is still present, a door is registered on its boundary via
-/// [`door`]; if it was removed (`ISGONE`), a plain passage tile is laid
-/// instead. The placed coordinate is recorded into `tiles` (and into
-/// `entry_points` for doors) so [`finish_passage`] can reconstruct the
-/// corridor.
-/// Uses globals: `rooms`, `places`, `level`.
+/// [`Level::door`](super::level::Level::door); if it was removed (`ISGONE`),
+/// a plain passage tile is laid instead. The placed coordinate is recorded
+/// into `tiles` (and into `entry_points` for doors) so [`finish_passage`] can
+/// reconstruct the corridor.
+/// Uses globals: `places`, `level`.
 unsafe fn place_corridor_end(
-    room: *mut CRoom,
+    room_index: usize,
     pos: &mut CCoord,
     tiles: &mut Vec<IVec2>,
     entry_points: &mut Vec<IVec2>,
 ) {
-    if room.is_null() || ((*room).r_flags & ISGONE) != 0 {
+    let current = super::current_level_mut();
+    if current.rooms[room_index].is_gone() {
         tiles.push(putpass(pos));
     } else {
-        let door_pos = door(room, pos);
+        let door_pos = current.door(room_index, IVec2::new(pos.x, pos.y));
         tiles.push(door_pos);
         entry_points.push(door_pos);
     }
@@ -360,8 +361,8 @@ unsafe fn conn(r1: c_int, r2: c_int) {
 
     let mut plan = plan_corridor(r1, r2);
 
-    place_corridor_end(&raw mut rooms[plan.base_room], &mut plan.start, &mut tiles, &mut entry_points);
-    place_corridor_end(&raw mut rooms[plan.partner_room], &mut plan.end, &mut tiles, &mut entry_points);
+    place_corridor_end(plan.base_room, &mut plan.start, &mut tiles, &mut entry_points);
+    place_corridor_end(plan.partner_room, &mut plan.end, &mut tiles, &mut entry_points);
 
     dig_corridor(&plan, &mut tiles);
 
@@ -432,46 +433,6 @@ pub(super) unsafe fn putpass(cp: *mut CCoord) -> IVec2 {
     pos
 }
 
-/// Place a door at `cp` on the boundary of room `rm`.
-///
-/// Registers the coordinate as an exit of the room and records the door on
-/// the current [`Level`](super::level::Level). The door's kind (open `+` or
-/// a wall segment depending on depth and randomness) is decided here, and the
-/// level later draws it to `places`. Returns the absolute coordinate so the
-/// caller can record it both as a passage tile and as an entry point of the
-/// current corridor.
-/// Uses globals: `level`.
-unsafe fn door(rm: *mut CRoom, cp: *mut CCoord) -> IVec2 {
-    if rm.is_null() || cp.is_null() {
-        return IVec2::ZERO;
-    }
-
-    let rm_ref = &mut *rm;
-    rm_ref.r_exit[rm_ref.r_nexits as usize] = *cp;
-    rm_ref.r_nexits += 1;
-
-    let pos = IVec2::new((*cp).x, (*cp).y);
-
-    if (rm_ref.r_flags & ISMAZE) != 0 {
-        return pos;
-    }
-
-    let kind = if rnd(10) + 1 < level && rnd(5) == 0 {
-        if (*cp).y == rm_ref.r_pos.y || (*cp).y == rm_ref.r_pos.y + rm_ref.r_max.y - 1 {
-            DoorKind::WallH
-        } else {
-            DoorKind::WallV
-        }
-    } else {
-        DoorKind::Open
-    };
-
-    super::current_level_mut().place_door(Door { position: pos, kind });
-
-    pos
-}
-
-
 
 /// Draw all passage and door tiles for the current level (FFI export).
 ///
@@ -506,6 +467,23 @@ pub unsafe extern "C" fn add_pass() {
                     addch(if (flags as u8) & (F_PASS as u8) != 0 { PASSAGE as c_uint } else { DOOR as c_uint });
                     standend();
                 }
+            }
+        }
+    }
+}
+
+/// Copy each room's Rust-side entry points into the C `rooms` array so that
+/// [`passnum`] can flood-fill the passage network from the registered exits.
+/// Uses globals: `rooms`.
+unsafe fn sync_rooms_to_c() {
+    let current = super::current_level_mut();
+    for (i, room) in current.rooms.iter().enumerate() {
+        let rp = &raw mut rooms[i];
+        (*rp).r_nexits = room.entry_point_count;
+        for j in 0..room.entry_point_count as usize {
+            if let Some(ep) = room.entry_points.get(j) {
+                let abs = *ep + room.position;
+                (*rp).r_exit[j] = CCoord { x: abs.x, y: abs.y };
             }
         }
     }
