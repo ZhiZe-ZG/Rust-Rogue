@@ -33,7 +33,7 @@ const ISHUH: c_short = 0o0001000;
 const ISINVIS: c_short = 0o0002000;
 const ISRUN: c_short = 0o020000;
 const SEEMONST: c_short = 0o040000;
-const F_PASS: c_char = 0x80;
+const F_PASS: c_char = 0x80u8 as c_char;
 const MAXSTR: usize = 1024;
 const MAXLINES: c_int = 24;
 const MAXCOLS: c_int = 80;
@@ -270,14 +270,14 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             }
 
             if door_stop != 0 && firstmove == 0 && running != 0 {
-                if runch == b'h' && x == ex { continue; }
-                if runch == b'j' && y == sy { continue; }
-                if runch == b'k' && y == ey { continue; }
-                if runch == b'l' && x == sx { continue; }
-                if runch == b'y' && (y + x) - sumhero >= 1 { continue; }
-                if runch == b'u' && (y - x) - diffhero >= 1 { continue; }
-                if runch == b'n' && (y + x) - sumhero <= -1 { continue; }
-                if runch == b'b' && (y - x) - diffhero <= -1 { continue; }
+                if runch == b'h' as c_char && x == ex { continue; }
+                if runch == b'j' as c_char && y == sy { continue; }
+                if runch == b'k' as c_char && y == ey { continue; }
+                if runch == b'l' as c_char && x == sx { continue; }
+                if runch == b'y' as c_char && (y + x) - sumhero >= 1 { continue; }
+                if runch == b'u' as c_char && (y - x) - diffhero >= 1 { continue; }
+                if runch == b'n' as c_char && (y + x) - sumhero <= -1 { continue; }
+                if runch == b'b' as c_char && (y - x) - diffhero <= -1 { continue; }
 
                 if ch == DOOR as c_int {
                     if x == hero.x || y == hero.y {
@@ -306,13 +306,17 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
 #[no_mangle]
 pub unsafe extern "C" fn trip_ch(y: c_int, x: c_int, ch: c_int) -> c_int {
     if on(&raw mut player, ISHALU) && after != 0 {
-        match ch as c_char {
-            FLOOR | b' ' | PASSAGE | b'-' | b'|' | DOOR | TRAP => {}
-            _ => {
-                if !(y == stairs.y && x == stairs.x && seenstairs != 0) {
-                    return rnd(26) as c_char as c_int;
-                }
-            }
+        let tile = ch as c_char;
+        if tile != FLOOR
+            && tile != PASSAGE
+            && tile != DOOR
+            && tile != TRAP
+            && tile != b' ' as c_char
+            && tile != b'-' as c_char
+            && tile != b'|' as c_char
+            && !(y == stairs.y && x == stairs.x && seenstairs != 0)
+        {
+            return rnd(26) as c_char as c_int;
         }
     }
     ch
@@ -528,7 +532,7 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
         loop {
             gotit = true;
             dir_ch = readchar() as c_char;
-            match dir_ch {
+            match dir_ch as u8 {
                 b'h' | b'H' => { delta.y = 0; delta.x = -1; }
                 b'j' | b'J' => { delta.y = 1; delta.x = 0; }
                 b'k' | b'K' => { delta.y = -1; delta.x = 0; }

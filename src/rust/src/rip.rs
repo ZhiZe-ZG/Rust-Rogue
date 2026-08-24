@@ -125,7 +125,7 @@ pub unsafe extern "C" fn center(s: *mut c_char) -> c_int {
 pub unsafe extern "C" fn killname(monst: c_char, doart: bool) -> *mut c_char {
     let mut article = false;
     let mut name = String::from("Wally the Wonder Badger");
-    if monst.is_ascii_uppercase() {
+    if (monst as u8).is_ascii_uppercase() {
         let idx = (monst as u8 - b'A') as usize;
         let monster = unsafe { &*monsters.get_unchecked(idx) };
         let monster_name = CStr::from_ptr(monster.m_name).to_string_lossy();

@@ -90,11 +90,32 @@ extern "C" {
     fn md_unlink_open_file(file: *mut c_char, inf: *mut CFile) -> c_int;
     fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
     fn strerror(errnum: c_int) -> *const c_char;
-    fn __errno_location() -> *mut c_int;
     fn rs_save_file(savef: *mut CFile);
     fn fflush(stream: *mut CFile) -> c_int;
     fn fclose(stream: *mut CFile) -> c_int;
     fn exit(status: c_int) -> !;
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn __error() -> *mut c_int;
+}
+
+#[cfg(not(target_os = "macos"))]
+unsafe extern "C" {
+    fn __errno_location() -> *mut c_int;
+}
+
+#[inline]
+unsafe fn errno_location() -> *mut c_int {
+    #[cfg(target_os = "macos")]
+    {
+        __error()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        __errno_location()
+    }
 }
 
 #[repr(C)]
@@ -198,7 +219,7 @@ pub unsafe extern "C" fn save_game() {
                 save_file(savef);
             }
 
-            msg(c"%s".as_ptr(), strerror(*__errno_location()));
+            msg(c"%s".as_ptr(), strerror(*errno_location()));
             buf[0] = 0;
         }
     }

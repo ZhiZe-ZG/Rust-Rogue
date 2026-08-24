@@ -269,10 +269,8 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
     let cur = new_item();
     (*thing_o(cur)).o_hplus = 0;
     (*thing_o(cur)).o_dplus = 0;
-    let dmg = b"0x0\0";
-    std::ptr::copy_nonoverlapping(dmg.as_ptr(), (*thing_o(cur)).o_damage.as_mut_ptr(), 4);
-    let hurldmg = b"0x0\0";
-    std::ptr::copy_nonoverlapping(hurldmg.as_ptr(), (*thing_o(cur)).o_hurldmg.as_mut_ptr(), 4);
+    std::ptr::copy_nonoverlapping(c"0x0".as_ptr(), (*thing_o(cur)).o_damage.as_mut_ptr(), 4);
+    std::ptr::copy_nonoverlapping(c"0x0".as_ptr(), (*thing_o(cur)).o_hurldmg.as_mut_ptr(), 4);
     (*thing_o(cur)).o_arm = 11;
     (*thing_o(cur)).o_count = 1;
     (*thing_o(cur)).o_group = 0;
