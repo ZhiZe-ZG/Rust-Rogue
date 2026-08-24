@@ -14,6 +14,7 @@ pub mod rings;
 pub mod save;
 pub mod score;
 pub mod monsters;
+pub mod things;
 pub mod weapons;
 pub mod sticks;
 pub mod scrolls;

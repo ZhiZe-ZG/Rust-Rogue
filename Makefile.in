@@ -107,14 +107,13 @@ OBJS1    = vers.$(O) extern.$(O) command.$(O) \
            daemon.$(O) daemons.$(O) fight.$(O) init.$(O) io.$(O) \
 		   mach_dep.$(O) main.$(O) mdport.$(O)
 OBJS2    = options.$(O) pack.$(O) \
-		   state.$(O) \
-		   things.$(O)
+		   state.$(O)
 OBJS     = $(OBJS1) $(OBJS2)
 CFILES   = vers.c extern.c command.c daemon.c \
            daemons.c fight.c init.c io.c mach_dep.c \
 		   main.c  mdport.c \
 		   options.c pack.c \
-		   state.c things.c
+		   state.c
 MISC_C   =
 DOCSRC   = rogue.me.in rogue.6.in rogue.doc.in rogue.html.in rogue.cat.in
 DOCS     = $(PROGRAM).doc $(PROGRAM).html $(PROGRAM).cat $(PROGRAM).me \
