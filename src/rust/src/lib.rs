@@ -1,3 +1,5 @@
+#![feature(c_variadic)]
+
 pub mod armor;
 pub mod chase;
 pub mod daemon;
@@ -5,6 +7,7 @@ pub mod daemons;
 pub mod draw;
 pub mod fight;
 pub mod init;
+pub mod io;
 pub mod level;
 pub mod list;
 pub mod misc;
