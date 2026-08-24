@@ -74,7 +74,6 @@ unsafe extern "C" {
     static mut max_stats: crate::player::CStats;
     static mut mpos: c_int;
     static mut no_command: c_int;
-    static mut nohaste: *const c_void;
     static mut no_move: c_int;
     static mut oldpos: CCoord;
     static mut oldrp: *mut CRoom;
@@ -100,6 +99,7 @@ unsafe extern "C" {
     fn extinguish(func: *const c_void);
     fn free(ptr: *mut c_void);
     fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
+    fn nohaste();
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
     fn get_str(s: *mut c_char, win: *mut c_void) -> c_int;
     fn inch() -> c_uint;
@@ -473,14 +473,14 @@ pub unsafe extern "C" fn add_haste(potion: c_uchar) -> c_uchar {
     if on(&raw mut player, ISHASTE) {
         no_command += rnd(8);
         (*thing_t(&raw mut player)).t_flags &= !(ISRUN as c_short | ISHASTE as c_short) as c_short;
-        extinguish(nohaste);
+        extinguish(nohaste as *const c_void);
         msg(c"you faint from exhaustion".as_ptr());
         return FALSE;
     }
 
     (*thing_t(&raw mut player)).t_flags |= ISHASTE as c_short;
     if potion != 0 {
-        fuse(nohaste, 0, rnd(4) + 4, AFTER);
+        fuse(nohaste as *const c_void, 0, rnd(4) + 4, AFTER);
     }
     TRUE
 }
