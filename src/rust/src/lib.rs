@@ -4,6 +4,7 @@ pub mod daemon;
 pub mod daemons;
 pub mod draw;
 pub mod fight;
+pub mod init;
 pub mod level;
 pub mod list;
 pub mod misc;
