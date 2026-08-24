@@ -1,4 +1,4 @@
-use std::ffi::{CStr, VaList};
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::player::{CStats, CThing, CThingMonster};
@@ -37,6 +37,7 @@ unsafe extern "C" {
     fn isalpha(c: c_int) -> c_int;
     fn islower(c: c_int) -> c_int;
     fn look(wakeup: c_uchar);
+    fn msg(fmt: *const c_char, ...) -> c_int;
     #[link_name = "move"]
     fn move_(y: c_int, x: c_int);
     fn mvaddstr(y: c_int, x: c_int, s: *const c_char) -> c_int;
@@ -49,7 +50,6 @@ unsafe extern "C" {
     fn strlen(s: *const c_char) -> usize;
     fn touchwin(win: *mut c_void) -> c_int;
     fn toupper(c: c_int) -> c_int;
-    fn vsnprintf(s: *mut c_char, n: usize, fmt: *const c_char, ap: VaList<'_>) -> c_int;
     fn wmove(win: *mut c_void, y: c_int, x: c_int) -> c_int;
     fn waddstr(win: *mut c_void, s: *const c_char) -> c_int;
     fn wrefresh(win: *mut c_void) -> c_int;
@@ -64,20 +64,12 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
     tp as *mut CThingMonster
 }
 
-#[cfg(not(test))]
-#[no_mangle]
-pub unsafe extern "C" fn doadd(fmt: *const c_char, args: VaList<'_>) {
-    if fmt.is_null() {
+unsafe fn append_message(text: *const c_char) {
+    if text.is_null() {
         return;
     }
 
-    let mut buf: [c_char; MAXSTR] = [0; MAXSTR];
-    let len = vsnprintf(buf.as_mut_ptr(), buf.len(), fmt, args);
-    if len <= 0 {
-        return;
-    }
-
-    let text = CStr::from_ptr(buf.as_ptr());
+    let text = CStr::from_ptr(text);
     if strlen(msgbuf.as_ptr()) + text.to_bytes().len() >= MAXMSG {
         endmsg();
     }
@@ -88,22 +80,22 @@ pub unsafe extern "C" fn doadd(fmt: *const c_char, args: VaList<'_>) {
 
 #[cfg(not(test))]
 #[no_mangle]
-pub unsafe extern "C" fn msg(fmt: *const c_char, mut ap: ...) -> c_int {
-    if fmt.is_null() || *fmt == 0 {
+pub unsafe extern "C" fn rogue_msg_str(text: *const c_char) -> c_int {
+    if text.is_null() || *text == 0 {
         move_(0, 0);
         clrtoeol();
         mpos = 0;
         return !ESCAPE;
     }
 
-    doadd(fmt, ap);
+    append_message(text);
     endmsg()
 }
 
 #[cfg(not(test))]
 #[no_mangle]
-pub unsafe extern "C" fn addmsg(fmt: *const c_char, mut ap: ...) {
-    doadd(fmt, ap);
+pub unsafe extern "C" fn rogue_addmsg_str(text: *const c_char) {
+    append_message(text);
 }
 
 #[cfg(not(test))]

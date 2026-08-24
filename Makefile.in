@@ -104,12 +104,12 @@ CSRC_DIR = $(srcdir)/src/c
 RUST_DIR = $(srcdir)/src/rust
 RUST_LIB = $(RUST_DIR)/target/release/librogue_rust.a
 OBJS1    = vers.$(O) extern.$(O) command.$(O) \
-		   mach_dep.$(O) main.$(O) mdport.$(O)
+		   mach_dep.$(O) main.$(O) mdport.$(O) io_shim.$(O)
 OBJS2    = state.$(O)
 OBJS     = $(OBJS1) $(OBJS2)
 CFILES   = vers.c extern.c command.c \
 		   mach_dep.c \
-		   main.c  mdport.c \
+		   main.c  mdport.c io_shim.c \
 		   state.c
 MISC_C   =
 DOCSRC   = rogue.me.in rogue.6.in rogue.doc.in rogue.html.in rogue.cat.in

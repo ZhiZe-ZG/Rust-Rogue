@@ -1,5 +1,3 @@
-#![feature(c_variadic)]
-
 pub mod armor;
 pub mod chase;
 pub mod daemon;
