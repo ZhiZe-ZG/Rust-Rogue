@@ -9,6 +9,7 @@ pub mod fight;
 pub mod init;
 pub mod io;
 pub mod options;
+pub mod pack;
 pub mod level;
 pub mod list;
 pub mod misc;
