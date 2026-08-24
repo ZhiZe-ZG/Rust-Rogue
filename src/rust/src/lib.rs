@@ -3,6 +3,7 @@ pub mod chase;
 pub mod daemon;
 pub mod daemons;
 pub mod draw;
+pub mod fight;
 pub mod level;
 pub mod list;
 pub mod misc;
