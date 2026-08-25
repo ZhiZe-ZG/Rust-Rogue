@@ -33,10 +33,10 @@
               clippy # linting
 
               # Common cargo subcommands. Add or remove as needed.
-              cargo-edit # cargo add/remove/upgrade
-              cargo-nextest # fast test runner
-              cargo-watch # watch files and re-run commands
-              cargo-audit # security audit of dependencies
+              # cargo-edit # cargo add/remove/upgrade
+              # cargo-nextest # fast test runner
+              # cargo-watch # watch files and re-run commands
+              # cargo-audit # security audit of dependencies
 
               # ---- C / C++ ----
               gcc # compiler
