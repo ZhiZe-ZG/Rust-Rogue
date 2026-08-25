@@ -2,11 +2,8 @@
   description = "Nix flake for Rust Rogue";
 
   inputs = {
-    # Unstable channel for the latest packages (including Rust toolchain).
-    # NOTE: The C template used `nixos-26.05`; when merging you must pick ONE
-    # nixpkgs branch for the whole flake. `nixpkgs-unstable` is used here so
-    # rust-overlay gets fresh Rust releases.
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    # Stable nixpkgs.
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
     # Utility to generate outputs for every supported system.
     flake-utils.url = "github:numtide/flake-utils";
@@ -27,7 +24,7 @@
         # The Rust toolchain.
         # Change `stable.latest` to pin a release, e.g. `stable."1.85.0"`,
         # or use `beta.latest` / `nightly.latest`.
-        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+        rustToolchain = pkgs.rust-bin.stable."1.98.0".default.override {
           extensions = [
             "rust-src" # sources, needed by rust-analyzer
             "rust-analyzer" # LSP server
