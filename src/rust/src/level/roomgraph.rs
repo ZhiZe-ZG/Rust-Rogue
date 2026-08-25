@@ -7,7 +7,6 @@
 //! generation can run without C globals.
 
 use std::os::raw::c_int;
-use std::os::raw::c_uchar;
 
 use crate::rnd::rnd;
 use glam::IVec2;
@@ -21,7 +20,7 @@ const NUMCOLS: i32 = 80;
 const NUMLINES: i32 = 24;
 const MAX_ROOM_TRIES: usize = 100;
 
-type AdjacentArray = [[c_uchar; MAX_ROOMS]; MAX_ROOMS];
+type AdjacentArray = [[u8; MAX_ROOMS]; MAX_ROOMS];
 
 fn build_base_adjacency() -> AdjacentArray {
     let mut adjacent = [[0; MAX_ROOMS]; MAX_ROOMS];
@@ -52,8 +51,8 @@ fn build_base_adjacency() -> AdjacentArray {
 pub struct RoomGraph {
     rooms: [Room; MAX_ROOMS],
     adjacent: AdjacentArray,
-    isconn: [[c_uchar; MAX_ROOMS]; MAX_ROOMS],
-    ingraph: [c_uchar; MAX_ROOMS],
+    isconn: [[u8; MAX_ROOMS]; MAX_ROOMS],
+    ingraph: [u8; MAX_ROOMS],
     connections: Vec<(usize, usize)>,
 }
 
