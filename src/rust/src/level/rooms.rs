@@ -1,5 +1,4 @@
 use glam::IVec2;
-use std::os::raw::c_int;
 
 use super::roomgraph::MAX_ROOMS;
 use super::structure::Structure;
@@ -14,44 +13,44 @@ pub struct Room {
 	pub size: IVec2,
 	pub structure: Structure,
 	pub entry_points: Vec<IVec2>,
-	pub(crate) gold: IVec2,
-	pub(crate) goldval: i32,
-	pub(crate) gone: bool,
-	pub(crate) dark: bool,
-	pub(crate) maze: bool,
-	pub(crate) entry_point_count: i32,
+	pub gold: IVec2,
+	pub goldval: i32,
+	pub gone: bool,
+	pub dark: bool,
+	pub maze: bool,
+	pub entry_point_count: i32,
 }
 
 impl Room {
 	/// Whether this room slot is removed for the level.
-	pub(crate) fn is_gone(&self) -> bool {
+	pub fn is_gone(&self) -> bool {
 		self.gone
 	}
 
 	/// Whether this room should be generated as a maze room.
-	pub(crate) fn is_maze(&self) -> bool {
+	pub fn is_maze(&self) -> bool {
 		self.maze
 	}
 
 	/// Mark this room slot as gone.
-	pub(crate) fn mark_gone(&mut self) {
+	pub fn mark_gone(&mut self) {
 		self.gone = true;
 	}
 
 	/// Mark this room as dark.
-	pub(crate) fn mark_dark(&mut self) {
+	pub fn mark_dark(&mut self) {
 		self.dark = true;
 	}
 
 	/// Convert this room into a maze room (overrides other room flags).
-	pub(crate) fn set_maze(&mut self) {
+	pub fn set_maze(&mut self) {
 		self.maze = true;
 		self.dark = false;
 		self.gone = false;
 	}
 
 	/// Clear all generation flags before layout generation starts.
-	pub(crate) fn clear_flags(&mut self) {
+	pub fn clear_flags(&mut self) {
 		self.gone = false;
 		self.dark = false;
 		self.maze = false;
@@ -59,7 +58,7 @@ impl Room {
 }
 
 /// Fill each active room's tile structure from its geometry/flags.
-pub(crate) fn build_generated_rooms(mut rooms: [Room; MAX_ROOMS]) -> [Room; MAX_ROOMS] {
+pub fn build_generated_rooms(mut rooms: [Room; MAX_ROOMS]) -> [Room; MAX_ROOMS] {
 	for room in &mut rooms {
 		if room.is_gone() {
 			continue;
@@ -220,7 +219,7 @@ mod tests {
 	}
 }
 
-pub(crate) fn build_room_structure(height: usize, width: usize) -> Structure {
+pub fn build_room_structure(height: usize, width: usize) -> Structure {
 	let mut structure = Structure::new(height, width, Tile::Empty);
 
 	for y in 0..height {
@@ -244,7 +243,7 @@ pub(crate) fn build_room_structure(height: usize, width: usize) -> Structure {
 /// Pure-Rust half of the FFI `build_room_model` split: given a room's
 /// position, size, and whether it is a maze, construct the tile structure
 /// and wrap everything in a [`Room`]. No C types are involved here.
-pub(crate) fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room> {
+pub fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room> {
 	if size.x <= 0 || size.y <= 0 {
 		return None;
 	}
@@ -258,24 +257,24 @@ pub(crate) fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> O
 	Some(Room::new(position, size, Some(structure), None))
 }
 
-pub(crate) fn build_maze_structure(height: usize, width: usize) -> Structure {
+pub fn build_maze_structure(height: usize, width: usize) -> Structure {
 	let mut structure = Structure::new(height, width, Tile::Empty);
 
 	if height == 0 || width == 0 {
 		return structure;
 	}
 
-	fn is_passage(structure: &Structure, y: c_int, x: c_int) -> bool {
+	fn is_passage(structure: &Structure, y: i32, x: i32) -> bool {
 		matches!(structure.get(y as usize, x as usize), Some(Tile::Passage))
 	}
 
-	fn dig_local(structure: &mut Structure, y: c_int, x: c_int, max_y: c_int, max_x: c_int) {
-		let deltas: [(c_int, c_int); 4] = [(2, 0), (-2, 0), (0, 2), (0, -2)];
+	fn dig_local(structure: &mut Structure, y: i32, x: i32, max_y: i32, max_x: i32) {
+		let deltas: [(i32, i32); 4] = [(2, 0), (-2, 0), (0, 2), (0, -2)];
 
 		loop {
-			let mut cnt: c_int = 0;
-			let mut next_y: c_int = 0;
-			let mut next_x: c_int = 0;
+			let mut cnt: i32 = 0;
+			let mut next_y: i32 = 0;
+			let mut next_x: i32 = 0;
 
 			for (dy, dx) in deltas {
 				let new_y = y + dy;
@@ -311,15 +310,15 @@ pub(crate) fn build_maze_structure(height: usize, width: usize) -> Structure {
 		}
 	}
 
-	let max_y = height as c_int - 1;
-	let max_x = width as c_int - 1;
+	let max_y = height as i32 - 1;
+	let max_x = width as i32 - 1;
 	let start_y = if height > 1 {
-		(crate::rnd::rnd(height as c_int) / 2) * 2
+		(crate::rnd::rnd(height as i32) / 2) * 2
 	} else {
 		0
 	};
 	let start_x = if width > 1 {
-		(crate::rnd::rnd(width as c_int) / 2) * 2
+		(crate::rnd::rnd(width as i32) / 2) * 2
 	} else {
 		0
 	};
