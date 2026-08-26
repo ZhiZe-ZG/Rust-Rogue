@@ -14,7 +14,7 @@ use crate::rnd::rnd;
 use super::ffitools::{DOOR, F_REAL, H_WALL, V_WALL};
 use super::passages::{passnum, sync_passages_to_c, sync_rooms_to_c, CorridorPlan, Passage};
 use super::roomgraph::{RoomGraph, MAX_ROOMS};
-use super::rooms::{build_generated_rooms, Room};
+use super::rooms::{build_generated_rooms, DoorKind, Room};
 use super::structure::Structure;
 use super::tile::Tile;
 
@@ -28,31 +28,12 @@ pub const LEVEL_HEIGHT: usize = 32;
 /// Map width in cells. Matches the C `places` grid (80 columns).
 pub const LEVEL_WIDTH: usize = 80;
 
-/// How a door placed on a room boundary is rendered.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DoorKind {
-    /// An open door, rendered as `+`.
-    Open,
-    /// A wall segment on a horizontal boundary, rendered as `-`.
-    WallH,
-    /// A wall segment on a vertical boundary, rendered as `|`.
-    WallV,
-}
-
-/// A door placed on a room boundary while digging corridors.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Door {
-    pub position: IVec2,
-    pub kind: DoorKind,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Level {
     pub depth: i32,
     pub rooms: Vec<Room>,
     pub room_graph: RoomGraph,
     pub passages: Vec<Passage>,
-    pub doors: Vec<Door>,
     pub map: Structure,
 }
 
@@ -65,24 +46,8 @@ impl Level {
                 .collect(),
             room_graph: RoomGraph::new(),
             passages: Vec::new(),
-            doors: Vec::new(),
             map: Structure::new(LEVEL_HEIGHT, LEVEL_WIDTH, Tile::Empty),
         }
-    }
-
-    /// Register a door at an absolute map position.
-    ///
-    /// Records the door for later drawing and, for an open door, stamps the
-    /// tile map so the canonical grid reflects the doorway. Wall-segment
-    /// doors keep the surrounding wall tile.
-    fn place_door(&mut self, door: Door) {
-        if door.kind == DoorKind::Open {
-            let (y, x) = (door.position.y, door.position.x);
-            if y >= 0 && x >= 0 {
-                let _ = self.map.set(y as usize, x as usize, Tile::Door);
-            }
-        }
-        self.doors.push(door);
     }
 
     /// Stamp a passage tile at absolute map position `pos`.
@@ -102,20 +67,19 @@ impl Level {
     /// Place a door at `pos` on the boundary of `self.rooms[room_index]`.
     ///
     /// Registers `pos` as an exit of the room and, unless the room is a maze,
-    /// records a door on this level for later drawing. The door's kind (open
-    /// `+` or a wall segment depending on depth and randomness) is decided
-    /// here. Returns `pos` so the caller can record it both as a passage tile
-    /// and as an entry point of the current corridor.
+    /// places a door on the room itself (see [`Room::place_door`]). The door's
+    /// kind (open `+` or a wall segment depending on depth and randomness) is
+    /// decided here. Returns `pos` so the caller can record it both as a
+    /// passage tile and as an entry point of the current corridor.
     fn door(&mut self, room_index: usize, pos: IVec2) -> IVec2 {
         let depth = self.depth;
         let (is_maze, position, size) = {
-            let room = &mut self.rooms[room_index];
-            room.add_entry_point(pos - room.position);
-            room.entry_point_count += 1;
+            let room = &self.rooms[room_index];
             (room.is_maze(), room.position, room.size)
         };
 
         if is_maze {
+            self.rooms[room_index].add_entry_point(pos - position);
             return pos;
         }
 
@@ -129,7 +93,7 @@ impl Level {
             DoorKind::Open
         };
 
-        self.place_door(Door { position: pos, kind });
+        self.rooms[room_index].place_door(pos, kind);
 
         pos
     }
@@ -371,26 +335,29 @@ impl Level {
         self.passages.push(passage);
     }
 
-    /// Draw this level's registered doors onto the C `places` grid.
+    /// Draw this level's doors onto the C `places` grid.
     ///
-    /// Each door is written at its absolute map position: an open door as
-    /// `+`, and a wall-segment door as `-`/`|` with the `F_REAL` flag
-    /// cleared (so it renders as a secret door).
+    /// Every door registered on a room is written at its absolute map
+    /// position: an open door as `+`, and a wall-segment door as `-`/`|` with
+    /// the `F_REAL` flag cleared (so it renders as a secret door).
     /// Uses globals: `places` (via `set_tile_char`/`clear_tile_flag`).
     unsafe fn draw_doors(&self) {
-        for door in &self.doors {
-            let (y, x) = (door.position.y, door.position.x);
-            match door.kind {
-                DoorKind::Open => {
-                    set_tile_char(y, x, DOOR);
-                }
-                DoorKind::WallH => {
-                    set_tile_char(y, x, H_WALL);
-                    clear_tile_flag(y, x, F_REAL);
-                }
-                DoorKind::WallV => {
-                    set_tile_char(y, x, V_WALL);
-                    clear_tile_flag(y, x, F_REAL);
+        for room in &self.rooms {
+            for door in &room.doors {
+                let abs = room.position + door.position;
+                let (y, x) = (abs.y, abs.x);
+                match door.kind {
+                    DoorKind::Open => {
+                        set_tile_char(y, x, DOOR);
+                    }
+                    DoorKind::WallH => {
+                        set_tile_char(y, x, H_WALL);
+                        clear_tile_flag(y, x, F_REAL);
+                    }
+                    DoorKind::WallV => {
+                        set_tile_char(y, x, V_WALL);
+                        clear_tile_flag(y, x, F_REAL);
+                    }
                 }
             }
         }
@@ -444,27 +411,25 @@ mod tests {
         0
     }
 
-    /// Registering a door stores it and leaves it drawable.
+    /// A door placed through [`Level::door`] is recorded on the room and both
+    /// the entry point and the tile map reflect it.
     #[test]
-    fn place_door_stores_door_for_drawing() {
+    fn door_records_on_room_and_stamps_tile_map() {
         let mut level = Level::new();
-        level.place_door(Door {
-            position: IVec2::new(3, 4),
-            kind: DoorKind::Open,
-        });
-        level.place_door(Door {
-            position: IVec2::new(5, 6),
-            kind: DoorKind::WallH,
-        });
+        level.depth = 1;
+        level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
 
-        assert_eq!(level.doors.len(), 2);
-        assert_eq!(level.doors[0].position, IVec2::new(3, 4));
-        assert_eq!(level.doors[0].kind, DoorKind::Open);
-        assert_eq!(level.doors[1].kind, DoorKind::WallH);
+        // `door` decides the kind randomly (depth 1 → always open).
+        let pos = level.door(0, IVec2::new(15, 11));
 
-        // Open doors are stamped into the tile map; wall segments are not.
-        assert_eq!(level.map.get(4, 3), Some(Tile::Door));
-        assert_eq!(level.map.get(6, 5), Some(Tile::Empty));
+        assert_eq!(pos, IVec2::new(15, 11));
+        let room = &level.rooms[0];
+        assert_eq!(room.doors.len(), 1);
+        assert_eq!(room.doors[0].position, IVec2::new(5, 1));
+        assert_eq!(room.doors[0].kind, DoorKind::Open);
+        assert_eq!(room.entry_point_count, 1);
+        // Open doors are stamped into the tile map.
+        assert_eq!(level.map.get(11, 15), Some(Tile::Door));
     }
 
     /// Generate a level with a fixed depth and verify that every active
@@ -589,7 +554,8 @@ mod tests {
         assert_eq!(passage.entry_points.len(), 2);
 
         // Doors were registered on both rooms' boundaries.
-        assert_eq!(level.doors.len(), 2);
+        assert_eq!(level.rooms[0].doors.len(), 1);
+        assert_eq!(level.rooms[1].doors.len(), 1);
         assert_eq!(level.rooms[0].entry_point_count, 1);
         assert_eq!(level.rooms[1].entry_point_count, 1);
 
