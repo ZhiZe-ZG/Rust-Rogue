@@ -16,6 +16,11 @@ pub const DOOR: c_char = b'+' as c_char;
 pub const STAIRS: c_char = b'%' as c_char;
 pub const TRAP: c_char = b'^' as c_char;
 
+/// Flag bit marking a cell as a passage (`#`).
+pub const F_PASS: c_char = 0x80u8 as c_char;
+/// Flag bit marking a cell as a real (opaque) wall.
+pub const F_REAL: c_char = 0x10u8 as c_char;
+
 /// Convert a [`Tile`] into its on-screen ASCII character.
 ///
 /// Horizontal walls render as horizontal bars (`-`); vertical walls render as

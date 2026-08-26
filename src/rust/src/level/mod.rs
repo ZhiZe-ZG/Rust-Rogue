@@ -14,10 +14,7 @@ pub mod structure;
 pub mod tile;
 
 pub use ffi::{door_open, new_level};
-pub use level::{
-    create_level, current_level_mut, set_current_level, Door, DoorKind, Level, LEVEL_HEIGHT,
-    LEVEL_WIDTH, MAX_LEVEL_PASSAGES, MAX_LEVEL_ROOMS,
-};
+pub use level::{current_level_mut, Door, DoorKind, Level, LEVEL_HEIGHT, LEVEL_WIDTH};
 
 pub use passages::Passage;
 pub use roomgraph::{RoomGraph, MAX_ROOMS};

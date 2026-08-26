@@ -1,26 +1,34 @@
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+//! Corridor/passage digging helpers and C `places` grid mirroring.
+//!
+//! Mirrors the legacy `passages.c` behavior: flags passage tiles on the C
+//! `places` grid ([`sync_passages_to_c`]), numbers contiguous passage
+//! networks ([`passnum`]/[`numpass`]), and redraws doors and passages on
+//! screen refresh ([`add_pass`]).
 
-use crate::draw::place_at;
-use crate::player::{CCoord, CPlace, CRoom, CThingMonster};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use glam::IVec2;
 
+use crate::draw::{clear_tile_flag, place_at};
+use crate::player::{CCoord, CPlace, CRoom, CThingMonster};
+
+use super::ffitools::{DOOR, F_PASS, F_REAL, PASSAGE};
 use super::level::Level;
-use super::structure::Structure;
+use super::roomgraph::MAX_ROOMS;
 use super::tile::Tile;
 
-
-
-const MAXROOMS: usize = 9;
+/// Size of the C `passages` room array.
 const MAXPASS: usize = 13;
+/// Width of the on-screen C `places` grid.
 const NUMCOLS: c_int = 80;
+/// Height of the on-screen C `places` grid.
 const NUMLINES: c_int = 24;
+/// Max exits writeable into the C `r_exit` array.
+const MAX_EXITS: usize = 12;
 
-const PASSAGE: c_char = b'#' as c_char;
-const DOOR: c_char = b'+' as c_char;
-const F_PASS: c_char = 0x80u8 as c_char;
-const F_REAL: c_char = 0x10u8 as c_char;
+/// Flat `p_flags` bit holding a passage component number (0-15).
 const F_PNUM: c_char = 0x0fu8 as c_char;
+/// Flat `p_flags` bit marking a cell as already drawn ([`add_pass`]).
 const F_SEEN: c_char = 0x40u8 as c_char;
 
 const FALSE: c_uchar = 0;
@@ -30,8 +38,7 @@ const TRUE: c_uchar = 1;
 ///
 /// Mirrors the [`Room`](super::rooms::Room) abstraction: a bounding box
 /// (`position`/`size`) plus the relative coordinates of every passage tile
-/// and entry point. Use [`Passage::to_structure`] to derive the tile
-/// [`Structure`] from those coordinates.
+/// and entry point.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Passage {
     pub position: IVec2,
@@ -42,55 +49,14 @@ pub struct Passage {
     pub entry_points: Vec<IVec2>,
 }
 
-impl Default for Passage {
-    fn default() -> Self {
-        Self {
-            position: IVec2::ZERO,
-            size: IVec2::ZERO,
-            tiles: Vec::new(),
-            entry_points: Vec::new(),
-        }
-    }
-}
-
-impl Passage {
-    /// Register `relative_pos` as an entry point where this corridor joins a
-    /// room. Entry points are stored relative to the passage's `position`.
-    pub fn add_entry_point(&mut self, relative_pos: IVec2) {
-        self.entry_points.push(relative_pos);
-    }
-
-    /// Record a passage tile coordinate, relative to the passage's `position`.
-    pub fn add_tile(&mut self, relative_pos: IVec2) {
-        self.tiles.push(relative_pos);
-    }
-
-    /// Build the tile [`Structure`] described by this passage.
-    ///
-    /// Returns a `size`-sized grid with every recorded tile laid as
-    /// `Tile::Passage` and every entry point laid as `Tile::Door`.
-    pub fn to_structure(&self) -> Structure {
-        let height = self.size.y as usize;
-        let width = self.size.x as usize;
-        let mut structure = Structure::new(height, width, Tile::Empty);
-        for pos in &self.tiles {
-            let _ = structure.set(pos.y as usize, pos.x as usize, Tile::Passage);
-        }
-        for pos in &self.entry_points {
-            let _ = structure.set(pos.y as usize, pos.x as usize, Tile::Door);
-        }
-        structure
-    }
-}
-
-/// Number of the passage currently being scanned by [`passnum`]/[`numpass`].
+/// Number of the passage component currently being scanned by [`passnum`].
 static mut PNUM: c_int = 0;
 
-/// Whether the next cell reached by [`numpass`] starts a new passage number.
+/// Whether the next cell reached by [`numpass`] opens a new component.
 static mut NEW_PNUM: c_uchar = FALSE;
 
 unsafe extern "C" {
-    static mut rooms: [CRoom; MAXROOMS];
+    static mut rooms: [CRoom; MAX_ROOMS];
     static mut passages: [CRoom; MAXPASS];
     static mut places: [CPlace; 32 * 80];
 
@@ -101,26 +67,14 @@ unsafe extern "C" {
     fn standend() -> c_int;
 }
 
-/// Read the character at `(y, x)` from the C `places` grid.
-/// Uses globals: `places`.
+/// Whether `ch`/`flags` describe a doorway or a hidden (non-real) wall.
+///
+/// Both [`add_pass`] and [`numpass`] treat `+` doors and `-`/`|` walls whose
+/// `F_REAL` bit has been cleared as part of the passage network.
 #[inline]
-unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
-}
-
-/// Read the flat flags at `(y, x)` from the C `places` grid.
-/// Uses globals: `places`.
-#[inline]
-unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_flags
-}
-
-/// Clear `flag` from the flat flags of the `places` cell at `(y, x)`.
-/// Uses globals: `places`.
-#[inline]
-unsafe fn clear_flat_flag(y: c_int, x: c_int, flag: c_char) {
-    let pp = place_at((&raw mut places) as *mut CPlace, y, x);
-    (*pp).p_flags = (((*pp).p_flags as u8) & !(flag as u8)) as c_char;
+fn is_door_or_hidden(ch: c_char, flags: c_char) -> bool {
+    ch == DOOR
+        || ((flags as u8 & F_REAL as u8) == 0 && (ch == b'|' as c_char || ch == b'-' as c_char))
 }
 
 /// Geometric plan of the L-shaped corridor between two rooms.
@@ -165,16 +119,15 @@ pub(crate) unsafe fn sync_passages_to_c(level: &Level) {
                 continue;
             }
             let pp = place_at((&raw mut places) as *mut CPlace, y as c_int, x as c_int);
-            (*pp).p_flags = (((*pp).p_flags as u8) | (F_PASS as u8)) as c_char;
+            (*pp).p_flags = ((*pp).p_flags as u8 | F_PASS as u8) as c_char;
             if rnd(10) + 1 < depth && rnd(40) == 0 {
-                clear_flat_flag(y as c_int, x as c_int, F_REAL);
+                clear_tile_flag(y as c_int, x as c_int, F_REAL);
             } else {
                 (*pp).p_ch = PASSAGE;
             }
         }
     }
 }
-
 
 /// Draw all passage and door tiles for the current level (FFI export).
 ///
@@ -189,24 +142,21 @@ pub unsafe extern "C" fn add_pass() {
             let pp = place_at((&raw mut places) as *mut CPlace, y, x);
             let flags = (*pp).p_flags;
             let ch = (*pp).p_ch;
-            if (((flags as u8) & (F_PASS as u8)) != 0)
-                || ch == DOOR
-                || (((flags as u8) & (F_REAL as u8)) == 0 && (ch == b'|' as c_char || ch == b'-' as c_char))
-            {
+            if (flags as u8 & F_PASS as u8) != 0 || is_door_or_hidden(ch, flags) {
                 let mut out_ch = ch;
-                if ((flags as u8) & (F_PASS as u8)) != 0 {
+                if (flags as u8 & F_PASS as u8) != 0 {
                     out_ch = PASSAGE;
                 }
-                (*pp).p_flags = (((*pp).p_flags as u8) | (F_SEEN as u8)) as c_char;
+                (*pp).p_flags = ((*pp).p_flags as u8 | F_SEEN as u8) as c_char;
                 r#move(y, x);
                 if !(*pp).p_monst.is_null() {
                     let monst = (*pp).p_monst as *mut CThingMonster;
                     (*monst).t_oldch = (*pp).p_ch;
-                } else if ((flags as u8) & (F_REAL as u8)) != 0 {
+                } else if (flags as u8 & F_REAL as u8) != 0 {
                     addch(out_ch as c_uint);
                 } else {
                     standout();
-                    addch(if (flags as u8) & (F_PASS as u8) != 0 { PASSAGE as c_uint } else { DOOR as c_uint });
+                    addch(if (flags as u8 & F_PASS as u8) != 0 { PASSAGE as c_uint } else { DOOR as c_uint });
                     standend();
                 }
             }
@@ -221,12 +171,10 @@ pub unsafe extern "C" fn add_pass() {
 pub(crate) unsafe fn sync_rooms_to_c(level: &Level) {
     for (i, room) in level.rooms.iter().enumerate() {
         let rp = &raw mut rooms[i];
-        (*rp).r_nexits = room.entry_point_count;
-        for j in 0..room.entry_point_count as usize {
-            if let Some(ep) = room.entry_points.get(j) {
-                let abs = *ep + room.position;
-                (*rp).r_exit[j] = CCoord { x: abs.x, y: abs.y };
-            }
+        (*rp).r_nexits = room.entry_point_count.min(MAX_EXITS as i32);
+        for (j, ep) in room.entry_points.iter().take(MAX_EXITS).enumerate() {
+            let abs = *ep + room.position;
+            (*rp).r_exit[j] = CCoord { x: abs.x, y: abs.y };
         }
     }
 }
@@ -243,7 +191,7 @@ pub(crate) unsafe fn passnum() {
     for rp in &mut passages[..MAXPASS] {
         rp.r_nexits = 0;
     }
-    for rp in &mut rooms[..MAXROOMS] {
+    for rp in &mut rooms[..MAX_ROOMS] {
         for i in 0..rp.r_nexits as usize {
             NEW_PNUM = TRUE;
             numpass(rp.r_exit[i].y, rp.r_exit[i].x);
@@ -264,7 +212,7 @@ unsafe fn numpass(y: c_int, x: c_int) {
     }
 
     let pp = place_at((&raw mut places) as *mut CPlace, y, x);
-    if ((*pp).p_flags as u8 & F_PNUM as u8) != 0 {
+    if (*pp).p_flags as u8 & F_PNUM as u8 != 0 {
         return;
     }
     if NEW_PNUM != 0 {
@@ -272,17 +220,18 @@ unsafe fn numpass(y: c_int, x: c_int) {
         NEW_PNUM = FALSE;
     }
 
-    let ch = chat_at(y, x);
-    if ch == DOOR || (((flat_at(y, x) as u8) & (F_REAL as u8)) == 0 && (ch == b'|' as c_char || ch == b'-' as c_char)) {
+    let ch = (*pp).p_ch;
+    let flags = (*pp).p_flags;
+    if is_door_or_hidden(ch, flags) {
         let rp = &mut passages[PNUM as usize];
         rp.r_exit[rp.r_nexits as usize].y = y;
         rp.r_exit[rp.r_nexits as usize].x = x;
         rp.r_nexits += 1;
-    } else if ((flat_at(y, x) as u8) & (F_PASS as u8)) == 0 {
+    } else if (flags as u8 & F_PASS as u8) == 0 {
         return;
     }
 
-    (*pp).p_flags = (((*pp).p_flags as u8) | (PNUM as u8)) as c_char;
+    (*pp).p_flags = ((*pp).p_flags as u8 | PNUM as u8) as c_char;
     numpass(y + 1, x);
     numpass(y - 1, x);
     numpass(y, x + 1);

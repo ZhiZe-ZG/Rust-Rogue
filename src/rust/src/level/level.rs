@@ -4,22 +4,19 @@
 //! for the current dungeon level, plus the process-wide singleton holding
 //! the live level.
 
-use std::os::raw::{c_char, c_int};
+use std::os::raw::c_char;
 
 use glam::IVec2;
 
 use crate::draw::{clear_tile_flag, set_tile_char};
 use crate::rnd::rnd;
 
-use super::ffitools::{DOOR, H_WALL, V_WALL};
+use super::ffitools::{DOOR, F_REAL, H_WALL, V_WALL};
 use super::passages::{passnum, sync_passages_to_c, sync_rooms_to_c, CorridorPlan, Passage};
 use super::roomgraph::{RoomGraph, MAX_ROOMS};
 use super::rooms::{build_generated_rooms, Room};
 use super::structure::Structure;
 use super::tile::Tile;
-
-/// Flag bit marking a non-real wall segment.
-const F_REAL: c_int = 0x10;
 
 unsafe extern "C" {
     fn msg(fmt: *const c_char, ...);
@@ -30,9 +27,6 @@ unsafe extern "C" {
 pub const LEVEL_HEIGHT: usize = 32;
 /// Map width in cells. Matches the C `places` grid (80 columns).
 pub const LEVEL_WIDTH: usize = 80;
-
-pub const MAX_LEVEL_ROOMS: usize = MAX_ROOMS;
-pub const MAX_LEVEL_PASSAGES: usize = 13;
 
 /// How a door placed on a room boundary is rendered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,48 +56,18 @@ pub struct Level {
     pub map: Structure,
 }
 
-impl Default for Level {
-    fn default() -> Self {
+impl Level {
+    pub fn new() -> Self {
         Self {
             depth: 0,
-            rooms: Vec::new(),
+            rooms: (0..MAX_ROOMS)
+                .map(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
+                .collect(),
             room_graph: RoomGraph::new(),
             passages: Vec::new(),
             doors: Vec::new(),
             map: Structure::new(LEVEL_HEIGHT, LEVEL_WIDTH, Tile::Empty),
         }
-    }
-}
-
-impl Level {
-    pub fn new() -> Self {
-        let mut level = Self::default();
-        level.rooms = (0..MAX_LEVEL_ROOMS)
-            .map(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
-            .collect();
-        level.map = Structure::new(LEVEL_HEIGHT, LEVEL_WIDTH, Tile::Empty);
-        level
-    }
-
-    pub fn create() -> Self {
-        Self::new()
-    }
-
-    pub fn reset(&mut self) {
-        self.depth = 0;
-        self.rooms.clear();
-        self.room_graph.reset();
-        self.passages.clear();
-        self.doors.clear();
-        self.map = Structure::new(LEVEL_HEIGHT, LEVEL_WIDTH, Tile::Empty);
-    }
-
-    pub fn add_room(&mut self, room: Room) {
-        self.rooms.push(room);
-    }
-
-    pub fn add_passage(&mut self, passage: Passage) {
-        self.passages.push(passage);
     }
 
     /// Register a door at an absolute map position.
@@ -111,7 +75,7 @@ impl Level {
     /// Records the door for later drawing and, for an open door, stamps the
     /// tile map so the canonical grid reflects the doorway. Wall-segment
     /// doors keep the surrounding wall tile.
-    pub fn place_door(&mut self, door: Door) {
+    fn place_door(&mut self, door: Door) {
         if door.kind == DoorKind::Open {
             let (y, x) = (door.position.y, door.position.x);
             if y >= 0 && x >= 0 {
@@ -127,7 +91,7 @@ impl Level {
     /// part of the canonical grid (mirrored to the C `places` grid by
     /// `sync_passages_to_c`). Returns `pos` so callers can record it both as
     /// a tile of the current corridor and, when applicable, an entry point.
-    pub(crate) fn putpass(&mut self, pos: IVec2) -> IVec2 {
+    fn putpass(&mut self, pos: IVec2) -> IVec2 {
         let (y, x) = (pos.y, pos.x);
         if y >= 0 && x >= 0 {
             let _ = self.map.set(y as usize, x as usize, Tile::Passage);
@@ -142,18 +106,21 @@ impl Level {
     /// `+` or a wall segment depending on depth and randomness) is decided
     /// here. Returns `pos` so the caller can record it both as a passage tile
     /// and as an entry point of the current corridor.
-    pub(crate) fn door(&mut self, room_index: usize, pos: IVec2) -> IVec2 {
+    fn door(&mut self, room_index: usize, pos: IVec2) -> IVec2 {
         let depth = self.depth;
-        let room = &mut self.rooms[room_index];
-        room.add_entry_point(pos - room.position);
-        room.entry_point_count += 1;
+        let (is_maze, position, size) = {
+            let room = &mut self.rooms[room_index];
+            room.add_entry_point(pos - room.position);
+            room.entry_point_count += 1;
+            (room.is_maze(), room.position, room.size)
+        };
 
-        if room.is_maze() {
+        if is_maze {
             return pos;
         }
 
         let kind = if rnd(10) + 1 < depth && rnd(5) == 0 {
-            if pos.y == room.position.y || pos.y == room.position.y + room.size.y - 1 {
+            if pos.y == position.y || pos.y == position.y + size.y - 1 {
                 DoorKind::WallH
             } else {
                 DoorKind::WallV
@@ -161,8 +128,6 @@ impl Level {
         } else {
             DoorKind::Open
         };
-
-        drop(room);
 
         self.place_door(Door { position: pos, kind });
 
@@ -176,7 +141,7 @@ impl Level {
     /// laid instead (see [`Level::putpass`]). The placed coordinate is
     /// recorded into `tiles` (and into `entry_points` for doors) so the
     /// caller can reconstruct the corridor as a [`Passage`].
-    pub(crate) fn place_corridor_end(
+    fn place_corridor_end(
         &mut self,
         room_index: usize,
         pos: IVec2,
@@ -200,7 +165,7 @@ impl Level {
     /// corridor ends up aligned with `plan.end`. A final check warns if the
     /// path did not reach the expected end point. Every laid tile is
     /// recorded into `tiles`.
-    pub(crate) fn dig_corridor(&mut self, plan: &CorridorPlan, tiles: &mut Vec<IVec2>) {
+    fn dig_corridor(&mut self, plan: &CorridorPlan, tiles: &mut Vec<IVec2>) {
         let mut curr = plan.start;
         let mut distance = plan.distance;
 
@@ -240,7 +205,7 @@ impl Level {
     /// coordinate. In maze rooms the point is redrawn until it lands on an
     /// existing passage so the corridor always joins the maze. If the room was
     /// removed ([`Room::is_gone`]), its top-left corner is returned unchanged.
-    pub(crate) fn entry_point(&self, room_index: usize, direc: char, start: bool) -> IVec2 {
+    fn entry_point(&self, room_index: usize, direc: char, start: bool) -> IVec2 {
         let room = &self.rooms[room_index];
         let mut p = room.position;
         if !room.is_gone() {
@@ -268,7 +233,7 @@ impl Level {
     /// horizontal corridor (`'r'`); rooms stacked (any other pair) by a
     /// vertical corridor (`'d'`). Also returns the smaller index, which anchors
     /// the corridor's start.
-    pub(crate) fn corridor_direction(r1: usize, r2: usize) -> (char, usize) {
+    fn corridor_direction(r1: usize, r2: usize) -> (char, usize) {
         if r1 < r2 {
             let direc = if r1 + 1 == r2 { 'r' } else { 'd' };
             (direc, r1)
@@ -283,7 +248,7 @@ impl Level {
     /// Determines the corridor direction from the room indices, picks random
     /// entry points on both room boundaries, and derives the straight run, the
     /// perpendicular turn, and the random position of the turn.
-    pub(crate) fn plan_corridor(&self, r1: usize, r2: usize) -> CorridorPlan {
+    fn plan_corridor(&self, r1: usize, r2: usize) -> CorridorPlan {
         let (direc, base_room) = Self::corridor_direction(r1, r2);
         let partner_room = if direc == 'd' { base_room + 3 } else { base_room + 1 };
 
@@ -333,7 +298,7 @@ impl Level {
     /// collected locally and wrapped into a [`Passage`] by
     /// [`Level::finish_passage`]. All of the digging happens against this
     /// level's own rooms and tile map.
-    pub(crate) fn conn(&mut self, r1: usize, r2: usize) {
+    fn conn(&mut self, r1: usize, r2: usize) {
         let mut tiles = Vec::new();
         let mut entry_points = Vec::new();
 
@@ -356,7 +321,7 @@ impl Level {
     /// to C, and finally numbers the resulting passage network.
     /// Uses globals: `places` (via [`Level::draw_doors`]),
     /// `rooms`/`passages` (via `sync_rooms_to_c`/`passnum`).
-    pub unsafe fn do_passages(&mut self) {
+    pub(crate) unsafe fn do_passages(&mut self) {
         let connections = self.room_graph.connections().to_vec();
         for (r1, r2) in &connections {
             self.conn(*r1, *r2);
@@ -375,7 +340,7 @@ impl Level {
     /// corridor, computes their bounding box, and stores the resulting
     /// [`Passage`] with its coordinates made relative to the bounding box
     /// origin.
-    pub(crate) fn finish_passage(&mut self, tiles: Vec<IVec2>, entry_points: Vec<IVec2>) {
+    fn finish_passage(&mut self, tiles: Vec<IVec2>, entry_points: Vec<IVec2>) {
         if tiles.is_empty() {
             return;
         }
@@ -403,7 +368,7 @@ impl Level {
             tiles: relative_tiles,
             entry_points: relative_entry_points,
         };
-        self.add_passage(passage);
+        self.passages.push(passage);
     }
 
     /// Draw this level's registered doors onto the C `places` grid.
@@ -412,7 +377,7 @@ impl Level {
     /// `+`, and a wall-segment door as `-`/`|` with the `F_REAL` flag
     /// cleared (so it renders as a secret door).
     /// Uses globals: `places` (via `set_tile_char`/`clear_tile_flag`).
-    pub unsafe fn draw_doors(&self) {
+    unsafe fn draw_doors(&self) {
         for door in &self.doors {
             let (y, x) = (door.position.y, door.position.x);
             match door.kind {
@@ -421,11 +386,11 @@ impl Level {
                 }
                 DoorKind::WallH => {
                     set_tile_char(y, x, H_WALL);
-                    clear_tile_flag(y, x, F_REAL as c_char);
+                    clear_tile_flag(y, x, F_REAL);
                 }
                 DoorKind::WallV => {
                     set_tile_char(y, x, V_WALL);
-                    clear_tile_flag(y, x, F_REAL as c_char);
+                    clear_tile_flag(y, x, F_REAL);
                 }
             }
         }
@@ -454,10 +419,6 @@ impl Level {
     }
 }
 
-pub fn create_level() -> Level {
-    Level::new()
-}
-
 static mut CURRENT_LEVEL: Option<Level> = None;
 
 pub unsafe fn current_level_mut() -> &'static mut Level {
@@ -467,14 +428,10 @@ pub unsafe fn current_level_mut() -> &'static mut Level {
     CURRENT_LEVEL.as_mut().unwrap()
 }
 
-pub unsafe fn set_current_level(level: Level) -> &'static mut Level {
-    CURRENT_LEVEL = Some(level);
-    CURRENT_LEVEL.as_mut().unwrap()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::raw::c_int;
 
     /// Test-only definition of the C `msg` symbol.
     ///
