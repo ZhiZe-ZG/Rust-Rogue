@@ -256,7 +256,10 @@ pub fn build_maze_structure(height: usize, width: usize) -> Structure {
 	}
 
 	fn is_passage(structure: &Structure, y: i32, x: i32) -> bool {
-		matches!(structure.get(y as usize, x as usize), Some(Tile::Passage))
+		match structure.get(y as usize, x as usize) {
+			Some(Tile::Passage) => true,
+			_ => false,
+		}
 	}
 
 	fn dig_local(structure: &mut Structure, y: i32, x: i32, max_y: i32, max_x: i32) {
