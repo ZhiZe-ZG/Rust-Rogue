@@ -211,25 +211,6 @@ mod tests {
 	}
 }
 
-pub fn build_room_structure(height: usize, width: usize) -> Structure {
-	let mut structure = Structure::new(height, width, Tile::Empty);
-
-	for y in 0..height {
-		for x in 0..width {
-			let tile = if y == 0 || y + 1 == height {
-				Tile::HWall
-			} else if x == 0 || x + 1 == width {
-				Tile::VWall
-			} else {
-				Tile::Floor
-			};
-			let _ = structure.set(y, x, tile);
-		}
-	}
-
-	structure
-}
-
 /// Build a [`Room`] model from Rust-native geometry.
 ///
 /// Pure-Rust half of the FFI `build_room_model` split: given a room's
@@ -247,6 +228,25 @@ pub fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<R
 	};
 
 	Some(Room::with_structure(position, size, structure))
+}
+
+pub fn build_room_structure(height: usize, width: usize) -> Structure {
+	let mut structure = Structure::new(height, width, Tile::Empty);
+
+	for y in 0..height {
+		for x in 0..width {
+			let tile = if y == 0 || y + 1 == height {
+				Tile::HWall
+			} else if x == 0 || x + 1 == width {
+				Tile::VWall
+			} else {
+				Tile::Floor
+			};
+			let _ = structure.set(y, x, tile);
+		}
+	}
+
+	structure
 }
 
 pub fn build_maze_structure(height: usize, width: usize) -> Structure {
