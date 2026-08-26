@@ -8,11 +8,9 @@ use std::os::raw::c_char;
 
 use glam::IVec2;
 
-use crate::draw::{clear_tile_flag, set_tile_char};
 use crate::rnd::rnd;
 
-use super::ffitools::{DOOR, F_REAL, H_WALL, V_WALL};
-use super::passages::{passnum, sync_passages_to_c, sync_rooms_to_c, CorridorPlan, Passage};
+use super::passages::{mark_passages, passnum, sync_rooms_to_c, CorridorPlan, Passage};
 use super::roomgraph::{RoomGraph, MAX_ROOMS};
 use super::rooms::{build_generated_rooms, DoorKind, Room};
 use super::structure::Structure;
@@ -28,6 +26,36 @@ pub const LEVEL_HEIGHT: usize = 32;
 /// Map width in cells. Matches the C `places` grid (80 columns).
 pub const LEVEL_WIDTH: usize = 80;
 
+/// Per-cell flat-flag data for the level.
+///
+/// Mirrors the bits carried by the C `places` grid's `p_flags` field while
+/// level generation runs, so no C globals need to be touched until the whole
+/// level is finalized and copied over by [`copy_flags_to_c`]
+/// (see [`super::passages`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LevelFlags {
+    /// `false` marks a non-real (secret) wall or door cell.
+    pub real: Vec<bool>,
+    /// `true` marks a passage (`#`) cell.
+    pub passage: Vec<bool>,
+    /// `true` marks a cell already drawn by [`add_pass`](super::passages::add_pass).
+    pub seen: Vec<bool>,
+    /// Passage component number (0-15) assigned by `passnum`.
+    pub passnum: Vec<u8>,
+}
+
+impl LevelFlags {
+    fn cleared() -> Self {
+        let cells = LEVEL_HEIGHT * LEVEL_WIDTH;
+        Self {
+            real: vec![true; cells],
+            passage: vec![false; cells],
+            seen: vec![false; cells],
+            passnum: vec![0; cells],
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Level {
     pub depth: i32,
@@ -35,6 +63,7 @@ pub struct Level {
     pub room_graph: RoomGraph,
     pub passages: Vec<Passage>,
     pub map: Structure,
+    pub flags: LevelFlags,
 }
 
 impl Level {
@@ -47,19 +76,39 @@ impl Level {
             room_graph: RoomGraph::new(),
             passages: Vec::new(),
             map: Structure::new(LEVEL_HEIGHT, LEVEL_WIDTH, Tile::Empty),
+            flags: LevelFlags::cleared(),
         }
+    }
+
+    /// Linear cell index for absolute map coordinates, or `None` out of bounds.
+    fn cell_index(&self, y: i32, x: i32) -> Option<usize> {
+        if y < 0 || x < 0 {
+            return None;
+        }
+        let (y, x) = (y as usize, x as usize);
+        if y < LEVEL_HEIGHT && x < LEVEL_WIDTH {
+            Some(y * LEVEL_WIDTH + x)
+        } else {
+            None
+        }
+    }
+
+    /// Reset every flag grid to a fresh-level state.
+    pub(crate) fn reset_flags(&mut self) {
+        self.flags = LevelFlags::cleared();
     }
 
     /// Stamp a passage tile at absolute map position `pos`.
     ///
     /// Marks the cell as [`Tile::Passage`] in the level map so it becomes
     /// part of the canonical grid (mirrored to the C `places` grid by
-    /// `sync_passages_to_c`). Returns `pos` so callers can record it both as
+    /// `copy_flags_to_c`). Returns `pos` so callers can record it both as
     /// a tile of the current corridor and, when applicable, an entry point.
     fn putpass(&mut self, pos: IVec2) -> IVec2 {
         let (y, x) = (pos.y, pos.x);
-        if y >= 0 && x >= 0 {
-            let _ = self.map.set(y as usize, x as usize, Tile::Passage);
+        if let Some(idx) = self.cell_index(y, x) {
+            self.map.set(y as usize, x as usize, Tile::Passage);
+            self.flags.passage[idx] = true;
         }
         pos
     }
@@ -93,6 +142,13 @@ impl Level {
             DoorKind::Open
         };
 
+        if let Some(idx) = self.cell_index(pos.y, pos.x) {
+            if kind == DoorKind::Open {
+                self.map.set(pos.y as usize, pos.x as usize, Tile::Door);
+            } else {
+                self.flags.real[idx] = false;
+            }
+        }
         self.rooms[room_index].place_door(pos, kind);
 
         pos
@@ -285,17 +341,16 @@ impl Level {
     /// to C, and finally numbers the resulting passage network.
     /// Uses globals: `places` (via [`Level::draw_doors`]),
     /// `rooms`/`passages` (via `sync_rooms_to_c`/`passnum`).
-    pub(crate) unsafe fn do_passages(&mut self) {
+    pub(crate) fn do_passages(&mut self) {
         let connections = self.room_graph.connections().to_vec();
         for (r1, r2) in &connections {
             self.conn(*r1, *r2);
         }
 
-        self.draw_doors();
-        sync_rooms_to_c(self);
-        sync_passages_to_c(self);
+        unsafe { sync_rooms_to_c(self) };
+        mark_passages(self);
 
-        passnum();
+        passnum(self);
     }
 
     /// Wrap the tiles laid while digging a corridor into a [`Passage`].
@@ -333,34 +388,6 @@ impl Level {
             entry_points: relative_entry_points,
         };
         self.passages.push(passage);
-    }
-
-    /// Draw this level's doors onto the C `places` grid.
-    ///
-    /// Every door registered on a room is written at its absolute map
-    /// position: an open door as `+`, and a wall-segment door as `-`/`|` with
-    /// the `F_REAL` flag cleared (so it renders as a secret door).
-    /// Uses globals: `places` (via `set_tile_char`/`clear_tile_flag`).
-    unsafe fn draw_doors(&self) {
-        for room in &self.rooms {
-            for door in &room.doors {
-                let abs = room.position + door.position;
-                let (y, x) = (abs.y, abs.x);
-                match door.kind {
-                    DoorKind::Open => {
-                        set_tile_char(y, x, DOOR);
-                    }
-                    DoorKind::WallH => {
-                        set_tile_char(y, x, H_WALL);
-                        clear_tile_flag(y, x, F_REAL);
-                    }
-                    DoorKind::WallV => {
-                        set_tile_char(y, x, V_WALL);
-                        clear_tile_flag(y, x, F_REAL);
-                    }
-                }
-            }
-        }
     }
 
     pub(crate) fn generate_rooms_and_connections(
@@ -464,7 +491,7 @@ mod tests {
         }
     }
 
-    /// Stamping a passage tile records it in the level map and returns it.
+    /// Stamping a passage tile records it in the level map and flag grids.
     #[test]
     fn putpass_stamps_passage_into_map() {
         let mut level = Level::new();
@@ -472,6 +499,9 @@ mod tests {
 
         assert_eq!(pos, IVec2::new(5, 7));
         assert_eq!(level.map.get(7, 5), Some(Tile::Passage));
+        assert!(level.flags.passage[7 * LEVEL_WIDTH + 5]);
+        // Passage placement clears no real-wall flag.
+        assert!(level.flags.real[7 * LEVEL_WIDTH + 5]);
     }
 
     /// Out-of-bounds passage placement is ignored without panicking.
@@ -559,14 +589,21 @@ mod tests {
         assert_eq!(level.rooms[0].entry_point_count, 1);
         assert_eq!(level.rooms[1].entry_point_count, 1);
 
-        // The interior passage tiles were stamped into the level map as
-        // passages (the door cells themselves are `Tile::Door`).
+        // The interior passage tiles were stamped into the level map and the
+        // Rust flag grids as passages (the door cells are `Tile::Door`).
         let interior = passage.tiles.len() - passage.entry_points.len();
         let mut count = 0;
         for y in 0..LEVEL_HEIGHT {
             for x in 0..LEVEL_WIDTH {
                 if matches!(level.map.get(y, x), Some(Tile::Passage)) {
                     count += 1;
+                }
+                if level.flags.passage[y * LEVEL_WIDTH + x] {
+                    assert_eq!(
+                        level.map.get(y, x),
+                        Some(Tile::Passage),
+                        "passage flag set on non-passage cell ({y},{x})"
+                    );
                 }
             }
         }
