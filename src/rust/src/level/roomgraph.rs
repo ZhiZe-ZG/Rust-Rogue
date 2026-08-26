@@ -70,7 +70,7 @@ impl RoomGraph {
 
     fn from_adjacency(conn: AdjacentArray) -> Self {
         Self {
-            rooms: std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO, None, None)),
+            rooms: std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO)),
             adjacent: conn,
             isconn: [[0; MAX_ROOMS]; MAX_ROOMS],
             ingraph: [0; MAX_ROOMS],

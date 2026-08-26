@@ -79,7 +79,7 @@ impl Level {
     pub fn new() -> Self {
         let mut level = Self::default();
         level.rooms = (0..MAX_LEVEL_ROOMS)
-            .map(|_| Room::new(IVec2::ZERO, IVec2::ZERO, None, None))
+            .map(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
             .collect();
         level.map = Structure::new(LEVEL_HEIGHT, LEVEL_WIDTH, Tile::Empty);
         level
@@ -518,7 +518,7 @@ mod tests {
         level.depth = 1;
 
         // 9 room slots with default geometry (0 size → skipped as gone).
-        let rooms = std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO, None, None));
+        let rooms = std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO));
         let bsze = IVec2::new(26, 8);
 
         let generated = level.generate_rooms_and_connections(rooms, bsze);
@@ -599,8 +599,8 @@ mod tests {
     #[test]
     fn plan_corridor_anchors_at_room_boundaries() {
         let mut level = Level::new();
-        level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4), None, None);
-        level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4), None, None);
+        level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
+        level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4));
 
         let plan = level.plan_corridor(0, 1);
 
@@ -621,8 +621,8 @@ mod tests {
     fn conn_digs_corridor_between_adjacent_rooms() {
         let mut level = Level::new();
         level.depth = 1;
-        level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4), None, None);
-        level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4), None, None);
+        level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
+        level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4));
 
         level.conn(0, 1);
 

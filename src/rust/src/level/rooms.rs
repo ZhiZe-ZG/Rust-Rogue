@@ -9,19 +9,59 @@ use super::tile::Tile;
 /// Coordinates are absolute map positions; `structure` stores room-local tiles.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Room {
+	/// Absolute map position of the room's top-left corner.
 	pub position: IVec2,
+	/// Room size in map cells.
 	pub size: IVec2,
+	/// Room-local tile model (walled room or maze passages).
 	pub structure: Structure,
+	/// Doorway positions relative to `position`.
 	pub entry_points: Vec<IVec2>,
+	/// Absolute map position of the room's gold stash.
 	pub gold: IVec2,
+	/// Value of the room's gold stash; `0` when there is none.
 	pub goldval: i32,
+	/// Whether this room slot is removed for the level.
 	pub gone: bool,
+	/// Whether the room is generated dark.
 	pub dark: bool,
+	/// Whether the room is generated as a maze.
 	pub maze: bool,
+	/// Number of registered entry points, mirrored to C's `r_nexits`.
 	pub entry_point_count: i32,
 }
 
 impl Room {
+	/// Create a room with tiles derived from its geometry.
+	///
+	/// A positive `size` yields a plain walled room; a zero or negative size
+	/// yields an empty structure. Pre-built structures (e.g. mazes) should be
+	/// supplied via [`Room::with_structure`].
+	pub fn new(position: IVec2, size: IVec2) -> Self {
+		let structure = if size.x > 0 && size.y > 0 {
+			build_room_structure(size.y as usize, size.x as usize)
+		} else {
+			Structure::new(0, 0, Tile::Empty)
+		};
+		Self::with_structure(position, size, structure)
+	}
+
+	/// Create a room from a pre-built tile structure.
+	pub fn with_structure(position: IVec2, size: IVec2, structure: Structure) -> Self {
+		Self {
+			position,
+			size,
+			structure,
+			entry_points: Vec::new(),
+			gold: IVec2::ZERO,
+			goldval: 0,
+			gone: false,
+			dark: false,
+			maze: false,
+			entry_point_count: 0,
+		}
+	}
+
 	/// Whether this room slot is removed for the level.
 	pub fn is_gone(&self) -> bool {
 		self.gone
@@ -55,69 +95,10 @@ impl Room {
 		self.dark = false;
 		self.maze = false;
 	}
-}
 
-/// Fill each active room's tile structure from its geometry/flags.
-pub fn build_generated_rooms(mut rooms: [Room; MAX_ROOMS]) -> [Room; MAX_ROOMS] {
-	for room in &mut rooms {
-		if room.is_gone() {
-			continue;
-		}
-
-		if let Some(model) = build_room_model(room.position, room.size, room.is_maze()) {
-			room.structure = model.structure;
-		}
-	}
-
-	rooms
-}
-
-impl Room {
-	pub fn new(
-		position: IVec2,
-		size: IVec2,
-		structure: Option<Structure>,
-		entry_points: Option<Vec<IVec2>>,
-	) -> Self {
-		let default_structure = if size.x > 0 && size.y > 0 {
-			build_room_structure(size.y as usize, size.x as usize)
-		} else {
-			Structure::new(0, 0, Tile::Empty)
-		};
-
-		Self {
-			position,
-			size,
-			structure: structure.unwrap_or(default_structure),
-			entry_points: entry_points.unwrap_or_default(),
-			gold: IVec2::ZERO,
-			goldval: 0,
-			gone: false,
-			dark: false,
-			maze: false,
-			entry_point_count: 0,
-		}
-	}
-
+	/// Register `relative_pos` as an entry point where a corridor joins the room.
 	pub fn add_entry_point(&mut self, relative_pos: IVec2) {
 		self.entry_points.push(relative_pos);
-	}
-
-	pub fn set_entry_points(&mut self, entry_points: Vec<IVec2>) {
-		self.entry_points = entry_points;
-	}
-
-	pub fn delete_entry_point(&mut self, relative_pos: IVec2) -> bool {
-		if let Some(idx) = self.entry_points.iter().position(|&p| p == relative_pos) {
-			self.entry_points.remove(idx);
-			true
-		} else {
-			false
-		}
-	}
-
-	pub fn place_tile(&mut self, local_y: usize, local_x: usize, tile: Tile) -> bool {
-		self.structure.set(local_y, local_x, tile)
 	}
 
 	/// Place a door on one of this room's walls.
@@ -150,17 +131,27 @@ impl Room {
 	}
 }
 
+/// Fill each active room's tile structure from its geometry/flags.
+pub fn build_generated_rooms(mut rooms: [Room; MAX_ROOMS]) -> [Room; MAX_ROOMS] {
+	for room in &mut rooms {
+		if room.is_gone() {
+			continue;
+		}
+
+		if let Some(model) = build_room_model(room.position, room.size, room.is_maze()) {
+			room.structure = model.structure;
+		}
+	}
+
+	rooms
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 
 	fn test_room() -> Room {
-		Room::new(
-			IVec2::new(10, 20),
-			IVec2::new(6, 4),
-			None,
-			None,
-		)
+		Room::new(IVec2::new(10, 20), IVec2::new(6, 4))
 	}
 
 	#[test]
@@ -254,7 +245,7 @@ pub fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<R
 		build_room_structure(size.y as usize, size.x as usize)
 	};
 
-	Some(Room::new(position, size, Some(structure), None))
+	Some(Room::with_structure(position, size, structure))
 }
 
 pub fn build_maze_structure(height: usize, width: usize) -> Structure {
@@ -298,10 +289,10 @@ pub fn build_maze_structure(height: usize, width: usize) -> Structure {
 			}
 
 			if next_y == y {
-				let mid_x = if (next_x - x) < 0 { next_x + 1 } else { next_x - 1 };
+				let mid_x = (x + next_x) / 2;
 				let _ = structure.set(y as usize, mid_x as usize, Tile::Passage);
 			} else {
-				let mid_y = if (next_y - y) < 0 { next_y + 1 } else { next_y - 1 };
+				let mid_y = (y + next_y) / 2;
 				let _ = structure.set(mid_y as usize, x as usize, Tile::Passage);
 			}
 

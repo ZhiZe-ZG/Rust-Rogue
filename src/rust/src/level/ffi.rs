@@ -238,13 +238,9 @@ unsafe fn draw_map_ascii() {
 }
 
 unsafe fn room_from_c(rp: *const CRoom) -> Room {
-
-
 	let mut room = Room::new(
 		IVec2::new((*rp).r_pos.x, (*rp).r_pos.y),
 		IVec2::new((*rp).r_max.x, (*rp).r_max.y),
-		None,
-		None,
 	);
 	room.gold = IVec2::new((*rp).r_gold.x, (*rp).r_gold.y);
 	room.goldval = (*rp).r_goldval;
