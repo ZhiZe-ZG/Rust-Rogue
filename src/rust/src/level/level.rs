@@ -142,6 +142,7 @@ impl Level {
             DoorKind::Open
         };
 
+        let local = pos - position;
         if let Some(idx) = self.cell_index(pos.y, pos.x) {
             if kind == DoorKind::Open {
                 self.map.set(pos.y as usize, pos.x as usize, Tile::Door);
@@ -149,7 +150,7 @@ impl Level {
                 self.flags.real[idx] = false;
             }
         }
-        self.rooms[room_index].place_door(pos, kind);
+        self.rooms[room_index].place_door(local, kind);
 
         pos
     }
