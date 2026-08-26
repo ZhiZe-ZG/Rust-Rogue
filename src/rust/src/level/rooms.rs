@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use glam::IVec2;
 
 use super::roomgraph::MAX_ROOMS;
@@ -281,7 +282,7 @@ pub fn build_maze_structure(height: usize, width: usize) -> Structure {
 				}
 
 				cnt += 1;
-				if crate::rnd::rnd(cnt) == 0 {
+				if rnd(cnt) == 0 {
 					next_y = new_y;
 					next_x = new_x;
 				}
@@ -307,12 +308,12 @@ pub fn build_maze_structure(height: usize, width: usize) -> Structure {
 	let max_y = height as i32 - 1;
 	let max_x = width as i32 - 1;
 	let start_y = if height > 1 {
-		(crate::rnd::rnd(height as i32) / 2) * 2
+		(rnd(height as i32) / 2) * 2
 	} else {
 		0
 	};
 	let start_x = if width > 1 {
-		(crate::rnd::rnd(width as i32) / 2) * 2
+		(rnd(width as i32) / 2) * 2
 	} else {
 		0
 	};
