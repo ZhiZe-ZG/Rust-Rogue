@@ -64,6 +64,7 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
     tp as *mut CThingMonster
 }
 
+#[cfg(not(test))]
 unsafe fn append_message(text: *const c_char) {
     if text.is_null() {
         return;
