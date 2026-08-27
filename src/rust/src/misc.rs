@@ -363,7 +363,7 @@ pub unsafe extern "C" fn show_floor() -> c_uchar {
 pub unsafe extern "C" fn find_obj(y: c_int, x: c_int) -> *mut CThing {
     let mut obj = lvl_obj;
     while !obj.is_null() {
-        if (*thing_t(obj)).t_pos.y == y && (*thing_t(obj)).t_pos.x == x {
+        if (*thing_o(obj)).o_pos.y == y && (*thing_o(obj)).o_pos.x == x {
             return obj;
         }
         obj = (*thing_t(obj)).l_next;
