@@ -95,12 +95,12 @@ mod tests {
 	fn put_sub_structure_copies_tiles_at_position() {
 		let mut map = Structure::new(6, 6, Tile::Empty);
 		let mut room = Structure::new(2, 2, Tile::Floor);
-		room.set(0, 0, Tile::HWall);
+		room.set(0, 0, Tile::Wall);
 
 		let ok = map.put_sub_structure(IVec2::new(2, 3), &room);
 
 		assert!(ok);
-		assert_eq!(map.get(3, 2), Some(Tile::HWall));
+		assert_eq!(map.get(3, 2), Some(Tile::Wall));
 		assert_eq!(map.get(3, 3), Some(Tile::Floor));
 		assert_eq!(map.get(4, 2), Some(Tile::Floor));
 		assert_eq!(map.get(4, 3), Some(Tile::Floor));

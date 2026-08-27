@@ -75,7 +75,9 @@ pub(crate) unsafe fn read_c_room_data() -> [Room; super::symbols::MAXROOMS] {
 /// Draw the whole level map to the C `places` grid in one pass.
 ///
 /// Iterates the merged tile map of [`current_level_mut()`] once and converts
-/// every non-empty tile to its ASCII character. Passage tiles are flagged
+/// every non-empty tile to its ASCII character. Orientation-sensitive tiles
+/// ([`Tile::Wall`], [`Tile::HiddenDoor`]) are given their above/below
+/// neighbours so the renderer can pick `-` vs `|`. Passage tiles are flagged
 /// with `F_PASS` separately by `sync_passages_to_c` during passage
 /// generation.
 /// Uses globals: `places` (via `set_tile_char`).
@@ -85,7 +87,10 @@ pub(crate) unsafe fn draw_map_ascii() {
 
     for y in 0..map.height() {
         for x in 0..map.width() {
-            let ch = match tile_to_ascii(map.get(y, x).unwrap_or(Tile::Empty)) {
+            let tile = map.get(y, x).unwrap_or(Tile::Empty);
+            let up = if y == 0 { None } else { map.get(y - 1, x) };
+            let down = map.get(y + 1, x);
+            let ch = match tile_to_ascii(tile, up, down) {
                 Some(ch) => ch,
                 None => continue,
             };

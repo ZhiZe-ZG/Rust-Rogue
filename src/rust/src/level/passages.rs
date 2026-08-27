@@ -355,6 +355,10 @@ pub(crate) fn stamp_door(
         if kind == DoorKind::Open {
             map.set(pos.y as usize, pos.x as usize, Tile::Door);
         } else {
+            // A wall-segment door stays disguised as a wall in the tile map
+            // (rendered `-`/`|` like the wall it replaces) and is marked
+            // non-real so the C side can reveal it as `+`.
+            map.set(pos.y as usize, pos.x as usize, Tile::HiddenDoor);
             flags.real[idx] = false;
         }
     }
@@ -502,8 +506,7 @@ fn number_passage(
     }
 
     let tile = map.get(y as usize, x as usize);
-    let is_door = tile == Some(Tile::Door)
-        || (!flags.real[idx] && (tile == Some(Tile::HWall) || tile == Some(Tile::VWall)));
+    let is_door = tile == Some(Tile::Door) || tile == Some(Tile::HiddenDoor);
     if is_door {
         if let Some(links) = links.get_mut(scan.num - 1) {
             // Capped at the size of the C `r_exit` table.

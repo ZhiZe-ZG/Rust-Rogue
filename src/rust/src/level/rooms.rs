@@ -216,7 +216,7 @@ mod tests {
 
 		// Open doors replace the wall cell; wall-segment doors do not.
 		assert_eq!(room.structure.get(0, 1), Some(Tile::Door));
-		assert_eq!(room.structure.get(1, 5), Some(Tile::HWall));
+		assert_eq!(room.structure.get(1, 5), Some(Tile::Wall));
 		assert_eq!(room.structure.get(3, 2), Some(Tile::Door));
 		assert_eq!(room.structure.get(2, 0), Some(Tile::Door));
 	}
@@ -267,10 +267,8 @@ pub fn build_room_structure(height: usize, width: usize) -> Structure {
 
 	for y in 0..height {
 		for x in 0..width {
-			let tile = if y == 0 || y + 1 == height {
-				Tile::HWall
-			} else if x == 0 || x + 1 == width {
-				Tile::VWall
+			let tile = if y == 0 || y + 1 == height || x == 0 || x + 1 == width {
+				Tile::Wall
 			} else {
 				Tile::Floor
 			};

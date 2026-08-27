@@ -15,7 +15,7 @@ use crate::player::{CCoord, CPlace, CRoom, CThing};
 use crate::rnd::rnd;
 
 use super::ffitools::{FLOOR, F_REAL, PASSAGE, STAIRS};
-use super::level::current_level_mut;
+use super::level::{current_level_mut, LEVEL_WIDTH};
 use super::redraw::{chat_at, chat_at_mut};
 use super::symbols::{
     AMULET, AMULETLEVEL, FALSE, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN, MAXOBJ,
@@ -24,6 +24,7 @@ use super::symbols::{
     new_monster, new_thing, ntraps, places, player, randmonster, roomin, rooms, seenstairs, stairs,
     step_ok, thing_o, thing_t, turn_see, visuals,
 };
+use super::tile::Tile;
 
 /// Map a pointer into the C `rooms` array back to its Rust room-slot index.
 ///
@@ -260,6 +261,13 @@ unsafe fn place_traps() {
         let sp = &raw mut (*place_at((&raw mut places) as *mut CPlace, stairs.y, stairs.x)).p_flags;
         *sp = ((*sp as u8) & !(F_REAL as u8)) as c_char;
         *sp = ((*sp as u8) | rnd(NTRAPS) as u8) as c_char;
+
+        // Keep the Rust level model in sync: the trap occupies a floor cell
+        // in the tile map and is non-real (hidden) so it can be revealed.
+        let current = current_level_mut();
+        current.map.set(stairs.y as usize, stairs.x as usize, Tile::Trap);
+        let idx = stairs.y as usize * LEVEL_WIDTH + stairs.x as usize;
+        current.flags.real[idx] = false;
         i -= 1;
     }
 }
