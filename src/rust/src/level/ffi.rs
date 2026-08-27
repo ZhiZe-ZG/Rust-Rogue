@@ -5,7 +5,7 @@ use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
 use super::ffitools::{tile_to_ascii, FLOOR, PASSAGE, STAIRS};
-use super::passages::copy_flags_to_c;
+use super::passages::{copy_flags_to_c, sync_passages_to_c, sync_rooms_to_c};
 use super::rooms::Room;
 
 use super::{current_level_mut};
@@ -177,8 +177,10 @@ unsafe fn write_rust_data_back_to_c_and_ncurses(generated: &[Room; MAXROOMS]) {
 
 	draw_map_ascii();
 
-	// Mirror the Rust flag grids into `places` now that rooms, doors, and
-	// passages are fully laid out.
+	// Mirror the Rust-side rooms, passage components, and flag grids into the
+	// C arrays now that rooms, doors, and passages are fully laid out.
+	sync_rooms_to_c(current_level_mut());
+	sync_passages_to_c(current_level_mut());
 	copy_flags_to_c(current_level_mut());
 
 	// Place gold and monsters.
@@ -420,6 +422,7 @@ unsafe fn begin_new_level() {
 	current.rooms.clear();
 	current.room_graph.reset();
 	current.passages.clear();
+	current.passage_links.clear();
 
 	(*thing_t(&raw mut player)).t_flags &= !ISHELD; /* unhold when you go down just in case */
 	if level > max_level {

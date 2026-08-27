@@ -10,7 +10,9 @@ use glam::IVec2;
 
 use crate::rnd::rnd;
 
-use super::passages::{mark_passages, passnum, sync_rooms_to_c, CorridorPlan, Passage};
+use super::passages::{
+    CorridorPlan, Passage, PassageLinks, MAX_EXITS, MAX_PASSAGES, SCREEN_COLS, SCREEN_LINES,
+};
 use super::roomgraph::{RoomGraph, MAX_ROOMS};
 use super::rooms::{build_generated_rooms, DoorKind, Room};
 use super::structure::Structure;
@@ -30,17 +32,16 @@ pub const LEVEL_WIDTH: usize = 80;
 ///
 /// Mirrors the bits carried by the C `places` grid's `p_flags` field while
 /// level generation runs, so no C globals need to be touched until the whole
-/// level is finalized and copied over by [`copy_flags_to_c`]
-/// (see [`super::passages`]).
+/// level is finalized and copied over by `copy_flags_to_c`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LevelFlags {
     /// `false` marks a non-real (secret) wall or door cell.
     pub real: Vec<bool>,
     /// `true` marks a passage (`#`) cell.
     pub passage: Vec<bool>,
-    /// `true` marks a cell already drawn by [`add_pass`](super::passages::add_pass).
+    /// `true` marks a cell already drawn by `add_pass`.
     pub seen: Vec<bool>,
-    /// Passage component number (0-15) assigned by `passnum`.
+    /// Passage component number (0-15) assigned by `number_passages`.
     pub passnum: Vec<u8>,
 }
 
@@ -56,6 +57,32 @@ impl LevelFlags {
     }
 }
 
+/// Scan state for [`Level::number_passages`].
+///
+/// Wraps the flood-fill bookkeeping that the legacy C `passnum`/`numpass`
+/// kept in the `PNUM`/`NEW_PNUM` globals: the current passage component
+/// number and whether the next reached cell opens a new component.
+struct PassageScan {
+    /// Current passage component number; 0 before any component is opened.
+    num: usize,
+    /// Whether the next unnumbered cell reached should open a new component.
+    pending_start: bool,
+}
+
+impl PassageScan {
+    fn new() -> Self {
+        Self {
+            num: 0,
+            pending_start: false,
+        }
+    }
+
+    /// Mark that the next unnumbered cell starts a new passage component.
+    fn open_component(&mut self) {
+        self.pending_start = true;
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Level {
     pub depth: i32,
@@ -64,6 +91,9 @@ pub struct Level {
     pub passages: Vec<Passage>,
     pub map: Structure,
     pub flags: LevelFlags,
+    /// Door exits of each numbered passage component, index-aligned with the
+    /// C `passages` array and copied over by `sync_passages_to_c`.
+    pub passage_links: Vec<PassageLinks>,
 }
 
 impl Level {
@@ -77,6 +107,7 @@ impl Level {
             passages: Vec::new(),
             map: Structure::new(LEVEL_HEIGHT, LEVEL_WIDTH, Tile::Empty),
             flags: LevelFlags::cleared(),
+            passage_links: Vec::new(),
         }
     }
 
@@ -333,25 +364,44 @@ impl Level {
         self.finish_passage(tiles, entry_points);
     }
 
+    /// Mark `self.map`'s passage cells on the Rust flag grids.
+    ///
+    /// Sets `passage` on every passage tile so [`Level::number_passages`] and
+    /// the C-side screen redraw (`add_pass`) can find it. Matching the legacy
+    /// `putpass`, a cell is occasionally hidden by clearing `real` so it
+    /// renders as a wall glyph (`-`/`|`) instead of `#`. Pure Rust: the C
+    /// `places` grid is only written later by `copy_flags_to_c`.
+    pub(crate) fn mark_passages(&mut self) {
+        let depth = self.depth;
+        for y in 0..self.map.height() {
+            for x in 0..self.map.width() {
+                if !matches!(self.map.get(y, x), Some(Tile::Passage)) {
+                    continue;
+                }
+                let idx = y * LEVEL_WIDTH + x;
+                self.flags.passage[idx] = true;
+                if rnd(10) + 1 < depth && rnd(40) == 0 {
+                    self.flags.real[idx] = false;
+                }
+            }
+        }
+    }
+
     /// Dig all corridors that connect the rooms of this level.
     ///
     /// Consumes the room-connection plan recorded in this level's room graph:
     /// for each pair, [`Level::conn`] digs an actual corridor into the level
-    /// map. The level then draws its registered doors onto the C `places`
-    /// grid, mirrors the rooms' entry points and the map's passage tiles back
-    /// to C, and finally numbers the resulting passage network.
-    /// Uses globals: `places` (via [`Level::draw_doors`]),
-    /// `rooms`/`passages` (via `sync_rooms_to_c`/`passnum`).
+    /// map. The level then flags and numbers the passage network on the Rust
+    /// side; the C `rooms`/`passages`/`places` globals are only written later
+    /// by `write_rust_data_back_to_c_and_ncurses`.
     pub(crate) fn do_passages(&mut self) {
         let connections = self.room_graph.connections().to_vec();
         for (r1, r2) in &connections {
             self.conn(*r1, *r2);
         }
 
-        unsafe { sync_rooms_to_c(self) };
-        mark_passages(self);
-
-        passnum(self);
+        self.mark_passages();
+        self.number_passages();
     }
 
     /// Wrap the tiles laid while digging a corridor into a [`Passage`].
@@ -389,6 +439,75 @@ impl Level {
             entry_points: relative_entry_points,
         };
         self.passages.push(passage);
+    }
+
+    /// Number the contiguous passage networks reachable from every room exit.
+    ///
+    /// Flood-fills from each room's entry points using [`Level::number_passage`],
+    /// assigning every contiguous component a number stored in
+    /// `self.flags.passnum` and a door-exit table in `self.passage_links`
+    /// (index-aligned with the C `passages` array, copied over by
+    /// `sync_passages_to_c`).
+    pub(crate) fn number_passages(&mut self) {
+        self.passage_links.clear();
+        let mut scan = PassageScan::new();
+        // Collect absolute entry-point seeds up front so the flood-fill can
+        // borrow `self` mutably while iterating.
+        let seeds: Vec<IVec2> = self
+            .rooms
+            .iter()
+            .flat_map(|room| room.entry_points.iter().map(|ep| ep + room.position))
+            .collect();
+        for seed in seeds {
+            scan.open_component();
+            self.number_passage(&mut scan, seed.x, seed.y);
+        }
+    }
+
+    /// Recursively flood-fill one passage network, numbering its cells.
+    ///
+    /// Stops at the screen edge, already-numbered cells, or tiles that are
+    /// neither passages nor doors, then recurses into the four neighbours.
+    /// Each numbered component collects its doorways into `self.passage_links`
+    /// and stamps its component number into `self.flags.passnum`.
+    fn number_passage(&mut self, scan: &mut PassageScan, y: i32, x: i32) {
+        if x >= SCREEN_COLS || x < 0 || y >= SCREEN_LINES || y <= 0 {
+            return;
+        }
+
+        let idx = (y as usize) * LEVEL_WIDTH + (x as usize);
+        if self.flags.passnum[idx] != 0 {
+            return;
+        }
+
+        if scan.pending_start {
+            scan.num += 1;
+            scan.pending_start = false;
+            if scan.num <= MAX_PASSAGES {
+                self.passage_links.resize(scan.num, PassageLinks::default());
+            }
+        }
+
+        let tile = self.map.get(y as usize, x as usize);
+        let is_door = tile == Some(Tile::Door)
+            || (!self.flags.real[idx]
+                && (tile == Some(Tile::HWall) || tile == Some(Tile::VWall)));
+        if is_door {
+            if let Some(links) = self.passage_links.get_mut(scan.num - 1) {
+                // Capped at the size of the C `r_exit` table.
+                if links.exits.len() < MAX_EXITS {
+                    links.exits.push(IVec2::new(x, y));
+                }
+            }
+        } else if !self.flags.passage[idx] {
+            return;
+        }
+
+        self.flags.passnum[idx] = (scan.num as u8) & 0x0f;
+        self.number_passage(scan, y + 1, x);
+        self.number_passage(scan, y - 1, x);
+        self.number_passage(scan, y, x + 1);
+        self.number_passage(scan, y, x - 1);
     }
 
     pub(crate) fn generate_rooms_and_connections(
@@ -565,6 +684,42 @@ mod tests {
         assert_eq!(plan.end.x, 18);
         assert!((11..=12).contains(&plan.start.y));
         assert!((11..=12).contains(&plan.end.y));
+    }
+
+    /// `number_passages` flood-fills the corridor from each room entry point,
+    /// assigning a component number and collecting the door exits into
+    /// `passage_links`.
+    #[test]
+    fn number_passages_collects_door_exits() {
+        let mut level = Level::new();
+        level.depth = 10;
+        level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
+        level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4));
+
+        // Dig the corridor first so the map/flags are populated.
+        level.conn(0, 1);
+        level.mark_passages();
+        level.number_passages();
+
+        // One connected component exists with both facing-wall doors.
+        assert_eq!(level.passage_links.len(), 1);
+        let links = &level.passage_links[0];
+
+        // Every exit must be a door cell on the map.
+        let passage = &level.passages[0];
+        assert_eq!(links.exits.len(), passage.entry_points.len());
+        for exit in &links.exits {
+            assert_eq!(level.map.get(exit.y as usize, exit.x as usize), Some(Tile::Door));
+        }
+
+        // Every interior passage tile carries component number 1.
+        for y in 0..LEVEL_HEIGHT {
+            for x in 0..LEVEL_WIDTH {
+                if level.flags.passage[y * LEVEL_WIDTH + x] {
+                    assert_eq!(level.flags.passnum[y * LEVEL_WIDTH + x], 1);
+                }
+            }
+        }
     }
 
     /// `conn` digs a corridor between two side-by-side rooms, registering

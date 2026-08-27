@@ -1,13 +1,16 @@
 //! Corridor/passage digging helpers, Rust-side per-cell flags, and the C
-//! `places` grid mirroring.
+//! global mirroring.
 //!
-//! Level generation writes per-cell flags into [`Level::flags`] (see
-//! [`mark_passages`], [`passnum`]) instead of poking the C `places` grid
-//! directly. Once the whole level is generated, [`copy_flags_to_c`] translates
-//! those Rust grids into the `p_flags` bits the C engine consumes.
-//! [`add_pass`] continues to read `places` during screen redraw.
+//! Level generation writes per-cell flags into [`Level::flags`] and the door
+//! exits of each numbered passage component into [`Level::passage_links`]
+//! (see [`Level::mark_passages`] and [`Level::number_passages`]) instead of
+//! poking the C `places`/`rooms`/`passages` globals directly. Once the whole
+//! level is generated, [`copy_flags_to_c`], [`sync_rooms_to_c`], and
+//! [`sync_passages_to_c`] translate those Rust structures into the C arrays
+//! the engine consumes. [`add_pass`] continues to read `places` during screen
+//! redraw.
 
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_uint};
 
 use glam::IVec2;
 
@@ -17,19 +20,26 @@ use crate::player::{CCoord, CPlace, CRoom, CThingMonster};
 use super::ffitools::{DOOR, F_PASS, F_PNUM, F_REAL, F_SEEN, PASSAGE};
 use super::level::{Level, LEVEL_HEIGHT, LEVEL_WIDTH};
 use super::roomgraph::MAX_ROOMS;
-use super::tile::Tile;
 
-/// Size of the C `passages` room array.
-const MAXPASS: usize = 13;
-/// Width of the on-screen C `places` grid.
-const NUMCOLS: c_int = 80;
-/// Height of the on-screen C `places` grid.
-const NUMLINES: c_int = 24;
-/// Max exits writeable into the C `r_exit` array.
-const MAX_EXITS: usize = 12;
+/// Size of the C `passages` room array (also the cap on numbered components).
+pub(crate) const MAX_PASSAGES: usize = 13;
+/// Max exits writeable into one C `r_exit` array.
+pub(crate) const MAX_EXITS: usize = 12;
+/// Width of the playable C `places` screen.
+pub(crate) const SCREEN_COLS: c_int = 80;
+/// Height of the playable C `places` screen.
+pub(crate) const SCREEN_LINES: c_int = 24;
 
-const FALSE: c_uchar = 0;
-const TRUE: c_uchar = 1;
+unsafe extern "C" {
+    static mut rooms: [CRoom; MAX_ROOMS];
+    static mut passages: [CRoom; MAX_PASSAGES];
+    static mut places: [CPlace; 32 * 80];
+
+    fn r#move(y: c_int, x: c_int) -> c_int;
+    fn addch(ch: c_uint) -> c_int;
+    fn standout() -> c_int;
+    fn standend() -> c_int;
+}
 
 /// A corridor connecting two rooms.
 ///
@@ -46,22 +56,15 @@ pub struct Passage {
     pub entry_points: Vec<IVec2>,
 }
 
-/// Number of the passage component currently being scanned by [`passnum`].
-static mut PNUM: c_int = 0;
-
-/// Whether the next cell reached by [`numpass`] opens a new component.
-static mut NEW_PNUM: c_uchar = FALSE;
-
-unsafe extern "C" {
-    static mut rooms: [CRoom; MAX_ROOMS];
-    static mut passages: [CRoom; MAXPASS];
-    static mut places: [CPlace; 32 * 80];
-
-    fn rnd(range: c_int) -> c_int;
-    fn r#move(y: c_int, x: c_int) -> c_int;
-    fn addch(ch: c_uint) -> c_int;
-    fn standout() -> c_int;
-    fn standend() -> c_int;
+/// Door exits of one numbered passage component.
+///
+/// Produced by [`Level::number_passages`] and mirrored to one slot of the C
+/// `passages` array (a `CRoom` used as an exit table) by
+/// [`sync_passages_to_c`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PassageLinks {
+    /// Absolute map coordinates of the component's doorways.
+    pub exits: Vec<IVec2>,
 }
 
 /// Geometric plan of the L-shaped corridor between two rooms.
@@ -91,29 +94,6 @@ pub(crate) struct CorridorPlan {
     pub(crate) turn_spot: i32,
 }
 
-/// Mark `level.map`'s passage cells on the Rust flag grids.
-///
-/// Sets `passage` on every passage tile so [`passnum`] and the C-side screen
-/// redraw ([`add_pass`]) can find it. Matching the legacy `putpass`, a cell
-/// is occasionally hidden by clearing `real` so it renders as a wall glyph
-/// (`-`/`|`) instead of `#`. Pure Rust: the C `places` grid is only written
-/// later by [`copy_flags_to_c`].
-pub(crate) fn mark_passages(level: &mut Level) {
-    let depth = level.depth;
-    for y in 0..level.map.height() {
-        for x in 0..level.map.width() {
-            if !matches!(level.map.get(y, x), Some(Tile::Passage)) {
-                continue;
-            }
-            let idx = y * LEVEL_WIDTH + x;
-            level.flags.passage[idx] = true;
-            if unsafe { rnd(10) + 1 < depth && rnd(40) == 0 } {
-                level.flags.real[idx] = false;
-            }
-        }
-    }
-}
-
 /// Whether `ch`/`flags` describe a doorway or a hidden (non-real) wall.
 ///
 /// [`add_pass`] treats `+` doors and `-`/`|` walls whose `F_REAL` bit has been
@@ -132,8 +112,8 @@ fn is_door_or_hidden(ch: c_char, flags: c_char) -> bool {
 /// Uses globals: `places`.
 #[no_mangle]
 pub unsafe extern "C" fn add_pass() {
-    for y in 1..NUMLINES - 1 {
-        for x in 0..NUMCOLS {
+    for y in 1..SCREEN_LINES - 1 {
+        for x in 0..SCREEN_COLS {
             let pp = place_at((&raw mut places) as *mut CPlace, y, x);
             let flags = (*pp).p_flags;
             let ch = (*pp).p_ch;
@@ -188,8 +168,7 @@ pub(crate) unsafe fn copy_flags_to_c(level: &Level) {
 }
 
 /// Copy `level`'s rooms' Rust-side entry points into the C `rooms` array so
-/// that [`passnum`] can flood-fill the passage network from the registered
-/// exits.
+/// the engine can follow room exits.
 /// Uses globals: `rooms`.
 pub(crate) unsafe fn sync_rooms_to_c(level: &Level) {
     for (i, room) in level.rooms.iter().enumerate() {
@@ -202,65 +181,21 @@ pub(crate) unsafe fn sync_rooms_to_c(level: &Level) {
     }
 }
 
-/// Number the passages reachable from every room exit.
+/// Copy `level`'s numbered passage components into the C `passages` array.
 ///
-/// Resets the passage table and the level's `passnum` grid, then flood-fills
-/// from each room exit using [`numpass`]. Every contiguous passage network is
-/// assigned a number used to index the C `passages` array.
-/// Uses globals: `passages`, `rooms`; writes `level.flags.passnum`.
-pub(crate) fn passnum(level: &mut Level) {
-    unsafe {
-        PNUM = 0;
-        NEW_PNUM = FALSE;
-        for rp in &mut passages[..MAXPASS] {
-            rp.r_nexits = 0;
-        }
-        for rp in &mut rooms[..MAX_ROOMS] {
-            for i in 0..rp.r_nexits as usize {
-                NEW_PNUM = TRUE;
-                numpass(level, rp.r_exit[i].y, rp.r_exit[i].x);
-            }
+/// Each Rust [`PassageLinks`] entry (produced by [`Level::number_passages`])
+/// is written into the matching `passages[]` slot: `r_nexits` and the
+/// absolute coordinates of its doorways.
+/// Uses globals: `passages`.
+pub(crate) unsafe fn sync_passages_to_c(level: &Level) {
+    for rp in &mut passages[..MAX_PASSAGES] {
+        rp.r_nexits = 0;
+    }
+    for (i, links) in level.passage_links.iter().enumerate().take(MAX_PASSAGES) {
+        let rp = &mut passages[i];
+        rp.r_nexits = links.exits.len().min(MAX_EXITS) as c_int;
+        for (j, exit) in links.exits.iter().take(MAX_EXITS).enumerate() {
+            rp.r_exit[j] = CCoord { x: exit.x, y: exit.y };
         }
     }
-}
-
-/// Recursively flood-fill a passage network, numbering its cells on the
-/// Rust-side `passnum` grid.
-///
-/// Stops at the screen edge, already-numbered cells, or tiles that are
-/// neither passages nor doors, then recurses into the four neighbours.
-/// Each new contiguous component increments the current passage number and
-/// its exits are registered in the C `passages` array.
-/// Uses globals: `PNUM`, `NEW_PNUM`, `passages`; reads `level.flags`.
-unsafe fn numpass(level: &mut Level, y: c_int, x: c_int) {
-    if x >= NUMCOLS || x < 0 || y >= NUMLINES || y <= 0 {
-        return;
-    }
-
-    let idx = ((y as usize) * LEVEL_WIDTH) + (x as usize);
-    if level.flags.passnum[idx] != 0 {
-        return;
-    }
-    if NEW_PNUM != 0 {
-        PNUM += 1;
-        NEW_PNUM = FALSE;
-    }
-
-    let is_door = level.map.get(y as usize, x as usize) == Some(Tile::Door)
-        || (!level.flags.real[idx] && level.map.get(y as usize, x as usize) == Some(Tile::HWall))
-        || (!level.flags.real[idx] && level.map.get(y as usize, x as usize) == Some(Tile::VWall));
-    if is_door {
-        let rp = &mut passages[PNUM as usize];
-        rp.r_exit[rp.r_nexits as usize].y = y;
-        rp.r_exit[rp.r_nexits as usize].x = x;
-        rp.r_nexits += 1;
-    } else if !level.flags.passage[idx] {
-        return;
-    }
-
-    level.flags.passnum[idx] = (PNUM as u8) & F_PNUM as u8;
-    numpass(level, y + 1, x);
-    numpass(level, y - 1, x);
-    numpass(level, y, x + 1);
-    numpass(level, y, x - 1);
 }
