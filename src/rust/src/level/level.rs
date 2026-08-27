@@ -125,7 +125,7 @@ impl Level {
     }
 
     /// Reset every flag grid to a fresh-level state.
-    pub(crate) fn reset_flags(&mut self) {
+    pub fn reset_flags(&mut self) {
         self.flags = LevelFlags::cleared();
     }
 
