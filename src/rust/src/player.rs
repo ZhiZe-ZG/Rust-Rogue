@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::draw::{set_tile_char, place_at};
 use crate::level::door_open;
@@ -152,7 +153,6 @@ unsafe extern "C" {
     static mut stdscr: *mut CWindow;
 
     fn msg(fmt: *const c_char, ...);
-    fn rnd(range: c_int) -> c_int;
     fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
     fn see_monst(mp: *mut CThing) -> c_uchar;
     fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;

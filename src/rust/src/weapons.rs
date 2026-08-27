@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::draw::place_at;
@@ -153,7 +154,6 @@ unsafe extern "C" {
     fn msg(fmt: *const c_char, ...);
     fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
     fn addmsg(fmt: *const c_char, ...);
-    fn rnd(range: c_int) -> c_int;
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 

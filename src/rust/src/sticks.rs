@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 
 const STICK: c_int = '/' as c_int;
@@ -153,7 +154,6 @@ unsafe extern "C" {
     fn save(kind: c_int) -> c_uchar;
     fn hit_monster(y: c_int, x: c_int, obj: *mut CThing);
     fn do_motion(obj: *mut CThing, y: c_int, x: c_int);
-    fn rnd(amt: c_int) -> c_int;
     fn roll(num: c_int, sides: c_int) -> c_int;
     fn death(thing: c_char) -> !;
     fn runto(pos: *mut CCoord);

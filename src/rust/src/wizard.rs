@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
@@ -113,7 +114,6 @@ unsafe extern "C" {
     fn init_weapon(obj: *mut CThing, which: c_int);
     fn fix_stick(obj: *mut CThing);
     fn readchar() -> c_int;
-    fn rnd(range: c_int) -> c_int;
     fn isdigit(ch: c_int) -> c_int;
     fn free(ptr: *mut std::ffi::c_void);
     fn floor_at() -> c_char;

@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_uchar};
 use crate::potions::invis_on;
 
@@ -73,7 +74,6 @@ unsafe extern "C" {
     fn aggravate();
     fn dropcheck(obj: *mut CThing) -> c_uchar;
     fn readchar() -> c_int;
-    fn rnd(range: c_int) -> c_int;
     fn num(n1: c_int, n2: c_int, obj_type: c_char) -> *mut c_char;
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }

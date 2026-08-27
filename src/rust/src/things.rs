@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::player::{CThing, CThingObject};
@@ -69,7 +70,6 @@ unsafe extern "C" {
     fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
     fn msg(fmt: *const c_char, ...);
     fn new_item() -> *mut CThing;
-    fn rnd(range: c_int) -> c_int;
     fn sprintf(buf: *mut c_char, fmt: *const c_char, ...) -> c_int;
     fn strcat(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;

@@ -371,7 +371,7 @@ impl Level {
     /// `putpass`, a cell is occasionally hidden by clearing `real` so it
     /// renders as a wall glyph (`-`/`|`) instead of `#`. Pure Rust: the C
     /// `places` grid is only written later by `copy_flags_to_c`.
-    pub(crate) fn mark_passages(&mut self) {
+    pub fn mark_passages(&mut self) {
         let depth = self.depth;
         for y in 0..self.map.height() {
             for x in 0..self.map.width() {
@@ -394,7 +394,7 @@ impl Level {
     /// map. The level then flags and numbers the passage network on the Rust
     /// side; the C `rooms`/`passages`/`places` globals are only written later
     /// by `write_rust_data_back_to_c_and_ncurses`.
-    pub(crate) fn do_passages(&mut self) {
+    pub fn do_passages(&mut self) {
         let connections = self.room_graph.connections().to_vec();
         for (r1, r2) in &connections {
             self.conn(*r1, *r2);
@@ -448,7 +448,7 @@ impl Level {
     /// `self.flags.passnum` and a door-exit table in `self.passage_links`
     /// (index-aligned with the C `passages` array, copied over by
     /// `sync_passages_to_c`).
-    pub(crate) fn number_passages(&mut self) {
+    pub fn number_passages(&mut self) {
         self.passage_links.clear();
         let mut scan = PassageScan::new();
         // Collect absolute entry-point seeds up front so the flood-fill can
@@ -510,7 +510,7 @@ impl Level {
         self.number_passage(scan, y, x - 1);
     }
 
-    pub(crate) fn generate_rooms_and_connections(
+    pub fn generate_rooms_and_connections(
         &mut self,
         rooms: [Room; MAX_ROOMS],
         bsze: IVec2,

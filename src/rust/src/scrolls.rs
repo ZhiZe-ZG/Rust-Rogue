@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -167,7 +168,6 @@ unsafe extern "C" {
     fn msg(fmt: *const c_char, ...);
     fn addmsg(fmt: *const c_char, ...);
     fn endmsg() -> c_int;
-    fn rnd(range: c_int) -> c_int;
     fn step_ok(ch: c_int) -> c_int;
     fn find_obj(y: c_int, x: c_int) -> *mut CThing;
     fn new_item() -> *mut CThing;

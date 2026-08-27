@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 /*
  * All the daemon and fuse callback functions.
  *
@@ -71,7 +72,6 @@ unsafe extern "C" {
 // ─── Extern C functions ──────────────────────────────────────────────────────
 
 unsafe extern "C" {
-    fn rnd(range: c_int) -> c_int;
     fn roll(number: c_int, sides: c_int) -> c_int;
     fn msg(fmt: *const c_char, ...);
     fn addmsg(fmt: *const c_char, ...);

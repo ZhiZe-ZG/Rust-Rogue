@@ -10,6 +10,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::draw::place_at;
 use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
+use crate::rnd::rnd;
 
 const NUMLINES: c_int = 24;
 const NUMCOLS: c_int = 80;
@@ -83,7 +84,6 @@ unsafe extern "C" {
 
     fn msg(fmt: *const c_char, ...);
     fn endmsg() -> c_int;
-    fn rnd(range: c_int) -> c_int;
     fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
     fn r#move(y: c_int, x: c_int) -> c_int;
     fn addch(ch: c_uint) -> c_int;

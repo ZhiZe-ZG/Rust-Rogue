@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 use std::ptr;
 
@@ -188,7 +189,6 @@ unsafe extern "C" {
     fn msg(fmt: *const c_char, ...);
     fn addmsg(fmt: *const c_char, ...);
     fn endmsg() -> c_int;
-    fn rnd(range: c_int) -> c_int;
     fn roll(num: c_int, sides: c_int) -> c_int;
     fn chg_str(amt: c_int);
     fn add_str(sp: *mut c_uint, amt: c_int);

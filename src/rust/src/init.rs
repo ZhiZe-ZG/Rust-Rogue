@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 /*
  * Global variable initialization.
  *
@@ -287,7 +288,6 @@ unsafe extern "C" {
     fn init_weapon(obj: *mut CThing, which: c_int);
     fn malloc(size: usize) -> *mut c_void;
     fn new_item() -> *mut CThing;
-    fn rnd(range: c_int) -> c_int;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
 }

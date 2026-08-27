@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::draw::place_at;
@@ -52,7 +53,6 @@ unsafe extern "C" {
     static mut cur_ring: [*mut CThing; 2];
 
     fn msg(fmt: *const c_char, ...);
-    fn rnd(range: c_int) -> c_int;
     fn roll(num: c_int, sides: c_int) -> c_int;
     fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_int;
     fn save(which: c_int) -> c_int;

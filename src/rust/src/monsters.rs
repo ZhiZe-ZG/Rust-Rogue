@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -195,7 +196,6 @@ unsafe extern "C" {
     fn roll(number: c_int, sides: c_int) -> c_int;
     fn runto(cp: *mut CCoord);
     fn rnd_thing() -> c_char;
-    fn rnd(range: c_int) -> c_int;
     fn new_item() -> *mut CThing;
     fn new_thing() -> *mut CThing;
     fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_uchar, monst: c_uchar) -> c_uchar;

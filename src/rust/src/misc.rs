@@ -1,3 +1,4 @@
+use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
@@ -112,7 +113,6 @@ unsafe extern "C" {
     fn move_(y: c_int, x: c_int);
     fn readchar() -> c_int;
     fn reset_last();
-    fn rnd(range: c_int) -> c_int;
     fn roll(num: c_int, sides: c_int) -> c_int;
     fn runto(cp: *mut CCoord);
     fn see_monst(mp: *mut CThing) -> c_uchar;
