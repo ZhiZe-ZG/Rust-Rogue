@@ -9,7 +9,7 @@
 //! `crate::level::ffi::sync_rooms_to_c` / `crate::level::ffi::sync_passages_to_c`
 //! translate those Rust structures into the C arrays the engine consumes.
 
-use std::os::raw::{c_char, c_int};
+use std::os::raw::c_int;
 
 use glam::IVec2;
 
@@ -19,10 +19,6 @@ use super::level::{LevelFlags, LEVEL_HEIGHT, LEVEL_WIDTH};
 use super::rooms::{DoorKind, Room};
 use super::structure::Structure;
 use super::tile::Tile;
-
-unsafe extern "C" {
-    fn msg(fmt: *const c_char, ...);
-}
 
 /// Size of the C `passages` room array (also the cap on numbered components).
 pub(crate) const MAX_PASSAGES: usize = 13;
@@ -206,8 +202,9 @@ pub(crate) fn plan_corridor(rooms: &[Room], map: &Structure, r1: usize, r2: usiz
 /// Walks an L-shaped path: from `plan.start` it steps along `plan.step`
 /// for `plan.distance` cells, making a perpendicular run of
 /// `plan.turn_distance` cells starting at `plan.turn_spot`, so the
-/// corridor ends up aligned with `plan.end`. A final check warns if the
-/// path did not reach the expected end point. Pure: the level map is not
+/// corridor ends up aligned with `plan.end`. A final check panics if the
+/// path did not reach the expected end point (a geometry/setup bug rather
+/// than a recoverable in-game condition). Pure: the level map is not
 /// touched — the caller applies the returned tiles to the map later.
 pub(crate) fn corridor_tiles(plan: &CorridorPlan) -> Vec<IVec2> {
     let mut tiles = Vec::new();
@@ -234,11 +231,14 @@ pub(crate) fn corridor_tiles(plan: &CorridorPlan) -> Vec<IVec2> {
 
     curr.x += plan.step.x;
     curr.y += plan.step.y;
-    if curr.x != plan.end.x || curr.y != plan.end.y {
-        unsafe {
-            msg(b"warning, connectivity problem on this level\0".as_ptr() as *const c_char);
-        }
-    }
+    assert!(
+        curr.x == plan.end.x && curr.y == plan.end.y,
+        "connectivity problem on this level: corridor ended at ({}, {}) instead of ({}, {})",
+        curr.x,
+        curr.y,
+        plan.end.x,
+        plan.end.y,
+    );
     tiles
 }
 

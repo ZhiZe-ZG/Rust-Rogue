@@ -171,18 +171,6 @@ pub unsafe fn current_level_mut() -> &'static mut Level {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::raw::{c_char, c_int};
-
-    /// Test-only definition of the C `msg` symbol.
-    ///
-    /// Test builds link without the C engine, so `corridor_tiles`'s
-    /// connectivity warning (which calls the variadic C `msg`) needs a local
-    /// symbol. The non-variadic stub matches the single-argument call site;
-    /// its body is never reached in the current tests.
-    #[no_mangle]
-    extern "C" fn msg(_fmt: *const c_char) -> c_int {
-        0
-    }
 
     /// A door placed through [`stamp_door`] is recorded on the room and both
     /// the entry point and the tile map reflect it.
