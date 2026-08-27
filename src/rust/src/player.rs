@@ -1,8 +1,7 @@
 use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::draw::{set_tile_char, place_at};
-use crate::level::door_open;
-use crate::trap::be_trapped;
+use crate::level::{be_trapped, door_open, T_DOOR, T_TELEP};
 use crate::rndmove::rndmove;
 
 const NUMCOLS: c_int = 80;
@@ -33,8 +32,6 @@ const F_REAL: c_char = 0x10u8 as c_char;
 const F_SEEN: c_char = 0x40u8 as c_char;
 const F_PNUM: c_char = 0x0fu8 as c_char;
 
-const T_DOOR: c_char = 0;
-const T_TELEP: c_char = 4;
 
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
@@ -533,7 +530,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
             move_stuff(&mut next_pos, fl);
         }
         TRAP => {
-            let trap = be_trapped(&mut next_pos);
+            let trap = be_trapped(next_pos);
             if trap == T_DOOR || trap == T_TELEP {
                 return;
             }
@@ -545,7 +542,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         }
         FLOOR => {
             if (fl as u8 & F_REAL as u8) == 0 {
-                be_trapped(hero_ptr());
+                be_trapped(hero_pos());
             }
             move_stuff(&mut next_pos, fl);
         }
