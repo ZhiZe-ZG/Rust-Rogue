@@ -7,11 +7,15 @@
 mod ffi;
 mod ffitools;
 mod level;
-pub mod passages;
-pub mod roomgraph;
-pub mod rooms;
-pub mod structure;
-pub mod tile;
+mod mirror;
+mod passages;
+mod presence;
+mod redraw;
+mod roomgraph;
+mod rooms;
+mod structure;
+mod symbols;
+mod tile;
 
 pub use ffi::{door_open, new_level};
 pub use level::{current_level_mut, Level, LevelFlags, LEVEL_HEIGHT, LEVEL_WIDTH};

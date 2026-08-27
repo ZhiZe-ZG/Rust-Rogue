@@ -5,8 +5,8 @@
 //! exits of each numbered passage component into `Level::passage_links` (see
 //! [`mark_passages`] and [`number_passages`]) instead of poking the C
 //! `places`/`rooms`/`passages` globals directly. Once the whole level is
-//! generated, `crate::level::ffi::copy_flags_to_c` /
-//! `crate::level::ffi::sync_rooms_to_c` / `crate::level::ffi::sync_passages_to_c`
+//! generated, `crate::level::mirror::copy_flags_to_c` /
+//! `crate::level::mirror::sync_rooms_to_c` / `crate::level::mirror::sync_passages_to_c`
 //! translate those Rust structures into the C arrays the engine consumes.
 
 use std::os::raw::c_int;
@@ -48,7 +48,7 @@ pub struct Passage {
 ///
 /// Produced by [`number_passages`] and mirrored to one slot of the C
 /// `passages` array (a `CRoom` used as an exit table) by
-/// `crate::level::ffi::sync_passages_to_c`.
+/// `crate::level::mirror::sync_passages_to_c`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PassageLinks {
     /// Absolute map coordinates of the component's doorways.
@@ -306,7 +306,7 @@ pub(crate) fn build_passage(tiles: Vec<IVec2>, entry_points: Vec<IVec2>) -> Opti
 ///
 /// Marks the cell as [`Tile::Passage`] in the level map so it becomes part of
 /// the canonical grid (mirrored to the C `places` grid by
-/// `crate::level::ffi::copy_flags_to_c`).
+/// `crate::level::mirror::copy_flags_to_c`).
 pub(crate) fn stamp_passage(map: &mut Structure, flags: &mut LevelFlags, pos: IVec2) {
     let (y, x) = (pos.y, pos.x);
     if let Some(idx) = cell_index(y, x) {
@@ -399,10 +399,10 @@ pub(crate) fn apply_passage(
 /// Mark `map`'s passage cells on the Rust flag grids.
 ///
 /// Sets `passage` on every passage tile so [`number_passages`] and the C-side
-/// screen redraw (`crate::level::ffi::add_pass`) can find it. Matching the
+/// screen redraw (`crate::level::redraw::add_pass`) can find it. Matching the
 /// legacy `putpass`, a cell is occasionally hidden by clearing `real` so it
 /// renders as a wall glyph (`-`/`|`) instead of `#`. Pure Rust: the C
-/// `places` grid is only written later by `crate::level::ffi::copy_flags_to_c`.
+/// `places` grid is only written later by `crate::level::mirror::copy_flags_to_c`.
 pub(crate) fn mark_passages(map: &Structure, flags: &mut LevelFlags, depth: i32) {
     for y in 0..map.height() {
         for x in 0..map.width() {
@@ -449,7 +449,7 @@ impl PassageScan {
 /// Flood-fills from each room's entry points using [`number_passage`],
 /// assigning every contiguous component a number stored in `flags.passnum`
 /// and a door-exit table in `links` (index-aligned with the C `passages`
-/// array, copied over by `crate::level::ffi::sync_passages_to_c`).
+/// array, copied over by `crate::level::mirror::sync_passages_to_c`).
 pub(crate) fn number_passages(
     map: &Structure,
     flags: &mut LevelFlags,
