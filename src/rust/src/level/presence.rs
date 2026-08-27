@@ -1,10 +1,13 @@
 //! Populating a generated level: gold, monsters, objects, traps, stairs, and
 //! the hero spawn.
 //!
-//! All functions read/write the C `places`/`rooms`/`player` globals via the
-//! raw symbols in [`super::symbols`]; [`super::ffi::new_level`] calls them
-//! after the rooms/passages have been dug and mirrored.
+//! Room selection and geometry go through the Rust `Level` model
+//! (`Level::rnd_room`/`Level::rnd_pos` on `current_level_mut()`); the
+//! remaining C `places`/`player` globals are touched via the raw symbols in
+//! [`super::symbols`]. [`super::ffi::new_level`] calls these after the
+//! rooms/passages have been dug and mirrored.
 
+use std::mem::size_of;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use crate::draw::place_at;
@@ -12,52 +15,47 @@ use crate::player::{CCoord, CPlace, CRoom, CThing};
 use crate::rnd::rnd;
 
 use super::ffitools::{FLOOR, F_REAL, PASSAGE, STAIRS};
+use super::level::current_level_mut;
 use super::redraw::{chat_at, chat_at_mut};
 use super::symbols::{
-    AMULET, AMULETLEVEL, FALSE, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMAZE, ISMEAN, MAXOBJ,
+    AMULET, AMULETLEVEL, FALSE, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN, MAXOBJ,
     MAXROOMS, MAXTRAPS, MAXTRIES, MAXTREAS, MINTREAS, NTRAPS, PLAYER, SEEMONST, TREAS_ROOM, TRUE,
     _attach, amulet, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch, new_item,
     new_monster, new_thing, ntraps, places, player, randmonster, roomin, rooms, seenstairs, stairs,
     step_ok, thing_o, thing_t, turn_see, visuals,
 };
 
-/// Pick a random room slot that has not been removed.
-unsafe fn rnd_room() -> c_int {
-    loop {
-        let rm = rnd(MAXROOMS as c_int);
-        if (rooms[rm as usize].r_flags & ISGONE) == 0 {
-            return rm;
-        }
+/// Map a pointer into the C `rooms` array back to its Rust room-slot index.
+///
+/// The pointer is only used for address arithmetic against the C `rooms`
+/// global so the caller can look the slot up in the `Level::rooms` member;
+/// it is never dereferenced. Returns `None` for a null or out-of-range
+/// pointer.
+unsafe fn room_slot_of(rp: *mut CRoom) -> Option<usize> {
+    if rp.is_null() {
+        return None;
     }
-}
-
-/// Random floor coordinate inside `rp`.
-unsafe fn rnd_pos(rp: *mut CRoom, cp: *mut CCoord) {
-    if rp.is_null() || cp.is_null() {
-        return;
-    }
-    (*cp).x = (*rp).r_pos.x + rnd((*rp).r_max.x - 2) + 1;
-    (*cp).y = (*rp).r_pos.y + rnd((*rp).r_max.y - 2) + 1;
+    let base = rooms.as_ptr() as usize;
+    let idx = (rp as usize).wrapping_sub(base) / size_of::<CRoom>();
+    (idx < MAXROOMS).then_some(idx)
 }
 
 /// Find a floor cell to place something, optionally avoiding monsters.
 ///
-/// If `rp` is null a random room is tried each iteration. Returns `TRUE` and
-/// stores the chosen cell into `cp` on success; `FALSE` when `limit` (if
-/// nonzero) attempts are exhausted.
+/// If `rp` is null a random room slot is tried each iteration via
+/// `Level::rnd_room`; otherwise `rp` is mapped back to the matching `Level`
+/// room slot. Room selection and geometry come from the Rust `Level` model
+/// (`Level::rnd_pos`), while the candidate cell is validated against the C
+/// `places` grid. Returns `TRUE` and stores the chosen cell into `cp` on
+/// success; `FALSE` when `limit` (if nonzero) attempts are exhausted.
 #[no_mangle]
 pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: c_uchar) -> c_uchar {
     if cp.is_null() {
         return FALSE;
     }
 
-    let pickroom = rp.is_null();
-    let mut room_ptr = rp;
-    let mut compchar: c_char = 0;
-
-    if !pickroom {
-        compchar = if ((*room_ptr).r_flags & ISMAZE) != 0 { PASSAGE } else { FLOOR };
-    }
+    let current = current_level_mut();
+    let room_idx = room_slot_of(rp);
 
     let mut cnt = limit;
     loop {
@@ -68,12 +66,16 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
             cnt -= 1;
         }
 
-        if pickroom {
-            room_ptr = (&raw mut rooms[rnd_room() as usize]) as *mut CRoom;
-            compchar = if ((*room_ptr).r_flags & ISMAZE) != 0 { PASSAGE } else { FLOOR };
-        }
+        let idx = match room_idx {
+            Some(idx) => idx,
+            None => current.rnd_room(),
+        };
+        let room = &current.rooms[idx];
+        let compchar = if room.is_maze() { PASSAGE } else { FLOOR };
+        let pos = current.rnd_pos(room);
 
-        rnd_pos(room_ptr, cp);
+        (*cp).x = pos.x;
+        (*cp).y = pos.y;
         let pp = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
         if monst != 0 {
             if (*pp).p_monst.is_null() && step_ok((*pp).p_ch as c_int) != 0 {
@@ -87,10 +89,13 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
 
 /// Fill one treasure room with `MIN..MAX` objects and monsters.
 unsafe fn treas_room() {
+    let current = current_level_mut();
     let mut mp = CCoord { x: 0, y: 0 };
-    let rp = &mut rooms[rnd_room() as usize];
+    let idx = current.rnd_room();
+    let room = &current.rooms[idx];
+    let rp = &mut rooms[idx];
 
-    let mut spots = (rp.r_max.y - 2) * (rp.r_max.x - 2) - MINTREAS;
+    let mut spots = (room.size.y - 2) * (room.size.x - 2) - MINTREAS;
     if spots > (MAXTREAS - MINTREAS) {
         spots = MAXTREAS - MINTREAS;
     }
@@ -110,7 +115,7 @@ unsafe fn treas_room() {
     if nm < num_monst + 2 {
         nm = num_monst + 2;
     }
-    spots = (rp.r_max.y - 2) * (rp.r_max.x - 2);
+    spots = (room.size.y - 2) * (room.size.x - 2);
     if nm > spots {
         nm = spots;
     }

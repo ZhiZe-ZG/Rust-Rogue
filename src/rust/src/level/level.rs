@@ -4,6 +4,9 @@
 //! for the current dungeon level, plus the process-wide singleton holding
 //! the live level.
 
+use std::os::raw::c_int;
+
+use crate::rnd::rnd;
 use glam::IVec2;
 
 use super::passages::{
@@ -134,6 +137,32 @@ impl Level {
 
         mark_passages(&self.map, &mut self.flags, self.depth);
         number_passages(&self.map, &mut self.flags, &self.rooms, &mut self.passage_links);
+    }
+
+    /// Pick a random room slot that has not been removed for this level.
+    ///
+    /// Reads the `self.rooms` member (the Rust room model) instead of the C
+    /// `rooms` global, checking each slot's `gone` flag until a live slot is
+    /// found. Returns the room's index into [`Level::rooms`].
+    pub fn rnd_room(&self) -> usize {
+        loop {
+            let rm = rnd(MAX_ROOMS as c_int) as usize;
+            if !self.rooms[rm].is_gone() {
+                return rm;
+            }
+        }
+    }
+
+    /// Random floor coordinate inside `room`.
+    ///
+    /// Returns a cell one tile inside the room's walls: `room.position`
+    /// offset by `rnd(room.size - 2) + 1` on each axis, matching the legacy
+    /// C `rnd_pos` math but using the Rust room geometry.
+    pub fn rnd_pos(&self, room: &Room) -> IVec2 {
+        IVec2::new(
+            room.position.x + rnd(room.size.x - 2) + 1,
+            room.position.y + rnd(room.size.y - 2) + 1,
+        )
     }
 
     pub fn generate_rooms_and_connections(
@@ -418,6 +447,33 @@ mod tests {
                     || (abs.x == 18 && (11..=12).contains(&abs.y)),
                 "entry point {abs:?} not on a facing wall"
             );
+        }
+    }
+
+    /// `rnd_room` only returns a slot that is not gone; when every slot but
+    /// one is removed, that single live slot is always selected.
+    #[test]
+    fn rnd_room_skips_gone_rooms() {
+        let mut level = Level::new();
+        for (i, room) in level.rooms.iter_mut().enumerate() {
+            if i != 3 {
+                room.mark_gone();
+            }
+        }
+        for _ in 0..100 {
+            assert_eq!(level.rnd_room(), 3);
+        }
+    }
+
+    /// `rnd_pos` always lands one cell inside the room walls on every axis.
+    #[test]
+    fn rnd_pos_lands_inside_room_walls() {
+        let level = Level::new();
+        let room = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
+        for _ in 0..100 {
+            let pos = level.rnd_pos(&room);
+            assert!((11..15).contains(&pos.x), "x {0} outside room interior", pos.x);
+            assert!((11..13).contains(&pos.y), "y {0} outside room interior", pos.y);
         }
     }
 }
