@@ -1,5 +1,6 @@
 pub mod armor;
 pub mod chase;
+pub mod command;
 pub mod daemon;
 pub mod daemons;
 pub mod draw;
