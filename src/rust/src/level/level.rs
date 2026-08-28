@@ -188,14 +188,8 @@ impl Level {
     }
 }
 
-static mut CURRENT_LEVEL: Option<Level> = None;
-
-pub unsafe fn current_level_mut() -> &'static mut Level {
-    if CURRENT_LEVEL.is_none() {
-        CURRENT_LEVEL = Some(Level::new());
-    }
-    CURRENT_LEVEL.as_mut().unwrap()
-}
+/// The live level singleton is owned by the game-state module.
+pub use crate::game::{current_level_mut, current_level};
 
 #[cfg(test)]
 mod tests {

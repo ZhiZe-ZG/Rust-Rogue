@@ -10,8 +10,8 @@ use std::os::raw::c_int;
 
 use glam::IVec2;
 
-use crate::draw::place_at;
-use crate::player::{CPlace, CRoom, CThing};
+use crate::game::clear_level;
+use crate::player::{CRoom, CThing};
 
 use super::level::current_level_mut;
 use super::mirror::{
@@ -25,7 +25,7 @@ use super::rooms::Room;
 use super::structure::Structure;
 use super::symbols::{
     ISGONE, ISHELD, MAXROOMS, _free_list, clear, level, lvl_obj, max_level, mlist, no_food,
-    places, player, thing_t, wake_monster,
+    player, thing_t, wake_monster,
 };
 use super::tile::Tile;
 
@@ -92,14 +92,8 @@ unsafe fn begin_new_level() {
     // Reset the Rust-side per-cell flags for the fresh depth.
     current.reset_flags();
 
-    // Clean things off from last level.
-    for y in 0..32 {
-        for x in 0..SCREEN_COLS {
-            let pp = place_at((&raw mut places) as *mut CPlace, y, x);
-            (*pp).p_ch = b' ' as _;
-            (*pp).p_monst = std::ptr::null_mut();
-        }
-    }
+    // Reset the Rust-owned places grid and monster map.
+    clear_level();
     clear();
 }
 

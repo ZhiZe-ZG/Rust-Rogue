@@ -5,6 +5,7 @@ pub mod daemon;
 pub mod daemons;
 pub mod draw;
 pub mod fight;
+pub mod game;
 pub mod init;
 pub mod io;
 pub mod options;

@@ -12,7 +12,8 @@ use crate::player::{CPlace, CThingMonster};
 
 use super::ffitools::{DOOR, F_PASS, F_REAL, F_SEEN, PASSAGE};
 use super::passages::{SCREEN_COLS, SCREEN_LINES};
-use super::symbols::{addch, places, r#move, standend, standout, thing_o};
+use crate::game::places;
+use super::symbols::{addch, r#move, standend, standout, thing_o};
 
 /// Read a cell's on-screen character from the C `places` grid.
 #[inline]

@@ -11,13 +11,14 @@ use std::os::raw::{c_char, c_int, c_short};
 use glam::IVec2;
 
 use crate::draw::{place_at, set_tile_char};
+use crate::game::places;
 use crate::player::{CCoord, CPlace, CRoom};
 
 use super::ffitools::{tile_to_ascii, FLOOR, F_PASS, F_PNUM, F_REAL, F_SEEN, PASSAGE, STAIRS};
 use super::level::{Level, LEVEL_HEIGHT, LEVEL_WIDTH, current_level_mut};
 use super::passages::{MAX_EXITS, MAX_PASSAGES, SCREEN_COLS, SCREEN_LINES};
 use super::rooms::Room;
-use super::symbols::{ISDARK, ISGONE, ISMAZE, max_level, places, rooms, passages};
+use super::symbols::{ISDARK, ISGONE, ISMAZE, max_level, rooms, passages};
 use super::tile::Tile;
 
 /// Convert one C `CRoom` into a Rust [`Room`].

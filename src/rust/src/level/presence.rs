@@ -11,6 +11,7 @@ use std::mem::size_of;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use crate::draw::place_at;
+use crate::game::places;
 use crate::player::{CCoord, CPlace, CRoom, CThing};
 use crate::rnd::rnd;
 
@@ -21,7 +22,7 @@ use super::symbols::{
     AMULET, AMULETLEVEL, FALSE, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN, MAXOBJ,
     MAXROOMS, MAXTRAPS, MAXTRIES, MAXTREAS, MINTREAS, NTRAPS, PLAYER, SEEMONST, TREAS_ROOM, TRUE,
     _attach, amulet, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch, new_item,
-    new_monster, new_thing, ntraps, places, player, randmonster, roomin, rooms, seenstairs, stairs,
+    new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, stairs,
     step_ok, thing_o, thing_t, turn_see, visuals,
 };
 use super::tile::Tile;

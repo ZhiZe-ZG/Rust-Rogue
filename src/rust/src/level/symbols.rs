@@ -56,7 +56,6 @@ unsafe extern "C" {
     pub(crate) static mut rooms: [CRoom; MAXROOMS];
     pub(crate) static mut passages: [CRoom; MAX_PASSAGES];
     pub(crate) static mut lvl_obj: *mut CThing;
-    pub(crate) static mut places: [CPlace; 32 * 80];
     pub(crate) static mut player: CThing;
     pub(crate) static mut mlist: *mut CThing;
     pub(crate) static mut no_food: c_int;
