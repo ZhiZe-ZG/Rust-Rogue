@@ -606,8 +606,6 @@ void	ring_on();
 void	ring_off();
 int	rnd(int range);
 int	roll(int number, int sides);
-int	rs_save_file(FILE *savef);
-int	rs_restore_file(FILE *inf);
 void	runto(coord *runner);
 void	rust_armor(THING *arm);
 int	save(int which);

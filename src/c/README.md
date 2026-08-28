@@ -11,7 +11,7 @@ The files are grouped here by primary responsibility. Some files interact across
 - `main.c`: Program entry point, top-level initialization, and main game flow startup.
 - `init.c`: Early game/session initialization routines.
 - `command.rs`: Player command parsing and command dispatch, hosted in the Rust FFI layer at `src/rust/src/command.rs`.
-- `state.c`: Core game-state transitions and state-related utilities.
+- `state.rs`: Game save/restore serialization, hosted in the Rust FFI layer at `src/rust/src/state.rs`.
 
 ## Dungeon and Movement
 
