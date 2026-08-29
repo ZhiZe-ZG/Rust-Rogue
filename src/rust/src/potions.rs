@@ -139,8 +139,6 @@ pub union CThing {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CPlace {
-    pub p_ch: c_char,
-    pub p_flags: c_char,
     pub p_monst: *mut CThing,
 }
 

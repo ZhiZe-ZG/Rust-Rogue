@@ -3,8 +3,8 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
 
-use crate::draw::place_at;
-use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
+use crate::draw;
+use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
@@ -61,12 +61,12 @@ unsafe fn proom() -> *mut CRoom {
 
 #[inline]
 unsafe fn flat(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_flags
+    draw::flat_at(y, x)
 }
 
 #[inline]
 unsafe fn chat(y: c_int, x: c_int) -> c_int {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch as c_uchar as c_int
+    draw::chat_at(y, x) as c_uchar as c_int
 }
 
 #[inline]
@@ -100,7 +100,6 @@ unsafe extern "C" {
     static mut stdscr: *mut std::ffi::c_void;
     static mut monsters: [crate::monsters::CMonster; 26];
     static mut player: CThing;
-    static mut places: [CPlace; 32 * 80];
     static mut scr_info: [CObjInfo; 18];
     static mut pot_info: [CObjInfo; 14];
     static mut ws_info: [CObjInfo; 14];

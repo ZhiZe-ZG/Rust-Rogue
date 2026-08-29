@@ -10,20 +10,19 @@
 use std::mem::size_of;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
-use crate::draw::place_at;
-use crate::game::places;
-use crate::player::{CCoord, CPlace, CRoom, CThing};
+use crate::draw::terrain_chat_at;
+use crate::game;
+use crate::player::{CCoord, CRoom, CThing};
 use crate::rnd::rnd;
 
-use super::ffitools::{FLOOR, F_REAL, PASSAGE, STAIRS};
-use super::level::{current_level_mut, LEVEL_WIDTH};
-use super::redraw::{chat_at, chat_at_mut};
+use super::ffitools::{FLOOR, PASSAGE, STAIRS};
+use super::level::{current_level_mut, LevelFlags, LEVEL_WIDTH};
 use super::symbols::{
     AMULET, AMULETLEVEL, FALSE, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN, MAXOBJ,
     MAXROOMS, MAXTRAPS, MAXTRIES, MAXTREAS, MINTREAS, NTRAPS, PLAYER, SEEMONST, TREAS_ROOM, TRUE,
-    _attach, amulet, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch, new_item,
-    new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, stairs,
-    step_ok, thing_o, thing_t, turn_see, visuals,
+    _attach, amulet, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch,
+    new_item, new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs,
+    stairs, step_ok, thing_o, thing_t, turn_see, visuals,
 };
 use super::tile::Tile;
 
@@ -60,12 +59,19 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
     let room_idx = room_slot_of(rp);
 
     let mut cnt = limit;
+    let mut guard = 0u32;
     loop {
         if limit != 0 {
             if cnt == 0 {
                 return FALSE;
             }
             cnt -= 1;
+        }
+        // Safety bound: unlimited scans must eventually give up rather than
+        // hang level generation on a packed level.
+        guard += 1;
+        if guard > 1_000_000 {
+            return FALSE;
         }
 
         let idx = match room_idx {
@@ -78,12 +84,17 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
 
         (*cp).x = pos.x;
         (*cp).y = pos.y;
-        let pp = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
+
+        // `find_floor` validates terrain: an object overlay (`!`, `?`, ...)
+        // must not count as a free floor cell, matching the legacy behavior
+        // where placed objects were scribbled into `places[].p_ch`.
+        let ch = terrain_chat_at((*cp).y, (*cp).x);
+
         if monst != 0 {
-            if (*pp).p_monst.is_null() && step_ok((*pp).p_ch as c_int) != 0 {
+            if game::monster_at((*cp).y, (*cp).x).is_null() && step_ok(ch as c_int) != 0 {
                 return TRUE;
             }
-        } else if (*pp).p_ch == compchar {
+        } else if ch == compchar {
             return TRUE;
         }
     }
@@ -108,8 +119,8 @@ unsafe fn treas_room() {
         find_floor(rp as *mut CRoom, &mut mp, 2 * MAXTRIES, FALSE);
         let tp = new_thing();
         (*thing_o(tp)).o_pos = mp;
+        // Objects render from the `lvl_obj` list; no glyph write needed.
         _attach((&raw mut lvl_obj) as *mut *mut CThing, tp);
-        (*place_at((&raw mut places) as *mut CPlace, mp.y, mp.x)).p_ch = (*thing_o(tp)).o_type as c_char;
         nm -= 1;
     }
 
@@ -163,7 +174,6 @@ unsafe fn place_room_contents() {
                 (*rp).r_goldval = (*og).o_arm;
                 find_floor(rp, &mut (*rp).r_gold, FALSE as c_int, FALSE);
                 (*og).o_pos = (*rp).r_gold;
-                (*place_at((&raw mut places) as *mut CPlace, (*rp).r_gold.y, (*rp).r_gold.x)).p_ch = GOLD;
                 (*og).o_flags = ISMANY;
                 (*og).o_group = GOLDGRP;
                 (*og).o_type = GOLD as c_int;
@@ -209,8 +219,6 @@ unsafe fn put_things() {
             let og = thing_o(obj);
             let pos = &raw mut (*og).o_pos;
             find_floor(std::ptr::null_mut(), pos, FALSE as c_int, FALSE);
-            let pp = place_at((&raw mut places) as *mut CPlace, (*og).o_pos.y, (*og).o_pos.x);
-            (*pp).p_ch = (*og).o_type as c_char;
         }
     }
 
@@ -231,8 +239,6 @@ unsafe fn put_things() {
         // Put it somewhere.
         let pos = &raw mut (*og).o_pos;
         find_floor(std::ptr::null_mut(), pos, FALSE as c_int, FALSE);
-        let pp = place_at((&raw mut places) as *mut CPlace, (*og).o_pos.y, (*og).o_pos.x);
-        (*pp).p_ch = AMULET;
     }
 }
 
@@ -255,20 +261,18 @@ unsafe fn place_traps() {
     while i > 0 {
         loop {
             find_floor(std::ptr::null_mut(), &raw mut stairs, FALSE as c_int, FALSE);
-            if chat_at(stairs.y, stairs.x) == FLOOR {
+            if terrain_chat_at(stairs.y, stairs.x) == FLOOR {
                 break;
             }
         }
-        let sp = &raw mut (*place_at((&raw mut places) as *mut CPlace, stairs.y, stairs.x)).p_flags;
-        *sp = ((*sp as u8) & !(F_REAL as u8)) as c_char;
-        *sp = ((*sp as u8) | rnd(NTRAPS) as u8) as c_char;
 
-        // Keep the Rust level model in sync: the trap occupies a floor cell
-        // in the tile map and is non-real (hidden) so it can be revealed.
+        // Record the trap in the level model: a floor cell becomes a hidden
+        // trap (non-real, with its kind in the trap grid).
         let current = current_level_mut();
         current.map.set(stairs.y as usize, stairs.x as usize, Tile::Trap);
-        let idx = stairs.y as usize * LEVEL_WIDTH + stairs.x as usize;
+        let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
         current.flags.real[idx] = false;
+        current.flags.trap[idx] = rnd(NTRAPS) as u8;
         i -= 1;
     }
 }
@@ -280,7 +284,10 @@ unsafe fn place_traps() {
 /// ```
 unsafe fn place_stairs() {
     find_floor(std::ptr::null_mut(), &raw mut stairs, FALSE as c_int, FALSE);
-    *chat_at_mut(stairs.y, stairs.x) = STAIRS;
+    // The staircase is a tile in the level map; it renders `%` via draw.
+    current_level_mut()
+        .map
+        .set(stairs.y as usize, stairs.x as usize, Tile::Stairs);
     seenstairs = FALSE;
 }
 

@@ -167,8 +167,6 @@ unsafe extern "C" {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CPlace {
-    pub p_ch: c_char,
-    pub p_flags: c_char,
     pub p_monst: *mut CThing,
 }
 
@@ -199,12 +197,12 @@ unsafe fn place_idx(y: c_int, x: c_int) -> usize {
 
 #[inline]
 unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    places[place_idx(y, x)].p_ch
+    crate::draw::chat_at(y, x)
 }
 
 #[inline]
 unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
-    places[place_idx(y, x)].p_monst
+    crate::game::monster_at(y, x) as *mut CThing
 }
 
 #[inline]
@@ -422,11 +420,7 @@ pub unsafe extern "C" fn charge_str(obj: *mut CThing) -> *mut c_char {
     BUF.as_mut_ptr()
 }
 
+#[inline]
 unsafe fn winat(y: c_int, x: c_int) -> c_char {
-    let tp = moat_at(y, x);
-    if tp.is_null() {
-        chat_at(y, x)
-    } else {
-        (*thing_o(tp)).o_packch
-    }
+    crate::draw::winat(y, x)
 }

@@ -2094,45 +2094,92 @@ unsafe fn rs_read_thing_references(
 
 // ─── Places (level map) ──────────────────────────────────────────────────────
 
-/// Serializes the level map, encoding monster links as references into the
-/// global mlist.
+/// Serialize the playable cell grid (the top `24x80` screen rows of the
+/// level): for each cell the tile discriminant, the four flag grids, the trap
+/// kind, and the per-cell monster reference (indexed into the global `mlist`).
 ///
-/// Uses globals: mlist.
-unsafe fn rs_write_places(savef: *mut CFile, places_arg: *mut CPlace, count: c_int) -> c_int {
+/// Uses globals: mlist, places (via crate::game), CURRENT_LEVEL.
+unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
+    let lvl = crate::game::current_level();
     let mut i: c_int = 0;
     while i < count {
-        let _ = rs_write_char(savef, (*places_arg.add(i as usize)).p_ch);
-        let _ = rs_write_char(savef, (*places_arg.add(i as usize)).p_flags);
-        let _ = rs_write_thing_reference(savef, mlist, (*places_arg.add(i as usize)).p_monst);
+        let y = i / MAXCOLS;
+        let x = i % MAXCOLS;
+        let idx = (y as usize) * crate::level::LEVEL_WIDTH + (x as usize);
+        let tile = lvl
+            .map
+            .get(y as usize, x as usize)
+            .unwrap_or(crate::level::Tile::Empty);
+        let _ = rs_write_char(savef, tile.to_u8() as c_char);
+        let _ = rs_write_boolean(savef, lvl.flags.real[idx] as c_int);
+        let _ = rs_write_boolean(savef, lvl.flags.passage[idx] as c_int);
+        let _ = rs_write_boolean(savef, lvl.flags.seen[idx] as c_int);
+        let _ = rs_write_char(savef, lvl.flags.passnum[idx] as c_char);
+        let _ = rs_write_char(savef, lvl.flags.trap[idx] as c_char);
+        // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
+        let place_idx = ((x as usize) << 5) + (y as usize);
+        let _ = rs_write_thing_reference(savef, mlist, crate::game::places[place_idx].p_monst);
         i += 1;
     }
 
     WRITE_ERROR
 }
 
-/// Restores the level map, resolving monster references against the global
-/// mlist.
+/// Restore the playable cell grid, resolving monster references against the
+/// global mlist and writing everything back into `CURRENT_LEVEL` plus the
+/// monster map.
 ///
-/// Uses globals: mlist.
-unsafe fn rs_read_places(inf: *mut CFile, places_arg: *mut CPlace, count: c_int) -> c_int {
+/// Uses globals: mlist, places (via crate::game), CURRENT_LEVEL.
+unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
+    let lvl = crate::game::current_level_mut();
     let mut i: c_int = 0;
     while i < count {
-        let _ = rs_read_char(inf, &mut (*places_arg.add(i as usize)).p_ch);
-        let _ = rs_read_char(inf, &mut (*places_arg.add(i as usize)).p_flags);
-        let _ = rs_read_thing_reference(inf, mlist, &mut (*places_arg.add(i as usize)).p_monst);
+        let y = i / MAXCOLS;
+        let x = i % MAXCOLS;
+        let idx = (y as usize) * crate::level::LEVEL_WIDTH + (x as usize);
+
+        let mut tile_disc: c_char = 0;
+        let mut real: c_uchar = 0;
+        let mut passage: c_uchar = 0;
+        let mut seen: c_uchar = 0;
+        let mut passnum: c_char = 0;
+        let mut trap_kind: c_char = 0;
+        let mut monst: *mut CThing = std::ptr::null_mut();
+
+        let _ = rs_read_char(inf, &mut tile_disc);
+        let _ = rs_read_boolean(inf, &mut real);
+        let _ = rs_read_boolean(inf, &mut passage);
+        let _ = rs_read_boolean(inf, &mut seen);
+        let _ = rs_read_char(inf, &mut passnum);
+        let _ = rs_read_char(inf, &mut trap_kind);
+        let _ = rs_read_thing_reference(inf, mlist, &mut monst);
+
+        let tile = crate::level::Tile::from_u8(tile_disc as u8).unwrap_or(crate::level::Tile::Empty);
+        let _ = lvl.map.set(y as usize, x as usize, tile);
+        lvl.flags.real[idx] = real != 0;
+        lvl.flags.passage[idx] = passage != 0;
+        lvl.flags.seen[idx] = seen != 0;
+        lvl.flags.passnum[idx] = passnum as u8;
+        lvl.flags.trap[idx] = trap_kind as u8;
+
+        // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
+        let place_idx = ((x as usize) << 5) + (y as usize);
+        crate::game::places[place_idx].p_monst = monst;
+        crate::game::MONSTERS[place_idx] = monst;
         i += 1;
     }
 
     read_stat()
 }
+
 
 // ─── Whole-game save / restore ───────────────────────────────────────────────
 
@@ -2250,7 +2297,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_object_list(savef, lvl_obj);
     let _ = rs_write_thing_list(savef, mlist);
 
-    let _ = rs_write_places(savef, (&raw mut places) as *mut CPlace, MAXLINES * MAXCOLS);
+    let _ = rs_write_places(savef, MAXLINES * MAXCOLS);
 
     let _ = rs_write_stats(savef, &raw mut max_stats);
     let _ = rs_write_rooms(savef, (&raw mut rooms) as *mut CRoom, MAXROOMS as c_int);
@@ -2400,7 +2447,7 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     rs_fix_thing(&raw mut player);
     rs_fix_thing_list(mlist);
 
-    let _ = rs_read_places(inf, (&raw mut places) as *mut CPlace, MAXLINES * MAXCOLS);
+    let _ = rs_read_places(inf, MAXLINES * MAXCOLS);
 
     let _ = rs_read_stats(inf, &raw mut max_stats);
     let _ = rs_read_rooms(inf, (&raw mut rooms) as *mut CRoom, MAXROOMS as c_int);

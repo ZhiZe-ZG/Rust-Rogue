@@ -10,7 +10,6 @@ mod level;
 mod mirror;
 mod passages;
 mod presence;
-mod redraw;
 mod roomgraph;
 mod rooms;
 mod structure;
@@ -19,7 +18,7 @@ mod tile;
 mod trap;
 
 pub use ffi::{door_open, new_level};
-pub use level::{current_level_mut, Level, LevelFlags, LEVEL_HEIGHT, LEVEL_WIDTH};
+pub use level::{current_level, current_level_mut, Level, LevelFlags, LEVEL_HEIGHT, LEVEL_WIDTH};
 
 pub use passages::Passage;
 pub use roomgraph::{RoomGraph, MAX_ROOMS};

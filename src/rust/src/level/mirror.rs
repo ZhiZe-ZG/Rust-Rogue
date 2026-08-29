@@ -10,15 +10,12 @@ use std::os::raw::{c_char, c_int, c_short};
 
 use glam::IVec2;
 
-use crate::draw::{place_at, set_tile_char};
-use crate::game::places;
-use crate::player::{CCoord, CPlace, CRoom};
+use crate::player::{CCoord, CRoom};
 
-use super::ffitools::{tile_to_ascii, FLOOR, F_PASS, F_PNUM, F_REAL, F_SEEN, PASSAGE, STAIRS};
-use super::level::{Level, LEVEL_HEIGHT, LEVEL_WIDTH, current_level_mut};
-use super::passages::{MAX_EXITS, MAX_PASSAGES, SCREEN_COLS, SCREEN_LINES};
+use super::level::Level;
+use super::passages::{MAX_EXITS, MAX_PASSAGES};
 use super::rooms::Room;
-use super::symbols::{ISDARK, ISGONE, ISMAZE, max_level, rooms, passages};
+use super::symbols::{ISDARK, ISGONE, ISMAZE, rooms, passages};
 use super::tile::Tile;
 
 /// Convert one C `CRoom` into a Rust [`Room`].
@@ -73,61 +70,11 @@ pub(crate) unsafe fn read_c_room_data() -> [Room; super::symbols::MAXROOMS] {
     })
 }
 
-/// Draw the whole level map to the C `places` grid in one pass.
-///
-/// Iterates the merged tile map of [`current_level_mut()`] once and converts
-/// every non-empty tile to its ASCII character. Orientation-sensitive tiles
-/// ([`Tile::Wall`], [`Tile::HiddenDoor`]) are given their above/below
-/// neighbours so the renderer can pick `-` vs `|`. Passage tiles are flagged
-/// with `F_PASS` separately by `sync_passages_to_c` during passage
-/// generation.
-/// Uses globals: `places` (via `set_tile_char`).
-pub(crate) unsafe fn draw_map_ascii() {
-    let current = current_level_mut();
-    let map = &current.map;
-
-    for y in 0..map.height() {
-        for x in 0..map.width() {
-            let tile = map.get(y, x).unwrap_or(Tile::Empty);
-            let up = if y == 0 { None } else { map.get(y - 1, x) };
-            let down = map.get(y + 1, x);
-            let ch = match tile_to_ascii(tile, up, down) {
-                Some(ch) => ch,
-                None => continue,
-            };
-
-            set_tile_char(y as c_int, x as c_int, ch);
-        }
-    }
-}
-
-/// Copy the Rust flag grids of `lvl` into the C `places` grid's `p_flags`.
-///
-/// Reconstructs the legacy flat bits after level generation has finished
-/// digging rooms, doors, and passages, so no C globals are touched while
-/// generating. Cell flags are the OR of the passage component number
-/// (`passnum`), `F_PASS`, `F_SEEN`, and `F_REAL` (except where a real wall
-/// was hidden).
-/// Uses globals: `places`.
-pub(crate) unsafe fn copy_flags_to_c(lvl: &Level) {
-    for y in 0..LEVEL_HEIGHT {
-        for x in 0..LEVEL_WIDTH {
-            let idx = y * LEVEL_WIDTH + x;
-            let mut flags = lvl.flags.passnum[idx] & F_PNUM as u8;
-            if lvl.flags.passage[idx] {
-                flags |= F_PASS as u8;
-            }
-            if lvl.flags.seen[idx] {
-                flags |= F_SEEN as u8;
-            }
-            if lvl.flags.real[idx] {
-                flags |= F_REAL as u8;
-            }
-            let pp = place_at((&raw mut places) as *mut CPlace, y as c_int, x as c_int);
-            (*pp).p_flags = flags as c_char;
-        }
-    }
-}
+// NOTE: The per-cell display glyph (`p_ch`) and flat flags (`p_flags`) are no
+// longer cached in a `places` grid. `crate::draw` computes the glyph for every
+// cell on the fly from the `Level` tile map and `LevelFlags` grids, so the
+// former `draw_map_ascii` and `copy_flags_to_c` mirrors are obsolete and have
+// been removed.
 
 /// Copy `lvl`'s rooms' Rust-side entry points into the C `rooms` array so
 /// the engine can follow room exits.

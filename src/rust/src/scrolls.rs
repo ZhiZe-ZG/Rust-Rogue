@@ -2,7 +2,8 @@ use crate::rnd::rnd;
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-use crate::draw::place_at;
+use crate::draw::{chat_at as draw_chat, map_cell_reveal, winat as draw_winat};
+use crate::game;
 
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
@@ -133,8 +134,6 @@ pub union CThing {
 
 #[repr(C)]
 pub struct CPlace {
-    pub p_ch: c_char,
-    pub p_flags: c_char,
     pub p_monst: *mut CThing,
 }
 
@@ -209,22 +208,17 @@ unsafe fn proom() -> *mut CRoom {
 
 #[inline]
 unsafe fn chat(y: c_int, x: c_int) -> c_int {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch as c_uchar as c_int
+    draw_chat(y, x) as c_uchar as c_int
 }
 
 #[inline]
 unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst
+    game::monster_at(y, x) as *mut CThing
 }
 
 #[inline]
 unsafe fn winat(y: c_int, x: c_int) -> c_int {
-    let tp = moat(y, x);
-    if tp.is_null() {
-        chat(y, x)
-    } else {
-        (*thing_t(tp)).t_disguise as c_uchar as c_int
-    }
+    draw_winat(y, x) as c_uchar as c_int
 }
 
 #[inline]
@@ -237,65 +231,8 @@ unsafe fn player_has(flag: c_short) -> bool {
     ((*thing_t(&raw mut player)).t_flags & flag) != 0
 }
 
-unsafe fn map_cell_reveal(pp: *mut CPlace) -> c_int {
-    let mut ch = (*pp).p_ch as c_uchar as c_int;
-    match ch {
-        DOOR | STAIRS => {}
-        H_WALL | V_WALL => {
-            if ((*pp).p_flags & F_REAL) == 0 {
-                (*pp).p_ch = DOOR as c_char;
-                (*pp).p_flags |= F_REAL;
-                ch = DOOR;
-            }
-        }
-        SPACE => {
-            if ((*pp).p_flags & F_REAL) != 0 {
-                if ((*pp).p_flags & F_PASS) != 0 {
-                    if ((*pp).p_flags & F_REAL) == 0 {
-                        (*pp).p_ch = PASSAGE as c_char;
-                    }
-                    (*pp).p_flags |= F_SEEN | F_REAL;
-                    ch = PASSAGE;
-                } else {
-                    ch = SPACE;
-                }
-            } else {
-                (*pp).p_flags |= F_REAL;
-                (*pp).p_ch = PASSAGE as c_char;
-                (*pp).p_flags |= F_SEEN | F_REAL;
-                ch = PASSAGE;
-            }
-        }
-        PASSAGE => {
-            if ((*pp).p_flags & F_REAL) == 0 {
-                (*pp).p_ch = PASSAGE as c_char;
-            }
-            (*pp).p_flags |= F_SEEN | F_REAL;
-            ch = PASSAGE;
-        }
-        FLOOR => {
-            if ((*pp).p_flags & F_REAL) != 0 {
-                ch = SPACE;
-            } else {
-                (*pp).p_ch = TRAP as c_char;
-                (*pp).p_flags |= F_SEEN | F_REAL;
-                ch = TRAP;
-            }
-        }
-        _ => {
-            if ((*pp).p_flags & F_PASS) != 0 {
-                if ((*pp).p_flags & F_REAL) == 0 {
-                    (*pp).p_ch = PASSAGE as c_char;
-                }
-                (*pp).p_flags |= F_SEEN | F_REAL;
-                ch = PASSAGE;
-            } else {
-                ch = SPACE;
-            }
-        }
-    }
-    ch
-}
+// Map reveal now lives in `crate::draw::map_cell_reveal`, operating directly
+// on the `CURRENT_LEVEL` tile map and flag grids.
 
 /// read_scroll:
 /// Read a scroll from the pack and apply its effect.
@@ -424,21 +361,20 @@ pub unsafe extern "C" fn read_scroll() {
             scr_info[S_MAP as usize].oi_know = TRUE;
             msg(c"oh, now this scroll has a map on it".as_ptr());
 
-            for y in 1..(NUMLINES - 1) {
-                for x in 0..NUMCOLS {
-                    let pp = place_at((&raw mut places) as *mut CPlace, y, x);
-                    let ch = map_cell_reveal(pp);
-                    if ch != SPACE {
-                        let tp = (*pp).p_monst;
-                        if !tp.is_null() {
-                            (*thing_t(tp)).t_oldch = ch as c_char;
-                        }
-                        if tp.is_null() || !player_has(SEEMONST) {
-                            mvaddch(y, x, ch as c_uint);
-                        }
-                    }
+    for y in 1..(NUMLINES - 1) {
+        for x in 0..NUMCOLS {
+            let ch = map_cell_reveal(y, x);
+            if ch != SPACE {
+                let tp = moat(y, x);
+                if !tp.is_null() {
+                    (*thing_t(tp)).t_oldch = ch as c_char;
+                }
+                if tp.is_null() || !player_has(SEEMONST) {
+                    mvaddch(y, x, ch as c_uint);
                 }
             }
+        }
+    }
         }
         S_FDET => {
             let mut found = FALSE;

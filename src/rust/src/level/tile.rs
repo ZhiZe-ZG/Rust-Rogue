@@ -26,3 +26,34 @@ pub enum Tile {
     /// until it is revealed.
     Trap,
 }
+
+impl Tile {
+    /// Stable serialization discriminant for the save file.
+    pub const fn to_u8(self) -> u8 {
+        match self {
+            Tile::Empty => 0,
+            Tile::Floor => 1,
+            Tile::Passage => 2,
+            Tile::Door => 3,
+            Tile::Wall => 4,
+            Tile::HiddenDoor => 5,
+            Tile::Stairs => 6,
+            Tile::Trap => 7,
+        }
+    }
+
+    /// Inverse of [`Tile::to_u8`].
+    pub const fn from_u8(v: u8) -> Option<Tile> {
+        match v {
+            0 => Some(Tile::Empty),
+            1 => Some(Tile::Floor),
+            2 => Some(Tile::Passage),
+            3 => Some(Tile::Door),
+            4 => Some(Tile::Wall),
+            5 => Some(Tile::HiddenDoor),
+            6 => Some(Tile::Stairs),
+            7 => Some(Tile::Trap),
+            _ => None,
+        }
+    }
+}

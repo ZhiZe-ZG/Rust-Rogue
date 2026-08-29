@@ -2,8 +2,7 @@ use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
-use crate::draw::place_at;
-use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
+use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
@@ -88,7 +87,6 @@ unsafe extern "C" {
     static mut stairs: CCoord;
     static mut stdscr: *mut c_void;
     static mut terse: c_uchar;
-    static mut places: [CPlace; 32 * 80];
     static mut cur_armor: *mut CThing;
     static mut cur_ring: [*mut CThing; 2];
     static mut cur_weapon: *mut CThing;
@@ -103,14 +101,11 @@ unsafe extern "C" {
     fn nohaste();
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
     fn get_str(s: *mut c_char, win: *mut c_void) -> c_int;
-    fn inch() -> c_uint;
     fn isupper(c: c_int) -> c_int;
     fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
     fn malloc(size: usize) -> *mut c_void;
     fn msg(fmt: *const c_char, ...);
     fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
-    #[link_name = "move"]
-    fn move_(y: c_int, x: c_int);
     fn readchar() -> c_int;
     fn reset_last();
     fn roll(num: c_int, sides: c_int) -> c_int;
@@ -139,11 +134,6 @@ unsafe fn on(thing: *mut CThing, flag: c_short) -> bool {
 }
 
 #[inline]
-unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
-}
-
-#[inline]
 unsafe fn room_flags(rp: *mut CRoom) -> c_short {
     if rp.is_null() { 0 } else { (*rp).r_flags }
 }
@@ -162,194 +152,8 @@ unsafe fn first_is_vowel(s: *const c_char) -> bool {
     matches!(bytes[0], b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U')
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn look(wakeup: c_uchar) {
-    let mut x: c_int;
-    let mut y: c_int;
-    let mut ch: c_int;
-    let mut tp: *mut CThing;
-    let mut pp: *mut CPlace;
-    let mut ey: c_int;
-    let mut ex: c_int;
-    let mut passcount: c_int = 0;
-    let mut pfl: c_char;
-    let mut pch: c_char;
-    let mut sy: c_int;
-    let mut sx: c_int;
-    let mut sumhero: c_int = 0;
-    let mut diffhero: c_int = 0;
-    let hero = hero_pos();
-
-    if !(oldpos.x == hero.x && oldpos.y == hero.y) {
-        erase_lamp(&raw mut oldpos, oldrp);
-        oldpos = hero;
-        oldrp = (*thing_t(&raw mut player)).t_room;
-    }
-
-    ey = hero.y + 1;
-    ex = hero.x + 1;
-    sx = hero.x - 1;
-    sy = hero.y - 1;
-    if door_stop != 0 && firstmove == 0 && running != 0 {
-        sumhero = hero.y + hero.x;
-        diffhero = hero.y - hero.x;
-    }
-
-    pp = place_at((&raw mut places) as *mut CPlace, hero.y, hero.x);
-    pch = (*pp).p_ch;
-    pfl = (*pp).p_flags;
-
-    for y in sy..=ey {
-        if y <= 0 || y >= MAXLINES - 1 {
-            continue;
-        }
-        for x in sx..=ex {
-            if x < 0 || x >= MAXCOLS {
-                continue;
-            }
-            if !on(&raw mut player, ISBLIND) && y == hero.y && x == hero.x {
-                continue;
-            }
-
-            pp = place_at((&raw mut places) as *mut CPlace, y, x);
-            ch = (*pp).p_ch as c_int;
-            if ch == ' ' as c_int {
-                continue;
-            }
-
-            let fp = &mut (*pp).p_flags;
-            if pch != DOOR && ch != DOOR as c_int && (pfl as u8 & F_PASS as u8) != ((*fp as u8) & F_PASS as u8) {
-                continue;
-            }
-            if (((*fp as u8) & F_PASS as u8) != 0 || ch == DOOR as c_int)
-                && (((pfl as u8) & F_PASS as u8) != 0 || pch == DOOR)
-            {
-                if hero.x != x && hero.y != y
-                    && step_ok(chat_at(y, hero.x) as c_int) == 0
-                    && step_ok(chat_at(hero.y, x) as c_int) == 0
-                {
-                    continue;
-                }
-            }
-
-            tp = (*pp).p_monst;
-            if tp.is_null() {
-                ch = trip_ch(y, x, ch);
-            } else {
-                if on(tp, SEEMONST) && on(tp, ISINVIS) {
-                    if door_stop != 0 && firstmove == 0 {
-                        running = FALSE;
-                    }
-                    continue;
-                }
-                if wakeup != 0 {
-                    wake_monster(y, x);
-                }
-                if see_monst(tp) != 0 {
-                    if on(&raw mut player, ISHALU) {
-                        ch = rnd(26) + 'A' as c_int;
-                    } else {
-                        ch = (*thing_t(tp)).t_disguise as c_int;
-                    }
-                }
-            }
-
-            if on(&raw mut player, ISBLIND) && (y != hero.y || x != hero.x) {
-                continue;
-            }
-
-            move_(y, x);
-            let player_room = (*thing_t(&raw mut player)).t_room;
-            if (room_flags(player_room) & (ISGONE as c_short | ISDARK as c_short)) == ISDARK && see_floor == 0 && ch == FLOOR as c_int {
-                ch = ' ' as c_int;
-            }
-
-            let screen_ch = inch() as c_int & 0xFF;
-            if tp.is_null() || ch != screen_ch {
-                addch(ch as c_uint);
-            }
-
-            if door_stop != 0 && firstmove == 0 && running != 0 {
-                if runch == b'h' as c_char && x == ex { continue; }
-                if runch == b'j' as c_char && y == sy { continue; }
-                if runch == b'k' as c_char && y == ey { continue; }
-                if runch == b'l' as c_char && x == sx { continue; }
-                if runch == b'y' as c_char && (y + x) - sumhero >= 1 { continue; }
-                if runch == b'u' as c_char && (y - x) - diffhero >= 1 { continue; }
-                if runch == b'n' as c_char && (y + x) - sumhero <= -1 { continue; }
-                if runch == b'b' as c_char && (y - x) - diffhero <= -1 { continue; }
-
-                if ch == DOOR as c_int {
-                    if x == hero.x || y == hero.y {
-                        running = FALSE;
-                    }
-                } else if ch == PASSAGE as c_int {
-                    if x == hero.x || y == hero.y {
-                        passcount += 1;
-                    }
-                } else if ch == FLOOR as c_int || ch == b'|' as c_int || ch == b'-' as c_int || ch == b' ' as c_int {
-                } else {
-                    running = FALSE;
-                }
-            }
-        }
-    }
-
-    if door_stop != 0 && firstmove == 0 && passcount > 1 {
-        running = FALSE;
-    }
-    if running == 0 || jump == 0 {
-        mvaddch(hero.y, hero.x, PLAYER as c_uint);
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn trip_ch(y: c_int, x: c_int, ch: c_int) -> c_int {
-    if on(&raw mut player, ISHALU) && after != 0 {
-        let tile = ch as c_char;
-        if tile != FLOOR
-            && tile != PASSAGE
-            && tile != DOOR
-            && tile != TRAP
-            && tile != b' ' as c_char
-            && tile != b'-' as c_char
-            && tile != b'|' as c_char
-            && !(y == stairs.y && x == stairs.x && seenstairs != 0)
-        {
-            return rnd(26) as c_char as c_int;
-        }
-    }
-    ch
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn erase_lamp(pos: *mut CCoord, rp: *mut CRoom) {
-    let mut y: c_int;
-    let mut x: c_int;
-    let mut ey: c_int;
-    let mut sy: c_int;
-    let mut ex: c_int;
-
-    if !((see_floor != 0) && ((room_flags(rp) & (ISGONE as c_short | ISDARK as c_short)) == ISDARK) && !on(&raw mut player, ISBLIND)) {
-        return;
-    }
-
-    ey = (*pos).y + 1;
-    ex = (*pos).x + 1;
-    sy = (*pos).y - 1;
-    for x in (*pos).x - 1..=ex {
-        for y in sy..=ey {
-            if y == hero_pos().y && x == hero_pos().x {
-                continue;
-            }
-            move_(y, x);
-            if inch() as c_char == FLOOR {
-                addch(b' ' as c_uint);
-            }
-        }
-    }
-}
-
+/// show_floor:
+/// Returns whether the floor of the player's room should be displayed.
 #[no_mangle]
 pub unsafe extern "C" fn show_floor() -> c_uchar {
     let player_room = (*thing_t(&raw mut player)).t_room;
@@ -411,9 +215,6 @@ pub unsafe extern "C" fn eat() {
 #[no_mangle]
 pub unsafe extern "C" fn check_level() {
     let mut i: c_int = 0;
-    let mut add: c_int;
-    let mut olevel: c_int;
-
     while e_levels[i as usize] != 0 {
         if e_levels[i as usize] > (*thing_t(&raw mut player)).t_stats.s_exp {
             break;
@@ -421,10 +222,10 @@ pub unsafe extern "C" fn check_level() {
         i += 1;
     }
     i += 1;
-    olevel = (*thing_t(&raw mut player)).t_stats.s_lvl;
+    let olevel = (*thing_t(&raw mut player)).t_stats.s_lvl;
     (*thing_t(&raw mut player)).t_stats.s_lvl = i;
     if i > olevel {
-        add = roll(i - olevel, 10);
+        let add = roll(i - olevel, 10);
         (*thing_t(&raw mut player)).t_stats.s_maxhp += add;
         (*thing_t(&raw mut player)).t_stats.s_hpt += add;
         msg(c"welcome to level %d".as_ptr(), i);
@@ -433,7 +234,6 @@ pub unsafe extern "C" fn check_level() {
 
 #[no_mangle]
 pub unsafe extern "C" fn chg_str(amt: c_int) {
-    let mut comp: c_uint;
     if amt == 0 {
         return;
     }
@@ -445,7 +245,7 @@ pub unsafe extern "C" fn chg_str(amt: c_int) {
         new_strength = 31;
     }
     stats.s_str = new_strength as c_uint;
-    comp = stats.s_str;
+    let mut comp = stats.s_str;
 
     if cur_ring[LEFT as usize] != std::ptr::null_mut() {
         let ring = cur_ring[LEFT as usize];
@@ -517,7 +317,6 @@ pub unsafe extern "C" fn is_current(obj: *mut CThing) -> c_uchar {
 pub unsafe extern "C" fn get_dir() -> c_uchar {
     let mut gotit: bool;
     let mut last_delt: CCoord = CCoord { x: 0, y: 0 };
-    let prompt: *const c_char;
 
     if again != 0 && last_dir != 0 {
         delta.y = last_delt.y;
@@ -526,8 +325,6 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
     } else {
         if terse == 0 {
             msg(c"which direction? ".as_ptr());
-        } else {
-            // prompt is intentionally unused in the terse form.
         }
         loop {
             gotit = true;
@@ -612,7 +409,7 @@ pub unsafe extern "C" fn call_it(info: *mut CObjInfo) {
 
 #[no_mangle]
 pub unsafe extern "C" fn rnd_thing() -> c_char {
-    let mut thing_list = [POTION, SCROLL, RING, STICK, FOOD, WEAPON, ARMOR, STAIRS, GOLD, AMULET];
+    let thing_list = [POTION, SCROLL, RING, STICK, FOOD, WEAPON, ARMOR, STAIRS, GOLD, AMULET];
     let idx = if level >= AMULETLEVEL { rnd(thing_list.len() as c_int) } else { rnd((thing_list.len() - 1) as c_int) };
     thing_list[idx as usize]
 }

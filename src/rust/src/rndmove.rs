@@ -1,14 +1,12 @@
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::draw::place_at;
-use crate::player::{CCoord, CPlace, CThing, CThingMonster, CThingObject};
+use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
 const SCROLL: c_char = b'?' as c_char;
 const S_SCARE: c_int = 10;
 
 unsafe extern "C" {
-    static mut places: [CPlace; 32 * 80];
     static mut lvl_obj: *mut CThing;
 
     fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
@@ -27,17 +25,12 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 #[inline]
 unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
+    crate::draw::chat_at(y, x)
 }
 
 #[inline]
 unsafe fn winat(y: c_int, x: c_int) -> c_char {
-    let tp = (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst;
-    if tp.is_null() {
-        chat_at(y, x)
-    } else {
-        (*thing_o(tp)).o_packch
-    }
+    crate::draw::winat(y, x)
 }
 
 /// Persistent return coordinate, mirroring C's `static coord ret`.

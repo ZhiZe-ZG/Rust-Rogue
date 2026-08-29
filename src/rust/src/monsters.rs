@@ -51,6 +51,17 @@ pub struct CStats {
     pub s_maxhp: c_int,
 }
 
+/// Layout mirror of the C `struct monster` stat table, tied to the `monsters[]`
+/// global the C engine exposes.
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CMonster {
+    pub m_name: *mut c_char,
+    pub m_carry: c_int,
+    pub m_flags: c_short,
+    pub m_stats: CStats,
+}
+
 #[repr(C)]
 pub struct CRoom {
     pub r_pos: CCoord,
@@ -63,11 +74,9 @@ pub struct CRoom {
 }
 
 #[repr(C)]
-pub struct CMonster {
-    pub m_name: *mut c_char,
-    pub m_carry: c_int,
-    pub m_flags: c_short,
-    pub m_stats: CStats,
+#[derive(Copy, Clone)]
+pub struct CPlace {
+    pub p_monst: *mut CThing,
 }
 
 #[repr(C)]
@@ -114,13 +123,6 @@ pub struct CThingObject {
 pub union CThing {
     pub t: CThingMonster,
     pub o: CThingObject,
-}
-
-#[repr(C)]
-pub struct CPlace {
-    pub p_ch: c_char,
-    pub p_flags: c_char,
-    pub p_monst: *mut CThing,
 }
 
 static LVL_MONS: [c_char; 26] = [
@@ -279,10 +281,10 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
     (*thing_t(tp)).t_disguise = monster_type;
     (*thing_t(tp)).t_pos = *cp;
 
-    let place = place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x);
-    (*thing_t(tp)).t_oldch = (*place).p_ch;
+    (*thing_t(tp)).t_oldch = crate::draw::chat_at((*cp).y, (*cp).x);
     (*thing_t(tp)).t_room = roomin(cp);
-    (*place).p_monst = tp;
+    // Write into the Rust-owned `places` grid via the local layout mirror.
+    (*place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x)).p_monst = tp;
 
     let mp = &monsters[(monster_type as i32 - 'A' as i32) as usize];
     (*thing_t(tp)).t_stats.s_lvl = mp.m_stats.s_lvl + lev_add;

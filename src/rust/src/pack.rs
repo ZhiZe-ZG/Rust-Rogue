@@ -1,7 +1,8 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::draw::chat_at as draw_chat;
 use crate::list::{_detach, discard, new_item};
-use crate::player::{CPlace, CRoom, CThing};
+use crate::player::{CRoom, CThing};
 
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
@@ -47,7 +48,6 @@ unsafe extern "C" {
     static mut pack_used: [c_uchar; 26];
     static mut player: CThing;
     static mut purse: c_int;
-    static mut places: [CPlace; 32 * 80];
     static mut terse: c_uchar;
 
     fn add_line(fmt: *mut c_char, arg: *mut c_char) -> c_char;
@@ -119,15 +119,7 @@ unsafe fn player_has(flag: c_short) -> bool {
 }
 
 unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    let idx = ((x as usize) << 5) + (y as usize);
-    let slot = (&raw mut places as *mut CPlace).wrapping_add(idx);
-    (*slot).p_ch
-}
-
-unsafe fn set_chat(y: c_int, x: c_int, ch: c_char) {
-    let idx = ((x as usize) << 5) + (y as usize);
-    let slot = (&raw mut places as *mut CPlace).wrapping_add(idx);
-    (*slot).p_ch = ch;
+    draw_chat(y, x)
 }
 
 unsafe fn floor_char_for_room() -> c_char {
@@ -159,8 +151,9 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         && ((*thing_o(item)).o_flags & ISFOUND) != 0
     {
         detach_list(&raw mut lvl_obj, item);
+        // The object is removed from `lvl_obj`, so the terrain glyph shows
+        // automatically via draw.
         mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
-        set_chat(hero_coord().y, hero_coord().x, if room_flags(proom()) & ISGONE != 0 { PASSAGE } else { FLOOR });
         discard_item(item);
         msg(c"the scroll turns to dust as you pick it up".as_ptr());
         return;
@@ -281,8 +274,9 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_u
 
     if from_floor != 0 {
         detach_list(&raw mut lvl_obj, obj);
+        // The object is removed from `lvl_obj`, so the terrain glyph shows
+        // automatically via draw.
         mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
-        set_chat(hero_coord().y, hero_coord().x, if room_flags(proom()) & ISGONE != 0 { PASSAGE } else { FLOOR });
     }
 
     inpack += 1;
@@ -462,8 +456,8 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
 #[no_mangle]
 pub unsafe extern "C" fn money(value: c_int) {
     purse += value;
+    // The gold object was discarded, so the terrain glyph shows via draw.
     mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
-    set_chat(hero_coord().y, hero_coord().x, if room_flags(proom()) & ISGONE != 0 { PASSAGE } else { FLOOR });
     if value > 0 {
         if terse == 0 {
             addmsg(c"you found ".as_ptr());

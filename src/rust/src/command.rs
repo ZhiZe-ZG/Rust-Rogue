@@ -8,7 +8,7 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-use crate::draw::place_at;
+
 use crate::player::{CCoord, CPlace, CThing, CThingMonster, CThingObject};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
@@ -343,12 +343,12 @@ unsafe fn player_has(flag: c_short) -> bool {
 
 #[inline]
 unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
+    crate::draw::chat_at(y, x)
 }
 
 #[inline]
 unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst
+    crate::game::monster_at(y, x)
 }
 
 #[inline]
@@ -733,20 +733,19 @@ pub unsafe extern "C" fn command() {
                             let hero = hero_pos();
                             delta.y += hero.y;
                             delta.x += hero.x;
-                            let pp = place_at((&raw mut places) as *mut CPlace, delta.y, delta.x);
                             if terse == 0 {
                                 addmsg(c"You have found ".as_ptr());
                             }
-                            if (*pp).p_ch != TRAP {
+                            if !crate::draw::is_trap_cell(delta.y, delta.x) {
                                 msg(c"no trap there".as_ptr());
                             } else if player_has(ISHALU) {
                                 msg(c"%s".as_ptr(), tr_name[rnd(NTRAPS) as usize]);
                             } else {
                                 msg(
                                     c"%s".as_ptr(),
-                                    tr_name[((*pp).p_flags as u8 & F_TMASK as u8) as usize],
+                                    tr_name[crate::draw::trap_kind_at(delta.y, delta.x) as usize],
                                 );
-                                (*pp).p_flags = (((*pp).p_flags as u8) | (F_SEEN as u8)) as c_char;
+                                crate::draw::set_seen_at(delta.y, delta.x);
                             }
                         }
                     }
@@ -965,23 +964,21 @@ pub unsafe extern "C" fn search() {
                 x += 1;
                 continue;
             }
-            let fp = place_at((&raw mut places) as *mut CPlace, y, x);
-            let flags = (*fp).p_flags;
+            let flags = crate::draw::flat_at(y, x);
             if (flags as u8 & F_REAL as u8) == 0 {
-                match (*fp).p_ch as u8 {
+                match chat_at(y, x) as u8 {
                     b'|' | b'-' => {
                         if rnd(5 + probinc) == 0 {
-                            (*fp).p_ch = DOOR;
+                            crate::draw::reveal_secret_at(y, x);
                             msg(c"a secret door".as_ptr());
                             found = true;
-                            (*fp).p_flags = ((*fp).p_flags as u8 | F_REAL as u8) as c_char;
                             count = FALSE as c_int;
                             running = FALSE;
                         }
                     }
                     b'.' => {
                         if rnd(2 + probinc) == 0 {
-                            (*fp).p_ch = TRAP;
+                            crate::draw::reveal_trap_at(y, x);
                             if terse == 0 {
                                 addmsg(c"you found ".as_ptr());
                             }
@@ -990,21 +987,18 @@ pub unsafe extern "C" fn search() {
                             } else {
                                 msg(
                                     c"%s".as_ptr(),
-                                    tr_name[((*fp).p_flags as u8 & F_TMASK as u8) as usize],
+                                    tr_name[crate::draw::trap_kind_at(y, x) as usize],
                                 );
-                                (*fp).p_flags = (((*fp).p_flags as u8) | (F_SEEN as u8)) as c_char;
                             }
                             found = true;
-                            (*fp).p_flags = ((*fp).p_flags as u8 | F_REAL as u8) as c_char;
                             count = FALSE as c_int;
                             running = FALSE;
                         }
                     }
                     b' ' => {
                         if rnd(3 + probinc) == 0 {
-                            (*fp).p_ch = PASSAGE;
+                            crate::draw::reveal_secret_at(y, x);
                             found = true;
-                            (*fp).p_flags = ((*fp).p_flags as u8 | F_REAL as u8) as c_char;
                             count = FALSE as c_int;
                             running = FALSE;
                         }

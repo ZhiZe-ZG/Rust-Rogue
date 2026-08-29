@@ -431,10 +431,12 @@ typedef union thing THING;
 
 /*
  * describe a place on the level map
+ *
+ * The display glyph and flat flags previously cached here now live in the
+ * Rust-owned level state (`CURRENT_LEVEL`); only the per-cell monster
+ * pointer is retained for the legacy save format.
  */
 typedef struct {
-    char p_ch;
-    char p_flags;
     THING *p_monst;
 } PLACE;
 

@@ -1,7 +1,11 @@
 use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
-use crate::draw::{set_tile_char, place_at};
-use crate::level::{be_trapped, door_open, T_DOOR, T_TELEP};
+use crate::draw::{
+    chat_at, enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room,
+    reveal_trap_at, turnref as draw_turnref, winat,
+};
+use crate::game;
+use crate::level::{be_trapped, T_DOOR, T_TELEP};
 use crate::rndmove::rndmove;
 
 const NUMCOLS: c_int = 80;
@@ -20,22 +24,12 @@ const ISBLIND: c_short = 0o0000004;
 const ISHELD: c_short = 0o0000400;
 const ISHUH: c_short = 0o0001000;
 const ISLEVIT: c_short = 0o0000010;
-const ISRUN: c_short = 0o020000;
-const SEEMONST: c_short = 0o040000;
-
-const ISDARK: c_short = 0o0000001;
-const ISGONE: c_short = 0o0000002;
-const ISMAZE: c_short = 0o0000004;
 
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_REAL: c_char = 0x10u8 as c_char;
-const F_SEEN: c_char = 0x40u8 as c_char;
-const F_PNUM: c_char = 0x0fu8 as c_char;
-
 
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
-const MAXPASS: usize = 13;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -114,11 +108,12 @@ pub union CThing {
     pub o: CThingObject,
 }
 
+/// Per-cell monster occupancy, mirroring the legacy C `PLACE` struct minus the
+/// obsolete `p_ch`/`p_flags` members (those now live in `CURRENT_LEVEL`'s tile
+/// map and flag grids; see [`crate::draw`]).
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CPlace {
-    pub p_ch: c_char,
-    pub p_flags: c_char,
     pub p_monst: *mut CThing,
 }
 
@@ -144,25 +139,15 @@ unsafe extern "C" {
     static mut delta: CCoord;
     static mut cur_weapon: *mut CThing;
     static mut player: CThing;
-    static mut passages: [CRoom; MAXPASS];
     static mut runch: c_char;
     static mut places: [CPlace; 32 * 80];
-    static mut stdscr: *mut CWindow;
 
     fn msg(fmt: *const c_char, ...);
     fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
-    fn see_monst(mp: *mut CThing) -> c_uchar;
     fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;
     fn roomin(cp: *mut CCoord) -> *mut CRoom;
     fn floor_at() -> c_char;
-    fn r#move(y: c_int, x: c_int) -> c_int;
-    fn inch() -> c_uint;
-    fn addch(ch: c_uint) -> c_int;
-    fn standout() -> c_int;
-    fn standend() -> c_int;
     fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
-    fn leaveok(win: *mut CWindow, flag: c_int) -> c_int;
-    fn refresh() -> c_int;
 }
 
 #[inline]
@@ -196,185 +181,18 @@ unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
 }
 
 #[inline]
-unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
-}
-
-#[inline]
-unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_flags
-}
-
-#[inline]
-unsafe fn add_flat_flag(y: c_int, x: c_int, flag: c_char) {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_flags = (((*place_at((&raw mut places) as *mut CPlace, y, x)).p_flags as u8) | (flag as u8)) as c_char;
-}
-
-#[inline]
-unsafe fn winat(y: c_int, x: c_int) -> c_char {
-    let tp = (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst;
-    if tp.is_null() {
-        chat_at(y, x)
-    } else {
-        (*thing_o(tp)).o_packch
-    }
-}
-
-#[inline]
 unsafe fn is_upper(ch: c_char) -> bool {
     (ch as u8).is_ascii_uppercase()
-}
-
-#[inline]
-unsafe fn cchar_at_cursor() -> c_char {
-    inch() as u8 as c_char
-}
-
-/// enter_room:
-/// Code that is executed whenever the hero appears in a room.
-#[no_mangle]
-pub unsafe extern "C" fn enter_room(cp: *mut CCoord) {
-    if cp.is_null() {
-        return;
-    }
-
-    let rp = roomin(cp);
-    if rp.is_null() {
-        return;
-    }
-
-    (*thing_t(&raw mut player)).t_room = rp;
-    door_open(rp);
-
-    if ((*rp).r_flags & ISDARK) != 0 || player_has(ISBLIND) {
-        return;
-    }
-
-    let y0 = (*rp).r_pos.y;
-    let x0 = (*rp).r_pos.x;
-    let y_end = y0 + (*rp).r_max.y;
-    let x_end = x0 + (*rp).r_max.x;
-    let mut y = y0;
-    while y < y_end {
-        r#move(y, x0);
-        let mut x = x0;
-        while x < x_end {
-            let pp = place_at((&raw mut places) as *mut CPlace, y, x);
-            let tp = (*pp).p_monst;
-            let ch = (*pp).p_ch;
-
-            if tp.is_null() {
-                if cchar_at_cursor() != ch {
-                    addch(ch as c_uint);
-                } else {
-                    r#move(y, x + 1);
-                }
-            } else {
-                (*thing_t(tp)).t_oldch = ch;
-                if see_monst(tp) == 0 {
-                    if player_has(SEEMONST) {
-                        standout();
-                        addch((*thing_t(tp)).t_disguise as c_uint);
-                        standend();
-                    } else {
-                        addch(ch as c_uint);
-                    }
-                } else {
-                    addch((*thing_t(tp)).t_disguise as c_uint);
-                }
-            }
-            x += 1;
-        }
-        y += 1;
-    }
-}
-
-/// leave_room:
-/// Code for when the hero exits a room.
-#[no_mangle]
-pub unsafe extern "C" fn leave_room(cp: *mut CCoord) {
-    if cp.is_null() {
-        return;
-    }
-
-    let rp = (*thing_t(&raw mut player)).t_room;
-    if rp.is_null() {
-        return;
-    }
-
-    if ((*rp).r_flags & ISMAZE) != 0 {
-        return;
-    }
-
-    let floor = if ((*rp).r_flags & ISGONE) != 0 {
-        PASSAGE
-    } else if ((*rp).r_flags & ISDARK) == 0 || player_has(ISBLIND) {
-        FLOOR
-    } else {
-        SPACE
-    };
-
-    let pnum = (flat_at((*cp).y, (*cp).x) as u8 & F_PNUM as u8) as usize;
-    if pnum < MAXPASS {
-        (*thing_t(&raw mut player)).t_room = (&raw mut passages[pnum]) as *mut CRoom;
-    }
-
-    let y0 = (*rp).r_pos.y;
-    let x0 = (*rp).r_pos.x;
-    let y_end = y0 + (*rp).r_max.y;
-    let x_end = x0 + (*rp).r_max.x;
-    let mut y = y0;
-    while y < y_end {
-        let mut x = x0;
-        while x < x_end {
-            r#move(y, x);
-            let ch = cchar_at_cursor();
-            if ch == FLOOR {
-                if floor == SPACE && ch != SPACE {
-                    addch(SPACE as c_uint);
-                }
-            } else if is_upper(ch) {
-                if player_has(SEEMONST) {
-                    standout();
-                    addch(ch as c_uint);
-                    standend();
-                } else {
-                    let pp = place_at((&raw mut places) as *mut CPlace, y, x);
-                    let out = if (*pp).p_ch == DOOR { DOOR } else { floor };
-                    addch(out as c_uint);
-                }
-            }
-            x += 1;
-        }
-        y += 1;
-    }
-
-    door_open(rp);
-}
-
-/// turnref:
-/// Decide whether to refresh at a passage turning or not.
-#[no_mangle]
-pub unsafe extern "C" fn turnref() {
-    let hero = hero_pos();
-    let place = place_at((&raw mut places) as *mut CPlace, hero.y, hero.x);
-    if ((*place).p_flags as u8 & F_SEEN as u8) == 0 {
-        if jump != 0 {
-            leaveok(stdscr, TRUE as c_int);
-            refresh();
-            leaveok(stdscr, FALSE as c_int);
-        }
-        (*place).p_flags = (((*place).p_flags as u8) | (F_SEEN as u8)) as c_char;
-    }
 }
 
 /// turn_ok:
 /// Decide whether it is legal to turn onto the given space.
 #[no_mangle]
 pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
-    let place = place_at((&raw mut places) as *mut CPlace, y, x);
-    let flags = (*place).p_flags as u8;
-    if (*place).p_ch == DOOR || (flags & (F_REAL as u8 | F_PASS as u8)) == (F_REAL as u8 | F_PASS as u8) {
+    let flags = flat_at(y, x) as u8;
+    if chat_at(y, x) == DOOR
+        || (flags & (F_REAL as u8 | F_PASS as u8)) == (F_REAL as u8 | F_PASS as u8)
+    {
         TRUE
     } else {
         0
@@ -386,7 +204,7 @@ unsafe fn move_stuff(next_pos: &mut CCoord, fl: c_char) {
     let hero = hero_pos();
     mvaddch(hero.y, hero.x, floor_at() as c_uint);
     if (fl as u8 & F_PASS as u8) != 0 && chat_at(oldpos.y, oldpos.x) == DOOR {
-        leave_room(next_pos);
+        draw_leave_room(next_pos);
     }
     *hero_ptr() = *next_pos;
 }
@@ -413,7 +231,7 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
             *dy = 1;
         }
         *dx = 0;
-        turnref();
+        draw_turnref();
         true
     } else if runch == b'j' as c_char || runch == b'k' as c_char {
         let b1 = hero.x != 0 && turn_ok(hero.y, hero.x - 1) != 0;
@@ -429,7 +247,7 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
             *dx = 1;
         }
         *dy = 0;
-        turnref();
+        draw_turnref();
         true
     } else {
         false
@@ -509,8 +327,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
 
     if (fl as u8 & F_REAL as u8) == 0 && ch == FLOOR {
         if !player_has(ISLEVIT) {
-            set_tile_char(next_pos.y, next_pos.x, TRAP);
-            add_flat_flag(next_pos.y, next_pos.x, F_REAL);
+            reveal_trap_at(next_pos.y, next_pos.x);
             ch = TRAP;
         }
     } else if player_has(ISHELD) && ch != b'F' as c_char {
@@ -525,7 +342,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         DOOR => {
             running = FALSE;
             if (flat_at(hero.y, hero.x) as u8 & F_PASS as u8) != 0 {
-                enter_room(&mut next_pos);
+                draw_enter_room(&mut next_pos);
             }
             move_stuff(&mut next_pos, fl);
         }
@@ -549,7 +366,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         STAIRS => {
             seenstairs = TRUE;
             running = FALSE;
-            if is_upper(ch) || !(*place_at((&raw mut places) as *mut CPlace, next_pos.y, next_pos.x)).p_monst.is_null() {
+            if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
                 fight(&mut next_pos, cur_weapon, FALSE);
             } else {
                 take = ch;
@@ -558,7 +375,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         }
         _ => {
             running = FALSE;
-            if is_upper(ch) || !(*place_at((&raw mut places) as *mut CPlace, next_pos.y, next_pos.x)).p_monst.is_null() {
+            if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
                 fight(&mut next_pos, cur_weapon, FALSE);
             } else {
                 if ch != STAIRS {

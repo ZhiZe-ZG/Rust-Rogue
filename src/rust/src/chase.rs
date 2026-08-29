@@ -8,8 +8,7 @@
 
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-use crate::draw::place_at;
-use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
+use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
 const NUMLINES: c_int = 24;
@@ -70,7 +69,6 @@ unsafe extern "C" {
     static mut player: CThing;
     static mut passages: [CRoom; MAXPASS];
     static mut rooms: [CRoom; MAXROOMS];
-    static mut places: [CPlace; 32 * 80];
 
     static mut has_hit: c_uchar;
     static mut to_death: c_uchar;
@@ -137,22 +135,22 @@ unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
 
 #[inline]
 unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
+    crate::draw::chat_at(y, x)
 }
 
 #[inline]
 unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_flags
+    crate::draw::flat_at(y, x)
 }
 
 #[inline]
 unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst
+    crate::game::monster_at(y, x)
 }
 
 #[inline]
 unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst = tp;
+    crate::game::set_monster(y, x, tp);
 }
 
 #[inline]
@@ -354,16 +352,8 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
                 if (*thing_t(th)).t_dest == &raw mut (*thing_o(obj)).o_pos {
                     _detach(&raw mut lvl_obj, obj);
                     _attach(&raw mut (*thing_t(th)).t_pack, obj);
-                    (*place_at(
-                        (&raw mut places) as *mut CPlace,
-                        (*thing_o(obj)).o_pos.y,
-                        (*thing_o(obj)).o_pos.x,
-                    ))
-                    .p_ch = if ((*(*thing_t(th)).t_room).r_flags & ISGONE) != 0 {
-                        PASSAGE
-                    } else {
-                        FLOOR
-                    };
+                    // Objects render from the `lvl_obj` list; the floor glyph
+                    // under a picked-up object is then the terrain char.
                     (*thing_t(th)).t_dest = find_dest(th);
                     break;
                 }

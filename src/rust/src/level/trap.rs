@@ -7,8 +7,8 @@
 
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-use crate::draw::place_at;
-use crate::player::{CCoord, CPlace, CThing, CThingMonster, CThingObject};
+use crate::draw;
+use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
 const LEFT: usize = 0;
@@ -18,9 +18,6 @@ const TRAP: c_char = b'^' as c_char;
 
 const ISLEVIT: c_short = 0o0000010;
 const ISRUN: c_short = 0o020000;
-
-const F_SEEN: c_char = 0x40u8 as c_char;
-const F_TMASK: c_char = 0x07u8 as c_char;
 
 pub const T_DOOR: c_char = 0;
 pub const T_ARROW: c_char = 1;
@@ -45,7 +42,6 @@ unsafe extern "C" {
     static mut level: c_int;
     static mut cNCOLORS: c_int;
     static mut rainbow: [*const c_char; 27];
-    static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
     static mut cur_armor: *mut CThing;
     static mut cur_ring: [*mut CThing; 2];
@@ -101,8 +97,7 @@ unsafe fn rainbow_color() -> *const c_char {
 /// `roll`, `spread`, `teleport`, ...) exactly as the legacy `be_trapped` did,
 /// but is callable only from Rust.
 pub unsafe fn be_trapped(pos: CCoord) -> c_char {
-    let place = place_at((&raw mut places) as *mut CPlace, pos.y, pos.x);
-    let trap = (*place).p_flags & F_TMASK;
+    let trap = draw::trap_kind_at(pos.y, pos.x);
 
     if ((*thing_t(&raw mut player)).t_flags & ISLEVIT) != 0 {
         return T_RUST;
@@ -110,8 +105,7 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
 
     running = FALSE;
     count = FALSE as c_int;
-    (*place).p_ch = TRAP;
-    (*place).p_flags |= F_SEEN;
+    draw::reveal_trap_at(pos.y, pos.x);
 
     match trap {
         T_DOOR => {

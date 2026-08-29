@@ -13,8 +13,7 @@ use crate::rnd::rnd;
 
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-use crate::draw::place_at;
-use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::player::{CCoord, CStats, CThing, CThingMonster, CThingObject};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -107,7 +106,6 @@ static mut PRNAME_BUF: [c_char; MAXSTR] = [0; MAXSTR];
 
 unsafe extern "C" {
     static mut player:      CThing;
-    static mut places:      [CPlace; 32 * 80];
     static mut mlist:       *mut CThing;
     static mut monsters:    [CMonster; 26];
     static mut cur_armor:   *mut CThing;
@@ -210,18 +208,8 @@ unsafe fn on_p(tp: *mut CThing, flag: c_short) -> bool {
 }
 
 #[inline]
-unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst
-}
-
-#[inline]
-unsafe fn set_moat(y: c_int, x: c_int, val: *mut CThing) {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst = val;
-}
-
-#[inline]
 unsafe fn chat(y: c_int, x: c_int) -> c_char {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch
+    crate::draw::chat_at(y, x)
 }
 
 #[inline]
@@ -232,6 +220,16 @@ unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
 #[inline]
 unsafe fn iswearing(ring_type: c_int) -> bool {
     isring(LEFT, ring_type) || isring(RIGHT, ring_type)
+}
+
+#[inline]
+unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
+    crate::game::monster_at(y, x)
+}
+
+#[inline]
+unsafe fn set_moat(y: c_int, x: c_int, val: *mut CThing) {
+    crate::game::set_monster(y, x, val);
 }
 
 // ─── Exported functions ───────────────────────────────────────────────────────

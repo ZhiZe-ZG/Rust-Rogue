@@ -26,9 +26,10 @@ pub const LEVEL_WIDTH: usize = 80;
 
 /// Per-cell flat-flag data for the level.
 ///
-/// Mirrors the bits carried by the C `places` grid's `p_flags` field while
-/// level generation runs, so no C globals need to be touched until the whole
-/// level is finalized and copied over by `copy_flags_to_c`.
+/// The single source of truth for the cell flags previously stored in the C
+/// `places` grid's `p_flags` field. `real`/`passage`/`seen`/`passnum` are
+/// maintained by level generation; [`LevelFlags::trap`] holds the trap-kind
+/// nibble (0-7, the legacy `F_TMASK` bits) set by `place_traps`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LevelFlags {
     /// `false` marks a non-real (secret) wall or door cell.
@@ -39,6 +40,8 @@ pub struct LevelFlags {
     pub seen: Vec<bool>,
     /// Passage component number (0-15) assigned by `number_passages`.
     pub passnum: Vec<u8>,
+    /// Trap kind (0-7) of a hidden trap cell; 0 elsewhere.
+    pub trap: Vec<u8>,
 }
 
 impl LevelFlags {
@@ -49,7 +52,14 @@ impl LevelFlags {
             passage: vec![false; cells],
             seen: vec![false; cells],
             passnum: vec![0; cells],
+            trap: vec![0; cells],
         }
+    }
+
+    /// Cell index for `(y, x)` in the flat grids.
+    #[inline]
+    pub fn flag_idx(y: usize, x: usize) -> usize {
+        y * LEVEL_WIDTH + x
     }
 }
 

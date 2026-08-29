@@ -1,7 +1,7 @@
 use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::draw::place_at;
+use crate::draw::{self, chat_at, place_at, winat as draw_winat};
 
 const NO_WEAPON: c_int = -1;
 
@@ -88,8 +88,6 @@ pub union CThing {
 
 #[repr(C)]
 pub struct CPlace {
-    pub p_ch: c_char,
-    pub p_flags: c_char,
     pub p_monst: *mut CThing,
 }
 
@@ -176,7 +174,7 @@ unsafe fn hero() -> CCoord {
 
 #[inline]
 unsafe fn chat(y: c_int, x: c_int) -> c_int {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_ch as c_uchar as c_int
+    chat_at(y, x) as c_uchar as c_int
 }
 
 #[inline]
@@ -186,12 +184,7 @@ unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
 
 #[inline]
 unsafe fn winat(y: c_int, x: c_int) -> c_int {
-    let m = moat(y, x);
-    if m.is_null() {
-        chat(y, x)
-    } else {
-        (*thing_t(m)).t_disguise as c_uchar as c_int
-    }
+    draw_winat(y, x) as c_uchar as c_int
 }
 
 #[inline]
@@ -262,13 +255,13 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
 #[no_mangle]
 pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
     if fallpos(&mut (*thing_o(obj)).o_pos, &raw mut FALL_POS) != 0 {
-        let pp = place_at((&raw mut places) as *mut CPlace, FALL_POS.y, FALL_POS.x);
-        (*pp).p_ch = (*thing_o(obj)).o_type as c_char;
+        // Objects render from the `lvl_obj` list; no glyph write needed.
         (*thing_o(obj)).o_pos = FALL_POS;
 
         if cansee(FALL_POS.y, FALL_POS.x) != 0 {
-            if !(*pp).p_monst.is_null() {
-                (*thing_t((*pp).p_monst)).t_oldch = (*thing_o(obj)).o_type as c_char;
+            let m = moat(FALL_POS.y, FALL_POS.x);
+            if !m.is_null() {
+                (*thing_t(m)).t_oldch = (*thing_o(obj)).o_type as c_char;
             } else {
                 mvaddch(FALL_POS.y, FALL_POS.x, (*thing_o(obj)).o_type as c_uint);
             }

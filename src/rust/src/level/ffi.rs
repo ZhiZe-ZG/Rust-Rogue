@@ -15,12 +15,11 @@ use crate::player::{CRoom, CThing};
 
 use super::level::current_level_mut;
 use super::mirror::{
-    apply_room_to_c, copy_flags_to_c, draw_map_ascii, read_c_room_data, sync_passages_to_c,
-    sync_rooms_to_c,
+    apply_room_to_c, read_c_room_data, sync_passages_to_c, sync_rooms_to_c,
 };
+use crate::draw::winat;
 use super::passages::SCREEN_COLS;
 use super::presence::populate_level;
-use super::redraw::winat;
 use super::rooms::Room;
 use super::structure::Structure;
 use super::symbols::{
@@ -57,13 +56,11 @@ unsafe fn write_rust_data_back_to_c_and_ncurses(generated: &[Room; MAXROOMS]) {
         apply_room_to_c(&generated[i], rp);
     }
 
-    draw_map_ascii();
-
-    // Mirror the Rust-side rooms, passage components, and flag grids into the
-    // C arrays now that rooms, doors, and passages are fully laid out.
+    // Mirror the Rust-side room and passage components into the C arrays now
+    // that rooms, doors, and passages are fully laid out. Per-cell display
+    // glyphs and flat flags are computed on the fly by `crate::draw`.
     sync_rooms_to_c(current_level_mut());
     sync_passages_to_c(current_level_mut());
-    copy_flags_to_c(current_level_mut());
 }
 
 /// Reset the in-memory level and the C screen for a fresh dungeon depth.
