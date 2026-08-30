@@ -167,13 +167,14 @@ legacy_c_main(int argc, char **argv, char **envp)
  *
  * No globals used directly.
  */
-
+#if 0
 void
 endit(int sig)
 {
     NOOP(sig);
     fatal("Okay, bye bye!\n");
 }
+#endif
 
 /*
  * fatal:
@@ -181,7 +182,7 @@ endit(int sig)
  *
  * No globals used directly.
  */
-
+#if 0
 void
 fatal(char *s)
 {
@@ -190,6 +191,7 @@ fatal(char *s)
     endwin();
     my_exit(0);
 }
+#endif
 
 /*
  * roll:
@@ -197,6 +199,7 @@ fatal(char *s)
  *
  * No globals used directly (uses rnd()).
  */
+#if 0
 int
 roll(int number, int sides)
 {
@@ -206,12 +209,13 @@ roll(int number, int sides)
 	dtotal += rnd(sides)+1;
     return dtotal;
 }
+#endif
 
 /*
  * tstp:
  *	Handle stop and start signals
  */
-
+#if 0
 void
 tstp(int ignored)
 {
@@ -245,6 +249,7 @@ tstp(int ignored)
     move(oy, ox);  /* Use public API instead of internal structure access */
     fflush(stdout);
 }
+#endif
 
 /*
  * playit:
@@ -254,7 +259,7 @@ tstp(int ignored)
  * Uses globals: terse, jump, see_floor, inv_type, oldpos, oldrp,
  * hero, playing, running.
  */
-
+#if 0
 void
 playit()
 {
@@ -287,6 +292,7 @@ playit()
 	command();			/* Command execution */
     endit(0);
 }
+#endif
 
 /*
  * quit:
@@ -295,6 +301,7 @@ playit()
  * Uses globals: q_comm, mpos, purse, count, to_death.
  */
 
+#if 0
 void
 quit(int sig)
 {
@@ -331,12 +338,14 @@ quit(int sig)
 	to_death = FALSE;
     }
 }
+#endif
 
 /*
  * leave:
  *	Leave quickly, but curteously
  */
 
+#if 0
 void
 leave(int sig)
 {
@@ -355,6 +364,7 @@ leave(int sig)
     putchar('\n');
     my_exit(0);
 }
+#endif
 
 /*
  * shell:
@@ -363,6 +373,7 @@ leave(int sig)
  * Uses globals: in_shell, after.
  */
 
+#if 0
 void
 shell()
 {
@@ -392,6 +403,7 @@ shell()
     wait_for('\n');
     clearok(stdscr, TRUE);
 }
+#endif
 
 /*
  * my_exit:
@@ -400,6 +412,7 @@ shell()
  * No globals used directly.
  */
 
+#if 0
 void
 my_exit(int st)
 {
@@ -413,4 +426,5 @@ my_exit(int st)
     fflush(stderr);
     exit(st);
 }
+#endif
 
