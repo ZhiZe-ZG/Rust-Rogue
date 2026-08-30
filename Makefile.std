@@ -59,6 +59,8 @@ $(PROGRAM): $(RUST_LIB) $(HDRS) $(OBJS) fixdocs
 
 $(RUST_LIB): $(RUST_DIR)/Cargo.toml $(RUST_DIR)/src/lib.rs $(RUST_DIR)/src/armor.rs $(RUST_DIR)/src/chase.rs $(RUST_DIR)/src/command.rs $(RUST_DIR)/src/daemon.rs $(RUST_DIR)/src/daemons.rs $(RUST_DIR)/src/fight.rs $(RUST_DIR)/src/game.rs $(RUST_DIR)/src/init.rs $(RUST_DIR)/src/list.rs $(RUST_DIR)/src/misc.rs $(RUST_DIR)/src/monsters.rs $(RUST_DIR)/src/player.rs $(RUST_DIR)/src/potions.rs $(RUST_DIR)/src/rip.rs $(RUST_DIR)/src/rings.rs $(RUST_DIR)/src/save.rs $(RUST_DIR)/src/score.rs $(RUST_DIR)/src/scrolls.rs $(RUST_DIR)/src/state.rs $(RUST_DIR)/src/sticks.rs $(RUST_DIR)/src/things.rs $(RUST_DIR)/src/weapons.rs $(RUST_DIR)/src/wizard.rs $(RUST_DIR)/src/level/mod.rs $(RUST_DIR)/src/level/ffi.rs $(RUST_DIR)/src/level/rooms.rs $(RUST_DIR)/src/level/passages.rs $(RUST_DIR)/src/level/structure.rs $(RUST_DIR)/src/level/tile.rs
 	cd $(RUST_DIR) && cargo build --release
+
+$(RUST_LIB): $(RUST_DIR)/src/startup.rs
  
 clean:
 	$(RM) $(OBJS1)

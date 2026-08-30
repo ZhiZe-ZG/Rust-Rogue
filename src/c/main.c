@@ -22,8 +22,9 @@
  * Uses globals: wizard, player, home, file_name, whoami, dnum, seed,
  * purse, level, noscore, hw, noscore.
  */
+#if 0
 int
-main(int argc, char **argv, char **envp)
+legacy_c_main(int argc, char **argv, char **envp)
 {
     char *env;
     int lowtime;
@@ -158,6 +159,7 @@ main(int argc, char **argv, char **envp)
     playit();
     return(0);
 }
+#endif
 
 /*
  * endit:

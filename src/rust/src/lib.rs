@@ -22,6 +22,7 @@ pub mod rings;
 pub mod save;
 pub mod score;
 pub mod state;
+pub mod startup;
 pub mod monsters;
 pub mod things;
 pub mod weapons;

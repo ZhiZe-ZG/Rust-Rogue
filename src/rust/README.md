@@ -10,6 +10,7 @@ legacy symbol names where practical.
 
 - `Cargo.toml`: Rust crate definition for the FFI library.
 - `src/lib.rs`: Rust module root that exports migrated subsystems.
+- `src/startup.rs`: Rust-owned process entry point (`main`) that initializes the legacy C support layer and starts the game loop.
 - `src/rnd.rs`: Random number generator state and legacy RNG symbols (`rnd`, `set_seed`) backed by the `rand` crate.
 - `src/level/`: Level generation subsystem.
   - `src/level/ffi.rs`: Level creation entrypoints (`new_level`, `find_floor`) and internal room/passage drawing.
