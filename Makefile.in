@@ -98,7 +98,7 @@ man6dir = $(mandir)/man6
 # It should not be necessary to change anything below this comment
 ############################################################################### 
 
-HDRS     = rogue.h extern.h score.h
+HDRS     = rogue.h extern.h
 HDRS_SRC = $(addprefix $(srcdir)/,$(HDRS))
 CSRC_DIR = $(srcdir)/src/c
 RUST_DIR = $(srcdir)/src/rust

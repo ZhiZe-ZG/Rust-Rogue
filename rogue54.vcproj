@@ -328,10 +328,6 @@
 				RelativePath="rogue.h"
 				>
 			</File>
-			<File
-				RelativePath="score.h"
-				>
-			</File>
 		</Filter>
 		<Filter
 			Name="Resource Files"

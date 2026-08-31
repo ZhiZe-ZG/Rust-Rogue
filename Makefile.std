@@ -12,7 +12,7 @@
 DISTNAME = rogue5.4.4
 PROGRAM  = rogue54
 O        = o
-HDRS     = rogue.h extern.h score.h
+HDRS     = rogue.h extern.h
 RUST_DIR = src/rust
 RUST_LIB = $(RUST_DIR)/target/release/librogue_rust.a
 OBJS1    = vers.$(O) extern.$(O) \

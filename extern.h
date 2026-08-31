@@ -124,45 +124,18 @@ extern int orig_dsusp;
 extern FILE	*scoreboard;
 
 /*
- * Function types
+ * Function types: only those still implemented in C remain.
+ * All gameplay functions have been ported to Rust.
  */
 
 void    auto_save(int);
-void	come_down();
-void	doctor();
-void	end_line();
 void    endit(int sig);
 void	fatal(char *s);
 void	getltchars();
-void	land();
-void    leave(int);
-void	my_exit(int st);
-void	nohaste();
-void	playit();
-void    playltchars(void);
-void	print_disc(char);
 void    quit(int);
+void    playltchars(void);
 void    resetltchars(void);
-void	rollwand();
-void	runners();
-void	set_order(int *order, int numthings);
-void	sight();
-void	stomach();
-void	swander();
-void	tstp(int ignored);
-void	unconfuse();
-void	unsee();
-void	visuals();
-
-char	add_line(char *fmt, char *arg);
-
-char	*killname(char monst, bool doart);
-char	*nothing(char type);
-char	*type_name(int type);
-
-#ifdef CHECKTIME
-int	checkout();
-#endif
+void    tstp(int ignored);
 
 int	md_chmod(char *filename, int mode);
 int	md_dsuspchar();
