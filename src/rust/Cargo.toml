@@ -11,3 +11,4 @@ crate-type = ["staticlib", "rlib"]
 [dependencies]
 rand = "0.8"
 glam = "0.29"
+ncurses = "6.0.1"
