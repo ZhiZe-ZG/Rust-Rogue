@@ -8,7 +8,7 @@ The files are grouped here by primary responsibility. Some files interact across
 
 ## Entry and Core Flow
 
-- `main.c`: Program entry point, top-level initialization, and main game flow startup.
+- `main.c`: Program entry point, top-level initialization, and main game flow startup (ported to Rust in `src/rust/src/startup.rs`).
 - `init.c`: Early game/session initialization routines.
 - `command.rs`: Player command parsing and command dispatch, hosted in the Rust FFI layer at `src/rust/src/command.rs`.
 - `state.rs`: Game save/restore serialization, hosted in the Rust FFI layer at `src/rust/src/state.rs`.

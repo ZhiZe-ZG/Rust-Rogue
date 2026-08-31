@@ -240,10 +240,6 @@
 				>
 			</File>
 			<File
-				RelativePath="main.c"
-				>
-			</File>
-			<File
 				RelativePath="mdport.c"
 				>
 			</File>
