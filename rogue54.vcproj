@@ -208,10 +208,6 @@
 				>
 			</File>
 			<File
-				RelativePath="extern.c"
-				>
-			</File>
-			<File
 				RelativePath="fight.c"
 				>
 			</File>

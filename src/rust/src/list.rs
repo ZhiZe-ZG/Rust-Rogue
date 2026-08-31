@@ -10,8 +10,9 @@
 //! gameplay is unaffected when `MASTER` is not defined.
 
 use crate::io::msg_str;
+pub use crate::player::{CThing, CThingMonster};
 use std::alloc::{alloc_zeroed, dealloc, Layout};
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::c_int;
 
 /// Total number of `THING` items currently allocated.
 ///
@@ -19,83 +20,6 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 /// (e.g. `state.c`) can read and write it directly.
 #[no_mangle]
 pub static mut total: c_int = 0;
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CCoord {
-    pub x: c_int,
-    pub y: c_int,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CStats {
-    pub s_str: c_uint,
-    pub s_exp: c_int,
-    pub s_lvl: c_int,
-    pub s_arm: c_int,
-    pub s_hpt: c_int,
-    pub s_dmg: [c_char; 13],
-    pub s_maxhp: c_int,
-}
-
-#[repr(C)]
-pub struct CRoom {
-    pub r_pos: CCoord,
-    pub r_max: CCoord,
-    pub r_gold: CCoord,
-    pub r_goldval: c_int,
-    pub r_flags: c_short,
-    pub r_nexits: c_int,
-    pub r_exit: [CCoord; 12],
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CThingMonster {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
-    pub t_pos: CCoord,
-    pub t_turn: c_uchar,
-    pub t_type: c_char,
-    pub t_disguise: c_char,
-    pub t_oldch: c_char,
-    pub t_dest: *mut CCoord,
-    pub t_flags: c_short,
-    pub t_stats: CStats,
-    pub t_room: *mut CRoom,
-    pub t_pack: *mut CThing,
-    pub t_reserved: c_int,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CThingObject {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
-    pub o_type: c_int,
-    pub o_pos: CCoord,
-    pub o_text: *mut c_char,
-    pub o_launch: c_int,
-    pub o_packch: c_char,
-    pub o_damage: [c_char; 8],
-    pub o_hurldmg: [c_char; 8],
-    pub o_count: c_int,
-    pub o_which: c_int,
-    pub o_hplus: c_int,
-    pub o_dplus: c_int,
-    pub o_arm: c_int,
-    pub o_flags: c_int,
-    pub o_group: c_int,
-    pub o_label: *mut c_char,
-}
-
-/// A `THING` from `rogue.h`: a monster or an object.
-#[repr(C)]
-pub union CThing {
-    pub t: CThingMonster,
-    pub o: CThingObject,
-}
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {

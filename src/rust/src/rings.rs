@@ -1,4 +1,5 @@
 use crate::rnd::rnd;
+use crate::player::{CThing, CThingObject};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 use crate::potions::invis_on;
@@ -36,33 +37,6 @@ const USES: [c_int; 14] = [
     1,  // R_SUSTARM
 ];
 
-#[repr(C)]
-pub struct CCoord {
-    pub x: c_int,
-    pub y: c_int,
-}
-
-#[repr(C)]
-pub struct CThing {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
-    pub o_type: c_int,
-    pub o_pos: CCoord,
-    pub o_text: *mut c_char,
-    pub o_launch: c_int,
-    pub o_packch: c_char,
-    pub o_damage: [c_char; 8],
-    pub o_hurldmg: [c_char; 8],
-    pub o_count: c_int,
-    pub o_which: c_int,
-    pub o_hplus: c_int,
-    pub o_dplus: c_int,
-    pub o_arm: c_int,
-    pub o_flags: c_int,
-    pub o_group: c_int,
-    pub o_label: *mut c_char,
-}
-
 unsafe extern "C" {
     static mut cur_ring: [*mut CThing; 2];
     static mut terse: c_uchar;
@@ -81,6 +55,11 @@ unsafe extern "C" {
 
 static mut RING_NUM_BUF: [c_char; 10] = [0; 10];
 
+#[inline]
+unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+    tp as *mut CThingObject
+}
+
 /// Prompts for a ring and equips it on an available hand, applying immediate ring effects.
 #[no_mangle]
 pub unsafe extern "C" fn ring_on() {
@@ -88,7 +67,7 @@ pub unsafe extern "C" fn ring_on() {
     if obj.is_null() {
         return;
     }
-    if (*obj).o_type != RING_TYPE {
+    if (*thing_o(obj)).o_type != RING_TYPE {
         if terse == 0 {
             msg_str("it would be difficult to wrap that around a finger");
         } else {
@@ -122,8 +101,8 @@ pub unsafe extern "C" fn ring_on() {
 
     cur_ring[ring] = obj;
 
-    match (*obj).o_which {
-        R_ADDSTR => chg_str((*obj).o_arm),
+    match (*thing_o(obj)).o_which {
+        R_ADDSTR => chg_str((*thing_o(obj)).o_arm),
         R_SEEINVIS => invis_on(),
         R_AGGR => aggravate(),
         _ => {}
@@ -135,7 +114,7 @@ pub unsafe extern "C" fn ring_on() {
     msg_str(&format!(
         "{} ({})",
         CStr::from_ptr(inv_name(obj, 1)).to_string_lossy(),
-        (*obj).o_packch as u8 as char,
+        (*thing_o(obj)).o_packch as u8 as char,
     ));
 }
 
@@ -172,7 +151,7 @@ pub unsafe extern "C" fn ring_off() {
         msg_str(&format!(
             "was wearing {}({})",
             CStr::from_ptr(inv_name(obj, 1)).to_string_lossy(),
-            (*obj).o_packch as u8 as char,
+            (*thing_o(obj)).o_packch as u8 as char,
         ));
     }
 }
@@ -221,7 +200,7 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
         return 0;
     }
 
-    let which = (*ring).o_which as usize;
+    let which = (*thing_o(ring)).o_which as usize;
     if which >= USES.len() {
         return 0;
     }
@@ -230,7 +209,7 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
     if eat < 0 {
         eat = if rnd(-eat) == 0 { 1 } else { 0 };
     }
-    if (*ring).o_which == R_DIGEST {
+    if (*thing_o(ring)).o_which == R_DIGEST {
         eat = -eat;
     }
     eat
@@ -242,17 +221,17 @@ pub unsafe extern "C" fn ring_num(obj: *mut CThing) -> *mut c_char {
     if obj.is_null() {
         return c"".as_ptr() as *mut c_char;
     }
-    if ((*obj).o_flags & ISKNOW) == 0 {
+    if ((*thing_o(obj)).o_flags & ISKNOW) == 0 {
         return c"".as_ptr() as *mut c_char;
     }
 
-    match (*obj).o_which {
+    match (*thing_o(obj)).o_which {
         R_PROTECT | R_ADDSTR | R_ADDDAM | R_ADDHIT => {
             let _ = snprintf(
                 (&raw mut RING_NUM_BUF) as *mut c_char,
                 10,
                 c" [%s]".as_ptr(),
-                num((*obj).o_arm, 0, RING_TYPE as c_char),
+                num((*thing_o(obj)).o_arm, 0, RING_TYPE as c_char),
             );
             (&raw mut RING_NUM_BUF) as *mut c_char
         }

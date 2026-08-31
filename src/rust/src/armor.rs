@@ -1,4 +1,5 @@
 use crate::io::{addmsg_str, msg_str};
+use crate::player::{CThing, CThingObject};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
@@ -10,40 +11,6 @@ const RIGHT: usize = 1;
 const R_SUSTARM: c_int = 13;
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CCoord {
-    pub x: c_int,
-    pub y: c_int,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CThingObject {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
-    pub o_type: c_int,
-    pub o_pos: CCoord,
-    pub o_text: *mut c_char,
-    pub o_launch: c_int,
-    pub o_packch: c_char,
-    pub o_damage: [c_char; 8],
-    pub o_hurldmg: [c_char; 8],
-    pub o_count: c_int,
-    pub o_which: c_int,
-    pub o_hplus: c_int,
-    pub o_dplus: c_int,
-    pub o_arm: c_int,
-    pub o_flags: c_int,
-    pub o_group: c_int,
-    pub o_label: *mut c_char,
-}
-
-#[repr(C)]
-pub union CThing {
-    pub o: CThingObject,
-}
 
 unsafe extern "C" {
     static mut terse: c_uchar;

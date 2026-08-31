@@ -61,7 +61,7 @@ Save/restore and score persistence entry points are implemented in the Rust FFI 
 
 ## Global Definitions Bridge
 
-- `extern.c`: Definitions for globals declared externally in headers.
+- `../rust/src/globals.rs`: Rust definitions for globals declared externally in headers.
 
 ## Notes for Incremental Rust Migration
 

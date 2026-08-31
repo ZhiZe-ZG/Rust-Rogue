@@ -392,7 +392,7 @@ src/c/move.c               # Player and monster movement
 src/c/pack.c               # Inventory management
 src/c/state.c              # Game state management
 src/c/init.c               # Initialization routines
-src/c/extern.c             # Global variable definitions
+src/rust/src/globals.rs    # Global variable definitions and C ABI bridge
 ```
 
 ### Platform Abstraction
@@ -500,7 +500,7 @@ main()
 ### Adding New Features
 
 1. **New Monster Type**:
-   - Add entry to `monsters[]` array in `extern.c`
+   - Add entry to `monsters[]` array in `src/rust/src/globals.rs`
    - Update monster generation logic in `src/rust/src/level/ffi.rs` (new_level)
 
 2. **New Item Type**:
