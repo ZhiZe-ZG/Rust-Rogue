@@ -1,18 +1,17 @@
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use std::os::raw::c_int;
 use std::sync::{Mutex, OnceLock};
 
 static RNG: OnceLock<Mutex<StdRng>> = OnceLock::new();
 
-// Lazily initialize and return the shared RNG state used by the legacy C API.
+// Lazily initialize and return the shared RNG state.
 fn rng_state() -> &'static Mutex<StdRng> {
     RNG.get_or_init(|| Mutex::new(StdRng::from_seed([0x5eu8; 32])))
 }
 
-#[no_mangle]
-// Match Rogue's legacy rnd(range) contract while sourcing values from Rust.
-pub extern "C" fn rnd(range: c_int) -> c_int {
+/// Return a pseudo-random integer in `[0, range)`, matching the legacy
+/// Rogue `rnd(range)` contract.  `range == 0` yields `0`.
+pub fn rnd(range: i32) -> i32 {
     if range == 0 {
         return 0;
     }
@@ -28,9 +27,8 @@ pub extern "C" fn rnd(range: c_int) -> c_int {
     }
 }
 
-#[no_mangle]
-// Reset the shared RNG so C startup code can preserve deterministic seeds.
-pub extern "C" fn set_seed(seed: c_int) {
+/// Reset the shared RNG so startup code can preserve deterministic seeds.
+pub fn set_seed(seed: i32) {
     let mut guard = rng_state().lock().unwrap();
     *guard = StdRng::seed_from_u64(seed as u64);
 }

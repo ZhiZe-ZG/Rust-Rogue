@@ -10,6 +10,7 @@
 
 
 use crate::player::{CCoord, CPlace, CThing, CThingMonster, CThingObject};
+use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -288,7 +289,6 @@ unsafe extern "C" {
     fn read_scroll();
     fn readchar() -> c_int;
     fn refresh() -> c_int;
-    fn rnd(range: c_int) -> c_int;
     fn save_game();
     fn see_monst(mp: *mut CThing) -> c_uchar;
     fn shell();

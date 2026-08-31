@@ -5,6 +5,7 @@ use std::io::Write;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_void};
 
 use crate::player::{CCoord, CRoom, CThing, CThingMonster};
+use crate::rnd::{rnd, set_seed};
 
 const MAXSTR: usize = 1024;
 const NUMLINES: c_int = 24;
@@ -82,10 +83,8 @@ unsafe extern "C" {
     fn open_score();
     fn parse_opts(options: *mut c_char);
     fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c_uchar;
-    fn rnd(range: c_int) -> c_int;
     fn runners();
     fn score(amount: c_int, flags: c_int, monst: c_char);
-    fn set_seed(value: c_int);
     fn setup();
     fn start_daemon(func: *const c_void, arg: c_int, typ: c_int);
     fn stomach();

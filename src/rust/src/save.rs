@@ -1,3 +1,4 @@
+use crate::rnd::set_seed;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
@@ -80,7 +81,6 @@ extern "C" {
     fn sscanf(buf: *const c_char, fmt: *const c_char, ...) -> c_int;
     fn rs_restore_file(inf: *mut CFile) -> c_int;
     fn md_getpid() -> c_int;
-    fn srand(seed: c_int);
     fn playit();
     fn resetltchars();
     fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int;
@@ -326,7 +326,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     environ = envp;
     copy_cstr(file_name_ptr, file_ptr, MAXSTR);
     clearok(curscr, 1);
-    srand(md_getpid());
+    set_seed(md_getpid());
     msg(c"file name: %s".as_ptr(), file_ptr);
     playit();
     0
