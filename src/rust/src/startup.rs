@@ -4,6 +4,7 @@ use std::ffi::{CStr, CString};
 use std::io::Write;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_void};
 
+use crate::curses as cur;
 use crate::io::msg_str;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster};
 use crate::rnd::{rnd, set_seed};
@@ -64,9 +65,6 @@ unsafe extern "C" {
     fn doctor();
     fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
     fn getltchars();
-    fn initscr() -> *mut c_void;
-    fn endwin() -> c_int;
-    fn idlok(window: *mut c_void, enabled: c_int) -> c_int;
     fn init_check();
     fn init_colors();
     fn init_materials();
@@ -80,7 +78,6 @@ unsafe extern "C" {
     fn md_init();
     fn md_normaluser();
     fn new_level();
-    fn newwin(lines: c_int, columns: c_int, begin_y: c_int, begin_x: c_int) -> *mut c_void;
     fn open_score();
     fn parse_opts(options: *mut c_char);
     fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c_uchar;
@@ -95,41 +92,23 @@ unsafe extern "C" {
     static mut stdscr: *mut c_void;
 
     // ── Terminal, curses, and machdep functions used by game control ──────
-    fn baudrate() -> c_int;
-    fn clear() -> c_int;
-    fn clearok(win: *mut c_void, bf: c_uchar) -> c_int;
-    fn clrtoeol() -> c_int;
     fn command();
-    fn echo() -> c_int;
     fn exit(status: c_int) -> !;
     fn fflush(stream: *mut c_void) -> c_int;
-    fn getcurx(win: *mut c_void) -> c_int;
-    fn getcury(win: *mut c_void) -> c_int;
-    fn isendwin() -> c_int;
-    fn keypad(win: *mut c_void, bf: c_uchar) -> c_int;
     fn md_hasclreol() -> c_int;
     fn md_shellescape();
     fn md_tstpsignal();
     fn md_tstpresume();
-    #[link_name = "move"]
-    fn move_(y: c_int, x: c_int) -> c_int;
-    fn mvaddstr(y: c_int, x: c_int, s: *const c_char) -> c_int;
-    fn mvcur(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int;
-    fn mvprintw(y: c_int, x: c_int, fmt: *const c_char, ...) -> c_int;
-    fn noecho() -> c_int;
     fn playltchars();
     fn printf(fmt: *const c_char, ...) -> c_int;
     fn putchar(c: c_int) -> c_int;
-    fn raw() -> c_int;
     fn readchar() -> c_int;
-    fn refresh() -> c_int;
     fn resetltchars();
     fn roomin(cp: *mut CCoord) -> *mut CRoom;
     fn setbuf(stream: *mut c_void, buf: *mut c_char);
     fn signal(sig: c_int, handler: usize) -> usize;
     fn status();
     fn wait_for(ch: c_int);
-    fn wrefresh(win: *mut c_void) -> c_int;
 }
 
 #[inline]
@@ -160,9 +139,9 @@ pub unsafe extern "C" fn endit(sig: c_int) {
 /// No globals used directly.
 #[no_mangle]
 pub unsafe extern "C" fn fatal(s: *mut c_char) {
-    mvaddstr(LINES - 2, 0, s);
-    refresh();
-    endwin();
+    cur::mvaddstr(LINES - 2, 0, s);
+    cur::refresh();
+    cur::endwin();
     my_exit(0);
 }
 
@@ -190,10 +169,10 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
     /*
      * leave nicely
      */
-    let oy = getcury(curscr);
-    let ox = getcurx(curscr);
-    mvcur(0, COLS - 1, LINES - 1, 0);
-    endwin();
+    let oy = cur::getcury(curscr);
+    let ox = cur::getcurx(curscr);
+    cur::mvcur(0, COLS - 1, LINES - 1, 0);
+    cur::endwin();
     resetltchars();
     fflush(stdout);
     md_tstpsignal();
@@ -202,16 +181,16 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
      * start back up again
      */
     md_tstpresume();
-    raw();
-    noecho();
-    keypad(stdscr, TRUE);
+    cur::raw();
+    cur::noecho();
+    cur::keypad(stdscr, TRUE);
     playltchars();
-    clearok(curscr, TRUE);
-    wrefresh(curscr);
-    let y = getcury(curscr);
-    let x = getcurx(curscr);
-    mvcur(y, x, oy, ox);
-    move_(oy, ox);
+    cur::clearok(curscr, TRUE);
+    cur::wrefresh(curscr);
+    let y = cur::getcury(curscr);
+    let x = cur::getcurx(curscr);
+    cur::mvcur(y, x, oy, ox);
+    cur::move_(oy, ox);
     fflush(stdout);
 }
 
@@ -226,7 +205,7 @@ pub unsafe extern "C" fn playit() {
     /*
      * set up defaults for slow terminals
      */
-    if baudrate() <= 1200 {
+    if cur::baudrate() <= 1200 {
         terse = TRUE;
         jump = TRUE;
         see_floor = FALSE;
@@ -267,28 +246,25 @@ pub unsafe extern "C" fn quit(sig: c_int) {
     if q_comm == FALSE {
         mpos = 0;
     }
-    let oy = getcury(curscr);
-    let ox = getcurx(curscr);
+    let oy = cur::getcury(curscr);
+    let ox = cur::getcurx(curscr);
     msg_str("really quit?");
     if readchar() == b'y' as c_int {
         signal(SIGINT, leave as usize);
-        clear();
-        mvprintw(
-            LINES - 2,
-            0,
-            c"You quit with %d gold pieces".as_ptr(),
-            purse,
-        );
-        move_(LINES - 1, 0);
-        refresh();
+        cur::clear();
+        let line = format!("You quit with {} gold pieces", purse);
+        let c_line = CString::new(line).unwrap();
+        cur::mvaddstr(LINES - 2, 0, c_line.as_ptr());
+        cur::move_(LINES - 1, 0);
+        cur::refresh();
         score(purse, 1, 0);
         my_exit(0);
     } else {
-        move_(0, 0);
-        clrtoeol();
+        cur::move_(0, 0);
+        cur::clrtoeol();
         status();
-        move_(oy, ox);
-        refresh();
+        cur::move_(oy, ox);
+        cur::refresh();
         mpos = 0;
         count = 0;
         to_death = FALSE;
@@ -303,9 +279,9 @@ pub unsafe extern "C" fn leave(sig: c_int) {
 
     setbuf(stdout, LEAVE_BUF.as_mut_ptr());   /* throw away pending output */
 
-    if isendwin() == 0 {
-        mvcur(0, COLS - 1, LINES - 1, 0);
-        endwin();
+    if cur::isendwin() == 0 {
+        cur::mvcur(0, COLS - 1, LINES - 1, 0);
+        cur::endwin();
     }
 
     putchar(b'\n' as c_int);
@@ -321,9 +297,9 @@ pub unsafe extern "C" fn shell() {
     /*
      * Set the terminal back to original mode
      */
-    move_(LINES - 1, 0);
-    refresh();
-    endwin();
+    cur::move_(LINES - 1, 0);
+    cur::refresh();
+    cur::endwin();
     resetltchars();
     putchar(b'\n' as c_int);
     in_shell = TRUE;
@@ -336,13 +312,13 @@ pub unsafe extern "C" fn shell() {
 
     printf(c"\n[Press return to continue]".as_ptr());
     fflush(stdout);
-    noecho();
-    raw();
-    keypad(stdscr, TRUE);
+    cur::noecho();
+    cur::raw();
+    cur::keypad(stdscr, TRUE);
     playltchars();
     in_shell = FALSE;
     wait_for(b'\n' as c_int);
-    clearok(stdscr, TRUE);
+    cur::clearok(stdscr, TRUE);
 }
 
 /// my_exit:
@@ -353,8 +329,8 @@ pub unsafe extern "C" fn shell() {
 pub unsafe extern "C" fn my_exit(st: c_int) -> ! {
     resetltchars();
     if !stdscr.is_null() {
-        echo();
-        endwin();
+        cur::echo();
+        cur::endwin();
     }
     fflush(stdout);
     fflush(stderr);
@@ -415,7 +391,7 @@ pub unsafe extern "C" fn main(mut argc: c_int, mut argv: *mut *mut c_char, envp:
             }
             purse = rnd(100) + 1;
             level = rnd(100) + 1;
-            initscr();
+            cur::initscr();
             getltchars();
             death(death_monst());
             return 0;
@@ -433,9 +409,9 @@ pub unsafe extern "C" fn main(mut argc: c_int, mut argv: *mut *mut c_char, envp:
         print!("Hello {}, just a moment while I dig the dungeon...", CStr::from_ptr(whoami.as_ptr()).to_string_lossy());
     }
     std::io::stdout().flush().expect("failed to flush startup message");
-    initscr();
+    cur::initscr();
     if LINES < NUMLINES || COLS < NUMCOLS {
-        endwin();
+        cur::endwin();
         eprintln!("Sorry, the screen must be at least {}x{}", NUMLINES, NUMCOLS);
         eprintln!("Current terminal size: {}x{}", COLS, LINES);
         my_exit(1);
@@ -448,9 +424,9 @@ pub unsafe extern "C" fn main(mut argc: c_int, mut argv: *mut *mut c_char, envp:
     init_stones();
     init_materials();
     setup();
-    hw = newwin(LINES, COLS, 0, 0);
-    idlok(stdscr, 1);
-    idlok(hw, 1);
+    hw = cur::newwin(LINES, COLS, 0, 0);
+    cur::idlok(stdscr, 1);
+    cur::idlok(hw, 1);
     if master_mode_enabled != 0 {
         noscore = wizard;
     }

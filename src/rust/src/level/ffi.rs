@@ -10,6 +10,8 @@ use std::os::raw::c_int;
 
 use glam::IVec2;
 
+use crate::curses as cur;
+
 use crate::game::clear_level;
 use crate::player::{CRoom, CThing};
 
@@ -23,7 +25,7 @@ use super::presence::populate_level;
 use super::rooms::Room;
 use super::structure::Structure;
 use super::symbols::{
-    ISGONE, ISHELD, MAXROOMS, _free_list, clear, level, lvl_obj, max_level, mlist, no_food,
+    ISGONE, ISHELD, MAXROOMS, _free_list, level, lvl_obj, max_level, mlist, no_food,
     player, thing_t, wake_monster,
 };
 use super::tile::Tile;
@@ -91,7 +93,7 @@ unsafe fn begin_new_level() {
 
     // Reset the Rust-owned places grid and monster map.
     clear_level();
-    clear();
+    cur::clear();
 }
 
 /// Release the monsters and objects left on the previous level.

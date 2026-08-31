@@ -1,5 +1,6 @@
 use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use crate::curses as cur;
 use crate::draw::{
     chat_at, enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room,
     reveal_trap_at, turnref as draw_turnref, winat,
@@ -147,7 +148,6 @@ unsafe extern "C" {
     fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;
     fn roomin(cp: *mut CCoord) -> *mut CRoom;
     fn floor_at() -> c_char;
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
 }
 
 #[inline]
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
 #[inline]
 unsafe fn move_stuff(next_pos: &mut CCoord, fl: c_char) {
     let hero = hero_pos();
-    mvaddch(hero.y, hero.x, floor_at() as c_uint);
+    cur::mvaddch(hero.y, hero.x, floor_at() as c_uint);
     if (fl as u8 & F_PASS as u8) != 0 && chat_at(oldpos.y, oldpos.x) == DOOR {
         draw_leave_room(next_pos);
     }

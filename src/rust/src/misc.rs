@@ -94,7 +94,6 @@ unsafe extern "C" {
     static mut lvl_obj: *mut CThing;
     static mut mlist: *mut CThing;
 
-    fn addch(ch: c_uint) -> c_int;
     fn extinguish(func: *const c_void);
     fn free(ptr: *mut c_void);
     fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
@@ -104,7 +103,6 @@ unsafe extern "C" {
     fn isupper(c: c_int) -> c_int;
     fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
     fn malloc(size: usize) -> *mut c_void;
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
     fn readchar() -> c_int;
     fn reset_last();
     fn roll(num: c_int, sides: c_int) -> c_int;

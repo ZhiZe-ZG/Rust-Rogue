@@ -8,6 +8,7 @@
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::curses as cur;
 use crate::draw;
 use crate::io::msg_str;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
@@ -61,7 +62,6 @@ unsafe extern "C" {
     fn rust_armor(arm: *mut CThing);
     fn death(thing: c_char) -> !;
     fn spread(nm: c_int) -> c_int;
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
 }
 
 #[inline]
@@ -183,7 +183,7 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
         }
         T_TELEP => {
             teleport();
-            mvaddch(pos.y, pos.x, TRAP as c_uint);
+            cur::mvaddch(pos.y, pos.x, TRAP as c_uint);
         }
         T_DART => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;

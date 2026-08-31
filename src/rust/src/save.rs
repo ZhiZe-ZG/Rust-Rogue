@@ -1,4 +1,5 @@
 use crate::rnd::set_seed;
+use crate::curses as cur;
 use crate::io::msg_str;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
@@ -59,18 +60,10 @@ extern "C" {
     static mut player: CThingPlayer;
 
     fn readchar() -> c_int;
-    fn addstr(s: *const c_char) -> c_int;
-    fn refresh() -> c_int;
     fn get_str(s: *mut c_char, win: *mut CWindow) -> c_int;
     fn md_unlink(file: *mut c_char) -> c_int;
 
-    fn mvcur(ly: c_int, lx: c_int, y: c_int, x: c_int) -> c_int;
     fn putchar(c: c_int) -> c_int;
-    fn endwin() -> c_int;
-    fn initscr() -> *mut CWindow;
-    fn keypad(win: *mut CWindow, flag: c_int) -> c_int;
-    fn newwin(nlines: c_int, ncols: c_int, y: c_int, x: c_int) -> *mut CWindow;
-    fn clearok(win: *mut CWindow, bf: c_int);
     fn setup();
     fn md_tstphold();
     fn md_tstpresume();
@@ -172,8 +165,8 @@ pub unsafe extern "C" fn save_game() {
             }
 
             if c == 'y' as c_int || c == 'Y' as c_int {
-                addstr(c"Yes\n".as_ptr());
-                refresh();
+                cur::addstr(c"Yes\n".as_ptr());
+                cur::refresh();
                 copy_cstr(buf.as_mut_ptr(), file_name_ptr, MAXSTR);
                 // Continue to file-open logic using current buffer value.
             } else {
@@ -243,9 +236,9 @@ pub unsafe extern "C" fn save_file(savef: *mut CFile) {
     let header = format!("{} x {}\n", lines, cols);
     let version_ptr = &raw const version;
 
-    mvcur(0, cols - 1, lines - 1, 0);
+    cur::mvcur(0, cols - 1, lines - 1, 0);
     putchar('\n' as c_int);
-    endwin();
+    cur::endwin();
     resetltchars();
     md_chmod(&raw mut file_name as *mut c_char, 0o400);
 
@@ -297,11 +290,13 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     let _ = fread(buf.as_mut_ptr() as *mut u8, 1, 80, inf);
     let _ = sscanf(buf.as_ptr(), c"%d x %d\n".as_ptr(), &mut lines, &mut cols);
 
-    initscr();
-    keypad(stdscr, 1);
+    if stdscr.is_null() {
+        cur::initscr();
+    }
+    cur::keypad(stdscr as *mut CWindow, 1);
 
     if lines > LINES {
-        endwin();
+        cur::endwin();
         msg_str(&format!(
             "Sorry, original game was played on a screen with {} lines.\n",
             lines
@@ -313,7 +308,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
         return 0;
     }
     if cols > COLS {
-        endwin();
+        cur::endwin();
         msg_str(&format!(
             "Sorry, original game was played on a screen with {} columns.\n",
             cols
@@ -325,7 +320,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
         return 0;
     }
 
-    hw = newwin(LINES, COLS, 0, 0);
+    hw = cur::newwin(LINES, COLS, 0, 0) as *mut CWindow;
     setup();
     let _ = rs_restore_file(inf);
 
@@ -335,10 +330,10 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     }
 
     mpos = 0;
-    clearok(stdscr, 1);
+    cur::clearok(stdscr as *mut CWindow, 1);
 
     if restore_player_dead() {
-        endwin();
+        cur::endwin();
         msg_str("\n\"He's dead, Jim\"\n");
         return 0;
     }
@@ -346,7 +341,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     md_tstpresume();
     environ = envp;
     copy_cstr(file_name_ptr, file_ptr, MAXSTR);
-    clearok(curscr, 1);
+    cur::clearok(curscr as *mut CWindow, 1);
     set_seed(md_getpid());
     msg_str(&format!(
         "file name: {}",

@@ -1,4 +1,5 @@
 use crate::rnd::rnd;
+use crate::curses as cur;
 use crate::io::{addmsg_str, msg_str};
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
@@ -202,9 +203,6 @@ unsafe extern "C" {
     fn new_item() -> *mut CThing;
     fn new_thing() -> *mut CThing;
     fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_uchar, monst: c_uchar) -> c_uchar;
-    fn standout() -> c_int;
-    fn addch(ch: c_uint) -> c_int;
-    fn standend() -> c_int;
     fn dist(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int;
     fn lengthen(func: *const c_void, xtime: c_int);
     fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
@@ -212,7 +210,6 @@ unsafe extern "C" {
     fn spread(nm: c_int) -> c_int;
     fn set_mname(tp: *mut CThing) -> *mut c_char;
     fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
-    fn endwin() -> c_int;
     fn abort() -> !;
 }
 
@@ -341,13 +338,13 @@ pub unsafe extern "C" fn wanderer() {
     new_monster(tp, randmonster(1), &mut cp);
 
     if player_has(SEEMONST) {
-        standout();
+        cur::standout();
         if !player_has(ISHALU) {
-            addch((*thing_t(tp)).t_type as c_uint);
+            cur::addch((*thing_t(tp)).t_type as c_uint);
         } else {
-            addch((rnd(26) + 'A' as c_int) as c_uint);
+            cur::addch((rnd(26) + 'A' as c_int) as c_uint);
         }
-        standend();
+        cur::standend();
     }
 
     runto(&mut (*thing_t(tp)).t_pos);
@@ -365,7 +362,7 @@ pub unsafe extern "C" fn wanderer() {
 pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
     let tp = (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst;
     if tp.is_null() {
-        endwin();
+        cur::endwin();
         abort();
     }
 

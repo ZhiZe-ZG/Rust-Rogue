@@ -15,6 +15,7 @@ use crate::io::{addmsg_str, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::curses as cur;
 use crate::player::{CCoord, CStats, CThing, CThingMonster, CThingObject};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -137,10 +138,6 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn roll(n: c_int, sides: c_int) -> c_int;
     fn endmsg() -> c_int;
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
-    fn inch() -> c_uint;
-    #[link_name = "move"]
-    fn move_(y: c_int, x: c_int);
     fn isupper(c: c_int) -> c_int;
     fn toupper(c: c_int) -> c_int;
     fn toascii(c: c_int) -> c_int;
@@ -254,7 +251,7 @@ pub unsafe extern "C" fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uch
         (*thing_t(tp)).t_disguise = b'X' as c_char;
         if on_p(&raw mut player, ISHALU) {
             ch = (rnd(26) + b'A' as c_int) as c_char;
-            mvaddch((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x, ch as c_uint);
+            cur::mvaddch((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x, ch as c_uint);
         }
         msg_str(&CStr::from_ptr(choose_str(
             c"heavy!  That's a nasty critter!".as_ptr(),
@@ -321,7 +318,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
     {
         (*thing_t(mp)).t_disguise = b'X' as c_char;
         if on_p(&raw mut player, ISHALU) {
-            mvaddch(
+            cur::mvaddch(
                 (*thing_t(mp)).t_pos.y,
                 (*thing_t(mp)).t_pos.x,
                 (rnd(26) + b'A' as c_int) as c_uint,
@@ -551,8 +548,8 @@ pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
 
     let mname: *mut c_char;
     if on_p(&raw mut player, ISHALU) {
-        move_((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x);
-        let ch = toascii(inch() as c_int);
+        cur::move_((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x);
+        let ch = toascii(cur::inch() as c_int);
         let idx = if isupper(ch) != 0 {
             (ch - b'A' as c_int) as usize
         } else {
@@ -819,7 +816,7 @@ pub unsafe extern "C" fn remove_mon(mp: *mut CCoord, tp: *mut CThing, waskill: c
     set_moat((*mp).y, (*mp).x, std::ptr::null_mut());
     // Re-draw the underlying character.
     let oldch = (*thing_t(tp)).t_oldch;
-    mvaddch((*mp).y, (*mp).x, oldch as c_uchar as c_uint);
+    cur::mvaddch((*mp).y, (*mp).x, oldch as c_uchar as c_uint);
 
     _detach(&raw mut mlist as *mut *mut CThing, tp);
 

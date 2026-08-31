@@ -11,6 +11,7 @@
 
 use crate::player::{CCoord, CPlace, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
+use crate::curses as cur;
 use crate::io::{addmsg_str, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
@@ -253,7 +254,6 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn add_pack(obj: *mut CThing, all: c_uchar);
     fn add_pass();
-    fn clearok(win: *mut c_void, bf: c_uchar) -> c_int;
     fn create_obj();
     fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
     fn discovered();
@@ -276,8 +276,6 @@ unsafe extern "C" {
     fn look(wakeup: c_uchar);
     fn malloc(size: usize) -> *mut c_void;
     fn missile(ydelta: c_int, xdelta: c_int);
-    #[link_name = "move"]
-    fn move_(y: c_int, x: c_int);
     fn new_item() -> *mut CThing;
     fn new_level();
     fn option();
@@ -288,7 +286,6 @@ unsafe extern "C" {
     fn raise_level();
     fn read_scroll();
     fn readchar() -> c_int;
-    fn refresh() -> c_int;
     fn save_game();
     fn see_monst(mp: *mut CThing) -> c_uchar;
     fn shell();
@@ -299,17 +296,11 @@ unsafe extern "C" {
     fn take_off();
     fn teleport();
     fn total_winner();
-    fn touchwin(win: *mut c_void) -> c_int;
     fn turn_see(turn_off: c_uchar) -> c_uchar;
-    fn unctrl(ch: c_int) -> *mut c_char;
     fn wait_for(ch: c_int);
-    fn waddstr(win: *mut c_void, s: *const c_char) -> c_int;
-    fn wclear(win: *mut c_void) -> c_int;
     fn wear();
     fn whatis(insist: c_uchar, item_type: c_int);
     fn wield();
-    fn wmove(win: *mut c_void, y: c_int, x: c_int) -> c_int;
-    fn wrefresh(win: *mut c_void) -> c_int;
     fn ring_on();
     fn ring_off();
 }
@@ -408,9 +399,9 @@ pub unsafe extern "C" fn command() {
         status();
         lastscore = purse;
         let hero = hero_pos();
-        move_(hero.y, hero.x);
+        cur::move_(hero.y, hero.x);
         if !((running != 0 || count != 0) && jump != 0) {
-            refresh(); // Draw screen
+            cur::refresh(); // Draw screen
         }
         take = 0;
         after = TRUE;
@@ -710,8 +701,8 @@ pub unsafe extern "C" fn command() {
                     }
                     CTRL_R => {
                         after = FALSE;
-                        clearok(curscr, TRUE);
-                        wrefresh(curscr);
+                        cur::clearok(curscr, TRUE);
+                        cur::wrefresh(curscr);
                     }
                     b'v' => {
                         after = FALSE;
@@ -937,7 +928,7 @@ pub unsafe extern "C" fn illcom(ch: c_int) {
     count = 0;
     msg_str(&format!(
         "illegal command '{}'",
-        CStr::from_ptr(unctrl(ch)).to_string_lossy()
+        CStr::from_ptr(cur::unctrl(ch)).to_string_lossy()
     ));
     save_msg = TRUE;
 }
@@ -1044,14 +1035,14 @@ pub unsafe extern "C" fn help() {
      * or an error if he typed a funny character.
      */
     if helpch != b'*' as c_char {
-        move_(0, 0);
+        cur::move_(0, 0);
         let mut i = 0;
         while i < helpstr.len() && !helpstr[i].h_desc.is_null() {
             if helpstr[i].h_ch == helpch {
                 lower_msg = TRUE;
                 msg_str(&format!(
                     "{}{}",
-                    CStr::from_ptr(unctrl(helpstr[i].h_ch as c_int)).to_string_lossy(),
+                    CStr::from_ptr(cur::unctrl(helpstr[i].h_ch as c_int)).to_string_lossy(),
                     CStr::from_ptr(helpstr[i].h_desc).to_string_lossy()
                 ));
                 lower_msg = FALSE;
@@ -1061,7 +1052,7 @@ pub unsafe extern "C" fn help() {
         }
         msg_str(&format!(
             "unknown character '{}'",
-            CStr::from_ptr(unctrl(helpch as c_int)).to_string_lossy()
+            CStr::from_ptr(cur::unctrl(helpch as c_int)).to_string_lossy()
         ));
         return;
     }
@@ -1086,28 +1077,28 @@ pub unsafe extern "C" fn help() {
         numprint = LINES - 1;
     }
 
-    wclear(hw);
+    cur::wclear(hw);
     cnt = 0;
     let mut i = 0;
     while i < helpstr.len() && !helpstr[i].h_desc.is_null() && cnt < numprint * 2 {
         if helpstr[i].h_print != 0 {
-            wmove(hw, cnt % numprint, if cnt >= numprint { COLS / 2 } else { 0 });
+            cur::wmove(hw, cnt % numprint, if cnt >= numprint { COLS / 2 } else { 0 });
             if helpstr[i].h_ch != 0 {
-                waddstr(hw, unctrl(helpstr[i].h_ch as c_int));
+                cur::waddstr(hw, cur::unctrl(helpstr[i].h_ch as c_int));
             }
-            waddstr(hw, helpstr[i].h_desc);
+            cur::waddstr(hw, helpstr[i].h_desc);
             cnt += 1;
         }
         i += 1;
     }
-    wmove(hw, LINES - 1, 0);
-    waddstr(hw, c"--Press space to continue--".as_ptr());
-    wrefresh(hw);
+    cur::wmove(hw, LINES - 1, 0);
+    cur::waddstr(hw, c"--Press space to continue--".as_ptr());
+    cur::wrefresh(hw);
     wait_for(b' ' as c_int);
-    clearok(stdscr, TRUE);
+    cur::clearok(stdscr, TRUE);
     msg_str("");
-    touchwin(stdscr);
-    wrefresh(stdscr);
+    cur::touchwin(stdscr);
+    cur::wrefresh(stdscr);
 }
 
 // ─── identify() ───────────────────────────────────────────────────────────────
@@ -1142,7 +1133,7 @@ pub unsafe extern "C" fn identify() {
     }
     msg_str(&format!(
         "'{}': {}",
-        CStr::from_ptr(unctrl(ch)).to_string_lossy(),
+        CStr::from_ptr(cur::unctrl(ch)).to_string_lossy(),
         CStr::from_ptr(str_).to_string_lossy()
     ));
 }

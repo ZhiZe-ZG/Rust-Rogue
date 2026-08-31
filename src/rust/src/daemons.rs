@@ -1,4 +1,5 @@
 use crate::rnd::rnd;
+use crate::curses as cur;
 /*
  * All the daemon and fuse callback functions.
  *
@@ -75,12 +76,6 @@ unsafe extern "C" {
 
 unsafe extern "C" {
     fn roll(number: c_int, sides: c_int) -> c_int;
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
-    fn addch(ch: c_uint) -> c_int;
-    fn standout() -> c_int;
-    fn standend() -> c_int;
-    #[link_name = "move"]
-    fn move_(y: c_int, x: c_int);
     fn see_monst(mp: *mut CThing) -> c_uchar;
     fn enter_room(cp: *mut CCoord);
     fn choose_str(ts: *const c_char, ns: *const c_char) -> *const c_char;
@@ -194,7 +189,7 @@ pub unsafe extern "C" fn unsee() {
     let mut th = mlist;
     while !th.is_null() {
         if ((*thing_t(th)).t_flags & ISINVIS) != 0 && see_monst(th) != 0 {
-            mvaddch(
+            cur::mvaddch(
                 (*thing_t(th)).t_pos.y,
                 (*thing_t(th)).t_pos.x,
                 (*thing_t(th)).t_oldch as c_uchar as c_uint,
@@ -311,7 +306,7 @@ pub unsafe extern "C" fn come_down() {
     while !tp.is_null() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
-            mvaddch((*op).o_pos.y, (*op).o_pos.x, (*op).o_type as c_uint);
+            cur::mvaddch((*op).o_pos.y, (*op).o_pos.x, (*op).o_type as c_uint);
         }
         tp = (*thing_t(tp)).l_next;
     }
@@ -320,20 +315,20 @@ pub unsafe extern "C" fn come_down() {
     let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
     let mut tp = mlist;
     while !tp.is_null() {
-        move_((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x);
+        cur::move_((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x);
         if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
             if ((*thing_t(tp)).t_flags & ISINVIS) == 0
                 || ((*thing_t(&raw mut player)).t_flags & CANSEE) != 0
             {
-                addch((*thing_t(tp)).t_disguise as c_uchar as c_uint);
+                cur::addch((*thing_t(tp)).t_disguise as c_uchar as c_uint);
             }
             // If invisible and player can't see invisible, skip (original code
             // falls through to the else-if, but cansee returned true here,
             // so seemonst branch is not reached — matching C behavior).
         } else if seemonst {
-            standout();
-            addch((*thing_t(tp)).t_type as c_uchar as c_uint);
-            standend();
+            cur::standout();
+            cur::addch((*thing_t(tp)).t_type as c_uchar as c_uint);
+            cur::standend();
         }
         tp = (*thing_t(tp)).l_next;
     }
@@ -354,33 +349,33 @@ pub unsafe extern "C" fn visuals() {
     while !tp.is_null() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
-            mvaddch((*op).o_pos.y, (*op).o_pos.x, rnd_thing() as c_uchar as c_uint);
+            cur::mvaddch((*op).o_pos.y, (*op).o_pos.x, rnd_thing() as c_uchar as c_uint);
         }
         tp = (*thing_t(tp)).l_next;
     }
 
     // Change the stairs.
     if seenstairs == 0 && cansee(stairs.y, stairs.x) != 0 {
-        mvaddch(stairs.y, stairs.x, rnd_thing() as c_uchar as c_uint);
+        cur::mvaddch(stairs.y, stairs.x, rnd_thing() as c_uchar as c_uint);
     }
 
     // Change the monsters.
     let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
     let mut tp = mlist;
     while !tp.is_null() {
-        move_((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x);
+        cur::move_((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x);
         if see_monst(tp) != 0 {
             if (*thing_t(tp)).t_type == b'X' as c_char
                 && (*thing_t(tp)).t_disguise != b'X' as c_char
             {
-                addch(rnd_thing() as c_uchar as c_uint);
+                cur::addch(rnd_thing() as c_uchar as c_uint);
             } else {
-                addch((rnd(26) + b'A' as c_int) as c_uint);
+                cur::addch((rnd(26) + b'A' as c_int) as c_uint);
             }
         } else if seemonst {
-            standout();
-            addch((rnd(26) + b'A' as c_int) as c_uint);
-            standend();
+            cur::standout();
+            cur::addch((rnd(26) + b'A' as c_int) as c_uint);
+            cur::standend();
         }
         tp = (*thing_t(tp)).l_next;
     }

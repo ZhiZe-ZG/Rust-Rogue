@@ -1,4 +1,5 @@
 use crate::rnd::rnd;
+use crate::curses as cur;
 use crate::io::{addmsg_str, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
@@ -145,8 +146,6 @@ unsafe extern "C" {
     fn cansee(y: c_int, x: c_int) -> c_uchar;
     fn show_floor() -> c_uchar;
     fn step_ok(ch: c_int) -> c_int;
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
-    fn refresh() -> c_int;
     fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;
     fn discard(item: *mut CThing);
     fn _attach(list: *mut *mut CThing, item: *mut CThing);
@@ -233,7 +232,7 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
             if ch == FLOOR && show_floor() == 0 {
                 ch = ' ' as c_int;
             }
-            mvaddch((*o).o_pos.y, (*o).o_pos.x, ch as c_uint);
+            cur::mvaddch((*o).o_pos.y, (*o).o_pos.x, ch as c_uint);
         }
 
         (*o).o_pos.y += ydelta;
@@ -242,8 +241,8 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
         let ch = winat((*o).o_pos.y, (*o).o_pos.x);
         if step_ok(ch) != 0 && ch != DOOR {
             if cansee((*o).o_pos.y, (*o).o_pos.x) != 0 && terse == 0 {
-                mvaddch((*o).o_pos.y, (*o).o_pos.x, (*o).o_type as c_uint);
-                refresh();
+                cur::mvaddch((*o).o_pos.y, (*o).o_pos.x, (*o).o_type as c_uint);
+                cur::refresh();
             }
             continue;
         }
@@ -263,7 +262,7 @@ pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
             if !m.is_null() {
                 (*thing_t(m)).t_oldch = (*thing_o(obj)).o_type as c_char;
             } else {
-                mvaddch(FALL_POS.y, FALL_POS.x, (*thing_o(obj)).o_type as c_uint);
+                cur::mvaddch(FALL_POS.y, FALL_POS.x, (*thing_o(obj)).o_type as c_uint);
             }
         }
 

@@ -3,6 +3,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
 
+use crate::curses as cur;
 use crate::draw;
 use crate::io::msg_str;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
@@ -122,12 +123,6 @@ unsafe extern "C" {
     fn enter_room(cp: *mut CCoord);
     fn look(wakeup: c_uchar);
     fn flush_type();
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
-    fn wclear(win: *mut std::ffi::c_void) -> c_int;
-    fn wmove(win: *mut std::ffi::c_void, y: c_int, x: c_int) -> c_int;
-    fn waddch(win: *mut std::ffi::c_void, ch: c_uint) -> c_int;
-    fn wstandout(win: *mut std::ffi::c_void) -> c_int;
-    fn wstandend(win: *mut std::ffi::c_void) -> c_int;
     fn show_win(message: *const c_char);
 }
 
@@ -292,7 +287,7 @@ pub unsafe extern "C" fn teleport() {
     let mut c = CCoord { x: 0, y: 0 };
     let mut hero = hero();
 
-    mvaddch(hero.y, hero.x, floor_at() as c_uint);
+    cur::mvaddch(hero.y, hero.x, floor_at() as c_uint);
     find_floor(ptr::null_mut(), &mut c, FALSE, TRUE);
     if roomin(&mut c) != proom() {
         leave_room(&mut hero);
@@ -303,7 +298,7 @@ pub unsafe extern "C" fn teleport() {
         look(TRUE);
     }
     (*thing_t(&raw mut player)).t_pos = hero;
-    mvaddch(hero.y, hero.x, b'@' as c_uint);
+    cur::mvaddch(hero.y, hero.x, b'@' as c_uint);
 
     if ((*thing_t(&raw mut player)).t_flags & ISHELD) != 0 {
         (*thing_t(&raw mut player)).t_flags &= !ISHELD;
@@ -323,17 +318,17 @@ pub unsafe extern "C" fn show_map() {
         return;
     }
 
-    wclear(hw);
+    cur::wclear(hw);
     for y in 1..(NUMLINES - 1) {
         for x in 0..NUMCOLS {
             let real = flat(y, x);
             if ((real as u8) & (F_REAL as u8)) == 0 {
-                wstandout(hw);
+                cur::wstandout(hw);
             }
-            wmove(hw, y, x);
-            waddch(hw, chat(y, x) as c_uint);
+            cur::wmove(hw, y, x);
+            cur::waddch(hw, chat(y, x) as c_uint);
             if real == 0 {
-                wstandend(hw);
+                cur::wstandend(hw);
             }
         }
     }

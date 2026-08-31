@@ -1,6 +1,7 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
+use crate::curses as cur;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster};
 
 const TRUE: c_uchar = 1;
@@ -43,29 +44,17 @@ unsafe extern "C" {
     static mut tombstone: c_uchar;
     static mut whoami: [c_char; MAXSTR];
 
-    fn clearok(win: *mut c_void, bf: c_uchar) -> c_int;
     fn erase_lamp(pos: *mut CCoord, rp: *mut CRoom);
-    fn erasechar() -> c_int;
-    fn getcurx(win: *mut c_void) -> c_int;
-    fn getcury(win: *mut c_void) -> c_int;
     fn isalpha(c: c_int) -> c_int;
     fn isprint(c: c_int) -> c_int;
-    fn killchar() -> c_int;
     fn look(wakeup: c_uchar);
     fn readchar() -> c_int;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
     fn strlen(s: *const c_char) -> usize;
-    fn touchwin(win: *mut c_void) -> c_int;
     fn toupper(c: c_int) -> c_int;
-    fn unctrl(c: c_int) -> *mut c_char;
     fn wait_for(ch: c_int);
-    fn wclear(win: *mut c_void) -> c_int;
-    fn waddch(win: *mut c_void, ch: c_uint) -> c_int;
-    fn waddstr(win: *mut c_void, s: *const c_char) -> c_int;
-    fn wmove(win: *mut c_void, y: c_int, x: c_int) -> c_int;
-    fn wrefresh(win: *mut c_void) -> c_int;
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
@@ -81,8 +70,8 @@ unsafe fn proom_ptr() -> *mut CRoom {
 }
 
 unsafe fn getyx_(win: *mut c_void, y: *mut c_int, x: *mut c_int) {
-    *y = getcury(win);
-    *x = getcurx(win);
+    *y = cur::getcury(win);
+    *x = cur::getcurx(win);
 }
 
 unsafe fn option_list() -> [OPTION; 10] {
@@ -102,7 +91,7 @@ unsafe fn option_list() -> [OPTION; 10] {
 
 unsafe fn paint(win: *mut c_void, s: &str) {
     let c = CString::new(s).unwrap();
-    waddstr(win, c.as_ptr());
+    cur::waddstr(win, c.as_ptr());
 }
 
 unsafe fn pr_optname_slot(op: &OPTION) {
@@ -117,14 +106,14 @@ pub unsafe extern "C" fn option() {
     let mut optlist = option_list();
     let mut retval: c_int;
 
-    wclear(hw);
+    cur::wclear(hw);
     for item in &mut optlist {
         pr_optname_slot(item);
         (item.o_putfunc)(item.o_opt);
-        waddch(hw, '\n' as c_uint);
+        cur::waddch(hw, '\n' as c_uint);
     }
 
-    wmove(hw, 0, 0);
+    cur::wmove(hw, 0, 0);
     for index in 0..optlist.len() {
         let item = &mut optlist[index];
         pr_optname_slot(item);
@@ -133,7 +122,7 @@ pub unsafe extern "C" fn option() {
             break;
         }
         if retval == MINUS && index > 0 {
-            wmove(hw, (index as c_int) - 1, 0);
+            cur::wmove(hw, (index as c_int) - 1, 0);
             let prev = index as isize - 2;
             if prev >= 0 {
                 let _ = prev;
@@ -141,12 +130,12 @@ pub unsafe extern "C" fn option() {
         }
     }
 
-    wmove(hw, 23, 0);
+    cur::wmove(hw, 23, 0);
     paint(hw, "--Press space to continue--");
-    wrefresh(hw);
+    cur::wrefresh(hw);
     wait_for(' ' as c_int);
-    clearok(stdscr, TRUE);
-    touchwin(stdscr);
+    cur::clearok(stdscr, TRUE);
+    cur::touchwin(stdscr);
     after = FALSE;
 }
 
@@ -162,13 +151,13 @@ pub unsafe extern "C" fn pr_optname(op: *mut OPTION) {
 pub unsafe extern "C" fn put_bool(vp: *mut c_void) {
     let bp = vp as *mut c_uchar;
     let text = if *bp != 0 { c"True".as_ptr() } else { c"False".as_ptr() };
-    waddstr(hw, text);
+    cur::waddstr(hw, text);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn put_str(vp: *mut c_void) {
     let sp = vp as *mut c_char;
-    waddstr(hw, sp);
+    cur::waddstr(hw, sp);
 }
 
 #[no_mangle]
@@ -176,7 +165,7 @@ pub unsafe extern "C" fn put_inv_t(vp: *mut c_void) {
     let ip = vp as *mut c_int;
     let idx = *ip as usize;
     if idx < unsafe { inv_t_name.len() } {
-        waddstr(hw, inv_t_name[idx]);
+        cur::waddstr(hw, inv_t_name[idx]);
     }
 }
 
@@ -188,10 +177,10 @@ pub unsafe extern "C" fn get_bool(vp: *mut c_void, win: *mut c_void) -> c_int {
     let mut bad = true;
 
     getyx_(win, &mut oy, &mut ox);
-    waddstr(win, if *bp != 0 { c"True".as_ptr() } else { c"False".as_ptr() });
+    cur::waddstr(win, if *bp != 0 { c"True".as_ptr() } else { c"False".as_ptr() });
     while bad {
-        wmove(win, oy, ox);
-        wrefresh(win);
+        cur::wmove(win, oy, ox);
+        cur::wrefresh(win);
         match readchar() {
             ch if ch == 't' as c_int || ch == 'T' as c_int => {
                 *bp = TRUE;
@@ -207,14 +196,14 @@ pub unsafe extern "C" fn get_bool(vp: *mut c_void, win: *mut c_void) -> c_int {
             ESCAPE => return QUIT,
             ch if ch == '-' as c_int => return MINUS,
             _ => {
-                wmove(win, oy, ox + 10);
-                waddstr(win, c"(T or F)".as_ptr());
+                cur::wmove(win, oy, ox + 10);
+                cur::waddstr(win, c"(T or F)".as_ptr());
             }
         }
     }
-    wmove(win, oy, ox);
-    waddstr(win, if *bp != 0 { c"True".as_ptr() } else { c"False".as_ptr() });
-    waddch(win, '\n' as c_uint);
+    cur::wmove(win, oy, ox);
+    cur::waddstr(win, if *bp != 0 { c"True".as_ptr() } else { c"False".as_ptr() });
+    cur::waddch(win, '\n' as c_uint);
     NORM
 }
 
@@ -249,7 +238,7 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
     let mut c: c_int;
 
     getyx_(win, &mut oy, &mut ox);
-    wrefresh(win);
+    cur::wrefresh(win);
     loop {
         c = readchar();
         if c == '\n' as c_int || c == '\r' as c_int || c == ESCAPE {
@@ -258,15 +247,15 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
         if c == -1 {
             continue;
         }
-        if c == erasechar() {
+        if c == cur::erasechar() {
             if ptr > buf.as_mut_ptr() {
                 ptr = ptr.sub(1);
             }
             continue;
         }
-        if c == killchar() {
+        if c == cur::killchar() {
             ptr = buf.as_mut_ptr();
-            wmove(win, oy, ox);
+            cur::wmove(win, oy, ox);
             continue;
         }
         if ptr >= buf.as_mut_ptr().add(MAXINP) || !(isprint(c) != 0 || c == ' ' as c_int) {
@@ -274,7 +263,7 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
         }
         *ptr = c as c_char;
         ptr = ptr.add(1);
-        waddstr(win, unctrl(c));
+        cur::waddstr(win, cur::unctrl(c));
     }
 
     *ptr = 0;
@@ -290,9 +279,9 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
 
     let msg = if opt.is_null() { String::new() } else { CStr::from_ptr(opt).to_string_lossy().to_string() };
     let out = format!("{}\n", msg);
-    wmove(win, oy, ox);
+    cur::wmove(win, oy, ox);
     paint(win, &out);
-    wrefresh(win);
+    cur::wrefresh(win);
     if win == stdscr {
         mpos += (ptr as usize - buf.as_ptr() as usize) as c_int;
     }
@@ -314,11 +303,11 @@ pub unsafe extern "C" fn get_inv_t(vp: *mut c_void, win: *mut c_void) -> c_int {
 
     getyx_(win, &mut oy, &mut ox);
     if *ip >= 0 && *ip < inv_t_name.len() as c_int {
-        waddstr(win, inv_t_name[*ip as usize]);
+        cur::waddstr(win, inv_t_name[*ip as usize]);
     }
     while bad {
-        wmove(win, oy, ox);
-        wrefresh(win);
+        cur::wmove(win, oy, ox);
+        cur::wrefresh(win);
         match readchar() {
             ch if ch == 'o' as c_int || ch == 'O' as c_int => {
                 *ip = INV_OVER;
@@ -338,15 +327,15 @@ pub unsafe extern "C" fn get_inv_t(vp: *mut c_void, win: *mut c_void) -> c_int {
             ESCAPE => return QUIT,
             ch if ch == '-' as c_int => return MINUS,
             _ => {
-                wmove(win, oy, ox + 15);
-                waddstr(win, c"(O, S, or C)".as_ptr());
+                cur::wmove(win, oy, ox + 15);
+                cur::waddstr(win, c"(O, S, or C)".as_ptr());
             }
         }
     }
     if *ip >= 0 && *ip < inv_t_name.len() as c_int {
         let name = CStr::from_ptr(inv_t_name[*ip as usize]).to_string_lossy();
         let out = format!("{}\n", name);
-        wmove(win, oy, ox);
+        cur::wmove(win, oy, ox);
         paint(win, &out);
     }
     NORM

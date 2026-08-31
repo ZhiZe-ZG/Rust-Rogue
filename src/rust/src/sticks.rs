@@ -1,6 +1,7 @@
 use crate::rnd::rnd;
+use crate::curses as cur;
 use crate::io::msg_str;
-use std::os::raw::{c_char, c_int, c_uchar, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 const STICK: c_int = '/' as c_int;
 const WEAPON: c_int = ')' as c_int;
@@ -147,8 +148,6 @@ unsafe extern "C" {
 
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
     fn endmsg() -> c_int;
-    fn mvaddch(y: c_int, x: c_int, ch: c_char);
-    fn refresh();
     fn save_throw(kind: c_int, tp: *mut CThing) -> c_uchar;
     fn save(kind: c_int) -> c_uchar;
     fn hit_monster(y: c_int, x: c_int, obj: *mut CThing);
@@ -398,8 +397,8 @@ pub unsafe extern "C" fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *
         }
     }
 
-    mvaddch(pos.y, pos.x, '/' as c_char);
-    refresh();
+    cur::mvaddch(pos.y, pos.x, '/' as c_uint);
+    cur::refresh();
 }
 
 /// charge_str:

@@ -1,6 +1,7 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
+use crate::curses as cur;
 use crate::player::{CStats, CThing, CThingMonster};
 
 const TRUE: c_uchar = 1;
@@ -30,33 +31,20 @@ unsafe extern "C" {
     static mut hw: *mut c_void;
     static mut stdscr: *mut c_void;
 
-    fn clearok(win: *mut c_void, bf: c_uchar) -> c_int;
-    fn clrtoeol() -> c_int;
-    fn getcurx(win: *mut c_void) -> c_int;
-    fn getcury(win: *mut c_void) -> c_int;
     fn isalpha(c: c_int) -> c_int;
     fn islower(c: c_int) -> c_int;
     fn look(wakeup: c_uchar);
-    #[link_name = "move"]
-    fn move_(y: c_int, x: c_int);
-    fn mvaddstr(y: c_int, x: c_int, s: *const c_char) -> c_int;
     fn md_readchar() -> c_int;
-    fn printw(fmt: *const c_char, ...) -> c_int;
     fn quit(status: c_int) -> c_int;
-    fn refresh() -> c_int;
     fn strcat(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
-    fn touchwin(win: *mut c_void) -> c_int;
     fn toupper(c: c_int) -> c_int;
-    fn wmove(win: *mut c_void, y: c_int, x: c_int) -> c_int;
-    fn waddstr(win: *mut c_void, s: *const c_char) -> c_int;
-    fn wrefresh(win: *mut c_void) -> c_int;
 }
 
 unsafe fn getyx_(win: *mut c_void, y: *mut c_int, x: *mut c_int) {
-    *y = getcury(win);
-    *x = getcurx(win);
+    *y = cur::getcury(win);
+    *x = cur::getcurx(win);
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
@@ -82,8 +70,8 @@ unsafe fn append_message(text: *const c_char) {
 #[no_mangle]
 pub unsafe extern "C" fn rogue_msg_str(text: *const c_char) -> c_int {
     if text.is_null() || *text == 0 {
-        move_(0, 0);
-        clrtoeol();
+        cur::move_(0, 0);
+        cur::clrtoeol();
         mpos = 0;
         return !ESCAPE;
     }
@@ -141,8 +129,8 @@ pub unsafe extern "C" fn endmsg() -> c_int {
 
     if mpos != 0 {
         look(FALSE);
-        mvaddstr(0, mpos, c"--More--".as_ptr());
-        refresh();
+        cur::mvaddstr(0, mpos, c"--More--".as_ptr());
+        cur::refresh();
 
         if msg_esc == FALSE {
             wait_for(' ' as c_int);
@@ -166,12 +154,12 @@ pub unsafe extern "C" fn endmsg() -> c_int {
         msgbuf[0] = toupper(msgbuf[0] as c_int) as c_char;
     }
 
-    mvaddstr(0, 0, msgbuf.as_ptr());
-    clrtoeol();
+    cur::mvaddstr(0, 0, msgbuf.as_ptr());
+    cur::clrtoeol();
     mpos = newpos;
     newpos = 0;
     msgbuf[0] = 0;
-    refresh();
+    cur::refresh();
     !ESCAPE
 }
 
@@ -256,7 +244,7 @@ pub unsafe extern "C" fn status() {
     s_hungry = hungry_state;
 
     if stat_msg != FALSE {
-        move_(0, 0);
+        cur::move_(0, 0);
         msg_str(&format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -272,30 +260,31 @@ pub unsafe extern "C" fn status() {
             w = hpwidth as usize,
         ));
     } else {
-        move_(STATLINE, 0);
-        printw(
-            c"Level: %d  Gold: %-5d  Hp: %*d(%*d)  Str: %2d(%d)  Arm: %-2d  Exp: %d/%d  %s".as_ptr(),
+        cur::move_(STATLINE, 0);
+        let line = format!(
+            "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
             purse,
-            hpwidth,
             pstats.s_hpt,
-            hpwidth,
             max_hp,
             pstats.s_str,
             max_stats.s_str,
             10 - s_arm,
             pstats.s_lvl,
             pstats.s_exp,
-            state_name[hungry_state as usize],
+            CStr::from_ptr(state_name[hungry_state as usize]).to_string_lossy(),
+            w = hpwidth as usize,
         );
+        let c_line = CString::new(line).unwrap();
+        cur::addstr(c_line.as_ptr());
     }
 
     // C API uses non-variadic `clrtoeol()` and cursor restoration.
     // The project expects the cursor to remain where it was after the status line update.
     let _ = &oy;
     let _ = &ox;
-    clrtoeol();
-    move_(oy, ox);
+    cur::clrtoeol();
+    cur::move_(oy, ox);
 }
 
 #[cfg(not(test))]
@@ -319,13 +308,13 @@ pub unsafe extern "C" fn wait_for(ch: c_int) {
 #[no_mangle]
 pub unsafe extern "C" fn show_win(message: *const c_char) {
     let win = hw;
-    wmove(win, 0, 0);
-    waddstr(win, message);
-    touchwin(win);
+    cur::wmove(win, 0, 0);
+    cur::waddstr(win, message);
+    cur::touchwin(win);
     let hero = (*thing_t(&raw mut player)).t_pos;
-    wmove(win, hero.y, hero.x);
-    wrefresh(win);
+    cur::wmove(win, hero.y, hero.x);
+    cur::wrefresh(win);
     wait_for(' ' as c_int);
-    clearok(stdscr, TRUE);
-    touchwin(stdscr);
+    cur::clearok(stdscr, TRUE);
+    cur::touchwin(stdscr);
 }

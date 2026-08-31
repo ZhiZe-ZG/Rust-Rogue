@@ -1,6 +1,7 @@
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::curses as cur;
 use crate::draw::chat_at as draw_chat;
 use crate::io::{addmsg_str, msg_str};
 use crate::list::{_detach, discard, new_item};
@@ -56,10 +57,8 @@ unsafe extern "C" {
     fn endmsg() -> c_int;
     fn find_obj(y: c_int, x: c_int) -> *mut CThing;
     fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
     fn readchar() -> c_int;
     fn show_floor() -> c_uchar;
-    fn unctrl(ch: c_int) -> *mut c_char;
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut crate::player::CThingMonster {
@@ -153,7 +152,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         detach_list(&raw mut lvl_obj, item);
         // The object is removed from `lvl_obj`, so the terrain glyph shows
         // automatically via draw.
-        mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
+        cur::mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
         discard_item(item);
         msg_str("the scroll turns to dust as you pick it up");
         return;
@@ -280,7 +279,7 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_u
         detach_list(&raw mut lvl_obj, obj);
         // The object is removed from `lvl_obj`, so the terrain glyph shows
         // automatically via draw.
-        mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
+        cur::mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
     }
 
     inpack += 1;
@@ -451,7 +450,7 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
         }
         msg_str(&format!(
             "'{}' is not a valid item",
-            CStr::from_ptr(unctrl(ch)).to_string_lossy()
+            CStr::from_ptr(cur::unctrl(ch)).to_string_lossy()
         ));
     }
 }
@@ -460,7 +459,7 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
 pub unsafe extern "C" fn money(value: c_int) {
     purse += value;
     // The gold object was discarded, so the terrain glyph shows via draw.
-    mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
+    cur::mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
     if value > 0 {
         if terse == 0 {
             addmsg_str("you found ");
@@ -533,7 +532,7 @@ pub unsafe extern "C" fn picky_inven() {
         }
         msg_str(&format!(
             "'{}' not in pack",
-            CStr::from_ptr(unctrl(mch as c_int)).to_string_lossy()
+            CStr::from_ptr(cur::unctrl(mch as c_int)).to_string_lossy()
         ));
     }
 }

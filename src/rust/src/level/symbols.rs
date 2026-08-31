@@ -7,6 +7,7 @@
 
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::curses as cur;
 use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
 
 use super::passages::MAX_PASSAGES;
@@ -72,19 +73,17 @@ unsafe extern "C" {
     pub(crate) fn new_monster(tp: *mut CThing, kind: c_char, cp: *mut CCoord);
     pub(crate) fn give_pack(tp: *mut CThing);
 
-    pub(crate) fn clear() -> c_int;
-    pub(crate) fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
     pub(crate) fn enter_room(cp: *mut CCoord);
     pub(crate) fn turn_see(turn_off: c_uchar) -> c_uchar;
     pub(crate) fn _free_list(ptr: *mut *mut CThing);
     pub(crate) fn roomin(cp: *mut CCoord) -> *mut CRoom;
     pub(crate) fn visuals();
-
-    pub(crate) fn r#move(y: c_int, x: c_int) -> c_int;
-    pub(crate) fn addch(ch: c_uint) -> c_int;
-    pub(crate) fn standout() -> c_int;
-    pub(crate) fn standend() -> c_int;
 }
+
+/// ncurses wrapper re-exports so the rest of the `level` module can keep using
+/// the same names but go through the `crate::curses` shim (which calls the
+/// `ncurses` crate) instead of raw C ABI.
+pub(crate) use cur::{addch, clear, mvaddch, r#move, standout, standend};
 
 /// Interpret `tp` as an object (`CThingObject`).
 #[inline]

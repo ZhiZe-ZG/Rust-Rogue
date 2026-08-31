@@ -8,6 +8,7 @@
 
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::curses as cur;
 use crate::io::msg_str;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
@@ -82,12 +83,6 @@ unsafe extern "C" {
     static mut monsters: [crate::monsters::CMonster; 26];
 
     fn endmsg() -> c_int;
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
-    fn r#move(y: c_int, x: c_int) -> c_int;
-    fn addch(ch: c_uint) -> c_int;
-    fn standout() -> c_int;
-    fn standend() -> c_int;
-    fn mvinch(y: c_int, x: c_int) -> c_uint;
     fn step_ok(ch: c_int) -> c_int;
     fn attack(mp: *mut CThing) -> c_int;
     fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *mut c_char);
@@ -225,7 +220,7 @@ pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut CCoord) {
         return;
     }
     if !coord_eq(*new_loc, (*thing_t(th)).t_pos) {
-        mvaddch(
+        cur::mvaddch(
             (*thing_t(th)).t_pos.y,
             (*thing_t(th)).t_pos.x,
             (*thing_t(th)).t_oldch as c_uint,
@@ -241,13 +236,13 @@ pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut CCoord) {
         (*thing_t(th)).t_pos = *new_loc;
         set_moat_at((*new_loc).y, (*new_loc).x, th);
     }
-    r#move((*new_loc).y, (*new_loc).x);
+    cur::r#move((*new_loc).y, (*new_loc).x);
     if see_monst(th) != FALSE {
-        addch((*thing_t(th)).t_disguise as c_uint);
+        cur::addch((*thing_t(th)).t_disguise as c_uint);
     } else if player_has(SEEMONST) {
-        standout();
-        addch((*thing_t(th)).t_type as c_uint);
-        standend();
+        cur::standout();
+        cur::addch((*thing_t(th)).t_type as c_uint);
+        cur::standend();
     }
 }
 
@@ -385,7 +380,7 @@ pub unsafe extern "C" fn set_oldch(tp: *mut CThing, cp: *mut CCoord) {
     }
 
     let sch = (*thing_t(tp)).t_oldch;
-    (*thing_t(tp)).t_oldch = (mvinch((*cp).y, (*cp).x) & 0x7f) as c_char;
+    (*thing_t(tp)).t_oldch = (cur::mvinch((*cp).y, (*cp).x) & 0x7f) as c_char;
     if !player_has(ISBLIND) {
         if (sch == FLOOR || (*thing_t(tp)).t_oldch == FLOOR)
             && ((*(*thing_t(tp)).t_room).r_flags & ISDARK) != 0

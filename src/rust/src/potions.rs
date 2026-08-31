@@ -2,6 +2,7 @@ use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 use std::ptr;
 
+use crate::curses as cur;
 use crate::draw::place_at;
 use crate::io::msg_str;
 use std::ffi::CStr;
@@ -210,15 +211,6 @@ unsafe extern "C" {
     fn lengthen(func: *const c_void, xtime: c_int);
     fn spread(nm: c_int) -> c_int;
     fn see_monst(mp: *mut CThing) -> c_uchar;
-    fn wclear(win: *mut c_void) -> c_int;
-    fn wmove(win: *mut c_void, y: c_int, x: c_int) -> c_int;
-    fn waddch(win: *mut c_void, ch: c_uint) -> c_int;
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
-    fn r#move(y: c_int, x: c_int) -> c_int;
-    fn addch(ch: c_uint) -> c_int;
-    fn standout();
-    fn standend();
-    fn inch() -> c_int;
 }
 
 /// Cast a generic thing pointer to the monster portion of the union.
@@ -408,13 +400,13 @@ pub unsafe extern "C" fn quaff() {
         }
         P_TFIND => {
             if !lvl_obj.is_null() {
-                wclear(hw);
+                cur::wclear(hw);
                 tp = lvl_obj;
                 while !tp.is_null() {
                     if is_magic_local(tp) {
                         show = true;
-                        wmove(hw, (*thing_o(tp)).o_pos.y, (*thing_o(tp)).o_pos.x);
-                        waddch(hw, MAGIC as c_uint);
+                        cur::wmove(hw, (*thing_o(tp)).o_pos.y, (*thing_o(tp)).o_pos.x);
+                        cur::waddch(hw, MAGIC as c_uint);
                         (*pot_info.as_mut_ptr().add(P_TFIND as usize)).oi_know = TRUE;
                     }
                     tp = next_thing(tp);
@@ -425,8 +417,8 @@ pub unsafe extern "C" fn quaff() {
                     while !tp.is_null() {
                         if is_magic_local(tp) {
                             show = true;
-                            wmove(hw, (*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x);
-                            waddch(hw, MAGIC as c_uint);
+                            cur::wmove(hw, (*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x);
+                            cur::waddch(hw, MAGIC as c_uint);
                         }
                         tp = next_thing(tp);
                     }
@@ -550,7 +542,7 @@ pub unsafe extern "C" fn invis_on() {
     (*thing_t(&raw mut player)).t_flags |= CANSEE;
     while !mp.is_null() {
         if thing_has(mp, ISINVIS) && see_monst(mp) != 0 && !player_has(ISHALU) {
-            mvaddch((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_disguise as c_uint);
+            cur::mvaddch((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_disguise as c_uint);
         }
         mp = next_thing(mp);
     }
@@ -564,23 +556,23 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
     let mut add_new = 0;
 
     while !mp.is_null() {
-        r#move((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x);
+        cur::r#move((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x);
         let can_see = see_monst(mp) != 0;
         if turn_off != 0 {
             if !can_see {
-                addch((*thing_t(mp)).t_oldch as c_uint);
+                cur::addch((*thing_t(mp)).t_oldch as c_uint);
             }
         } else {
             if !can_see {
-                standout();
+                cur::standout();
             }
             if !player_has(ISHALU) {
-                addch((*thing_t(mp)).t_type as c_uint);
+                cur::addch((*thing_t(mp)).t_type as c_uint);
             } else {
-                addch((rnd(26) + 'A' as c_int) as c_uint);
+                cur::addch((rnd(26) + 'A' as c_int) as c_uint);
             }
             if !can_see {
-                standend();
+                cur::standend();
                 add_new += 1;
             }
         }
@@ -602,8 +594,8 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
 pub unsafe extern "C" fn seen_stairs() -> c_uchar {
     let tp: *mut CThing;
 
-    r#move(stairs.y, stairs.x);
-    if inch() == STAIRS {
+    cur::r#move(stairs.y, stairs.x);
+    if cur::inch() == STAIRS {
         return 1;
     }
     if hero().x == stairs.x && hero().y == stairs.y {

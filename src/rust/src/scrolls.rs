@@ -2,6 +2,7 @@ use crate::rnd::rnd;
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::curses as cur;
 use crate::draw::{chat_at as draw_chat, map_cell_reveal, winat as draw_winat};
 use crate::game;
 use crate::io::{addmsg_str, msg_str};
@@ -172,10 +173,6 @@ unsafe extern "C" {
     fn new_monster(tp: *mut CThing, monster_type: c_char, cp: *mut CCoord);
     fn randmonster(wander: c_uchar) -> c_char;
     fn whatis(insist: c_uchar, item_type: c_int);
-    fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
-    fn wclear(win: *mut c_void) -> c_int;
-    fn wmove(win: *mut c_void, y: c_int, x: c_int) -> c_int;
-    fn waddch(win: *mut c_void, ch: c_uint) -> c_int;
     fn show_win(message: *const c_char);
     fn teleport();
     fn look(wakeup: c_uchar);
@@ -375,7 +372,7 @@ pub unsafe extern "C" fn read_scroll() {
                     (*thing_t(tp)).t_oldch = ch as c_char;
                 }
                 if tp.is_null() || !player_has(SEEMONST) {
-                    mvaddch(y, x, ch as c_uint);
+                    cur::mvaddch(y, x, ch as c_uint);
                 }
             }
         }
@@ -383,13 +380,13 @@ pub unsafe extern "C" fn read_scroll() {
         }
         S_FDET => {
             let mut found = FALSE;
-            wclear(hw);
+            cur::wclear(hw);
             let mut it = lvl_obj;
             while !it.is_null() {
                 if (*thing_o(it)).o_type == FOOD {
                     found = TRUE;
-                    wmove(hw, (*thing_o(it)).o_pos.y, (*thing_o(it)).o_pos.x);
-                    waddch(hw, FOOD as c_uint);
+                    cur::wmove(hw, (*thing_o(it)).o_pos.y, (*thing_o(it)).o_pos.x);
+                    cur::waddch(hw, FOOD as c_uint);
                 }
                 it = (*thing_o(it)).l_next;
             }

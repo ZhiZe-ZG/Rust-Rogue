@@ -1,4 +1,5 @@
 pub mod armor;
+pub mod curses;
 pub mod chase;
 pub mod command;
 pub mod daemon;
