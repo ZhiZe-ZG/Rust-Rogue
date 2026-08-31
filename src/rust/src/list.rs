@@ -9,6 +9,7 @@
 //! unconditionally; since nothing outside the `MASTER` code paths reads it,
 //! gameplay is unaffected when `MASTER` is not defined.
 
+use crate::io::msg_str;
 use std::alloc::{alloc_zeroed, dealloc, Layout};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -96,10 +97,6 @@ pub union CThing {
     pub o: CThingObject,
 }
 
-unsafe extern "C" {
-    fn msg(fmt: *const c_char, ...);
-}
-
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
     tp as *mut CThingMonster
@@ -177,7 +174,7 @@ pub unsafe extern "C" fn discard(item: *mut CThing) {
 pub unsafe extern "C" fn new_item() -> *mut CThing {
     let item = alloc_zeroed(Layout::new::<CThing>()) as *mut CThing;
     if item.is_null() {
-        msg(c"ran out of memory after %d items".as_ptr(), total);
+        msg_str(&format!("ran out of memory after {} items", total));
         return item;
     }
     total += 1;

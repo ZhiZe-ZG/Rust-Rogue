@@ -8,6 +8,7 @@
 
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::io::msg_str;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
@@ -80,7 +81,6 @@ unsafe extern "C" {
     static mut delta: CCoord;
     static mut monsters: [crate::monsters::CMonster; 26];
 
-    fn msg(fmt: *const c_char, ...);
     fn endmsg() -> c_int;
     fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
     fn r#move(y: c_int, x: c_int) -> c_int;
@@ -441,11 +441,11 @@ pub unsafe extern "C" fn runto(runner: *mut CCoord) {
     // (C guarded this with `#ifdef MASTER`; always report in the Rust port.)
     let tp = moat_at((*runner).y, (*runner).x);
     if MASTER && tp.is_null() {
-        msg(
-            c"couldn't find monster in runto at (%d,%d)".as_ptr(),
+        msg_str(&format!(
+            "couldn't find monster in runto at ({},{})",
             (*runner).y,
-            (*runner).x,
-        );
+            (*runner).x
+        ));
     }
     // Start the beastie running
     (*thing_t(tp)).t_flags |= ISRUN;
@@ -584,11 +584,11 @@ pub unsafe extern "C" fn roomin(cp: *mut CCoord) -> *mut CRoom {
         }
     }
 
-    msg(
-        c"in some bizarre place (%d, %d)".as_ptr(),
+    msg_str(&format!(
+        "in some bizarre place ({}, {})",
         (*cp).y,
-        (*cp).x,
-    );
+        (*cp).x
+    ));
     if MASTER {
         abort();
     }

@@ -1,6 +1,8 @@
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::draw::chat_at as draw_chat;
+use crate::io::{addmsg_str, msg_str};
 use crate::list::{_detach, discard, new_item};
 use crate::player::{CRoom, CThing};
 
@@ -51,11 +53,9 @@ unsafe extern "C" {
     static mut terse: c_uchar;
 
     fn add_line(fmt: *mut c_char, arg: *mut c_char) -> c_char;
-    fn addmsg(fmt: *const c_char, ...);
     fn endmsg() -> c_int;
     fn find_obj(y: c_int, x: c_int) -> *mut CThing;
     fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
-    fn msg(fmt: *const c_char, ...);
     fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
     fn readchar() -> c_int;
     fn show_floor() -> c_uchar;
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         // automatically via draw.
         mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
         discard_item(item);
-        msg(c"the scroll turns to dust as you pick it up".as_ptr());
+        msg_str("the scroll turns to dust as you pick it up");
         return;
     }
 
@@ -248,9 +248,13 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
 
     if silent == 0 {
         if terse == 0 {
-            addmsg(c"you now have ".as_ptr());
+            addmsg_str("you now have ");
         }
-        msg(c"%s (%c)".as_ptr(), inv_name(item, if terse == 0 { 0 } else { 1 }), (*thing_o(item)).o_packch as c_uint);
+        msg_str(&format!(
+            "{} ({})",
+            CStr::from_ptr(inv_name(item, if terse == 0 { 0 } else { 1 })).to_string_lossy(),
+            (*thing_o(item)).o_packch as u8 as char,
+        ));
     }
 }
 
@@ -258,11 +262,11 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
 pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_uchar {
     if inpack + 1 > MAXPACK {
         if terse == 0 {
-            addmsg(c"there's ".as_ptr());
+            addmsg_str("there's ");
         }
-        addmsg(c"no room".as_ptr());
+        addmsg_str("no room");
         if terse == 0 {
-            addmsg(c" in your pack".as_ptr());
+            addmsg_str(" in your pack");
         }
         endmsg();
         if from_floor != 0 {
@@ -347,20 +351,16 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
             let format = [(*thing_o(cur)).o_packch, b')' as c_char, b' ' as c_char, b'%' as c_char, b's' as c_char, 0];
             std::ptr::copy_nonoverlapping(format.as_ptr(), inv_temp.as_mut_ptr(), format.len());
         }
-        if add_line(inv_temp.as_mut_ptr(), inv_name(cur, FALSE)) == ESCAPE as c_char {
-            msg_esc = FALSE;
-            msg(c"".as_ptr());
-            return TRUE;
-        }
+        let _ = add_line(inv_temp.as_mut_ptr(), inv_name(cur, FALSE));
         msg_esc = FALSE;
         cur = next_item(cur);
     }
 
     if n_objs == 0 {
         if terse != 0 {
-            msg(if type_ == 0 { c"empty handed".as_ptr() } else { c"nothing appropriate".as_ptr() });
+            msg_str(if type_ == 0 { "empty handed" } else { "nothing appropriate" });
         } else {
-            msg(if type_ == 0 { c"you are empty handed".as_ptr() } else { c"you don't have anything appropriate".as_ptr() });
+            msg_str(if type_ == 0 { "you are empty handed" } else { "you don't have anything appropriate" });
         }
         return FALSE;
     }
@@ -404,7 +404,7 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
     let mut ch: c_int;
 
     if pack_head().is_null() {
-        msg(c"you aren't carrying anything".as_ptr());
+        msg_str("you aren't carrying anything");
         return std::ptr::null_mut();
     }
 
@@ -412,25 +412,25 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
         if !last_pick.is_null() {
             return last_pick;
         }
-        msg(c"you ran out".as_ptr());
+        msg_str("you ran out");
         return std::ptr::null_mut();
     }
 
     loop {
         if terse == 0 {
-            addmsg(c"which object do you want to ".as_ptr());
+            addmsg_str("which object do you want to ");
         }
-        addmsg(purpose);
+        addmsg_str(&CStr::from_ptr(purpose).to_string_lossy());
         if terse != 0 {
-            addmsg(c" what".as_ptr());
+            addmsg_str(" what");
         }
-        msg(c"? (* for list): ".as_ptr());
+        msg_str("? (* for list): ");
         ch = readchar();
         mpos = 0;
         if ch == ESCAPE {
             reset_last();
             after = FALSE;
-            msg(c"".as_ptr());
+            msg_str("");
             return std::ptr::null_mut();
         }
         n_objs = 1;
@@ -449,7 +449,10 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
             }
             obj = next_item(obj);
         }
-        msg(c"'%s' is not a valid item".as_ptr(), unctrl(ch));
+        msg_str(&format!(
+            "'{}' is not a valid item",
+            CStr::from_ptr(unctrl(ch)).to_string_lossy()
+        ));
     }
 }
 
@@ -460,9 +463,9 @@ pub unsafe extern "C" fn money(value: c_int) {
     mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
     if value > 0 {
         if terse == 0 {
-            addmsg(c"you found ".as_ptr());
+            addmsg_str("you found ");
         }
-        msg(c"%d gold pieces".as_ptr(), value);
+        msg_str(&format!("{} gold pieces", value));
     }
 }
 
@@ -491,34 +494,47 @@ pub unsafe extern "C" fn reset_last() {
 #[no_mangle]
 pub unsafe extern "C" fn move_msg(obj: *mut CThing) {
     if terse == 0 {
-        addmsg(c"you ".as_ptr());
+        addmsg_str("you ");
     }
-    msg(c"moved onto %s".as_ptr(), inv_name(obj, TRUE));
+    msg_str(&format!(
+        "moved onto {}",
+        CStr::from_ptr(inv_name(obj, TRUE)).to_string_lossy()
+    ));
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn picky_inven() {
     if pack_head().is_null() {
-        msg(c"you aren't carrying anything".as_ptr());
+        msg_str("you aren't carrying anything");
     } else if next_item(pack_head()).is_null() {
-        msg(c"a) %s".as_ptr(), inv_name(pack_head(), FALSE));
+        msg_str(&format!(
+            "a) {}",
+            CStr::from_ptr(inv_name(pack_head(), FALSE)).to_string_lossy()
+        ));
     } else {
-        msg(if terse != 0 { c"item: ".as_ptr() } else { c"which item do you wish to inventory: ".as_ptr() });
+        msg_str(if terse != 0 { "item: " } else { "which item do you wish to inventory: " });
         mpos = 0;
         let mch = readchar() as c_char;
         if mch as c_int == ESCAPE {
-            msg(c"".as_ptr());
+            msg_str("");
             return;
         }
         let mut obj = pack_head();
         while !obj.is_null() {
             if mch == (*thing_o(obj)).o_packch {
-                msg(c"%c) %s".as_ptr(), mch as c_int, inv_name(obj, FALSE));
+                msg_str(&format!(
+                    "{}) {}",
+                    mch as u8 as char,
+                    CStr::from_ptr(inv_name(obj, FALSE)).to_string_lossy()
+                ));
                 return;
             }
             obj = next_item(obj);
         }
-        msg(c"'%s' not in pack".as_ptr(), unctrl(mch as c_int));
+        msg_str(&format!(
+            "'{}' not in pack",
+            CStr::from_ptr(unctrl(mch as c_int)).to_string_lossy()
+        ));
     }
 }
 

@@ -11,6 +11,8 @@ use crate::rnd::rnd;
  * See the file LICENSE.TXT for full copyright and licensing information.
  */
 
+use crate::io::{addmsg_str, msg_str};
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
@@ -73,8 +75,6 @@ unsafe extern "C" {
 
 unsafe extern "C" {
     fn roll(number: c_int, sides: c_int) -> c_int;
-    fn msg(fmt: *const c_char, ...);
-    fn addmsg(fmt: *const c_char, ...);
     fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
     fn addch(ch: c_uint) -> c_int;
     fn standout() -> c_int;
@@ -181,10 +181,10 @@ pub unsafe extern "C" fn rollwand() {
 #[no_mangle]
 pub unsafe extern "C" fn unconfuse() {
     (*thing_t(&raw mut player)).t_flags &= !ISHUH;
-    msg(
-        c"you feel less %s now".as_ptr(),
-        choose_str(c"trippy".as_ptr(), c"confused".as_ptr()),
-    );
+    msg_str(&format!(
+        "you feel less {} now",
+        CStr::from_ptr(choose_str(c"trippy".as_ptr(), c"confused".as_ptr())).to_string_lossy()
+    ));
 }
 
 /// unsee:
@@ -216,13 +216,10 @@ pub unsafe extern "C" fn sight() {
         if !proom.is_null() && ((*proom).r_flags & ISGONE) == 0 {
             enter_room(&mut (*thing_t(&raw mut player)).t_pos);
         }
-        msg(
-            c"%s".as_ptr(),
-            choose_str(
-                c"far out!  Everything is all cosmic again".as_ptr(),
-                c"the veil of darkness lifts".as_ptr(),
-            ),
-        );
+        msg_str(&CStr::from_ptr(choose_str(
+            c"far out!  Everything is all cosmic again".as_ptr(),
+            c"the veil of darkness lifts".as_ptr(),
+        )).to_string_lossy());
     }
 }
 
@@ -231,7 +228,7 @@ pub unsafe extern "C" fn sight() {
 #[no_mangle]
 pub unsafe extern "C" fn nohaste() {
     (*thing_t(&raw mut player)).t_flags &= !ISHASTE;
-    msg(c"you feel yourself slowing down".as_ptr());
+    msg_str("you feel yourself slowing down");
 }
 
 /// stomach:
@@ -254,49 +251,34 @@ pub unsafe extern "C" fn stomach() {
         no_command += rnd(8) + 4;
         hungry_state = 3;
         if terse == 0 {
-            addmsg(
-                c"%s".as_ptr(),
-                choose_str(
-                    c"the munchies overpower your motor capabilities.  ".as_ptr(),
-                    c"you feel too weak from lack of food.  ".as_ptr(),
-                ),
-            );
+            addmsg_str(&CStr::from_ptr(choose_str(
+                c"the munchies overpower your motor capabilities.  ".as_ptr(),
+                c"you feel too weak from lack of food.  ".as_ptr(),
+            )).to_string_lossy());
         }
-        msg(
-            c"%s".as_ptr(),
-            choose_str(c"You freak out".as_ptr(), c"You faint".as_ptr()),
-        );
+        msg_str(&CStr::from_ptr(choose_str(c"You freak out".as_ptr(), c"You faint".as_ptr())).to_string_lossy());
     } else {
         let oldfood = food_left;
         food_left -= ring_eat(LEFT as c_int) + ring_eat(RIGHT as c_int) + 1 - amulet as c_int;
 
         if food_left < MORETIME && oldfood >= MORETIME {
             hungry_state = 2;
-            msg(
-                c"%s".as_ptr(),
-                choose_str(
-                    c"the munchies are interfering with your motor capabilites".as_ptr(),
-                    c"you are starting to feel weak".as_ptr(),
-                ),
-            );
+            msg_str(&CStr::from_ptr(choose_str(
+                c"the munchies are interfering with your motor capabilites".as_ptr(),
+                c"you are starting to feel weak".as_ptr(),
+            )).to_string_lossy());
         } else if food_left < 2 * MORETIME && oldfood >= 2 * MORETIME {
             hungry_state = 1;
             if terse != 0 {
-                msg(
-                    c"%s".as_ptr(),
-                    choose_str(
-                        c"getting the munchies".as_ptr(),
-                        c"getting hungry".as_ptr(),
-                    ),
-                );
+                msg_str(&CStr::from_ptr(choose_str(
+                    c"getting the munchies".as_ptr(),
+                    c"getting hungry".as_ptr(),
+                )).to_string_lossy());
             } else {
-                msg(
-                    c"%s".as_ptr(),
-                    choose_str(
-                        c"you are getting the munchies".as_ptr(),
-                        c"you are starting to get hungry".as_ptr(),
-                    ),
-                );
+                msg_str(&CStr::from_ptr(choose_str(
+                    c"you are getting the munchies".as_ptr(),
+                    c"you are starting to get hungry".as_ptr(),
+                )).to_string_lossy());
             }
         }
     }
@@ -356,7 +338,7 @@ pub unsafe extern "C" fn come_down() {
         tp = (*thing_t(tp)).l_next;
     }
 
-    msg(c"Everything looks SO boring now.".as_ptr());
+    msg_str("Everything looks SO boring now.");
 }
 
 /// visuals:
@@ -409,11 +391,8 @@ pub unsafe extern "C" fn visuals() {
 #[no_mangle]
 pub unsafe extern "C" fn land() {
     (*thing_t(&raw mut player)).t_flags &= !ISLEVIT;
-    msg(
-        c"%s".as_ptr(),
-        choose_str(
-            c"bummer!  You've hit the ground".as_ptr(),
-            c"you float gently to the ground".as_ptr(),
-        ),
-    );
+    msg_str(&CStr::from_ptr(choose_str(
+        c"bummer!  You've hit the ground".as_ptr(),
+        c"you float gently to the ground".as_ptr(),
+    )).to_string_lossy());
 }

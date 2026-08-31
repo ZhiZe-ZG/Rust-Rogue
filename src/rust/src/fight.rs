@@ -11,6 +11,8 @@ use crate::rnd::rnd;
  * See the file LICENSE.TXT for full copyright and licensing information.
  */
 
+use crate::io::{addmsg_str, msg_str};
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::player::{CCoord, CStats, CThing, CThingMonster, CThingObject};
@@ -134,8 +136,6 @@ unsafe extern "C" {
 
 unsafe extern "C" {
     fn roll(n: c_int, sides: c_int) -> c_int;
-    fn msg(fmt: *const c_char, ...);
-    fn addmsg(fmt: *const c_char, ...);
     fn endmsg() -> c_int;
     fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
     fn inch() -> c_uint;
@@ -256,13 +256,10 @@ pub unsafe extern "C" fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uch
             ch = (rnd(26) + b'A' as c_int) as c_char;
             mvaddch((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x, ch as c_uint);
         }
-        msg(
-            c"%s".as_ptr(),
-            choose_str(
-                c"heavy!  That's a nasty critter!".as_ptr(),
-                c"wait!  That's a xeroc!".as_ptr(),
-            ),
-        );
+        msg_str(&CStr::from_ptr(choose_str(
+            c"heavy!  That's a nasty critter!".as_ptr(),
+            c"wait!  That's a xeroc!".as_ptr(),
+        )).to_string_lossy());
         if thrown == 0 {
             return FALSE as c_int;
         }
@@ -285,12 +282,15 @@ pub unsafe extern "C" fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uch
             (*thing_t(&raw mut player)).t_flags &= !CANHUH;
             endmsg();
             has_hit = FALSE;
-            msg(c"your hands stop glowing %s".as_ptr(), pick_color(c"red".as_ptr()));
+            msg_str(&format!(
+                "your hands stop glowing {}",
+                CStr::from_ptr(pick_color(c"red".as_ptr())).to_string_lossy()
+            ));
         }
         if (*thing_t(tp)).t_stats.s_hpt <= 0 {
             killed(tp, TRUE);
         } else if did_hit != 0 && !on_p(&raw mut player, ISBLIND) {
-            msg(c"%s appears confused".as_ptr(), mname);
+            msg_str(&format!("{} appears confused", CStr::from_ptr(mname).to_string_lossy()));
         }
         did_hit = TRUE;
     } else if thrown != 0 {
@@ -335,7 +335,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
     if roll_em(mp, &raw mut player, std::ptr::null_mut(), FALSE) != 0 {
         if (*thing_t(mp)).t_type != b'I' as c_char {
             if has_hit != 0 {
-                addmsg(c".  ".as_ptr());
+                addmsg_str(".  ");
             }
             hit(mname, std::ptr::null_mut(), FALSE);
         } else if has_hit != 0 {
@@ -364,9 +364,9 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 // Ice monster: freeze player
                 (*thing_t(&raw mut player)).t_flags &= !ISRUN;
                 if no_command == 0 {
-                    addmsg(c"you are frozen".as_ptr());
+                    addmsg_str("you are frozen");
                     if terse == 0 {
-                        addmsg(c" by the %s".as_ptr(), mname);
+                        addmsg_str(&format!(" by the {}", CStr::from_ptr(mname).to_string_lossy()));
                     }
                     endmsg();
                 }
@@ -380,15 +380,15 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                     if !iswearing(R_SUSTSTR) {
                         chg_str(-1);
                         if terse == 0 {
-                            msg(c"you feel a bite in your leg and now feel weaker".as_ptr());
+                            msg_str("you feel a bite in your leg and now feel weaker");
                         } else {
-                            msg(c"a bite has weakened you".as_ptr());
+                            msg_str("a bite has weakened you");
                         }
                     } else if to_death == 0 {
                         if terse == 0 {
-                            msg(c"a bite momentarily weakens you".as_ptr());
+                            msg_str("a bite momentarily weakens you");
                         } else {
-                            msg(c"bite has no effect".as_ptr());
+                            msg_str("bite has no effect");
                         }
                     }
                 }
@@ -424,7 +424,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                             death(mtype);
                         }
                     }
-                    msg(c"you suddenly feel weaker".as_ptr());
+                    msg_str("you suddenly feel weaker");
                 }
             } else if mtype == b'F' as c_char {
                 // Venus flytrap: holds the player, deals ongoing damage
@@ -453,7 +453,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 let mp_pos = (*thing_t(mp)).t_pos;
                 remove_mon(&(*thing_t(mp)).t_pos as *const CCoord as *mut CCoord, mp, FALSE);
                 if purse != lastpurse {
-                    msg(c"your purse feels lighter".as_ptr());
+                    msg_str("your purse feels lighter");
                 }
                 // mp is now dangling; fall out of the if-chain cleanly
                 count = 0;
@@ -486,7 +486,10 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                         FALSE,
                     );
                     leave_pack(steal, FALSE, FALSE);
-                    msg(c"she stole %s!".as_ptr(), inv_name(steal, TRUE));
+                    msg_str(&format!(
+                        "she stole {}!",
+                        CStr::from_ptr(inv_name(steal, TRUE)).to_string_lossy()
+                    ));
                     discard(steal);
                     count = 0;
                     status();
@@ -497,7 +500,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
     } else if (*thing_t(mp)).t_type != b'I' as c_char {
         // Miss branch
         if has_hit != 0 {
-            addmsg(c".  ".as_ptr());
+            addmsg_str(".  ");
             has_hit = FALSE;
         }
         if (*thing_t(mp)).t_type == b'F' as c_char {
@@ -711,11 +714,14 @@ pub unsafe extern "C" fn thunk(weap: *mut CThing, mname: *const c_char, noend: c
         return;
     }
     if (*thing_o(weap)).o_type == WEAPON {
-        addmsg(c"the %s hits ".as_ptr(), weap_info[(*thing_o(weap)).o_which as usize].oi_name);
+        addmsg_str(&format!(
+            "the {} hits ",
+            CStr::from_ptr(weap_info[(*thing_o(weap)).o_which as usize].oi_name).to_string_lossy()
+        ));
     } else {
-        addmsg(c"you hit ".as_ptr());
+        addmsg_str("you hit ");
     }
-    addmsg(c"%s".as_ptr(), mname);
+    addmsg_str(&CStr::from_ptr(mname).to_string_lossy());
     if noend == 0 {
         endmsg();
     }
@@ -728,7 +734,7 @@ pub unsafe extern "C" fn hit(er: *const c_char, ee: *const c_char, noend: c_ucha
     if to_death != 0 {
         return;
     }
-    addmsg(c"%s".as_ptr(), prname(er, TRUE));
+    addmsg_str(&CStr::from_ptr(prname(er, TRUE)).to_string_lossy());
     let s: *const c_char = if terse != 0 {
         c" hit".as_ptr()
     } else {
@@ -738,9 +744,9 @@ pub unsafe extern "C" fn hit(er: *const c_char, ee: *const c_char, noend: c_ucha
         }
         h_names[i]
     };
-    addmsg(c"%s".as_ptr(), s);
+    addmsg_str(&CStr::from_ptr(s).to_string_lossy());
     if terse == 0 {
-        addmsg(c"%s".as_ptr(), prname(ee, FALSE));
+        addmsg_str(&CStr::from_ptr(prname(ee, FALSE)).to_string_lossy());
     }
     if noend == 0 {
         endmsg();
@@ -754,16 +760,16 @@ pub unsafe extern "C" fn miss(er: *const c_char, ee: *const c_char, noend: c_uch
     if to_death != 0 {
         return;
     }
-    addmsg(c"%s".as_ptr(), prname(er, TRUE));
+    addmsg_str(&CStr::from_ptr(prname(er, TRUE)).to_string_lossy());
     let i: usize = if terse != 0 {
         if !er.is_null() { 4 } else { 0 }
     } else {
         let base = rnd(4) as usize;
         if !er.is_null() { base + 4 } else { base }
     };
-    addmsg(c"%s".as_ptr(), m_names[i]);
+    addmsg_str(&CStr::from_ptr(m_names[i]).to_string_lossy());
     if terse == 0 {
-        addmsg(c" %s".as_ptr(), prname(ee, FALSE));
+        addmsg_str(&format!(" {}", CStr::from_ptr(prname(ee, FALSE)).to_string_lossy()));
     }
     if noend == 0 {
         endmsg();
@@ -778,11 +784,14 @@ pub unsafe extern "C" fn bounce(weap: *mut CThing, mname: *const c_char, noend: 
         return;
     }
     if (*thing_o(weap)).o_type == WEAPON {
-        addmsg(c"the %s misses ".as_ptr(), weap_info[(*thing_o(weap)).o_which as usize].oi_name);
+        addmsg_str(&format!(
+            "the {} misses ",
+            CStr::from_ptr(weap_info[(*thing_o(weap)).o_which as usize].oi_name).to_string_lossy()
+        ));
     } else {
-        addmsg(c"you missed ".as_ptr());
+        addmsg_str("you missed ");
     }
-    addmsg(c"%s".as_ptr(), mname);
+    addmsg_str(&CStr::from_ptr(mname).to_string_lossy());
     if noend == 0 {
         endmsg();
     }
@@ -861,15 +870,15 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
 
     if pr != 0 {
         if has_hit != 0 {
-            addmsg(c".  Defeated ".as_ptr());
+            addmsg_str(".  Defeated ");
             has_hit = FALSE;
         } else {
             if terse == 0 {
-                addmsg(c"you have ".as_ptr());
+                addmsg_str("you have ");
             }
-            addmsg(c"defeated ".as_ptr());
+            addmsg_str("defeated ");
         }
-        msg(c"%s".as_ptr(), mname);
+        msg_str(&CStr::from_ptr(mname).to_string_lossy());
     }
 
     check_level();

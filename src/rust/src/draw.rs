@@ -84,7 +84,6 @@ unsafe extern "C" {
     static mut stdscr: *mut crate::player::CWindow;
     static mut lvl_obj: *mut CThing;
 
-    fn msg(fmt: *const c_char, ...);
     fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
     fn addch(ch: c_uint) -> c_int;
     fn standout() -> c_int;

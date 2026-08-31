@@ -1,9 +1,10 @@
 use crate::rnd::rnd;
-use std::ffi::c_void;
+use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::draw::{chat_at as draw_chat, map_cell_reveal, winat as draw_winat};
 use crate::game;
+use crate::io::{addmsg_str, msg_str};
 
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
@@ -164,8 +165,6 @@ unsafe extern "C" {
     fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
     fn discard(item: *mut CThing);
     fn pick_color(col: *const c_char) -> *mut c_char;
-    fn msg(fmt: *const c_char, ...);
-    fn addmsg(fmt: *const c_char, ...);
     fn endmsg() -> c_int;
     fn step_ok(ch: c_int) -> c_int;
     fn find_obj(y: c_int, x: c_int) -> *mut CThing;
@@ -245,9 +244,9 @@ pub unsafe extern "C" fn read_scroll() {
 
     if (*thing_o(obj)).o_type != SCROLL {
         if terse == 0 {
-            msg(c"there is nothing on it to read".as_ptr());
+            msg_str("there is nothing on it to read");
         } else {
-            msg(c"nothing to read".as_ptr());
+            msg_str("nothing to read");
         }
         return;
     }
@@ -263,13 +262,19 @@ pub unsafe extern "C" fn read_scroll() {
     match (*thing_o(obj)).o_which {
         S_CONFUSE => {
             (*thing_t(&raw mut player)).t_flags |= CANHUH;
-            msg(c"your hands begin to glow %s".as_ptr(), pick_color(c"red".as_ptr()));
+            msg_str(&format!(
+                "your hands begin to glow {}",
+                CStr::from_ptr(pick_color(c"red".as_ptr())).to_string_lossy()
+            ));
         }
         S_ARMOR => {
             if !cur_armor.is_null() {
                 (*thing_o(cur_armor)).o_arm -= 1;
                 (*thing_o(cur_armor)).o_flags &= !ISCURSED;
-                msg(c"your armor glows %s for a moment".as_ptr(), pick_color(c"silver".as_ptr()));
+                msg_str(&format!(
+                    "your armor glows {} for a moment",
+                    CStr::from_ptr(pick_color(c"silver".as_ptr())).to_string_lossy()
+                ));
             }
         }
         S_HOLD => {
@@ -293,25 +298,25 @@ pub unsafe extern "C" fn read_scroll() {
             }
 
             if ch != 0 {
-                addmsg(c"the monster".as_ptr());
+                addmsg_str("the monster");
                 if ch > 1 {
-                    addmsg(c"s around you".as_ptr());
+                    addmsg_str("s around you");
                 }
-                addmsg(c" freeze".as_ptr());
+                addmsg_str(" freeze");
                 if ch == 1 {
-                    addmsg(c"s".as_ptr());
+                    addmsg_str("s");
                 }
                 endmsg();
                 scr_info[S_HOLD as usize].oi_know = TRUE;
             } else {
-                msg(c"you feel a strange sense of loss".as_ptr());
+                msg_str("you feel a strange sense of loss");
             }
         }
         S_SLEEP => {
             scr_info[S_SLEEP as usize].oi_know = TRUE;
             no_command += rnd(SLEEPTIME) + 4;
             (*thing_t(&raw mut player)).t_flags &= !ISRUN;
-            msg(c"you fall asleep".as_ptr());
+            msg_str("you fall asleep");
         }
         S_CREATE => {
             let mut i = 0;
@@ -341,7 +346,7 @@ pub unsafe extern "C" fn read_scroll() {
             }
 
             if i == 0 {
-                msg(c"you hear a faint cry of anguish in the distance".as_ptr());
+                msg_str("you hear a faint cry of anguish in the distance");
             } else {
                 obj = new_item();
                 new_monster(obj, randmonster(FALSE), &mut mp);
@@ -351,15 +356,15 @@ pub unsafe extern "C" fn read_scroll() {
             let id_type: [c_int; (S_ID_R_OR_S as usize) + 1] =
                 [0, 0, 0, 0, 0, POTION, SCROLL, WEAPON, ARMOR, R_OR_S];
             scr_info[(*thing_o(obj)).o_which as usize].oi_know = TRUE;
-            msg(
-                c"this scroll is an %s scroll".as_ptr(),
-                scr_info[(*thing_o(obj)).o_which as usize].oi_name,
-            );
+            msg_str(&format!(
+                "this scroll is an {} scroll",
+                CStr::from_ptr(scr_info[(*thing_o(obj)).o_which as usize].oi_name).to_string_lossy()
+            ));
             whatis(TRUE, id_type[(*thing_o(obj)).o_which as usize]);
         }
         S_MAP => {
             scr_info[S_MAP as usize].oi_know = TRUE;
-            msg(c"oh, now this scroll has a map on it".as_ptr());
+            msg_str("oh, now this scroll has a map on it");
 
     for y in 1..(NUMLINES - 1) {
         for x in 0..NUMCOLS {
@@ -392,7 +397,7 @@ pub unsafe extern "C" fn read_scroll() {
                 scr_info[S_FDET as usize].oi_know = TRUE;
                 show_win(c"Your nose tingles and you smell food.--More--".as_ptr());
             } else {
-                msg(c"your nose tingles".as_ptr());
+                msg_str("your nose tingles");
             }
         }
         S_TELEP => {
@@ -404,7 +409,7 @@ pub unsafe extern "C" fn read_scroll() {
         }
         S_ENCH => {
             if cur_weapon.is_null() || (*thing_o(cur_weapon)).o_type != WEAPON {
-                msg(c"you feel a strange sense of loss".as_ptr());
+                msg_str("you feel a strange sense of loss");
             } else {
                 (*thing_o(cur_weapon)).o_flags &= !ISCURSED;
                 if rnd(2) == 0 {
@@ -412,41 +417,39 @@ pub unsafe extern "C" fn read_scroll() {
                 } else {
                     (*thing_o(cur_weapon)).o_dplus += 1;
                 }
-                msg(
-                    c"your %s glows %s for a moment".as_ptr(),
-                    weap_info[(*thing_o(cur_weapon)).o_which as usize].oi_name,
-                    pick_color(c"blue".as_ptr()),
-                );
+                msg_str(&format!(
+                    "your {} glows {} for a moment",
+                    CStr::from_ptr(weap_info[(*thing_o(cur_weapon)).o_which as usize].oi_name).to_string_lossy(),
+                    CStr::from_ptr(pick_color(c"blue".as_ptr())).to_string_lossy()
+                ));
             }
         }
         S_SCARE => {
-            msg(c"you hear maniacal laughter in the distance".as_ptr());
+            msg_str("you hear maniacal laughter in the distance");
         }
         S_REMOVE => {
             uncurse(cur_armor);
             uncurse(cur_weapon);
             uncurse(cur_ring[LEFT]);
             uncurse(cur_ring[RIGHT]);
-            msg(
-                choose_str(
-                    c"you feel in touch with the Universal Onenes".as_ptr(),
-                    c"you feel as if somebody is watching over you".as_ptr(),
-                ),
-            );
+            msg_str(&CStr::from_ptr(choose_str(
+                c"you feel in touch with the Universal Onenes".as_ptr(),
+                c"you feel as if somebody is watching over you".as_ptr(),
+            )).to_string_lossy());
         }
         S_AGGR => {
             aggravate();
-            msg(c"you hear a high pitched humming noise".as_ptr());
+            msg_str("you hear a high pitched humming noise");
         }
         S_PROTECT => {
             if !cur_armor.is_null() {
                 (*thing_o(cur_armor)).o_flags |= ISPROT;
-                msg(
-                    c"your armor is covered by a shimmering %s shield".as_ptr(),
-                    pick_color(c"gold".as_ptr()),
-                );
+                msg_str(&format!(
+                    "your armor is covered by a shimmering {} shield",
+                    CStr::from_ptr(pick_color(c"gold".as_ptr())).to_string_lossy()
+                ));
             } else {
-                msg(c"you feel a strange sense of loss".as_ptr());
+                msg_str("you feel a strange sense of loss");
             }
         }
         _ => {}

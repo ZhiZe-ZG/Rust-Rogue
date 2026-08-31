@@ -1,6 +1,9 @@
 use crate::rnd::rnd;
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 use crate::potions::invis_on;
+
+use crate::io::{addmsg_str, msg_str};
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
@@ -67,8 +70,6 @@ unsafe extern "C" {
 
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
     fn is_current(obj: *mut CThing) -> c_uchar;
-    fn msg(fmt: *const c_char, ...);
-    fn addmsg(fmt: *const c_char, ...);
     fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
     fn chg_str(amt: c_int);
     fn aggravate();
@@ -89,9 +90,9 @@ pub unsafe extern "C" fn ring_on() {
     }
     if (*obj).o_type != RING_TYPE {
         if terse == 0 {
-            msg(c"it would be difficult to wrap that around a finger".as_ptr());
+            msg_str("it would be difficult to wrap that around a finger");
         } else {
-            msg(c"not a ring".as_ptr());
+            msg_str("not a ring");
         }
         return;
     }
@@ -112,9 +113,9 @@ pub unsafe extern "C" fn ring_on() {
         RIGHT
     } else {
         if terse == 0 {
-            msg(c"you already have a ring on each hand".as_ptr());
+            msg_str("you already have a ring on each hand");
         } else {
-            msg(c"wearing two".as_ptr());
+            msg_str("wearing two");
         }
         return;
     };
@@ -129,9 +130,13 @@ pub unsafe extern "C" fn ring_on() {
     }
 
     if terse == 0 {
-        addmsg(c"you are now wearing ".as_ptr());
+        addmsg_str("you are now wearing ");
     }
-    msg(c"%s (%c)".as_ptr(), inv_name(obj, 1), (*obj).o_packch as c_int);
+    msg_str(&format!(
+        "{} ({})",
+        CStr::from_ptr(inv_name(obj, 1)).to_string_lossy(),
+        (*obj).o_packch as u8 as char,
+    ));
 }
 
 /// Removes a worn ring from the chosen hand after passing drop constraints.
@@ -139,9 +144,9 @@ pub unsafe extern "C" fn ring_on() {
 pub unsafe extern "C" fn ring_off() {
     let ring = if cur_ring[LEFT].is_null() && cur_ring[RIGHT].is_null() {
         if terse != 0 {
-            msg(c"no rings".as_ptr());
+            msg_str("no rings");
         } else {
-            msg(c"you aren't wearing any rings".as_ptr());
+            msg_str("you aren't wearing any rings");
         }
         return;
     } else if cur_ring[LEFT].is_null() {
@@ -159,12 +164,16 @@ pub unsafe extern "C" fn ring_off() {
     mpos = 0;
     let obj = cur_ring[ring];
     if obj.is_null() {
-        msg(c"not wearing such a ring".as_ptr());
+        msg_str("not wearing such a ring");
         return;
     }
 
     if dropcheck(obj) != 0 {
-        msg(c"was wearing %s(%c)".as_ptr(), inv_name(obj, 1), (*obj).o_packch as c_int);
+        msg_str(&format!(
+            "was wearing {}({})",
+            CStr::from_ptr(inv_name(obj, 1)).to_string_lossy(),
+            (*obj).o_packch as u8 as char,
+        ));
     }
 }
 
@@ -173,9 +182,9 @@ pub unsafe extern "C" fn ring_off() {
 pub unsafe extern "C" fn gethand() -> c_int {
     loop {
         if terse != 0 {
-            msg(c"left or right ring? ".as_ptr());
+            msg_str("left or right ring? ");
         } else {
-            msg(c"left hand or right hand? ".as_ptr());
+            msg_str("left hand or right hand? ");
         }
 
         let c = readchar() as u8;
@@ -192,9 +201,9 @@ pub unsafe extern "C" fn gethand() -> c_int {
         }
 
         if terse != 0 {
-            msg(c"L or R".as_ptr());
+            msg_str("L or R");
         } else {
-            msg(c"please type L or R".as_ptr());
+            msg_str("please type L or R");
         }
     }
 }

@@ -4,6 +4,7 @@ use std::ffi::{CStr, CString};
 use std::io::Write;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_void};
 
+use crate::io::msg_str;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster};
 use crate::rnd::{rnd, set_seed};
 
@@ -115,7 +116,6 @@ unsafe extern "C" {
     fn mvaddstr(y: c_int, x: c_int, s: *const c_char) -> c_int;
     fn mvcur(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int;
     fn mvprintw(y: c_int, x: c_int, fmt: *const c_char, ...) -> c_int;
-    fn msg(fmt: *const c_char, ...) -> c_int;
     fn noecho() -> c_int;
     fn playltchars();
     fn printf(fmt: *const c_char, ...) -> c_int;
@@ -269,7 +269,7 @@ pub unsafe extern "C" fn quit(sig: c_int) {
     }
     let oy = getcury(curscr);
     let ox = getcurx(curscr);
-    msg(c"really quit?".as_ptr());
+    msg_str("really quit?");
     if readchar() == b'y' as c_int {
         signal(SIGINT, leave as usize);
         clear();

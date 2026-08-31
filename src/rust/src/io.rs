@@ -1,4 +1,4 @@
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::player::{CStats, CThing, CThingMonster};
@@ -37,7 +37,6 @@ unsafe extern "C" {
     fn isalpha(c: c_int) -> c_int;
     fn islower(c: c_int) -> c_int;
     fn look(wakeup: c_uchar);
-    fn msg(fmt: *const c_char, ...) -> c_int;
     #[link_name = "move"]
     fn move_(y: c_int, x: c_int);
     fn mvaddstr(y: c_int, x: c_int, s: *const c_char) -> c_int;
@@ -97,6 +96,40 @@ pub unsafe extern "C" fn rogue_msg_str(text: *const c_char) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rogue_addmsg_str(text: *const c_char) {
     append_message(text);
+}
+
+/// Display a Rust-formatted message, bypassing the legacy C variadic
+/// `msg()` shim. The caller is expected to build the text with `format!`.
+/// Returns the same value as `rogue_msg_str` (useful for `--More--`
+/// escape detection when listing long inventories).
+#[inline]
+pub unsafe fn msg_str(text: &str) -> c_int {
+    let mut result = 0;
+    #[cfg(not(test))]
+    {
+        let ctext = CString::new(text).unwrap();
+        result = rogue_msg_str(ctext.as_ptr());
+    }
+    #[cfg(test)]
+    {
+        let _ = text;
+    }
+    result
+}
+
+/// Append a Rust-formatted message segment, bypassing the legacy C
+/// variadic `addmsg()` shim.
+#[inline]
+pub unsafe fn addmsg_str(text: &str) {
+    #[cfg(not(test))]
+    {
+        let ctext = CString::new(text).unwrap();
+        rogue_addmsg_str(ctext.as_ptr());
+    }
+    #[cfg(test)]
+    {
+        let _ = text;
+    }
 }
 
 #[cfg(not(test))]
@@ -224,21 +257,20 @@ pub unsafe extern "C" fn status() {
 
     if stat_msg != FALSE {
         move_(0, 0);
-        msg(
-            c"Level: %d  Gold: %-5d  Hp: %*d(%*d)  Str: %2d(%d)  Arm: %-2d  Exp: %d/%ld  %s".as_ptr(),
+        msg_str(&format!(
+            "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
             purse,
-            hpwidth,
             pstats.s_hpt,
-            hpwidth,
             max_hp,
             pstats.s_str,
             max_stats.s_str,
             10 - s_arm,
             pstats.s_lvl,
             pstats.s_exp,
-            state_name[hungry_state as usize],
-        );
+            CStr::from_ptr(state_name[hungry_state as usize]).to_string_lossy(),
+            w = hpwidth as usize,
+        ));
     } else {
         move_(STATLINE, 0);
         printw(

@@ -4,6 +4,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
 
 use crate::draw;
+use crate::io::msg_str;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 
 const TRUE: c_uchar = 1;
@@ -105,7 +106,6 @@ unsafe extern "C" {
     static mut ws_info: [CObjInfo; 14];
     static mut ring_info: [CObjInfo; 16];
 
-    fn msg(fmt: *const c_char, ...);
     fn inv_name(obj: *mut CThing, is_weapon: c_uchar) -> *mut c_char;
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
     fn new_item() -> *mut CThing;
@@ -135,7 +135,7 @@ unsafe extern "C" {
 pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
     let pack = (*thing_t(&mut player)).t_pack;
     if pack.is_null() {
-        msg(c"you don't have anything in your pack to identify".as_ptr());
+        msg_str("you don't have anything in your pack to identify");
         return;
     }
 
@@ -146,11 +146,14 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
             if n_objs == 0 {
                 return;
             } else if obj.is_null() {
-                msg(c"you must identify something".as_ptr());
+                msg_str("you must identify something");
             } else if item_type != 0 && (*thing_o(obj)).o_type != item_type
                 && !(item_type == R_OR_S && ((*thing_o(obj)).o_type == RING || (*thing_o(obj)).o_type == STICK))
             {
-                msg(c"you must identify a %s".as_ptr(), type_name(item_type));
+                msg_str(&format!(
+                    "you must identify a {}",
+                    CStr::from_ptr(type_name(item_type)).to_string_lossy()
+                ));
             } else {
                 break;
             }
@@ -172,7 +175,7 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
         _ => {}
     }
 
-    msg(c"%s".as_ptr(), inv_name(obj, FALSE));
+    msg_str(&CStr::from_ptr(inv_name(obj, FALSE)).to_string_lossy());
 }
 
 #[no_mangle]
@@ -216,10 +219,13 @@ pub unsafe extern "C" fn create_obj() {
     let obj = new_item();
     let mut ch: c_int;
 
-    msg(c"type of item: ".as_ptr());
+    msg_str("type of item: ");
     (*thing_o(obj)).o_type = readchar();
     mpos = 0;
-    msg(c"which %c do you want? (0-f)".as_ptr(), (*thing_o(obj)).o_type as c_uint);
+    msg_str(&format!(
+        "which {} do you want? (0-f)",
+        (*thing_o(obj)).o_type as u8 as char
+    ));
     ch = readchar();
     (*thing_o(obj)).o_which = if isdigit(ch) != 0 {
         ch - b'0' as c_int
@@ -232,7 +238,7 @@ pub unsafe extern "C" fn create_obj() {
     mpos = 0;
 
     if (*thing_o(obj)).o_type == WEAPON || (*thing_o(obj)).o_type == ARMOR {
-        msg(c"blessing? (+,-,n)".as_ptr());
+        msg_str("blessing? (+,-,n)");
         let bless = readchar() as c_char;
         mpos = 0;
         if bless == ('-' as c_char) {
@@ -258,7 +264,7 @@ pub unsafe extern "C" fn create_obj() {
     } else if (*thing_o(obj)).o_type == RING {
         match (*thing_o(obj)).o_which {
             0 | 1 | 2 | 3 | 6 | 7 => {
-                msg(c"blessing? (+,-,n)".as_ptr());
+                msg_str("blessing? (+,-,n)");
                 let bless = readchar() as c_char;
                 mpos = 0;
                 if bless == ('-' as c_char) {
@@ -273,7 +279,7 @@ pub unsafe extern "C" fn create_obj() {
     } else if (*thing_o(obj)).o_type == STICK {
         fix_stick(obj);
     } else if (*thing_o(obj)).o_type == GOLD {
-        msg(c"how much?".as_ptr());
+        msg_str("how much?");
         let mut amount = 0;
         get_num(&mut amount, stdscr);
     }

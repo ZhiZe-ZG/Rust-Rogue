@@ -1,4 +1,6 @@
 use crate::rnd::rnd;
+use crate::io::msg_str;
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::player::{CThing, CThingObject};
@@ -68,7 +70,6 @@ unsafe extern "C" {
     fn init_weapon(obj: *mut CThing, which: c_int);
     fn isupper(ch: c_int) -> c_int;
     fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
-    fn msg(fmt: *const c_char, ...);
     fn new_item() -> *mut CThing;
     fn sprintf(buf: *mut c_char, fmt: *const c_char, ...) -> c_int;
     fn strcat(dst: *mut c_char, src: *const c_char) -> *mut c_char;
@@ -245,7 +246,7 @@ pub unsafe extern "C" fn dropcheck(obj: *mut CThing) -> c_uchar {
         return TRUE;
     }
     if ((*thing_o(obj)).o_flags & ISCURSED) != 0 {
-        msg(c"you can't.  It appears to be cursed".as_ptr());
+        msg_str("you can't.  It appears to be cursed");
         return FALSE;
     }
     if obj == cur_weapon {
@@ -371,11 +372,21 @@ pub unsafe extern "C" fn add_line(fmt: *mut c_char, arg: *mut c_char) -> c_char 
     if fmt.is_null() {
         return 0;
     }
-    if !arg.is_null() {
-        msg(fmt, arg);
+    // The caller passes C-style format strings (e.g. `%s` or `a) %s`)
+    // together with a single string argument. Substitute the lone string
+    // argument for the `%s` conversion, then hand the finished text to
+    // `rogue_msg_str` directly, bypassing the legacy variadic `msg()` shim.
+    let fmt_str = CStr::from_ptr(fmt).to_string_lossy();
+    let text = if arg.is_null() {
+        fmt_str.to_string()
     } else {
-        msg(fmt);
-    }
+        let arg_str = CStr::from_ptr(arg).to_string_lossy();
+        match fmt_str.find("%s") {
+            Some(idx) => format!("{}{}{}", &fmt_str[..idx], arg_str, &fmt_str[idx + 2..]),
+            None => fmt_str.to_string(),
+        }
+    };
+    msg_str(&text);
     0
 }
 

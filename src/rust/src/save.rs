@@ -1,4 +1,5 @@
 use crate::rnd::set_seed;
+use crate::io::msg_str;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
@@ -57,7 +58,6 @@ extern "C" {
     static mut master_mode_enabled: c_uchar;
     static mut player: CThingPlayer;
 
-    fn msg(fmt: *const c_char, ...);
     fn readchar() -> c_int;
     fn addstr(s: *const c_char) -> c_int;
     fn refresh() -> c_int;
@@ -155,17 +155,20 @@ pub unsafe extern "C" fn save_game() {
     'over: loop {
         if ptr::read(file_name_ptr) != 0 {
             loop {
-                msg(c"save file (%s)? ".as_ptr(), file_name_ptr);
+                msg_str(&format!(
+                    "save file ({})? ",
+                    CStr::from_ptr(file_name_ptr).to_string_lossy()
+                ));
                 c = readchar();
                 mpos = 0;
                 if c == ESCAPE {
-                    msg(c"".as_ptr());
+                    msg_str("");
                     return;
                 }
                 if c == 'n' as c_int || c == 'N' as c_int || c == 'y' as c_int || c == 'Y' as c_int {
                     break;
                 }
-                msg(c"please answer Y or N".as_ptr());
+                msg_str("please answer Y or N");
             }
 
             if c == 'y' as c_int || c == 'Y' as c_int {
@@ -184,9 +187,9 @@ pub unsafe extern "C" fn save_game() {
         loop {
             if buf[0] == 0 {
                 mpos = 0;
-                msg(c"file name: ".as_ptr());
+                msg_str("file name: ");
                 if get_str(buf.as_mut_ptr(), stdscr) == QUIT {
-                    msg(c"".as_ptr());
+                    msg_str("");
                     return;
                 }
                 mpos = 0;
@@ -194,11 +197,11 @@ pub unsafe extern "C" fn save_game() {
 
             if access(buf.as_ptr(), 0) == 0 {
                 loop {
-                    msg(c"File exists.  Do you wish to overwrite it?".as_ptr());
+                    msg_str("File exists.  Do you wish to overwrite it?");
                     mpos = 0;
                     c = readchar();
                     if c == ESCAPE {
-                        msg(c"".as_ptr());
+                        msg_str("");
                         return;
                     }
                     if c == 'y' as c_int || c == 'Y' as c_int {
@@ -207,9 +210,12 @@ pub unsafe extern "C" fn save_game() {
                     if c == 'n' as c_int || c == 'N' as c_int {
                         continue 'over;
                     }
-                    msg(c"Please answer Y or N".as_ptr());
+                    msg_str("Please answer Y or N");
                 }
-                msg(c"file name: %s".as_ptr(), buf.as_ptr());
+                msg_str(&format!(
+                    "file name: {}",
+                    CStr::from_ptr(buf.as_ptr()).to_string_lossy()
+                ));
                 md_unlink(file_name_ptr);
             }
 
@@ -219,7 +225,10 @@ pub unsafe extern "C" fn save_game() {
                 save_file(savef);
             }
 
-            msg(c"%s".as_ptr(), strerror(*errno_location()));
+            msg_str(&format!(
+                "{}",
+                CStr::from_ptr(strerror(*errno_location())).to_string_lossy()
+            ));
             buf[0] = 0;
         }
     }
@@ -281,7 +290,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     let _ = fflush(ptr::null_mut());
     let _ = fread(buf.as_mut_ptr() as *mut u8, 1, strlen(version_ptr) + 1, inf);
     if strcmp(buf.as_ptr(), version_ptr) != 0 {
-        msg(c"Sorry, saved game is out of date.\n".as_ptr());
+        msg_str("Sorry, saved game is out of date.\n");
         return 0;
     }
 
@@ -293,14 +302,26 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
 
     if lines > LINES {
         endwin();
-        msg(c"Sorry, original game was played on a screen with %d lines.\n".as_ptr(), lines);
-        msg(c"Current screen only has %d lines. Unable to restore game\n".as_ptr(), LINES);
+        msg_str(&format!(
+            "Sorry, original game was played on a screen with {} lines.\n",
+            lines
+        ));
+        msg_str(&format!(
+            "Current screen only has {} lines. Unable to restore game\n",
+            LINES
+        ));
         return 0;
     }
     if cols > COLS {
         endwin();
-        msg(c"Sorry, original game was played on a screen with %d columns.\n".as_ptr(), cols);
-        msg(c"Current screen only has %d columns. Unable to restore game\n".as_ptr(), COLS);
+        msg_str(&format!(
+            "Sorry, original game was played on a screen with {} columns.\n",
+            cols
+        ));
+        msg_str(&format!(
+            "Current screen only has {} columns. Unable to restore game\n",
+            COLS
+        ));
         return 0;
     }
 
@@ -309,7 +330,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     let _ = rs_restore_file(inf);
 
     if (master_mode_enabled == 0 || wizard == 0) && md_unlink_open_file(file_ptr, inf) < 0 {
-        msg(c"Cannot unlink file\n".as_ptr());
+        msg_str("Cannot unlink file\n");
         return 0;
     }
 
@@ -318,7 +339,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
 
     if restore_player_dead() {
         endwin();
-        msg(c"\n\"He's dead, Jim\"\n".as_ptr());
+        msg_str("\n\"He's dead, Jim\"\n");
         return 0;
     }
 
@@ -327,7 +348,10 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     copy_cstr(file_name_ptr, file_ptr, MAXSTR);
     clearok(curscr, 1);
     set_seed(md_getpid());
-    msg(c"file name: %s".as_ptr(), file_ptr);
+    msg_str(&format!(
+        "file name: {}",
+        CStr::from_ptr(file_ptr).to_string_lossy()
+    ));
     playit();
     0
 }

@@ -1,3 +1,5 @@
+use crate::io::{addmsg_str, msg_str};
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 const ARMOR: c_int = ']' as c_int;
@@ -51,9 +53,7 @@ unsafe extern "C" {
     static mut to_death: c_uchar;
 
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn addmsg(fmt: *const c_char, ...);
     fn endmsg() -> c_int;
-    fn msg(fmt: *const c_char, ...);
     fn dropcheck(obj: *mut CThing) -> c_uchar;
     fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
     fn do_daemons(flag: c_int);
@@ -81,9 +81,9 @@ pub unsafe extern "C" fn wear() {
     }
 
     if !cur_armor.is_null() {
-        addmsg(c"you are already wearing some".as_ptr());
+        addmsg_str("you are already wearing some");
         if terse == 0 {
-            addmsg(c".  You'll have to take it off first".as_ptr());
+            addmsg_str(".  You'll have to take it off first");
         }
         endmsg();
         after = FALSE;
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn wear() {
     }
 
     if (*thing_o(obj)).o_type != ARMOR {
-        msg(c"you can't wear that".as_ptr());
+        msg_str("you can't wear that");
         return;
     }
 
@@ -100,9 +100,9 @@ pub unsafe extern "C" fn wear() {
     let sp = inv_name(obj, TRUE);
     cur_armor = obj;
     if terse == 0 {
-        addmsg(c"you are now ".as_ptr());
+        addmsg_str("you are now ");
     }
-    msg(c"wearing %s".as_ptr(), sp);
+    msg_str(&format!("wearing {}", CStr::from_ptr(sp).to_string_lossy()));
 }
 
 /// Removes currently worn armor after curse/drop checks.
@@ -112,9 +112,9 @@ pub unsafe extern "C" fn take_off() {
     if obj.is_null() {
         after = FALSE;
         if terse != 0 {
-            msg(c"not wearing armor".as_ptr());
+            msg_str("not wearing armor");
         } else {
-            msg(c"you aren't wearing any armor".as_ptr());
+            msg_str("you aren't wearing any armor");
         }
         return;
     }
@@ -125,11 +125,15 @@ pub unsafe extern "C" fn take_off() {
 
     cur_armor = std::ptr::null_mut();
     if terse != 0 {
-        addmsg(c"was".as_ptr());
+        addmsg_str("was");
     } else {
-        addmsg(c"you used to be".as_ptr());
+        addmsg_str("you used to be");
     }
-    msg(c" wearing %c) %s".as_ptr(), (*thing_o(obj)).o_packch as c_int, inv_name(obj, TRUE));
+    msg_str(&format!(
+        " wearing {}) {}",
+        (*thing_o(obj)).o_packch as u8 as char,
+        CStr::from_ptr(inv_name(obj, TRUE)).to_string_lossy()
+    ));
 }
 
 /// Advances daemon and fuse queues as a deliberate no-op turn.
@@ -151,14 +155,14 @@ pub unsafe extern "C" fn rust_armor(arm: *mut CThing) {
 
     if ((*thing_o(arm)).o_flags & ISPROT) != 0 || ring_is(LEFT, R_SUSTARM) || ring_is(RIGHT, R_SUSTARM) {
         if to_death == 0 {
-            msg(c"the rust vanishes instantly".as_ptr());
+            msg_str("the rust vanishes instantly");
         }
     } else {
         (*thing_o(arm)).o_arm += 1;
         if terse == 0 {
-            msg(c"your armor appears to be weaker now. Oh my!".as_ptr());
+            msg_str("your armor appears to be weaker now. Oh my!");
         } else {
-            msg(c"your armor weakens".as_ptr());
+            msg_str("your armor weakens");
         }
     }
 }

@@ -1,4 +1,5 @@
 use crate::rnd::rnd;
+use crate::io::msg_str;
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 
 const STICK: c_int = '/' as c_int;
@@ -145,9 +146,7 @@ unsafe extern "C" {
     static mut weap_info: [CObjInfo; 10];
 
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn addmsg(fmt: *const c_char, ...);
     fn endmsg() -> c_int;
-    fn msg(fmt: *const c_char, ...);
     fn mvaddch(y: c_int, x: c_int, ch: c_char);
     fn refresh();
     fn save_throw(kind: c_int, tp: *mut CThing) -> c_uchar;
@@ -259,11 +258,11 @@ pub unsafe extern "C" fn do_zap() {
     }
     if (*thing_o(obj)).o_type != STICK {
         after = FALSE;
-        msg(c"you can't zap with that!".as_ptr());
+        msg_str("you can't zap with that!");
         return;
     }
     if (*thing_o(obj)).o_arm == 0 {
-        msg(c"nothing happens".as_ptr());
+        msg_str("nothing happens");
         return;
     }
 
@@ -272,11 +271,11 @@ pub unsafe extern "C" fn do_zap() {
     match kind {
         Some(StickType::Light) => {
             ws_info[StickType::Light.index()].oi_know = TRUE;
-            msg(c"the corridor glows and then fades".as_ptr());
+            msg_str("the corridor glows and then fades");
         }
         Some(StickType::Drain) => {
             if unsafe { (*hero_stats_mut()).s_hpt } < 2 {
-                msg(c"you are too weak to use it".as_ptr());
+                msg_str("you are too weak to use it");
                 return;
             }
             drain();
@@ -294,7 +293,7 @@ pub unsafe extern "C" fn do_zap() {
                 x += delta.x;
             }
             if !moat_at(y, x).is_null() {
-                msg(c"the spell takes effect".as_ptr());
+                msg_str("the spell takes effect");
             }
         }
         Some(StickType::Missile) => {
@@ -316,9 +315,9 @@ pub unsafe extern "C" fn do_zap() {
             {
                 hit_monster(bolt_pos.y, bolt_pos.x, &mut bolt);
             } else if terse != 0 {
-                msg(c"missle vanishes".as_ptr());
+                msg_str("missle vanishes");
             } else {
-                msg(c"the missle vanishes with a puff of smoke".as_ptr());
+                msg_str("the missle vanishes with a puff of smoke");
             }
         }
         Some(StickType::HasteM) | Some(StickType::SlowM) => {
@@ -330,7 +329,7 @@ pub unsafe extern "C" fn do_zap() {
                 x += delta.x;
             }
             if !moat_at(y, x).is_null() {
-                msg(c"the spell takes effect".as_ptr());
+                msg_str("the spell takes effect");
             }
         }
         Some(StickType::Elect) | Some(StickType::Fire) | Some(StickType::Cold) => {
@@ -347,7 +346,7 @@ pub unsafe extern "C" fn do_zap() {
         }
         Some(StickType::Nop) => {}
         None => {
-            msg(c"what a bizarre schtick!".as_ptr());
+            msg_str("what a bizarre schtick!");
         }
     }
 
@@ -361,7 +360,7 @@ pub unsafe extern "C" fn drain() {
     if (*hero_stats_mut()).s_hpt >= 2 {
         (*hero_stats_mut()).s_hpt /= 2;
     }
-    msg(c"you have a tingling feeling".as_ptr());
+    msg_str("you have a tingling feeling");
 }
 
 /// fire_bolt:
@@ -387,15 +386,15 @@ pub unsafe extern "C" fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *
             if ((*hero_stats_mut()).s_hpt - roll(6, 6)) <= 0 {
                 death('b' as c_char);
             }
-            msg(c"the bolt hits".as_ptr());
+            msg_str("the bolt hits");
         } else {
-            msg(c"the bolt whizzes by you".as_ptr());
+            msg_str("the bolt whizzes by you");
         }
     } else {
         if !moat_at(pos.y, pos.x).is_null() && save_throw(VS_MAGIC, moat_at(pos.y, pos.x)) == 0 {
             hit_monster(pos.y, pos.x, &mut bolt);
         } else {
-            msg(c"the bolt misses".as_ptr());
+            msg_str("the bolt misses");
         }
     }
 

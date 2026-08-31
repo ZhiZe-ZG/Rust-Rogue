@@ -1,4 +1,6 @@
 use crate::rnd::rnd;
+use crate::io::{addmsg_str, msg_str};
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::draw::{self, chat_at, place_at, winat as draw_winat};
@@ -149,9 +151,7 @@ unsafe extern "C" {
     fn discard(item: *mut CThing);
     fn _attach(list: *mut *mut CThing, item: *mut CThing);
     fn endmsg() -> c_int;
-    fn msg(fmt: *const c_char, ...);
     fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
-    fn addmsg(fmt: *const c_char, ...);
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
@@ -276,10 +276,10 @@ pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
             endmsg();
             has_hit = 0;
         }
-        msg(
-            c"the %s vanishes as it hits the ground".as_ptr(),
-            weap_info[(*thing_o(obj)).o_which as usize].oi_name,
-        );
+        msg_str(&format!(
+            "the {} vanishes as it hits the ground",
+            CStr::from_ptr(weap_info[(*thing_o(obj)).o_which as usize].oi_name).to_string_lossy()
+        ));
     }
 
     discard(obj);
@@ -349,7 +349,7 @@ pub unsafe extern "C" fn wield() {
     }
 
     if (*thing_o(obj)).o_type == ARMOR as c_int {
-        msg(c"you can't wield armor".as_ptr());
+        msg_str("you can't wield armor");
         after = 0;
         return;
     }
@@ -361,9 +361,13 @@ pub unsafe extern "C" fn wield() {
     let sp = inv_name(obj, TRUE);
     cur_weapon = obj;
     if terse == 0 {
-        addmsg(c"you are now ".as_ptr());
+        addmsg_str("you are now ");
     }
-    msg(c"wielding %s (%c)".as_ptr(), sp, (*thing_o(obj)).o_packch as c_int);
+    msg_str(&format!(
+        "wielding {} ({})",
+        CStr::from_ptr(sp).to_string_lossy(),
+        (*thing_o(obj)).o_packch as u8 as char,
+    ));
 }
 
 /// Chooses a nearby floor/passage location to drop an item and returns whether one was found.

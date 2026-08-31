@@ -5,6 +5,7 @@ use crate::draw::{
     reveal_trap_at, turnref as draw_turnref, winat,
 };
 use crate::game;
+use crate::io::msg_str;
 use crate::level::{be_trapped, T_DOOR, T_TELEP};
 use crate::rndmove::rndmove;
 
@@ -142,7 +143,6 @@ unsafe extern "C" {
     static mut runch: c_char;
     static mut places: [CPlace; 32 * 80];
 
-    fn msg(fmt: *const c_char, ...);
     fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
     fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;
     fn roomin(cp: *mut CCoord) -> *mut CRoom;
@@ -281,7 +281,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     firstmove = FALSE;
     if no_move != 0 {
         no_move -= 1;
-        msg(c"you are still stuck in the bear trap".as_ptr());
+        msg_str("you are still stuck in the bear trap");
         return;
     }
 
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
             ch = TRAP;
         }
     } else if player_has(ISHELD) && ch != b'F' as c_char {
-        msg(c"you are being held".as_ptr());
+        msg_str("you are being held");
         return;
     }
     match ch {

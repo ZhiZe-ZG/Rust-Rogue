@@ -5,9 +5,11 @@
 //! on. This is a pure Rust API consumed by the movement code in
 //! [`crate::player`]; the legacy C ABI is intentionally not retained.
 
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::draw;
+use crate::io::msg_str;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
@@ -46,7 +48,6 @@ unsafe extern "C" {
     static mut cur_armor: *mut CThing;
     static mut cur_ring: [*mut CThing; 2];
 
-    fn msg(fmt: *const c_char, ...);
     fn roll(num: c_int, sides: c_int) -> c_int;
     fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_int;
     fn save(which: c_int) -> c_int;
@@ -111,42 +112,65 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
         T_DOOR => {
             level += 1;
             new_level();
-            msg(c"you fell into a trap!".as_ptr());
+            msg_str("you fell into a trap!");
         }
         T_BEAR => {
             no_move += spread(3);
-            msg(c"you are caught in a bear trap".as_ptr());
+            msg_str("you are caught in a bear trap");
         }
         T_MYST => {
+            let color = || CStr::from_ptr(rainbow_color()).to_string_lossy().into_owned();
             match rnd(11) {
-                0 => msg(c"you are suddenly in a parallel dimension".as_ptr()),
-                1 => msg(c"the light in here suddenly seems %s".as_ptr(), rainbow_color()),
-                2 => msg(c"you feel a sting in the side of your neck".as_ptr()),
-                3 => msg(c"multi-colored lines swirl around you, then fade".as_ptr()),
-                4 => msg(c"a %s light flashes in your eyes".as_ptr(), rainbow_color()),
-                5 => msg(c"a spike shoots past your ear!".as_ptr()),
-                6 => msg(c"%s sparks dance across your armor".as_ptr(), rainbow_color()),
-                7 => msg(c"you suddenly feel very thirsty".as_ptr()),
-                8 => msg(c"you feel time speed up suddenly".as_ptr()),
-                9 => msg(c"time now seems to be going slower".as_ptr()),
-                10 => msg(c"you pack turns %s!".as_ptr(), rainbow_color()),
+                0 => {
+                    msg_str("you are suddenly in a parallel dimension");
+                }
+                1 => {
+                    msg_str(&format!("the light in here suddenly seems {}", color()));
+                }
+                2 => {
+                    msg_str("you feel a sting in the side of your neck");
+                }
+                3 => {
+                    msg_str("multi-colored lines swirl around you, then fade");
+                }
+                4 => {
+                    msg_str(&format!("a {} light flashes in your eyes", color()));
+                }
+                5 => {
+                    msg_str("a spike shoots past your ear!");
+                }
+                6 => {
+                    msg_str(&format!("{} sparks dance across your armor", color()));
+                }
+                7 => {
+                    msg_str("you suddenly feel very thirsty");
+                }
+                8 => {
+                    msg_str("you feel time speed up suddenly");
+                }
+                9 => {
+                    msg_str("time now seems to be going slower");
+                }
+                10 => {
+                    msg_str(&format!("you pack turns {}!", color()));
+                }
                 _ => {}
             }
         }
         T_SLEEP => {
             no_command += spread(5);
             (*thing_t(&raw mut player)).t_flags &= !ISRUN;
-            msg(c"a strange white mist envelops you and you fall asleep".as_ptr());
+            msg_str("a strange white mist envelops you and you fall asleep");
         }
         T_ARROW => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;
             if swing(stats.s_lvl - 1, stats.s_arm, 1) != 0 {
                 stats.s_hpt -= roll(1, 6);
                 if stats.s_hpt <= 0 {
-                    msg(c"an arrow killed you".as_ptr());
+                    msg_str("an arrow killed you");
                     death(b'a' as c_char);
                 } else {
-                    msg(c"oh no! An arrow shot you".as_ptr());
+                    msg_str("oh no! An arrow shot you");
                 }
             } else {
                 let arrow = new_item();
@@ -154,7 +178,7 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
                 (*thing_o(arrow)).o_count = 1;
                 (*thing_o(arrow)).o_pos = hero_pos();
                 fall(arrow, FALSE);
-                msg(c"an arrow shoots past you".as_ptr());
+                msg_str("an arrow shoots past you");
             }
         }
         T_TELEP => {
@@ -164,21 +188,21 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
         T_DART => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;
             if swing(stats.s_lvl + 1, stats.s_arm, 1) == 0 {
-                msg(c"a small dart whizzes by your ear and vanishes".as_ptr());
+                msg_str("a small dart whizzes by your ear and vanishes");
             } else {
                 stats.s_hpt -= roll(1, 4);
                 if stats.s_hpt <= 0 {
-                    msg(c"a poisoned dart killed you".as_ptr());
+                    msg_str("a poisoned dart killed you");
                     death(b'd' as c_char);
                 }
                 if !ring_is(LEFT, R_SUSTSTR) && !ring_is(RIGHT, R_SUSTSTR) && save(VS_POISON) == 0 {
                     chg_str(-1);
                 }
-                msg(c"a small dart just hit you in the shoulder".as_ptr());
+                msg_str("a small dart just hit you in the shoulder");
             }
         }
         T_RUST => {
-            msg(c"a gush of water hits you on the head".as_ptr());
+            msg_str("a gush of water hits you on the head");
             rust_armor(cur_armor);
         }
         _ => {}

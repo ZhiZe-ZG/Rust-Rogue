@@ -1,4 +1,5 @@
 use crate::rnd::rnd;
+use crate::io::{addmsg_str, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
@@ -94,7 +95,6 @@ unsafe extern "C" {
     static mut mlist: *mut CThing;
 
     fn addch(ch: c_uint) -> c_int;
-    fn addmsg(fmt: *const c_char, ...);
     fn extinguish(func: *const c_void);
     fn free(ptr: *mut c_void);
     fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
@@ -104,7 +104,6 @@ unsafe extern "C" {
     fn isupper(c: c_int) -> c_int;
     fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
     fn malloc(size: usize) -> *mut c_void;
-    fn msg(fmt: *const c_char, ...);
     fn mvaddch(y: c_int, x: c_int, ch: c_uint) -> c_int;
     fn readchar() -> c_int;
     fn reset_last();
@@ -183,9 +182,9 @@ pub unsafe extern "C" fn eat() {
     }
     if (*thing_o(obj)).o_type != FOOD as c_int {
         if terse == 0 {
-            msg(c"ugh, you would get ill if you ate that".as_ptr());
+            msg_str("ugh, you would get ill if you ate that");
         } else {
-            msg(c"that's Inedible!".as_ptr());
+            msg_str("that's Inedible!");
         }
         return;
     }
@@ -202,12 +201,15 @@ pub unsafe extern "C" fn eat() {
         cur_weapon = std::ptr::null_mut();
     }
     if (*thing_o(obj)).o_which == 1 {
-        msg(c"my, that was a yummy %s".as_ptr(), fruit.as_ptr());
+        msg_str(&format!(
+            "my, that was a yummy {}",
+            CStr::from_ptr(fruit.as_ptr()).to_string_lossy()
+        ));
     } else if rnd(100) > 70 {
         (*thing_t(&raw mut player)).t_stats.s_exp += 1;
-        msg(c"%s, this food tastes awful".as_ptr(), c"bummer".as_ptr());
+        msg_str("bummer, this food tastes awful");
     } else {
-        msg(c"%s, that tasted good".as_ptr(), c"yum".as_ptr());
+        msg_str("yum, that tasted good");
     }
     leave_pack(obj, FALSE, FALSE);
 }
@@ -228,7 +230,7 @@ pub unsafe extern "C" fn check_level() {
         let add = roll(i - olevel, 10);
         (*thing_t(&raw mut player)).t_stats.s_maxhp += add;
         (*thing_t(&raw mut player)).t_stats.s_hpt += add;
-        msg(c"welcome to level %d".as_ptr(), i);
+        msg_str(&format!("welcome to level {}", i));
     }
 }
 
@@ -278,7 +280,7 @@ pub unsafe extern "C" fn add_haste(potion: c_uchar) -> c_uchar {
         no_command += rnd(8);
         (*thing_t(&raw mut player)).t_flags &= !(ISRUN as c_short | ISHASTE as c_short) as c_short;
         extinguish(nohaste as *const c_void);
-        msg(c"you faint from exhaustion".as_ptr());
+        msg_str("you faint from exhaustion");
         return FALSE;
     }
 
@@ -305,9 +307,9 @@ pub unsafe extern "C" fn is_current(obj: *mut CThing) -> c_uchar {
     }
     if obj == cur_armor || obj == cur_weapon || obj == cur_ring[LEFT as usize] || obj == cur_ring[RIGHT as usize] {
         if terse == 0 {
-            addmsg(c"That's already ".as_ptr());
+            addmsg_str("That's already ");
         }
-        msg(c"in use".as_ptr());
+        msg_str("in use");
         return TRUE;
     }
     FALSE
@@ -324,7 +326,7 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
         dir_ch = last_dir;
     } else {
         if terse == 0 {
-            msg(c"which direction? ".as_ptr());
+            msg_str("which direction? ");
         }
         loop {
             gotit = true;
@@ -341,7 +343,7 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
                 c if c as c_int == ESCAPE => { last_dir = 0; reset_last(); return FALSE; }
                 _ => {
                     mpos = 0;
-                    msg(c"which direction? ".as_ptr());
+                    msg_str("which direction? ");
                     gotit = false;
                 }
             }
@@ -389,9 +391,9 @@ pub unsafe extern "C" fn call_it(info: *mut CObjInfo) {
         }
     } else if (*info).oi_guess.is_null() {
         if terse != 0 {
-            msg(c"call it: ".as_ptr());
+            msg_str("call it: ");
         } else {
-            msg(c"what do you want to call it? ".as_ptr());
+            msg_str("what do you want to call it? ");
         }
         if get_str(prbuf.as_mut_ptr(), stdscr) == NORM {
             if !(*info).oi_guess.is_null() {

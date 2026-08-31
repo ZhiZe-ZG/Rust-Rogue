@@ -1,5 +1,6 @@
 use crate::rnd::rnd;
-use std::ffi::c_void;
+use crate::io::{addmsg_str, msg_str};
+use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::draw::place_at;
@@ -204,14 +205,12 @@ unsafe extern "C" {
     fn standout() -> c_int;
     fn addch(ch: c_uint) -> c_int;
     fn standend() -> c_int;
-    fn msg(fmt: *const c_char, ...);
     fn dist(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int;
     fn lengthen(func: *const c_void, xtime: c_int);
     fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
     fn unconfuse();
     fn spread(nm: c_int) -> c_int;
     fn set_mname(tp: *mut CThing) -> *mut c_char;
-    fn addmsg(fmt: *const c_char, ...);
     fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
     fn endwin() -> c_int;
     fn abort() -> !;
@@ -354,10 +353,10 @@ pub unsafe extern "C" fn wanderer() {
     runto(&mut (*thing_t(tp)).t_pos);
 
     if wizard != 0 {
-        msg(
-            c"started a wandering %s".as_ptr(),
-            monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_name,
-        );
+        msg_str(&format!(
+            "started a wandering {}",
+            CStr::from_ptr(monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_name).to_string_lossy()
+        ));
     }
 }
 
@@ -403,11 +402,11 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
                 }
                 (*player_t()).t_flags |= ISHUH;
                 let mname = set_mname(tp);
-                addmsg(c"%s".as_ptr(), mname);
+                addmsg_str(&CStr::from_ptr(mname).to_string_lossy());
                 if strcmp(mname, c"it".as_ptr()) != 0 {
-                    addmsg(c"'".as_ptr());
+                    addmsg_str("'");
                 }
-                msg(c"s gaze has confused you".as_ptr());
+                msg_str("s gaze has confused you");
             }
         }
     }
