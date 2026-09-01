@@ -47,7 +47,7 @@ unsafe extern "C" {
     fn rewind(stream: *mut crate::score::CFile);
     fn strerror(errnum: c_int) -> *const c_char;
 
-    // Machine-dependent helpers still implemented in src/c/mdport.c.
+    // Machine-dependent helpers now implemented in src/rust/src/mdport.rs.
     fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int;
     fn md_dsuspchar() -> c_int;
     fn md_getuid() -> c_uint;

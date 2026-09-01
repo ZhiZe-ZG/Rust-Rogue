@@ -343,8 +343,8 @@ export SEED=12345
 ```
 rogue.h              # Main header with data structures and defines
 extern.h             # External declarations and platform defines
-src/c/main.c         # Entry point, initialization, main game loop
-src/c/command.c      # Command processing and input handling
+src/rust/src/startup.rs  # Entry point, initialization, main game loop (Rust FFI)
+src/rust/src/command.rs  # Command processing and input handling (Rust FFI)
 ```
 
 ### Game Systems
@@ -398,8 +398,8 @@ src/rust/src/globals.rs    # Global variable definitions and C ABI bridge
 ### Platform Abstraction
 
 ```
-src/c/mach_dep.c           # Machine-dependent code detection
-src/c/mdport.c             # Platform abstraction layer
+src/rust/src/machdep.rs    # Machine-dependent routines (ported from mach_dep.c)
+src/rust/src/mdport.rs     # Portability wrappers / OS abstraction (ported from mdport.c)
 ```
 
 ### Rust Source

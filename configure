@@ -593,7 +593,7 @@ PACKAGE_STRING='Rogue 5.4.4'
 PACKAGE_BUGREPORT='yendor@rogueforge.net'
 PACKAGE_URL=''
 
-ac_unique_file="src/c/mdport.c"
+ac_unique_file="src/c/vers.c"
 # Factoring default headers for most tests.
 ac_includes_default="\
 #include <stddef.h>

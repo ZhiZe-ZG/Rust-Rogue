@@ -126,6 +126,7 @@ name = "rogue-rust"
 version = "0.1.0"
 dependencies = [
  "glam",
+ "libc",
  "ncurses",
  "rand",
 ]

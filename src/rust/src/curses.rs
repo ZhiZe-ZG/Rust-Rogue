@@ -56,6 +56,18 @@ pub unsafe fn raw() -> c_int {
     ncurses::raw()
 }
 
+pub unsafe fn nocbreak() -> c_int {
+    ncurses::nocbreak()
+}
+
+pub unsafe fn halfdelay(tenths: c_int) -> c_int {
+    ncurses::halfdelay(tenths)
+}
+
+pub unsafe fn set_escdelay(size: c_int) -> c_int {
+    ncurses::set_escdelay(size)
+}
+
 pub unsafe fn getch() -> c_int {
     ncurses::getch()
 }

@@ -139,7 +139,7 @@ struct CMonsterState {
 /// Delayed-action callback slot type (same representation as `daemon::DFunc`).
 type DFunc = Option<unsafe extern "C" fn(c_int)>;
 
-// ─── Extern C globals (defined in extern.c / mdport.c / vers.c) ──────────────
+// ─── Extern C globals (defined in vers.c) ────────────────────────────────────
 
 unsafe extern "C" {
     // booleans (C bool -> c_uchar)

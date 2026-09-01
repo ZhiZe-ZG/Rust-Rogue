@@ -14,7 +14,7 @@ grouped by purpose, with call sites and suggested crossterm equivalents.
 | `newwin(lines, cols, y, x)` | `main.c:141`, `things.c:503` | `save.rs:286` | Allocate an off-screen `Vec<Vec<char>>` buffer |
 | `delwin(win)` | `rip.c:70`, `rip.c:71`, `rip.c:73`, `things.c:532` | — | Drop the buffer |
 | `subwin(win, …)` | `things.c:504` | — | Slice a sub-region of the off-screen buffer |
-| `keypad(stdscr, 1)` | `mach_dep.c:156`, `main.c:228`, `main.c:371` | `save.rs:271` | No equivalent needed; crossterm reads escape sequences natively |
+| `keypad(stdscr, 1)` | `machdep.rs:170`, `main.c:228`, `main.c:371` | `save.rs:271` | No equivalent needed; crossterm reads escape sequences natively |
 | `idlok(win, flag)` | `main.c:142`, `main.c:143` | — | No equivalent (crossterm does not need this) |
 | `clearok(win, flag)` | — | `save.rs:296`, `save.rs:307` | Not needed once using crossterm |
 
@@ -24,12 +24,12 @@ grouped by purpose, with call sites and suggested crossterm equivalents.
 
 | Function | C call sites | Rust call sites | crossterm equivalent |
 |---|---|---|---|
-| `raw()` | `mach_dep.c:154`, `main.c:226`, `main.c:370`, `mdport.c:1027`, `mdport.c:1246` | — | `terminal::enable_raw_mode()` |
-| `noecho()` | `mach_dep.c:155`, `main.c:227`, `main.c:369` | — | Included in `enable_raw_mode()`; or disable with `event::DisableMouseCapture` |
-| `nocbreak()` | `mdport.c:1026`, `mdport.c:1245` | — | `terminal::disable_raw_mode()` |
-| `halfdelay(tenths)` | `mdport.c:1132` | — | `event::poll(Duration)` |
-| `flushinp()` | `mach_dep.c:456` | — | Drain `event::read()` in a loop while `event::poll(Duration::ZERO)` |
-| `typeahead(fd)` | `mach_dep.c:~450` (referenced) | — | Not needed |
+| `raw()` | `machdep.rs:168`, `main.c:226`, `main.c:370`, `mdport.rs` (md_readchar) | — | `terminal::enable_raw_mode()` |
+| `noecho()` | `machdep.rs:169`, `main.c:227`, `main.c:369` | — | Included in `enable_raw_mode()`; or disable with `event::DisableMouseCapture` |
+| `nocbreak()` | `mdport.rs` (md_readchar) | — | `terminal::disable_raw_mode()` |
+| `halfdelay(tenths)` | `mdport.rs` (md_readchar) | — | `event::poll(Duration)` |
+| `flushinp()` | `machdep.rs:327` | — | Drain `event::read()` in a loop while `event::poll(Duration::ZERO)` |
+| `typeahead(fd)` | `machdep.rs:~326` (referenced) | — | Not needed |
 | `baudrate()` | `main.c:253` | — | Not applicable; remove the baud-rate optimization |
 
 ---
@@ -107,7 +107,7 @@ grouped by purpose, with call sites and suggested crossterm equivalents.
 
 | Function | C call sites | Rust call sites | crossterm equivalent |
 |---|---|---|---|
-| `getch()` | `mdport.c:1021` | — | `event::read()` → `Event::Key(KeyEvent { … })` |
+| `getch()` | `mdport.rs` (md_readchar) | — | `event::read()` → `Event::Key(KeyEvent { … })` |
 
 ---
 
