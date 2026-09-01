@@ -19,6 +19,7 @@ pub mod mdport;
 pub mod misc;
 pub mod potions;
 pub mod player;
+pub mod vers;
 pub mod rndmove;
 pub mod rnd;
 pub mod rip;

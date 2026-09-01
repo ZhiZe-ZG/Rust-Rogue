@@ -332,8 +332,15 @@ pub unsafe extern "C" fn my_exit(st: c_int) -> ! {
     exit(st);
 }
 
+/// The C-ABI entry point, kept for the (legacy) `make` link path.
+/// A native Rust `main` in `src/bin/rogue.rs` calls this with
+/// argv/envp built from `std::env::args_os`.
 #[no_mangle]
-pub unsafe extern "C" fn main(mut argc: c_int, mut argv: *mut *mut c_char, envp: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn rogue_main(
+    mut argc: c_int,
+    mut argv: *mut *mut c_char,
+    envp: *mut *mut c_char,
+) -> c_int {
     md_init();
 
     if master_mode_enabled != 0 && argc >= 2 && *arg_at(argv, 1) == 0 {

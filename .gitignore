@@ -1,41 +1,54 @@
-# Autotools / configure generated files
-Makefile
-config.h
-config.log
-config.status
-stamp-h1
-autom4te.cache/
-
-# Generated docs/configured outputs
+# Generated docs
 rogue.6
 rogue.cat
 rogue.doc
 rogue.html
 rogue.me
 
-# Build artifacts
-*.o
-*.obj
-*.a
-*.so
-*.so.*
-*.dylib
-*.dll
-*.exe
+# ── Rust ──────────────────────────────────────────────────────────────────
+# Cargo build artifacts (crate lives at the repository root)
+/target/
+target/
 
-# Out-of-tree build directories
-build/
-build-*/
-cmake-build-*/
-src/rust/target/
+# Cargo lockfile backup created by cargo
+Cargo.lock.orig
 
-# Rogue binaries and runtime files
-rogue
-rogue54
-*/rogue
-*/rogue54
+# rustc output
+*.rmeta
+*.rlib
+*.rlib.metadata
+
+# rust-analyzer / IDE
+.idea/
+.vscode/
+*.iml
+.rust-analyzer/
+rust-project.json
+rust-analyzer/
+*.rs.bk
+
+# Rust test / bench artifacts
+/coverage/
+htmlcov/
+.cache/
+.cargo/
+.cargo-ok
+*.profraw
+*.profdata
+/target/debug
+/target/release
+/target/bench
+/target/coverage
+/target/doc
+
+# Rogue runtime files (saved games, score files)
+rogue.save
+rogue54.save
 *.lck
 *.scr
+# scoreboard files
+rogue.scr
+rogue54.scr
 
 # Common temp/debug files
 *~

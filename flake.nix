@@ -34,6 +34,24 @@
         };
       in
       {
+        packages.default = pkgs.rustPlatform.buildRustPackage {
+          pname = "rogue";
+          version = "5.4.4";
+
+          src = self;
+
+          buildAndTestSubdir = "src/rust";
+          cargoLock.lockFile = ./src/rust/Cargo.lock;
+
+          nativeBuildInputs = [ pkgs.pkg-config ];
+          buildInputs = [ pkgs.ncurses ];
+
+          meta = {
+            description = "Rogue: Exploring the Dungeons of Doom (Rust port)";
+            mainProgram = "rogue";
+          };
+        };
+
         devShells.default = pkgs.mkShell {
           packages =
             (with pkgs; [
@@ -46,31 +64,11 @@
               # cargo-watch # watch files and re-run commands
               # cargo-audit # security audit of dependencies
 
-              # ---- C / C++ ----
-              gcc # compiler
-              gnumake # build automation
-              autoconf # Autotools
-              automake # Autotools
-              libtool # Autotools
+              # ---- Libraries ----
               pkg-config # library compiler flags discovery
-              gdb # debugger
-
-              # ── Add C/C++ libraries HERE ──────────────────────────────
-              # Libraries from nixpkgs ship with headers (.h) and are found
-              # automatically by pkg-config / make. Uncomment examples:
-              # zlib        # compression library
-              # openssl     # TLS/crypto (dev headers provided)
-              # sqlite      # embedded SQL database
-              # libcurl     # HTTP client
-              # readline    # line editing
               ncurses
-              # ───────────────────────────────────────────────────────────
             ])
-
-            # binutils is needed for cross-compilation on Linux, but not on macOS.
-            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.binutils ];
-          # Optional LSP support for C/C++ editors. Uncomment to enable.
-          # ++ [ pkgs.clang-tools ]; # provides clangd + clang-format
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.gdb ];
 
           shellHook = ''
             # ---- Rust ----
@@ -79,17 +77,9 @@
             # Always print backtraces on panic
             export RUST_BACKTRACE=1
 
-            # ---- C / C++ ----
-            export CC=gcc
-            export CXX=g++
-            # Use all cores for parallel builds
-            export MAKEFLAGS="-j$(nproc)"
-
-            echo "🦀⚙️  Rust + C development environment ready"
+            echo "🦀 Rust development environment ready"
             rustc --version
             cargo --version
-            gcc --version | head -n 1
-            make --version | head -n 1
           '';
         };
       }
