@@ -1,3 +1,4 @@
+use crate::globals::{numscores, scoreboard};
 use std::os::raw::{c_char, c_int, c_uint, c_ushort};
 
 const MAXSTR: usize = 1024;
@@ -20,9 +21,6 @@ pub struct Score {
 }
 
 unsafe extern "C" {
-    static mut scoreboard: *mut CFile;
-    static mut numscores: c_uint;
-
     fn rewind(stream: *mut CFile);
     fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
     fn fwrite(ptr: *const u8, size: usize, n: usize, stream: *mut CFile) -> usize;

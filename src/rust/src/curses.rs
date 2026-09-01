@@ -76,6 +76,10 @@ pub unsafe fn killchar() -> c_int {
     ncurses::killchar().map(|c| c as c_int).unwrap_or(0)
 }
 
+pub unsafe fn flushinp() -> c_int {
+    ncurses::flushinp()
+}
+
 // ─── Cursor movement ─────────────────────────────────────────────────────────
 
 /// The curses `move(y, x)` — exposed under both spellings the game uses.

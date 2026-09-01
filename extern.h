@@ -1,5 +1,5 @@
 /*
- * Defines for things used in mach_dep.c
+ * External declarations for the C/FFI boundary.
  *
  * @(#)extern.h	4.35 (Berkeley) 02/05/99
  *
@@ -115,13 +115,11 @@
  * Now all the global variables
  */
 
-extern bool	got_ltc, in_shell;
+extern bool	in_shell;
 /* Compile-time wizard-mode availability exposed as a runtime constant. */
 extern const bool	master_mode_enabled;
 extern int	wizard;
 extern char	fruit[], prbuf[], whoami[];
-extern int orig_dsusp;
-extern FILE	*scoreboard;
 
 /*
  * Function types: only those still implemented in C remain.
@@ -131,10 +129,7 @@ extern FILE	*scoreboard;
 void    auto_save(int);
 void    endit(int sig);
 void	fatal(char *s);
-void	getltchars();
 void    quit(int);
-void    playltchars(void);
-void    resetltchars(void);
 void    tstp(int ignored);
 
 int	md_chmod(char *filename, int mode);
@@ -165,5 +160,4 @@ void md_ignoreallsignals();
 void md_onsignal_autosave();
 void md_onsignal_exit();
 void md_onsignal_default();
-int md_issymlink(char *sp);
 

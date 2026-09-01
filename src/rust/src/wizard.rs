@@ -6,6 +6,7 @@ use std::ptr;
 use crate::curses as cur;
 use crate::draw;
 use crate::io::msg_str;
+use crate::machdep::flush_type;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 
 const TRUE: c_uchar = 1;
@@ -122,7 +123,6 @@ unsafe extern "C" {
     fn leave_room(cp: *mut CCoord);
     fn enter_room(cp: *mut CCoord);
     fn look(wakeup: c_uchar);
-    fn flush_type();
     fn show_win(message: *const c_char);
 }
 

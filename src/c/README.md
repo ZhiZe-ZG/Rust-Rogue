@@ -56,7 +56,7 @@ Save/restore and score persistence entry points are implemented in the Rust FFI 
 
 ## Platform and OS Abstraction
 
-- `mach_dep.c`: Machine-dependent utilities and platform-specific behavior.
+- `mach_dep.c`: Machine-dependent utilities and platform-specific behavior (ported to Rust in `src/rust/src/machdep.rs`).
 - `mdport.c`: Portability wrappers and OS abstraction functions.
 
 ## Global Definitions Bridge

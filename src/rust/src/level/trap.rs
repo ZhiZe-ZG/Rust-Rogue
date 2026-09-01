@@ -11,6 +11,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::draw;
 use crate::io::msg_str;
+use crate::machdep::flush_type;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
@@ -56,7 +57,6 @@ unsafe extern "C" {
     fn init_weapon(weap: *mut CThing, which: c_int);
     fn fall(obj: *mut CThing, pr: c_uchar);
     fn teleport();
-    fn flush_type();
     fn chg_str(amt: c_int);
     fn new_level();
     fn rust_armor(arm: *mut CThing);

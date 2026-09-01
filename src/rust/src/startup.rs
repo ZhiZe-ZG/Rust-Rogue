@@ -6,6 +6,7 @@ use std::os::raw::{c_char, c_int, c_long, c_uchar, c_void};
 
 use crate::curses as cur;
 use crate::io::msg_str;
+use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
 use crate::player::{CCoord, CRoom, CThing, CThingMonster};
 use crate::rnd::{rnd, set_seed};
 
@@ -64,8 +65,6 @@ unsafe extern "C" {
     fn death_monst() -> c_char;
     fn doctor();
     fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
-    fn getltchars();
-    fn init_check();
     fn init_colors();
     fn init_materials();
     fn init_names();
@@ -78,12 +77,10 @@ unsafe extern "C" {
     fn md_init();
     fn md_normaluser();
     fn new_level();
-    fn open_score();
     fn parse_opts(options: *mut c_char);
     fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c_uchar;
     fn runners();
     fn score(amount: c_int, flags: c_int, monst: c_char);
-    fn setup();
     fn start_daemon(func: *const c_void, arg: c_int, typ: c_int);
     fn stomach();
     fn strucpy(destination: *mut c_char, source: *mut c_char, length: c_int);
@@ -99,11 +96,9 @@ unsafe extern "C" {
     fn md_shellescape();
     fn md_tstpsignal();
     fn md_tstpresume();
-    fn playltchars();
     fn printf(fmt: *const c_char, ...) -> c_int;
     fn putchar(c: c_int) -> c_int;
     fn readchar() -> c_int;
-    fn resetltchars();
     fn roomin(cp: *mut CCoord) -> *mut CRoom;
     fn setbuf(stream: *mut c_void, buf: *mut c_char);
     fn signal(sig: c_int, handler: usize) -> usize;

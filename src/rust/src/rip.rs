@@ -2,6 +2,8 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_ushort};
 
 use crate::curses as cur;
+use crate::globals::{allscore, Numname, numscores};
+use crate::machdep::{lock_sc, start_score, unlock_sc};
 
 const MAXSTR: usize = 1024;
 
@@ -36,12 +38,10 @@ pub struct Score {
 }
 
 unsafe extern "C" {
-    static mut allscore: c_uchar;
     static mut amulet: c_uchar;
     static mut level: c_int;
     static mut max_level: c_int;
     static mut noscore: c_int;
-    static mut Numname: *mut c_char;
     static mut pack: *mut crate::player::CThing;
     static mut player: crate::player::CThing;
     static mut purse: c_int;
@@ -50,23 +50,19 @@ unsafe extern "C" {
     static mut whoami: [c_char; MAXSTR];
     static mut wizard: c_int;
     static mut monsters: [crate::monsters::CMonster; 26];
-    static mut numscores: c_uint;
     static mut scoreboard: *mut crate::score::CFile;
 
     fn fgets(buf: *mut c_char, n: c_int, stream: *mut std::ffi::c_void) -> *mut c_char;
     fn getuid() -> c_uint;
     fn inv_name(obj: *mut crate::player::CThing, is_weapon: c_uchar) -> *mut c_char;
-    fn lock_sc() -> c_int;
     fn md_getuid() -> c_uint;
     fn md_raw_standend();
     fn md_raw_standout();
     fn printf(fmt: *const c_char, ...) -> c_int;
     fn rd_score(top_ten: *mut Score);
     fn signal(sig: c_int, handler: usize) -> usize;
-    fn unlock_sc();
     fn wait_for(ch: c_char);
     fn wr_score(top_ten: *mut Score);
-    fn start_score();
     static mut stdscr: *mut std::ffi::c_void;
     static mut curscr: *mut std::ffi::c_void;
 

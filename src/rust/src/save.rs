@@ -1,6 +1,7 @@
 use crate::rnd::set_seed;
 use crate::curses as cur;
 use crate::io::msg_str;
+use crate::machdep::{resetltchars, setup};
 use crate::player::{CThing, CThingMonster};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
@@ -34,7 +35,6 @@ extern "C" {
     fn md_unlink(file: *mut c_char) -> c_int;
 
     fn putchar(c: c_int) -> c_int;
-    fn setup();
     fn md_tstphold();
     fn md_tstpresume();
     fn perror(s: *const c_char);
@@ -45,7 +45,6 @@ extern "C" {
     fn rs_restore_file(inf: *mut CFile) -> c_int;
     fn md_getpid() -> c_int;
     fn playit();
-    fn resetltchars();
     fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int;
     fn fopen(path: *const c_char, mode: *const c_char) -> *mut CFile;
     fn access(path: *const c_char, mode: c_int) -> c_int;

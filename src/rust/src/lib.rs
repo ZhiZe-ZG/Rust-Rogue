@@ -14,6 +14,7 @@ pub mod options;
 pub mod pack;
 pub mod level;
 pub mod list;
+pub mod machdep;
 pub mod misc;
 pub mod potions;
 pub mod player;

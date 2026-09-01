@@ -79,6 +79,8 @@ pub type CThingObject = crate::player::CThingObject;
 pub type CPlace = PlayerCPlace;
 
 #[no_mangle]
+pub static mut allscore: c_uchar = 1; // ALLSCORES is enabled in the standard build
+#[no_mangle]
 pub static mut after: c_uchar = 0;
 #[no_mangle]
 pub static mut again: c_uchar = 0;
@@ -194,6 +196,10 @@ pub static mut tr_name: [*mut c_char; MAXTRAPS] = [
     b"a rust trap\0".as_ptr() as *mut c_char,
     b"a mysterious trap\0".as_ptr() as *mut c_char,
 ];
+#[no_mangle]
+pub static mut numscores: c_uint = 10; // NUMSCORES from config.h
+#[no_mangle]
+pub static mut Numname: *mut c_char = b"Ten\0".as_ptr() as *mut c_char; // NUMNAME from config.h
 #[no_mangle]
 pub static mut n_objs: c_int = 0;
 #[no_mangle]
