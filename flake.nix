@@ -66,7 +66,7 @@
 
               # ---- Libraries ----
               pkg-config # library compiler flags discovery
-              ncurses
+              ncurses # rust ncurses bindings still need the ncurses library
             ])
             ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.gdb ];
 
