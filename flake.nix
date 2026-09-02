@@ -47,7 +47,7 @@
           buildInputs = [ pkgs.ncurses ];
 
           meta = {
-            description = "Rogue: Exploring the Dungeons of Doom (Rust port)";
+            description = "A Rust rewrite of the classic Rogue game";
             mainProgram = "rogue";
           };
         };
