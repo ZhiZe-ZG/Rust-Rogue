@@ -1,8 +1,8 @@
-# Rust source notes
+# Rogue: Exploring the Dungeons of Doom
 
-This directory contains the complete, standalone Rust implementation of
-Rogue: Exploring the Dungeons of Doom.  There is no C code — the game is
-built and run with `cargo` alone.
+This is a Rust rewrite of Rogue, based on the original C code forked from <https://github.com/Davidslv/rogue>. The project is now written entirely in Rust, with no C source code remaining.
+
+> ncurses is still required to build the game.
 
 ## Build & run
 
