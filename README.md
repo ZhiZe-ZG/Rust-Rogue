@@ -1,6 +1,6 @@
-# Rogue: Exploring the Dungeons of Doom
+# Rust Rogue
 
-This is a Rust rewrite of Rogue, based on the original C code forked from <https://github.com/Davidslv/rogue>. The project is now written entirely in Rust, with no C source code remaining.
+This is a Rust rewrite of *Rogue: Exploring the Dungeons of Doom*, based on the original C code forked from <https://github.com/Davidslv/rogue>. The project is now written entirely in Rust, with no C source code remaining.
 
 > ncurses is still required to build the game.
 
