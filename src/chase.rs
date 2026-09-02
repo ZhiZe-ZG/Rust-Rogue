@@ -442,6 +442,9 @@ pub unsafe extern "C" fn runto(runner: *mut CCoord) {
             (*runner).x
         ));
     }
+    if tp.is_null() {
+        return;
+    }
     // Start the beastie running
     (*thing_t(tp)).t_flags |= ISRUN;
     (*thing_t(tp)).t_flags &= !ISHELD;

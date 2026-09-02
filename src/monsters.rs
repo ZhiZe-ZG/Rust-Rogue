@@ -1,11 +1,9 @@
 use crate::rnd::rnd;
 use crate::curses as cur;
 use crate::io::{addmsg_str, msg_str};
-use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::player::{CCoord, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
-
-use crate::draw::place_at;
 
 const AMULETLEVEL: c_int = 26;
 const LAMPDIST: c_int = 3;
@@ -107,7 +105,6 @@ static WAND_MONS: [c_char; 26] = [
 unsafe extern "C" {
     static mut level: c_int;
     static mut max_level: c_int;
-    static mut places: [CPlace; 32 * 80];
     static mut mlist: *mut CThing;
     static mut monsters: [CMonster; 26];
     static mut player: CThing;
@@ -198,8 +195,8 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
 
     (*thing_t(tp)).t_oldch = crate::draw::chat_at((*cp).y, (*cp).x);
     (*thing_t(tp)).t_room = roomin(cp);
-    // Write into the Rust-owned `places` grid via the local layout mirror.
-    (*place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x)).p_monst = tp;
+    // Keep both occupancy structures in sync (`MONSTERS` and `places`).
+    crate::game::set_monster((*cp).y, (*cp).x, tp);
 
     let mp = &monsters[(monster_type as i32 - 'A' as i32) as usize];
     (*thing_t(tp)).t_stats.s_lvl = mp.m_stats.s_lvl + lev_add;
@@ -279,7 +276,7 @@ pub unsafe extern "C" fn wanderer() {
 /// Wakes and updates an adjacent monster's pursuit behavior and special gaze logic.
 #[no_mangle]
 pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
-    let tp = (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst;
+    let tp = crate::game::monster_at(y, x);
     if tp.is_null() {
         cur::endwin();
         abort();
