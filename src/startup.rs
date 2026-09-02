@@ -26,6 +26,42 @@ const SIGINT: c_int = 2;
 /// Static buffer used by `leave()` to discard pending stdout output.
 static mut LEAVE_BUF: [c_char; BUFSIZ] = [0; BUFSIZ];
 
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    static mut __stdoutp: *mut c_void;
+    static mut __stderrp: *mut c_void;
+}
+
+#[cfg(not(target_os = "macos"))]
+unsafe extern "C" {
+    static mut stdout: *mut c_void;
+    static mut stderr: *mut c_void;
+}
+
+#[inline]
+unsafe fn c_stdout() -> *mut c_void {
+    #[cfg(target_os = "macos")]
+    {
+        __stdoutp
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        stdout
+    }
+}
+
+#[inline]
+unsafe fn c_stderr() -> *mut c_void {
+    #[cfg(target_os = "macos")]
+    {
+        __stderrp
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        stderr
+    }
+}
+
 unsafe extern "C" {
     static mut dnum: c_int;
     static mut file_name: [c_char; MAXSTR];
@@ -56,8 +92,6 @@ unsafe extern "C" {
     static mut q_comm: c_uchar;
     static mut running: c_uchar;
     static mut see_floor: c_uchar;
-    static mut stderr: *mut c_void;
-    static mut stdout: *mut c_void;
     static mut terse: c_uchar;
     static mut to_death: c_uchar;
 
@@ -169,7 +203,7 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
     cur::mvcur(0, COLS - 1, LINES - 1, 0);
     cur::endwin();
     resetltchars();
-    fflush(stdout);
+    fflush(c_stdout());
     md_tstpsignal();
 
     /*
@@ -186,7 +220,7 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
     let x = cur::getcurx(curscr);
     cur::mvcur(y, x, oy, ox);
     cur::move_(oy, ox);
-    fflush(stdout);
+    fflush(c_stdout());
 }
 
 /// playit:
@@ -272,7 +306,7 @@ pub unsafe extern "C" fn quit(sig: c_int) {
 pub unsafe extern "C" fn leave(sig: c_int) {
     let _ = sig;
 
-    setbuf(stdout, LEAVE_BUF.as_mut_ptr());   /* throw away pending output */
+    setbuf(c_stdout(), LEAVE_BUF.as_mut_ptr());   /* throw away pending output */
 
     if cur::isendwin() == 0 {
         cur::mvcur(0, COLS - 1, LINES - 1, 0);
@@ -299,14 +333,14 @@ pub unsafe extern "C" fn shell() {
     putchar(b'\n' as c_int);
     in_shell = TRUE;
     after = FALSE;
-    fflush(stdout);
+    fflush(c_stdout());
     /*
      * Fork and do a shell
      */
     md_shellescape();
 
     printf(c"\n[Press return to continue]".as_ptr());
-    fflush(stdout);
+    fflush(c_stdout());
     cur::noecho();
     cur::raw();
     cur::keypad(stdscr, TRUE);
@@ -327,8 +361,8 @@ pub unsafe extern "C" fn my_exit(st: c_int) -> ! {
         cur::echo();
         cur::endwin();
     }
-    fflush(stdout);
-    fflush(stderr);
+    fflush(c_stdout());
+    fflush(c_stderr());
     exit(st);
 }
 

@@ -33,9 +33,43 @@ const ENOENT: c_int = 2;
 /// `FILE *lfd` from mach_dep.c -- handle of the scoreboard lock file.
 static mut LFD: *mut crate::score::CFile = ptr::null_mut();
 
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    static mut __stdinp: *mut c_void;
+    static mut __stderrp: *mut c_void;
+}
+
+#[cfg(not(target_os = "macos"))]
 unsafe extern "C" {
     static mut stdin: *mut c_void;
     static mut stderr: *mut c_void;
+}
+
+#[inline]
+unsafe fn c_stdin() -> *mut c_void {
+    #[cfg(target_os = "macos")]
+    {
+        __stdinp
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        stdin
+    }
+}
+
+#[inline]
+unsafe fn c_stderr() -> *mut c_void {
+    #[cfg(target_os = "macos")]
+    {
+        __stderrp
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        stderr
+    }
+}
+
+unsafe extern "C" {
     static mut stdscr: *mut c_void;
 
     fn fopen(path: *const c_char, mode: *const c_char) -> *mut crate::score::CFile;
@@ -140,12 +174,12 @@ pub unsafe extern "C" fn open_score() {
 
     if scoreboard.is_null() {
         fprintf(
-            stderr,
+            c_stderr(),
             c"Could not open %s for writing: %s\n".as_ptr(),
             scorefile_ptr,
             strerror(*errno_location()),
         );
-        fflush(stderr);
+        fflush(c_stderr());
     }
 }
 
@@ -277,7 +311,7 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
                 printf(c"The score file is very busy.  Do you want to wait longer\n".as_ptr());
                 printf(c"for it to become free so your score can get posted?\n".as_ptr());
                 printf(c"If so, type \"y\"\n".as_ptr());
-                let _ = fgets(prbuf.as_mut_ptr(), MAXSTR as c_int, stdin);
+                let _ = fgets(prbuf.as_mut_ptr(), MAXSTR as c_int, c_stdin());
                 if prbuf[0] == 'y' as c_char {
                     loop {
                         LFD = fopen(lockfile_ptr, c"w+".as_ptr());
