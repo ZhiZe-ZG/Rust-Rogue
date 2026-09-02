@@ -4,6 +4,12 @@ This is a Rust rewrite of *Rogue: Exploring the Dungeons of Doom*, based on the 
 
 > ncurses is still required to build the game.
 
+## Develop Environment
+
+```bash
+nix develop
+```
+
 ## Build & run
 
 ```bash
