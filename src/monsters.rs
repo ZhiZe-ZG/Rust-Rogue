@@ -2,7 +2,7 @@ use crate::rnd::rnd;
 use crate::curses as cur;
 use crate::io::{addmsg_str, msg_str};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
-use crate::thing_list::{_attach, new_item};
+use crate::thing_list::{attach, new_item};
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -188,7 +188,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
         lev_add = 0;
     }
 
-    _attach(&raw mut mlist, tp);
+    attach(&raw mut mlist, tp);
 
     (*thing_t(tp)).t_type = monster_type;
     (*thing_t(tp)).t_disguise = monster_type;
@@ -342,7 +342,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
 #[no_mangle]
 pub unsafe extern "C" fn give_pack(tp: *mut CThing) {
     if level >= max_level && rnd(100) < monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry {
-        _attach(&mut (*thing_t(tp)).t_pack, new_thing());
+        attach(&mut (*thing_t(tp)).t_pack, new_thing());
     }
 }
 

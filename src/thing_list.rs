@@ -4,12 +4,22 @@
 //! in map cells and equipment slots. The allocations themselves are owned by
 //! this vector, so list operations no longer depend on a C allocator or ABI.
 
-use crate::io::msg_str;
 use crate::player::{CThing, CThingMonster};
-use std::os::raw::c_int;
+use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicI32, Ordering};
 
-static mut THINGS: Vec<Box<CThing>> = Vec::new();
-static mut TOTAL: c_int = 0;
+struct OwnedThing(Box<CThing>);
+
+// The game accesses thing pointers on its single gameplay thread; the mutex
+// only protects the arena's ownership when the global is initialized.
+unsafe impl Send for OwnedThing {}
+
+static THINGS: OnceLock<Mutex<Vec<OwnedThing>>> = OnceLock::new();
+static TOTAL: AtomicI32 = AtomicI32::new(0);
+
+fn things() -> &'static Mutex<Vec<OwnedThing>> {
+    THINGS.get_or_init(|| Mutex::new(Vec::new()))
+}
 
 #[inline]
 unsafe fn thing_t(item: *mut CThing) -> *mut CThingMonster {
@@ -48,38 +58,23 @@ pub unsafe fn free_list(list: *mut *mut CThing) {
 }
 
 pub unsafe fn discard(item: *mut CThing) {
-    if let Some(index) = THINGS.iter().position(|thing| {
-        (&**thing as *const CThing).cast_mut() == item
+    let mut things = things().lock().expect("thing store poisoned");
+    if let Some(index) = things.iter().position(|thing| {
+        (&*thing.0 as *const CThing).cast_mut() == item
     }) {
-        THINGS.swap_remove(index);
-        TOTAL -= 1;
+        things.swap_remove(index);
+        TOTAL.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
 pub unsafe fn new_item() -> *mut CThing {
-    let mut item = Box::new(std::mem::zeroed::<CThing>());
-    let pointer = (&mut *item) as *mut CThing;
-    THINGS.push(item);
-    TOTAL += 1;
-    if TOTAL < 0 {
-        msg_str("ran out of memory");
-        return std::ptr::null_mut();
-    }
+    let mut item = OwnedThing(Box::new(std::mem::zeroed::<CThing>()));
+    let pointer = (&mut *item.0) as *mut CThing;
+    things().lock().expect("thing store poisoned").push(item);
+    TOTAL.fetch_add(1, Ordering::Relaxed);
     pointer
 }
 
-pub unsafe fn allocated_count() -> c_int {
-    TOTAL
-}
-
-pub unsafe fn _detach(list: *mut *mut CThing, item: *mut CThing) {
-    detach(list, item);
-}
-
-pub unsafe fn _attach(list: *mut *mut CThing, item: *mut CThing) {
-    attach(list, item);
-}
-
-pub unsafe fn _free_list(list: *mut *mut CThing) {
-    free_list(list);
+pub fn allocated_count() -> i32 {
+    TOTAL.load(Ordering::Relaxed)
 }

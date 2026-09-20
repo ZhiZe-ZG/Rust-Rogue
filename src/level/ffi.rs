@@ -25,7 +25,7 @@ use super::presence::populate_level;
 use super::rooms::Room;
 use super::structure::Structure;
 use super::symbols::{
-    ISGONE, ISHELD, MAXROOMS, _free_list, level, lvl_obj, max_level, mlist, no_food,
+    ISGONE, ISHELD, MAXROOMS, free_list, level, lvl_obj, max_level, mlist, no_food,
     player, thing_t, wake_monster,
 };
 use super::tile::Tile;
@@ -109,13 +109,13 @@ unsafe fn clear_previous_level_items() {
     let mut tp = mlist;
     while !tp.is_null() {
         let next_tp = (*thing_t(tp)).l_next;
-        _free_list((&raw mut (*thing_t(tp)).t_pack) as *mut *mut CThing);
+        free_list((&raw mut (*thing_t(tp)).t_pack) as *mut *mut CThing);
         tp = next_tp;
     }
-    _free_list((&raw mut mlist) as *mut *mut CThing);
+    free_list((&raw mut mlist) as *mut *mut CThing);
 
     // Throw away stuff left on the previous level (if anything).
-    _free_list((&raw mut lvl_obj) as *mut *mut CThing);
+    free_list((&raw mut lvl_obj) as *mut *mut CThing);
 }
 
 /// door_open:

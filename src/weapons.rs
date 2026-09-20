@@ -6,7 +6,7 @@ use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::draw::{self, chat_at, place_at, winat as draw_winat};
 use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
-use crate::thing_list::{_attach, discard};
+use crate::thing_list::{attach, discard};
 
 const NO_WEAPON: c_int = -1;
 
@@ -194,7 +194,7 @@ pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
             }
         }
 
-        _attach(&raw mut lvl_obj, obj);
+        attach(&raw mut lvl_obj, obj);
         return;
     }
 

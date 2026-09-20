@@ -9,7 +9,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::curses as cur;
 use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
-pub(crate) use crate::thing_list::{_attach, _free_list, new_item};
+pub(crate) use crate::thing_list::{attach, free_list, new_item};
 
 use super::passages::MAX_PASSAGES;
 use super::roomgraph::MAX_ROOMS;

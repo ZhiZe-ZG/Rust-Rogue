@@ -21,7 +21,7 @@ use super::trap::Trap;
 use super::symbols::{
     AMULET, AMULETLEVEL, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN, MAXOBJ,
     MAXROOMS, MAXTRAPS, MAXTRIES, MAXTREAS, MINTREAS, NTRAPS, PLAYER, SEEMONST, TREAS_ROOM,
-    _attach, amulet, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch,
+    attach, amulet, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch,
     new_item, new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs,
     stairs, step_ok, thing_o, thing_t, turn_see, visuals,
 };
@@ -121,7 +121,7 @@ unsafe fn treas_room() {
         let tp = new_thing();
         (*thing_o(tp)).o_pos = mp;
         // Objects render from the `lvl_obj` list; no glyph write needed.
-        _attach((&raw mut lvl_obj) as *mut *mut CThing, tp);
+        attach((&raw mut lvl_obj) as *mut *mut CThing, tp);
         nm -= 1;
     }
 
@@ -178,7 +178,7 @@ unsafe fn place_room_contents() {
                 (*og).o_flags = ISMANY;
                 (*og).o_group = GOLDGRP;
                 (*og).o_type = GOLD as c_int;
-                _attach((&raw mut lvl_obj) as *mut *mut CThing, gold);
+                attach((&raw mut lvl_obj) as *mut *mut CThing, gold);
             }
         }
 
@@ -215,7 +215,7 @@ unsafe fn put_things() {
         if rnd(100) < 36 {
             // Pick a new object and link it in the list.
             let obj = new_thing();
-            _attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
+            attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
             // Put it somewhere.
             let og = thing_o(obj);
             let pos = &raw mut (*og).o_pos;
@@ -227,7 +227,7 @@ unsafe fn put_things() {
     // yet, put it somewhere on the ground.
     if level >= AMULETLEVEL && !amulet {
         let obj = new_item();
-        _attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
+        attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
         let og = thing_o(obj);
         (*og).o_hplus = 0;
         (*og).o_dplus = 0;

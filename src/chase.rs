@@ -11,7 +11,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::io::msg_str;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
-use crate::thing_list::{_attach, _detach};
+use crate::thing_list::{attach, detach};
 use crate::rnd::rnd;
 use crate::scrolls::ScrollType;
 
@@ -342,8 +342,8 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
             obj = lvl_obj;
             while !obj.is_null() {
                 if (*thing_t(th)).t_dest == &raw mut (*thing_o(obj)).o_pos {
-                    _detach(&raw mut lvl_obj, obj);
-                    _attach(&raw mut (*thing_t(th)).t_pack, obj);
+                    detach(&raw mut lvl_obj, obj);
+                    attach(&raw mut (*thing_t(th)).t_pack, obj);
                     // Objects render from the `lvl_obj` list; the floor glyph
                     // under a picked-up object is then the terrain char.
                     (*thing_t(th)).t_dest = find_dest(th);

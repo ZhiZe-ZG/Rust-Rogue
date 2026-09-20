@@ -18,7 +18,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::machdep::flush_type;
 use crate::player::{CCoord, CStats, CThing, CThingMonster, CThingObject};
-use crate::thing_list::{_attach, _detach, discard, new_item};
+use crate::thing_list::{attach, detach, discard, new_item};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -797,7 +797,7 @@ pub unsafe extern "C" fn remove_mon(mp: *mut CCoord, tp: *mut CThing, waskill: c
     while !obj.is_null() {
         let nexti = (*thing_t(obj)).l_next;
         (*thing_o(obj)).o_pos = (*thing_t(tp)).t_pos;
-        _detach(
+                    detach(
             &mut (*thing_t(tp)).t_pack as *mut *mut CThing,
             obj,
         );
@@ -813,7 +813,7 @@ pub unsafe extern "C" fn remove_mon(mp: *mut CCoord, tp: *mut CThing, waskill: c
     let oldch = (*thing_t(tp)).t_oldch;
     cur::mvaddch((*mp).y, (*mp).x, oldch as c_uchar as c_uint);
 
-    _detach(&raw mut mlist as *mut *mut CThing, tp);
+    detach(&raw mut mlist as *mut *mut CThing, tp);
 
     if on_p(tp, ISTARGET) {
         kamikaze = false as c_uchar;
@@ -853,7 +853,7 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
                 let extra = rnd(50 + 10 * level) + 2;
                 (*thing_o(gold)).o_arm += extra + extra + extra + extra;
             }
-            _attach(&mut (*thing_t(tp)).t_pack as *mut *mut CThing, gold);
+                    attach(&mut (*thing_t(tp)).t_pack as *mut *mut CThing, gold);
         }
     }
 
