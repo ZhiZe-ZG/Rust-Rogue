@@ -1,6 +1,7 @@
 use crate::chase::{cansee, runto};
 use crate::curses as cur;
 use crate::fight::set_mname;
+use crate::game::EQUIPMENT;
 use crate::io::{endmsg, msg_str, step_ok};
 use crate::monsters::{save, save_throw};
 use crate::pack::get_item;
@@ -81,7 +82,6 @@ unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
     static mut delta: CCoord;
-    static mut cur_weapon: *mut CThing;
     static mut ws_info: [CObjInfo; MAXSTICKS];
     static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
@@ -229,8 +229,8 @@ pub unsafe extern "C" fn do_zap() {
             (*thing_o(&mut bolt)).o_hplus = 100;
             (*thing_o(&mut bolt)).o_dplus = 1;
             (*thing_o(&mut bolt)).o_flags = ISMISL;
-            if !cur_weapon.is_null() {
-                (*thing_o(&mut bolt)).o_launch = (*thing_o(cur_weapon)).o_which;
+            if !EQUIPMENT.weapon.is_null() {
+                (*thing_o(&mut bolt)).o_launch = (*thing_o(EQUIPMENT.weapon)).o_which;
             }
             do_motion(&mut bolt, delta.y, delta.x);
             let bolt_pos = (*thing_o(&mut bolt)).o_pos;

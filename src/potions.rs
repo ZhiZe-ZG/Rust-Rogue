@@ -8,6 +8,7 @@ use crate::daemon::{fuse, lengthen, start_daemon};
 use crate::daemons::{come_down, land, sight, unconfuse, unsee, visuals};
 use crate::draw::look;
 use crate::draw::place_at;
+use crate::game::EQUIPMENT;
 use crate::io::{endmsg, msg_str, show_win, status};
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
 use crate::pack::{get_item, leave_pack};
@@ -141,8 +142,6 @@ unsafe extern "C" {
     static mut fruit: [c_char; 1024];
     static mut prbuf: [c_char; 2048];
     static mut player: CThing;
-    static mut cur_weapon: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
     static mut lvl_obj: *mut CThing;
     static mut mlist: *mut CThing;
     static mut places: [CPlace; 32 * 80];
@@ -184,7 +183,7 @@ unsafe fn thing_has(tp: *mut CThing, flag: c_short) -> bool {
 
 #[inline]
 unsafe fn ring_is(which: usize, ring_type: c_int) -> bool {
-    let ring = cur_ring[which];
+    let ring = EQUIPMENT.rings[which];
     !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
@@ -292,8 +291,8 @@ pub unsafe extern "C" fn quaff() {
         }
         return;
     }
-    if obj == cur_weapon {
-        cur_weapon = ptr::null_mut();
+    if obj == EQUIPMENT.weapon {
+        EQUIPMENT.weapon = ptr::null_mut();
     }
 
     discardit = (*thing_o(obj)).o_count == 1;
@@ -448,13 +447,13 @@ pub unsafe extern "C" fn quaff() {
             if ring_is(LEFT, R_ADDSTR) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
-                    -(*thing_o(cur_ring[LEFT])).o_arm,
+                    -(*thing_o(EQUIPMENT.rings[LEFT])).o_arm,
                 );
             }
             if ring_is(RIGHT, R_ADDSTR) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
-                    -(*thing_o(cur_ring[RIGHT])).o_arm,
+                    -(*thing_o(EQUIPMENT.rings[RIGHT])).o_arm,
                 );
             }
             if (*stats).t_stats.s_str < max_stats.s_str {
@@ -463,13 +462,13 @@ pub unsafe extern "C" fn quaff() {
             if ring_is(LEFT, R_ADDSTR) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
-                    (*thing_o(cur_ring[LEFT])).o_arm,
+                    (*thing_o(EQUIPMENT.rings[LEFT])).o_arm,
                 );
             }
             if ring_is(RIGHT, R_ADDSTR) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
-                    (*thing_o(cur_ring[RIGHT])).o_arm,
+                    (*thing_o(EQUIPMENT.rings[RIGHT])).o_arm,
                 );
             }
             msg_str("hey, this tastes great.  It make you feel warm all over");

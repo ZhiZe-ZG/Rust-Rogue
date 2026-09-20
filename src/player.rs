@@ -139,7 +139,6 @@ unsafe extern "C" {
     static mut to_death: c_uchar;
     static mut oldpos: CCoord;
     static mut delta: CCoord;
-    static mut cur_weapon: *mut CThing;
     static mut player: CThing;
     static mut runch: c_char;
     static mut places: [CPlace; 32 * 80];
@@ -369,7 +368,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
             seenstairs = true as c_uchar;
             running = false as c_uchar;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, cur_weapon, false as c_uchar);
+                fight(&mut next_pos, game::EQUIPMENT.weapon, false as c_uchar);
             } else {
                 take = ch;
                 move_stuff(&mut next_pos, fl);
@@ -378,7 +377,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         _ => {
             running = false as c_uchar;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, cur_weapon, false as c_uchar);
+                fight(&mut next_pos, game::EQUIPMENT.weapon, false as c_uchar);
             } else {
                 if ch != STAIRS {
                     take = ch;

@@ -260,12 +260,6 @@ pub static mut oldpos: CCoord = CCoord { x: 0, y: 0 };
 #[no_mangle]
 pub static mut stairs: CCoord = CCoord { x: 0, y: 0 };
 #[no_mangle]
-pub static mut cur_armor: *mut CThing = std::ptr::null_mut();
-#[no_mangle]
-pub static mut cur_ring: [*mut CThing; 2] = [std::ptr::null_mut(); 2];
-#[no_mangle]
-pub static mut cur_weapon: *mut CThing = std::ptr::null_mut();
-#[no_mangle]
 pub static mut l_last_pick: *mut CThing = std::ptr::null_mut();
 #[no_mangle]
 pub static mut last_pick: *mut CThing = std::ptr::null_mut();

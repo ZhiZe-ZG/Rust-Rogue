@@ -4,6 +4,7 @@ use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
+use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, msg_str, readchar};
 use crate::misc::{aggravate, chg_str, is_current};
 use crate::pack::get_item;
@@ -42,7 +43,6 @@ const USES: [c_int; 14] = [
 ];
 
 unsafe extern "C" {
-    static mut cur_ring: [*mut CThing; 2];
     static mut terse: c_uchar;
     static mut mpos: c_int;
 
@@ -76,15 +76,15 @@ pub unsafe extern "C" fn ring_on() {
         return;
     }
 
-    let ring = if cur_ring[LEFT].is_null() && cur_ring[RIGHT].is_null() {
+    let ring = if EQUIPMENT.rings[LEFT].is_null() && EQUIPMENT.rings[RIGHT].is_null() {
         let hand = gethand();
         if hand < 0 {
             return;
         }
         hand as usize
-    } else if cur_ring[LEFT].is_null() {
+    } else if EQUIPMENT.rings[LEFT].is_null() {
         LEFT
-    } else if cur_ring[RIGHT].is_null() {
+    } else if EQUIPMENT.rings[RIGHT].is_null() {
         RIGHT
     } else {
         if terse == 0 {
@@ -95,7 +95,7 @@ pub unsafe extern "C" fn ring_on() {
         return;
     };
 
-    cur_ring[ring] = obj;
+    EQUIPMENT.rings[ring] = obj;
 
     match (*thing_o(obj)).o_which {
         R_ADDSTR => chg_str((*thing_o(obj)).o_arm),
@@ -117,16 +117,16 @@ pub unsafe extern "C" fn ring_on() {
 /// Removes a worn ring from the chosen hand after passing drop constraints.
 #[no_mangle]
 pub unsafe extern "C" fn ring_off() {
-    let ring = if cur_ring[LEFT].is_null() && cur_ring[RIGHT].is_null() {
+    let ring = if EQUIPMENT.rings[LEFT].is_null() && EQUIPMENT.rings[RIGHT].is_null() {
         if terse != 0 {
             msg_str("no rings");
         } else {
             msg_str("you aren't wearing any rings");
         }
         return;
-    } else if cur_ring[LEFT].is_null() {
+    } else if EQUIPMENT.rings[LEFT].is_null() {
         RIGHT
-    } else if cur_ring[RIGHT].is_null() {
+    } else if EQUIPMENT.rings[RIGHT].is_null() {
         LEFT
     } else {
         let hand = gethand();
@@ -137,7 +137,7 @@ pub unsafe extern "C" fn ring_off() {
     };
 
     mpos = 0;
-    let obj = cur_ring[ring];
+    let obj = EQUIPMENT.rings[ring];
     if obj.is_null() {
         msg_str("not wearing such a ring");
         return;
@@ -191,7 +191,7 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
         return 0;
     }
 
-    let ring = cur_ring[hand_idx];
+    let ring = EQUIPMENT.rings[hand_idx];
     if ring.is_null() {
         return 0;
     }

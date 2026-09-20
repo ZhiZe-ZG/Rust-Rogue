@@ -1,6 +1,7 @@
 use crate::chase::runto;
 use crate::daemon::{extinguish, fuse};
 use crate::daemons::nohaste;
+use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, msg_str, readchar};
 use crate::options::get_str;
 use crate::pack::{get_item, leave_pack, reset_last};
@@ -91,9 +92,6 @@ unsafe extern "C" {
     static mut stairs: CCoord;
     static mut stdscr: *mut c_void;
     static mut terse: c_uchar;
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
-    static mut cur_weapon: *mut CThing;
     static mut lvl_obj: *mut CThing;
     static mut mlist: *mut CThing;
 
@@ -194,8 +192,8 @@ pub unsafe extern "C" fn eat() {
         food_left = STOMACHSIZE;
     }
     hungry_state = 0;
-    if obj == cur_weapon {
-        cur_weapon = std::ptr::null_mut();
+    if obj == EQUIPMENT.weapon {
+        EQUIPMENT.weapon = std::ptr::null_mut();
     }
     if (*thing_o(obj)).o_which == 1 {
         msg_str(&format!(
@@ -246,14 +244,14 @@ pub unsafe extern "C" fn chg_str(amt: c_int) {
     stats.s_str = new_strength as c_uint;
     let mut comp = stats.s_str;
 
-    if cur_ring[LEFT as usize] != std::ptr::null_mut() {
-        let ring = cur_ring[LEFT as usize];
+    if !EQUIPMENT.rings[LEFT as usize].is_null() {
+        let ring = EQUIPMENT.rings[LEFT as usize];
         let bonus = (*thing_o(ring)).o_arm as c_int;
         let reduced = comp as c_int - bonus;
         comp = if reduced < 3 { 3 } else { reduced as c_uint };
     }
-    if cur_ring[RIGHT as usize] != std::ptr::null_mut() {
-        let ring = cur_ring[RIGHT as usize];
+    if !EQUIPMENT.rings[RIGHT as usize].is_null() {
+        let ring = EQUIPMENT.rings[RIGHT as usize];
         let bonus = (*thing_o(ring)).o_arm as c_int;
         let reduced = comp as c_int - bonus;
         comp = if reduced < 3 { 3 } else { reduced as c_uint };
@@ -306,10 +304,10 @@ pub unsafe fn is_current(obj: *mut CThing) -> bool {
     if obj.is_null() {
         return false;
     }
-    if obj == cur_armor
-        || obj == cur_weapon
-        || obj == cur_ring[LEFT as usize]
-        || obj == cur_ring[RIGHT as usize]
+    if obj == EQUIPMENT.armor
+        || obj == EQUIPMENT.weapon
+        || obj == EQUIPMENT.rings[LEFT as usize]
+        || obj == EQUIPMENT.rings[RIGHT as usize]
     {
         if terse == 0 {
             addmsg_str("That's already ");

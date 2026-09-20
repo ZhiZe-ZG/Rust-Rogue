@@ -1,3 +1,4 @@
+use crate::game::EQUIPMENT;
 use crate::rnd::rnd;
 /*
  * Global variable initialization.
@@ -332,8 +333,6 @@ unsafe extern "C" {
     static mut player: CThing;
     static mut max_stats: CStats;
     static mut food_left: c_int;
-    static mut cur_armor: *mut CThing;
-    static mut cur_weapon: *mut CThing;
     static mut a_class: [c_int; 26];
 
     // Per-item colour / material / name assignments (in extern.c)
@@ -397,7 +396,7 @@ pub unsafe extern "C" fn init_player() {
     (*thing_o(obj)).o_arm = a_class[RING_MAIL as usize] - 1;
     (*thing_o(obj)).o_flags |= ISKNOW;
     (*thing_o(obj)).o_count = 1;
-    cur_armor = obj;
+    EQUIPMENT.armor = obj;
     add_pack(obj, true as c_uchar);
 
     // A +1 mace
@@ -407,7 +406,7 @@ pub unsafe extern "C" fn init_player() {
     (*thing_o(obj)).o_dplus = 1;
     (*thing_o(obj)).o_flags |= ISKNOW;
     add_pack(obj, true as c_uchar);
-    cur_weapon = obj;
+    EQUIPMENT.weapon = obj;
 
     // A +1 bow
     let obj = new_item();

@@ -19,6 +19,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 use crate::chase::{cansee, see_monst};
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon};
 use crate::draw::enter_room;
+use crate::game::EQUIPMENT;
 use crate::misc::{choose_str, rnd_thing, spread};
 use crate::monsters::wanderer;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
@@ -60,7 +61,6 @@ const STARVETIME: c_int = 850;
 unsafe extern "C" {
     static mut player: CThing;
     static mut quiet: c_int;
-    static mut cur_ring: [*mut CThing; 2];
     static mut mlist: *mut CThing;
     static mut lvl_obj: *mut CThing;
     static mut hungry_state: c_int;
@@ -92,7 +92,7 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 /// ISRING(hand, ring_type): true when the player wears ring_type on hand.
 #[inline]
 unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
-    !cur_ring[hand].is_null() && (*thing_o(cur_ring[hand])).o_which == ring_type
+    !EQUIPMENT.rings[hand].is_null() && (*thing_o(EQUIPMENT.rings[hand])).o_which == ring_type
 }
 
 // ─── Module globals ───────────────────────────────────────────────────────────

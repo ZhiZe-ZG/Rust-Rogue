@@ -3,6 +3,7 @@ use crate::curses as cur;
 use crate::daemon::{fuse, lengthen};
 use crate::daemons::unconfuse;
 use crate::fight::set_mname;
+use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, msg_str};
 use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
@@ -118,7 +119,6 @@ unsafe extern "C" {
     static mut mlist: *mut CThing;
     static mut monsters: [CMonster; 26];
     static mut player: CThing;
-    static mut cur_ring: [*mut CThing; 2];
     static mut wizard: c_int;
 
     fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
@@ -152,8 +152,9 @@ unsafe fn player_has(flag: c_short) -> bool {
 
 #[inline]
 unsafe fn iswearing(which: c_int) -> bool {
-    (!cur_ring[LEFT].is_null() && (*thing_o(cur_ring[LEFT])).o_which == which)
-        || (!cur_ring[RIGHT].is_null() && (*thing_o(cur_ring[RIGHT])).o_which == which)
+    (!EQUIPMENT.rings[LEFT].is_null() && (*thing_o(EQUIPMENT.rings[LEFT])).o_which == which)
+        || (!EQUIPMENT.rings[RIGHT].is_null()
+            && (*thing_o(EQUIPMENT.rings[RIGHT])).o_which == which)
 }
 
 /// Picks an appropriate monster glyph for the current depth.
@@ -360,11 +361,15 @@ pub unsafe extern "C" fn save_throw(which: c_int, tp: *mut CThing) -> c_int {
 pub unsafe extern "C" fn save(which: c_int) -> c_int {
     let mut adj = which;
     if which == VS_MAGIC {
-        if !cur_ring[LEFT].is_null() && (*thing_o(cur_ring[LEFT])).o_which == R_PROTECT {
-            adj -= (*thing_o(cur_ring[LEFT])).o_arm;
+        if !EQUIPMENT.rings[LEFT].is_null()
+            && (*thing_o(EQUIPMENT.rings[LEFT])).o_which == R_PROTECT
+        {
+            adj -= (*thing_o(EQUIPMENT.rings[LEFT])).o_arm;
         }
-        if !cur_ring[RIGHT].is_null() && (*thing_o(cur_ring[RIGHT])).o_which == R_PROTECT {
-            adj -= (*thing_o(cur_ring[RIGHT])).o_arm;
+        if !EQUIPMENT.rings[RIGHT].is_null()
+            && (*thing_o(EQUIPMENT.rings[RIGHT])).o_which == R_PROTECT
+        {
+            adj -= (*thing_o(EQUIPMENT.rings[RIGHT])).o_arm;
         }
     }
     save_throw(adj, &raw mut player)

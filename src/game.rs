@@ -10,6 +10,8 @@
 //!   `static mut places: [CPlace; 32*80]` declaration binds to this symbol;
 //! * the **monster map** — a dedicated [`MONSTERS`] per-cell monster
 //!   occupancy array that backs the `p_monst` column of `places`.
+//! * the **current equipment** — non-owning pointers to the armor, rings, and
+//!   weapon selected from the player's pack.
 //!
 //! Cell display glyphs and flat flags are no longer cached in `places` (the
 //! `p_ch`/`p_flags` members were removed); every access goes through
@@ -20,6 +22,24 @@ use std::os::raw::c_int;
 
 use crate::level::{Level, LEVEL_HEIGHT, LEVEL_WIDTH};
 use crate::player::{CPlace, CThing};
+
+/// Non-owning pointers to the objects currently equipped by the player.
+pub struct Equipment {
+    pub armor: *mut CThing,
+    pub rings: [*mut CThing; 2],
+    pub weapon: *mut CThing,
+}
+
+impl Equipment {
+    const EMPTY: Self = Self {
+        armor: std::ptr::null_mut(),
+        rings: [std::ptr::null_mut(); 2],
+        weapon: std::ptr::null_mut(),
+    };
+}
+
+/// Current player equipment. Items remain owned by the player's pack.
+pub static mut EQUIPMENT: Equipment = Equipment::EMPTY;
 
 /// Index of a grid cell, matching the legacy C layout `&places[(x<<5)+y]`.
 #[inline]

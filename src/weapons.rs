@@ -1,6 +1,7 @@
 use crate::chase::cansee;
 use crate::curses as cur;
 use crate::fight::fight;
+use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, endmsg, msg_str, step_ok};
 use crate::misc::{is_current, show_floor};
 use crate::pack::{get_item, leave_pack};
@@ -114,7 +115,6 @@ unsafe extern "C" {
     static mut has_hit: c_uchar;
     static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
-    static mut cur_weapon: *mut CThing;
     static mut lvl_obj: *mut CThing;
     static mut weap_info: [CObjInfo; MAXWEAPONS + 1];
 
@@ -312,12 +312,12 @@ pub unsafe extern "C" fn num(n1: c_int, n2: c_int, obj_type: c_char) -> *mut c_c
 /// Equips a selected weapon after validating curses and item type constraints.
 #[no_mangle]
 pub unsafe extern "C" fn wield() {
-    let oweapon = cur_weapon;
-    if dropcheck(cur_weapon) == 0 {
-        cur_weapon = oweapon;
+    let oweapon = EQUIPMENT.weapon;
+    if dropcheck(EQUIPMENT.weapon) == 0 {
+        EQUIPMENT.weapon = oweapon;
         return;
     }
-    cur_weapon = oweapon;
+    EQUIPMENT.weapon = oweapon;
 
     let obj = get_item(c"wield".as_ptr(), WEAPON as c_int);
     if obj.is_null() {
@@ -336,7 +336,7 @@ pub unsafe extern "C" fn wield() {
     }
 
     let sp = inv_name(obj, true as c_uchar);
-    cur_weapon = obj;
+    EQUIPMENT.weapon = obj;
     if terse == 0 {
         addmsg_str("you are now ");
     }

@@ -3,6 +3,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::curses as cur;
 use crate::draw::look;
+use crate::game::EQUIPMENT;
 use crate::mdport::md_readchar;
 use crate::player::{CStats, CThing, CThingMonster};
 use crate::startup::quit;
@@ -17,7 +18,6 @@ static mut msgbuf: [c_char; 2 * MAXMSG + 1] = [0; 2 * MAXMSG + 1];
 static mut newpos: c_int = 0;
 
 unsafe extern "C" {
-    static mut cur_armor: *mut CThing;
     static mut hungry_state: c_int;
     static mut huh: [c_char; MAXSTR];
     static mut level: c_int;
@@ -194,8 +194,8 @@ pub unsafe extern "C" fn status() {
     let mut ox = 0;
     let pstats = &mut (*thing_t(&raw mut player)).t_stats;
     let max_hp = pstats.s_maxhp;
-    let mut temp = if !cur_armor.is_null() {
-        (*cur_armor).o.o_arm
+    let mut temp = if !EQUIPMENT.armor.is_null() {
+        (*EQUIPMENT.armor).o.o_arm
     } else {
         pstats.s_arm
     };

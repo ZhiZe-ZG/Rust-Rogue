@@ -13,6 +13,7 @@ use crate::chase::{diag_ok, see_monst};
 use crate::curses as cur;
 use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
+use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, endmsg, msg_str, readchar, status, wait_for};
 use crate::level::new_level;
 use crate::misc::{eat, get_dir};
@@ -255,9 +256,6 @@ unsafe extern "C" {
     static mut again: c_uchar;
     static mut amulet: c_uchar;
     static mut count: c_int;
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
-    static mut cur_weapon: *mut CThing;
     static mut curscr: *mut c_void;
     static mut delta: CCoord;
     static mut dir_ch: c_char;
@@ -367,7 +365,7 @@ unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
 
 #[inline]
 unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
-    !cur_ring[hand].is_null() && (*thing_o(cur_ring[hand])).o_which == ring_type
+    !EQUIPMENT.rings[hand].is_null() && (*thing_o(EQUIPMENT.rings[hand])).o_which == ring_type
 }
 
 // ─── command() ────────────────────────────────────────────────────────────────
@@ -381,8 +379,7 @@ unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
 /// last_comm / last_dir / last_pick (via reset_last/last_*), lvl_obj,
 /// terse, mlist (via moat), max_hit, mp/t_flags (via to_death),
 /// dir_ch, delta, q_comm, huh, release, amulet, level, seenstairs,
-/// tr_name, stat_msg, inpack, food_left, cur_weapon, cur_armor,
-/// cur_ring, inv_describe.
+/// tr_name, stat_msg, inpack, food_left, equipment, inv_describe.
 #[no_mangle]
 pub unsafe extern "C" fn command() {
     let mut ch: u8;
@@ -808,14 +805,14 @@ pub unsafe extern "C" fn command() {
                         }
                     }
                     b')' => {
-                        current(cur_weapon, c"wielding".as_ptr(), std::ptr::null_mut());
+                        current(EQUIPMENT.weapon, c"wielding".as_ptr(), std::ptr::null_mut());
                     }
                     b']' => {
-                        current(cur_armor, c"wearing".as_ptr(), std::ptr::null_mut());
+                        current(EQUIPMENT.armor, c"wearing".as_ptr(), std::ptr::null_mut());
                     }
                     b'=' => {
                         current(
-                            cur_ring[LEFT],
+                            EQUIPMENT.rings[LEFT],
                             c"wearing".as_ptr(),
                             if terse != 0 {
                                 c"(L)".as_ptr()
@@ -824,7 +821,7 @@ pub unsafe extern "C" fn command() {
                             },
                         );
                         current(
-                            cur_ring[RIGHT],
+                            EQUIPMENT.rings[RIGHT],
                             c"wearing".as_ptr(),
                             if terse != 0 {
                                 c"(R)".as_ptr()
@@ -896,7 +893,7 @@ pub unsafe extern "C" fn command() {
                                     (*thing_o(obj)).o_hplus = 1;
                                     (*thing_o(obj)).o_dplus = 1;
                                     add_pack(obj, true as c_uchar);
-                                    cur_weapon = obj;
+                                    EQUIPMENT.weapon = obj;
                                     /*
                                      * And his suit of armor
                                      */
@@ -907,7 +904,7 @@ pub unsafe extern "C" fn command() {
                                     (*thing_o(obj)).o_flags = (*thing_o(obj)).o_flags | ISKNOW;
                                     (*thing_o(obj)).o_count = 1;
                                     (*thing_o(obj)).o_group = 0;
-                                    cur_armor = obj;
+                                    EQUIPMENT.armor = obj;
                                     add_pack(obj, true as c_uchar);
                                 }
                                 b'*' => pr_list(),

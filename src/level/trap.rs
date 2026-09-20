@@ -11,6 +11,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar};
 use crate::armor::rust_armor;
 use crate::draw;
 use crate::fight::swing;
+use crate::game::EQUIPMENT;
 use crate::io::msg_str;
 use crate::machdep::flush_type;
 use crate::misc::{chg_str, spread};
@@ -74,9 +75,6 @@ unsafe extern "C" {
     static mut cNCOLORS: c_int;
     static mut rainbow: [*const c_char; 27];
     static mut player: CThing;
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
-
 }
 
 #[inline]
@@ -96,7 +94,7 @@ unsafe fn hero_pos() -> CCoord {
 
 #[inline]
 unsafe fn ring_is(which: usize, ring_type: c_int) -> bool {
-    let ring = cur_ring[which];
+    let ring = EQUIPMENT.rings[which];
     !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
@@ -223,7 +221,7 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
         }
         Trap::Rust => {
             msg_str("a gush of water hits you on the head");
-            rust_armor(cur_armor);
+            rust_armor(EQUIPMENT.armor);
         }
     }
 

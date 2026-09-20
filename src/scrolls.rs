@@ -5,6 +5,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::draw::{chat_at as draw_chat, look, map_cell_reveal, winat as draw_winat};
 use crate::game;
+use crate::game::EQUIPMENT;
 use crate::init::pick_color;
 use crate::io::{addmsg_str, endmsg, msg_str, show_win, status, step_ok};
 use crate::misc::{aggravate, call_it, choose_str, find_obj};
@@ -120,9 +121,6 @@ unsafe extern "C" {
     static mut no_command: c_int;
     static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
-    static mut cur_weapon: *mut CThing;
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
     static mut lvl_obj: *mut CThing;
     static mut hw: *mut c_void;
     static mut scr_info: [CObjInfo; MAXSCROLLS];
@@ -196,8 +194,8 @@ pub unsafe extern "C" fn read_scroll() {
         return;
     }
 
-    if obj == cur_weapon {
-        cur_weapon = std::ptr::null_mut();
+    if obj == EQUIPMENT.weapon {
+        EQUIPMENT.weapon = std::ptr::null_mut();
     }
 
     let discardit = (*thing_o(obj)).o_count == 1;
@@ -214,9 +212,9 @@ pub unsafe extern "C" fn read_scroll() {
             ));
         }
         ScrollType::Armor => {
-            if !cur_armor.is_null() {
-                (*thing_o(cur_armor)).o_arm -= 1;
-                (*thing_o(cur_armor)).o_flags &= !ISCURSED;
+            if !EQUIPMENT.armor.is_null() {
+                (*thing_o(EQUIPMENT.armor)).o_arm -= 1;
+                (*thing_o(EQUIPMENT.armor)).o_flags &= !ISCURSED;
                 msg_str(&format!(
                     "your armor glows {} for a moment",
                     CStr::from_ptr(pick_color(c"silver".as_ptr().cast_mut())).to_string_lossy()
@@ -361,19 +359,21 @@ pub unsafe extern "C" fn read_scroll() {
             }
         }
         ScrollType::Enchant => {
-            if cur_weapon.is_null() || (*thing_o(cur_weapon)).o_type != WEAPON {
+            if EQUIPMENT.weapon.is_null() || (*thing_o(EQUIPMENT.weapon)).o_type != WEAPON {
                 msg_str("you feel a strange sense of loss");
             } else {
-                (*thing_o(cur_weapon)).o_flags &= !ISCURSED;
+                (*thing_o(EQUIPMENT.weapon)).o_flags &= !ISCURSED;
                 if rnd(2) == 0 {
-                    (*thing_o(cur_weapon)).o_hplus += 1;
+                    (*thing_o(EQUIPMENT.weapon)).o_hplus += 1;
                 } else {
-                    (*thing_o(cur_weapon)).o_dplus += 1;
+                    (*thing_o(EQUIPMENT.weapon)).o_dplus += 1;
                 }
                 msg_str(&format!(
                     "your {} glows {} for a moment",
-                    CStr::from_ptr(weap_info[(*thing_o(cur_weapon)).o_which as usize].oi_name)
-                        .to_string_lossy(),
+                    CStr::from_ptr(
+                        weap_info[(*thing_o(EQUIPMENT.weapon)).o_which as usize].oi_name,
+                    )
+                    .to_string_lossy(),
                     CStr::from_ptr(pick_color(c"blue".as_ptr().cast_mut())).to_string_lossy()
                 ));
             }
@@ -382,10 +382,10 @@ pub unsafe extern "C" fn read_scroll() {
             msg_str("you hear maniacal laughter in the distance");
         }
         ScrollType::RemoveCurse => {
-            uncurse(cur_armor);
-            uncurse(cur_weapon);
-            uncurse(cur_ring[LEFT]);
-            uncurse(cur_ring[RIGHT]);
+            uncurse(EQUIPMENT.armor);
+            uncurse(EQUIPMENT.weapon);
+            uncurse(EQUIPMENT.rings[LEFT]);
+            uncurse(EQUIPMENT.rings[RIGHT]);
             msg_str(
                 &CStr::from_ptr(choose_str(
                     c"you feel in touch with the Universal Onenes".as_ptr(),
@@ -399,8 +399,8 @@ pub unsafe extern "C" fn read_scroll() {
             msg_str("you hear a high pitched humming noise");
         }
         ScrollType::Protect => {
-            if !cur_armor.is_null() {
-                (*thing_o(cur_armor)).o_flags |= ISPROT;
+            if !EQUIPMENT.armor.is_null() {
+                (*thing_o(EQUIPMENT.armor)).o_flags |= ISPROT;
                 msg_str(&format!(
                     "your armor is covered by a shimmering {} shield",
                     CStr::from_ptr(pick_color(c"gold".as_ptr().cast_mut())).to_string_lossy()

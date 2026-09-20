@@ -13,6 +13,7 @@ use crate::rnd::rnd;
 
 use crate::armor::rust_armor;
 use crate::chase::{runto, see_monst};
+use crate::game::EQUIPMENT;
 use crate::init::pick_color;
 use crate::io::{addmsg_str, endmsg, msg_str, status};
 use crate::misc::{check_level, chg_str, choose_str, spread};
@@ -122,9 +123,6 @@ unsafe extern "C" {
     static mut player: CThing;
     static mut mlist: *mut CThing;
     static mut monsters: [CMonster; 26];
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
-    static mut cur_weapon: *mut CThing;
     static mut weap_info: [CObjInfo; 10]; // MAXWEAPONS + 1
     static mut e_levels: [c_int; 21];
 
@@ -200,7 +198,7 @@ unsafe fn chat(y: c_int, x: c_int) -> c_char {
 
 #[inline]
 unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
-    !cur_ring[hand].is_null() && (*thing_o(cur_ring[hand])).o_which == ring_type
+    !EQUIPMENT.rings[hand].is_null() && (*thing_o(EQUIPMENT.rings[hand])).o_which == ring_type
 }
 
 #[inline]
@@ -355,7 +353,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
             let mtype = (*thing_t(mp)).t_type;
             if mtype == b'A' as c_char {
                 // Aquator: corrode armor
-                rust_armor(cur_armor);
+                rust_armor(EQUIPMENT.armor);
             } else if mtype == b'I' as c_char {
                 // Ice monster: freeze player
                 (*thing_t(&raw mut player)).t_flags &= !ISRUN;
@@ -472,10 +470,10 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 let mut obj = (*thing_t(&raw mut player)).t_pack;
                 while !obj.is_null() {
                     let obj_next = (*thing_t(obj)).l_next;
-                    if obj != cur_armor
-                        && obj != cur_weapon
-                        && obj != cur_ring[LEFT]
-                        && obj != cur_ring[RIGHT]
+                    if obj != EQUIPMENT.armor
+                        && obj != EQUIPMENT.weapon
+                        && obj != EQUIPMENT.rings[LEFT]
+                        && obj != EQUIPMENT.rings[RIGHT]
                         && is_magic_item(obj) != 0
                     {
                         nobj += 1;
@@ -601,30 +599,30 @@ pub unsafe extern "C" fn roll_em(
     } else {
         let mut hp = (*thing_o(weap)).o_hplus;
         let mut dp = (*thing_o(weap)).o_dplus;
-        if weap == cur_weapon {
+        if weap == EQUIPMENT.weapon {
             if isring(LEFT, R_ADDDAM) {
-                dp += (*thing_o(cur_ring[LEFT])).o_arm;
+                dp += (*thing_o(EQUIPMENT.rings[LEFT])).o_arm;
             } else if isring(LEFT, R_ADDHIT) {
-                hp += (*thing_o(cur_ring[LEFT])).o_arm;
+                hp += (*thing_o(EQUIPMENT.rings[LEFT])).o_arm;
             }
             if isring(RIGHT, R_ADDDAM) {
-                dp += (*thing_o(cur_ring[RIGHT])).o_arm;
+                dp += (*thing_o(EQUIPMENT.rings[RIGHT])).o_arm;
             } else if isring(RIGHT, R_ADDHIT) {
-                hp += (*thing_o(cur_ring[RIGHT])).o_arm;
+                hp += (*thing_o(EQUIPMENT.rings[RIGHT])).o_arm;
             }
         }
         if hurl != 0 {
             if ((*thing_o(weap)).o_flags & ISMISL) != 0
-                && !cur_weapon.is_null()
-                && (*thing_o(cur_weapon)).o_which == (*thing_o(weap)).o_launch
+                && !EQUIPMENT.weapon.is_null()
+                && (*thing_o(EQUIPMENT.weapon)).o_which == (*thing_o(weap)).o_launch
             {
                 let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr();
                 return roll_em_inner(
                     thatt,
                     thdef,
                     hurldmg_ptr,
-                    hp + (*thing_o(cur_weapon)).o_hplus,
-                    dp + (*thing_o(cur_weapon)).o_dplus,
+                    hp + (*thing_o(EQUIPMENT.weapon)).o_hplus,
+                    dp + (*thing_o(EQUIPMENT.weapon)).o_dplus,
                 );
             } else if (*thing_o(weap)).o_launch < 0 {
                 let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr();
@@ -655,14 +653,14 @@ unsafe fn roll_em_inner(
     let player_is_def = thdef as *const u8 == (&raw const player) as *const u8;
     let mut def_arm = def_arm_base;
     if player_is_def {
-        if !cur_armor.is_null() {
-            def_arm = (*thing_o(cur_armor)).o_arm;
+        if !EQUIPMENT.armor.is_null() {
+            def_arm = (*thing_o(EQUIPMENT.armor)).o_arm;
         }
         if isring(LEFT, R_PROTECT) {
-            def_arm -= (*thing_o(cur_ring[LEFT])).o_arm;
+            def_arm -= (*thing_o(EQUIPMENT.rings[LEFT])).o_arm;
         }
         if isring(RIGHT, R_PROTECT) {
-            def_arm -= (*thing_o(cur_ring[RIGHT])).o_arm;
+            def_arm -= (*thing_o(EQUIPMENT.rings[RIGHT])).o_arm;
         }
     }
 

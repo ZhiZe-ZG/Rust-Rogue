@@ -36,6 +36,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 use crate::chase::runners;
 use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
+use crate::game::EQUIPMENT;
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::thing_list::{allocated_count, new_item};
 use crate::things::CObjInfo;
@@ -230,9 +231,6 @@ unsafe extern "C" {
 
     // player / lists
     static mut player: CThing;
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
-    static mut cur_weapon: *mut CThing;
     static mut l_last_pick: *mut CThing;
     static mut last_pick: *mut CThing;
     static mut lvl_obj: *mut CThing;
@@ -2253,7 +2251,7 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
 /// n_objs, ntraps, hungry_state, inpack, inv_type, level, max_level,
 /// mpos, no_food, a_class, count, food_left, lastscore, no_command,
 /// no_move, purse, quiet, vf_hit, dnum, seed, e_levels, delta, oldpos,
-/// stairs, player, cur_armor, cur_ring, cur_weapon, l_last_pick,
+/// stairs, player, equipment slots, l_last_pick,
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
 /// scr_info, weap_info, ws_info, d_list, total, between, nh, group,
@@ -2349,10 +2347,18 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_coord(savef, stairs);
 
     let _ = rs_write_thing(savef, &raw mut player);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, cur_armor);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, cur_ring[0]);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, cur_ring[1]);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, cur_weapon);
+    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, EQUIPMENT.armor);
+    let _ = rs_write_object_reference(
+        savef,
+        (*thing_t(&raw mut player)).t_pack,
+        EQUIPMENT.rings[0],
+    );
+    let _ = rs_write_object_reference(
+        savef,
+        (*thing_t(&raw mut player)).t_pack,
+        EQUIPMENT.rings[1],
+    );
+    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, EQUIPMENT.weapon);
     let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, l_last_pick);
     let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, last_pick);
 
@@ -2440,7 +2446,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 /// n_objs, ntraps, hungry_state, inpack, inv_type, level, max_level,
 /// mpos, no_food, a_class, count, food_left, lastscore, no_command,
 /// no_move, purse, quiet, vf_hit, dnum, seed, e_levels, delta, oldpos,
-/// stairs, player, cur_armor, cur_ring, cur_weapon, l_last_pick,
+/// stairs, player, equipment slots, l_last_pick,
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
 /// scr_info, weap_info, ws_info, d_list, total, between, nh, group,
@@ -2534,18 +2540,26 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_coord(inf, &mut stairs);
 
     let _ = rs_read_thing(inf, &raw mut player);
-    let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut cur_armor);
     let _ = rs_read_object_reference(
         inf,
         (*thing_t(&raw mut player)).t_pack,
-        &raw mut cur_ring[0],
+        &raw mut EQUIPMENT.armor,
     );
     let _ = rs_read_object_reference(
         inf,
         (*thing_t(&raw mut player)).t_pack,
-        &raw mut cur_ring[1],
+        &raw mut EQUIPMENT.rings[0],
     );
-    let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut cur_weapon);
+    let _ = rs_read_object_reference(
+        inf,
+        (*thing_t(&raw mut player)).t_pack,
+        &raw mut EQUIPMENT.rings[1],
+    );
+    let _ = rs_read_object_reference(
+        inf,
+        (*thing_t(&raw mut player)).t_pack,
+        &raw mut EQUIPMENT.weapon,
+    );
     let _ = rs_read_object_reference(
         inf,
         (*thing_t(&raw mut player)).t_pack,
