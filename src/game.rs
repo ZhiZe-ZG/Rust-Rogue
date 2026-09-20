@@ -79,8 +79,21 @@ pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
 /// Reset the places grid's monster pointers and the monster map for a fresh
 /// level. (The `Level` reset — tiles/flags — is handled by `Level::reset`.)
 pub unsafe fn clear_level() {
-    places.iter_mut().for_each(|cell| cell.p_monst = std::ptr::null_mut());
-    MONSTERS.fill(std::ptr::null_mut());
+    let place_cells = std::slice::from_raw_parts_mut(
+        (&raw mut places).cast::<CPlace>(),
+        LEVEL_HEIGHT * LEVEL_WIDTH,
+    );
+    for cell in place_cells {
+        cell.p_monst = std::ptr::null_mut();
+    }
+
+    let monsters = std::slice::from_raw_parts_mut(
+        (&raw mut MONSTERS).cast::<*mut CThing>(),
+        LEVEL_HEIGHT * LEVEL_WIDTH,
+    );
+    for monster in monsters {
+        *monster = std::ptr::null_mut();
+    }
 }
 
 /// Process-wide singleton for the live dungeon level.
@@ -93,10 +106,11 @@ pub static mut CURRENT_LEVEL: Option<Level> = None;
 /// The live level owner. Initializes the singleton on first use.
 #[inline]
 pub unsafe fn current_level_mut() -> &'static mut Level {
-    if CURRENT_LEVEL.is_none() {
-        CURRENT_LEVEL = Some(Level::new());
+    let current_level = &raw mut CURRENT_LEVEL;
+    if (*current_level).is_none() {
+        (*current_level) = Some(Level::new());
     }
-    CURRENT_LEVEL.as_mut().unwrap()
+    (*current_level).as_mut().unwrap()
 }
 
 /// Immutable access to the live level.
