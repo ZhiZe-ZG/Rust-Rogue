@@ -9,8 +9,6 @@ use crate::io::msg_str;
 use crate::machdep::flush_type;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 const POTION: c_int = b'!' as c_int;
 const SCROLL: c_int = b'?' as c_int;
@@ -118,7 +116,7 @@ unsafe extern "C" {
     fn isdigit(ch: c_int) -> c_int;
     fn free(ptr: *mut std::ffi::c_void);
     fn floor_at() -> c_char;
-    fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_uchar, monst: c_uchar);
+    fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: bool) -> bool;
     fn roomin(cp: *mut CCoord) -> *mut CRoom;
     fn leave_room(cp: *mut CCoord);
     fn enter_room(cp: *mut CCoord);
@@ -170,7 +168,7 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
         _ => {}
     }
 
-    msg_str(&CStr::from_ptr(inv_name(obj, FALSE)).to_string_lossy());
+    msg_str(&CStr::from_ptr(inv_name(obj, false as c_uchar)).to_string_lossy());
 }
 
 #[no_mangle]
@@ -181,7 +179,7 @@ pub unsafe extern "C" fn set_know(obj: *mut CThing, info: *mut CObjInfo) {
 
     let idx = (*thing_o(obj)).o_which as usize;
     let item = &mut *info.add(idx);
-    item.oi_know = TRUE;
+    item.oi_know = true as c_uchar;
     (*thing_o(obj)).o_flags |= ISKNOW;
     let guess = &mut item.oi_guess;
     if !guess.is_null() {
@@ -279,7 +277,7 @@ pub unsafe extern "C" fn create_obj() {
         get_num(&mut amount, stdscr);
     }
 
-    add_pack(obj, FALSE);
+    add_pack(obj, false as c_uchar);
 }
 
 #[no_mangle]
@@ -288,14 +286,14 @@ pub unsafe extern "C" fn teleport() {
     let mut hero = hero();
 
     cur::mvaddch(hero.y, hero.x, floor_at() as c_uint);
-    find_floor(ptr::null_mut(), &mut c, FALSE, TRUE);
+    find_floor(ptr::null_mut(), &mut c, 0, true);
     if roomin(&mut c) != proom() {
         leave_room(&mut hero);
         hero = c;
         enter_room(&mut hero);
     } else {
         hero = c;
-        look(TRUE);
+        look(true as c_uchar);
     }
     (*thing_t(&raw mut player)).t_pos = hero;
     cur::mvaddch(hero.y, hero.x, b'@' as c_uint);
@@ -308,7 +306,7 @@ pub unsafe extern "C" fn teleport() {
     }
     no_move = 0;
     count = 0;
-    running = FALSE;
+    running = false as c_uchar;
     flush_type();
 }
 
@@ -382,11 +380,11 @@ mod tests {
                 oi_prob: 0,
                 oi_worth: 0,
                 oi_guess: ptr::null_mut(),
-                oi_know: FALSE,
+                oi_know: false as c_uchar,
             }];
 
             set_know(&mut obj, info.as_mut_ptr());
-            assert_eq!(info[0].oi_know, TRUE);
+            assert_eq!(info[0].oi_know, true as c_uchar);
             assert!(((*thing_o(&mut obj)).o_flags & ISKNOW) != 0);
         }
     }

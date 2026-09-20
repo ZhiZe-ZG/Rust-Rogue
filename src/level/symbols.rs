@@ -47,13 +47,11 @@ pub(crate) const MAXTRAPS: c_int = 10;
 pub(crate) const NTRAPS: c_int = 8;
 
 // -- C booleans (flow through `c_uchar`) --
-pub(crate) const FALSE: c_uchar = 0;
-pub(crate) const TRUE: c_uchar = 1;
 
 unsafe extern "C" {
     pub(crate) static mut level: c_int;
     pub(crate) static mut max_level: c_int;
-    pub(crate) static mut amulet: c_uchar;
+    pub(crate) static mut amulet: bool;
     pub(crate) static mut rooms: [CRoom; MAXROOMS];
     pub(crate) static mut passages: [CRoom; MAX_PASSAGES];
     pub(crate) static mut lvl_obj: *mut CThing;
@@ -62,19 +60,19 @@ unsafe extern "C" {
     pub(crate) static mut no_food: c_int;
     pub(crate) static mut ntraps: c_int;
     pub(crate) static mut stairs: CCoord;
-    pub(crate) static mut seenstairs: c_uchar;
+    pub(crate) static mut seenstairs: bool;
 
     pub(crate) fn wake_monster(y: c_int, x: c_int);
     pub(crate) fn step_ok(ch: c_int) -> c_int;
     pub(crate) fn new_thing() -> *mut CThing;
     pub(crate) fn new_item() -> *mut CThing;
     pub(crate) fn _attach(list: *mut *mut CThing, item: *mut CThing);
-    pub(crate) fn randmonster(wander: c_uchar) -> c_char;
+    pub(crate) fn randmonster(wander: bool) -> c_char;
     pub(crate) fn new_monster(tp: *mut CThing, kind: c_char, cp: *mut CCoord);
     pub(crate) fn give_pack(tp: *mut CThing);
 
     pub(crate) fn enter_room(cp: *mut CCoord);
-    pub(crate) fn turn_see(turn_off: c_uchar) -> c_uchar;
+    pub(crate) fn turn_see(turn_off: bool) -> bool;
     pub(crate) fn _free_list(ptr: *mut *mut CThing);
     pub(crate) fn roomin(cp: *mut CCoord) -> *mut CRoom;
     pub(crate) fn visuals();

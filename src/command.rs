@@ -18,8 +18,6 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 const MAXSTR: usize = 1024;
 
@@ -149,7 +147,7 @@ pub struct CObjInfo {
 
 static mut COUNTCH: c_char = 0;
 static mut DIRECTION: c_char = 0;
-static mut NEWCOUNT: c_uchar = FALSE;
+static mut NEWCOUNT: c_uchar = false as c_uchar;
 
 /// Identify table (static in the C `identify()`).  Uses `&'static str` so the
 /// table can live in an immutable `static` (raw pointers are not `Sync`).
@@ -378,10 +376,10 @@ pub unsafe extern "C" fn command() {
 
     while ntimes > 0 {
         ntimes -= 1;
-        again = FALSE;
+        again = false as c_uchar;
         if has_hit != 0 {
             endmsg();
-            has_hit = FALSE;
+            has_hit = false as c_uchar;
         }
 
         /*
@@ -392,9 +390,9 @@ pub unsafe extern "C" fn command() {
             std::process::exit(1);
         }
 
-        look(TRUE);
+        look(true as c_uchar);
         if running == 0 {
-            door_stop = FALSE;
+            door_stop = false as c_uchar;
         }
         status();
         lastscore = purse;
@@ -404,7 +402,7 @@ pub unsafe extern "C" fn command() {
             cur::refresh(); // Draw screen
         }
         take = 0;
-        after = TRUE;
+        after = true as c_uchar;
 
         /*
          * Read command or continue run
@@ -420,7 +418,7 @@ pub unsafe extern "C" fn command() {
                 ch = COUNTCH as u8;
             } else {
                 ch = readchar() as u8;
-                move_on = FALSE;
+                move_on = false as c_uchar;
                 if mpos != 0 {
                     // Erase message if it's there
                     msg_str("");
@@ -441,10 +439,10 @@ pub unsafe extern "C" fn command() {
             /*
              * check for prefixes
              */
-            NEWCOUNT = FALSE;
+            NEWCOUNT = false as c_uchar;
             if ch.is_ascii_digit() {
                 count = 0;
-                NEWCOUNT = TRUE;
+                NEWCOUNT = true as c_uchar;
                 while ch.is_ascii_digit() {
                     count = count * 10 + (ch - b'0') as c_int;
                     if count > 255 {
@@ -578,8 +576,8 @@ pub unsafe extern "C" fn command() {
                             || v == ctrl(b'N') =>
                     {
                         if !player_has(ISBLIND) {
-                            door_stop = TRUE;
-                            firstmove = TRUE;
+                            door_stop = true as c_uchar;
+                            firstmove = true as c_uchar;
                         }
                         if count != 0 && NEWCOUNT == 0 {
                             ch = DIRECTION as u8;
@@ -592,10 +590,10 @@ pub unsafe extern "C" fn command() {
                     }
                     b'f' | b'F' => {
                         if ch == b'F' {
-                            kamikaze = TRUE;
+                            kamikaze = true as c_uchar;
                         }
                         if get_dir() == 0 {
-                            after = FALSE;
+                            after = false as c_uchar;
                         } else {
                             let hero = hero_pos();
                             delta.y += hero.y;
@@ -606,9 +604,9 @@ pub unsafe extern "C" fn command() {
                                     addmsg_str("I see ");
                                 }
                                 msg_str("no monster there");
-                                after = FALSE;
+                                after = false as c_uchar;
                             } else if diag_ok(hero_ptr(), &raw mut delta) != 0 {
-                                to_death = TRUE;
+                                to_death = true as c_uchar;
                                 max_hit = 0;
                                 (*thing_t(mp)).t_flags =
                                     ((*thing_t(mp)).t_flags as c_short | ISTARGET as c_short)
@@ -621,7 +619,7 @@ pub unsafe extern "C" fn command() {
                     }
                     b't' => {
                         if get_dir() == 0 {
-                            after = FALSE;
+                            after = false as c_uchar;
                         } else {
                             missile(delta.y, delta.x);
                         }
@@ -629,26 +627,26 @@ pub unsafe extern "C" fn command() {
                     b'a' => {
                         if last_comm == 0 {
                             msg_str("you haven't typed a command yet");
-                            after = FALSE;
+                            after = false as c_uchar;
                         } else {
                             ch = last_comm as u8;
-                            again = TRUE;
+                            again = true as c_uchar;
                             continue 'dispatch;
                         }
                     }
                     b'q' => quaff(),
                     b'Q' => {
-                        after = FALSE;
-                        q_comm = TRUE;
+                        after = false as c_uchar;
+                        q_comm = true as c_uchar;
                         quit(0);
-                        q_comm = FALSE;
+                        q_comm = false as c_uchar;
                     }
                     b'i' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         inventory((*thing_t(&raw mut player)).t_pack, 0);
                     }
                     b'I' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         picky_inven();
                     }
                     b'd' => drop(),
@@ -661,26 +659,26 @@ pub unsafe extern "C" fn command() {
                     b'R' => ring_off(),
                     b'o' => {
                         option();
-                        after = FALSE;
+                        after = false as c_uchar;
                     }
                     b'c' => {
                         call();
-                        after = FALSE;
+                        after = false as c_uchar;
                     }
                     b'>' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         d_level();
                     }
                     b'<' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         u_level();
                     }
                     b'?' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         help();
                     }
                     b'/' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         identify();
                     }
                     b's' => search(),
@@ -688,41 +686,41 @@ pub unsafe extern "C" fn command() {
                         if get_dir() != 0 {
                             do_zap();
                         } else {
-                            after = FALSE;
+                            after = false as c_uchar;
                         }
                     }
                     b'D' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         discovered();
                     }
                     CTRL_P => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         msg_str(&CStr::from_ptr(huh.as_ptr()).to_string_lossy());
                     }
                     CTRL_R => {
-                        after = FALSE;
-                        cur::clearok(curscr, TRUE);
+                        after = false as c_uchar;
+                        cur::clearok(curscr, true as c_uchar);
                         cur::wrefresh(curscr);
                     }
                     b'v' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         msg_str(&format!(
                             "version {}. (mctesq was here)",
                             CStr::from_ptr(release).to_string_lossy()
                         ));
                     }
                     b'S' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         save_game();
                     }
                     b'.' => {
                         // Rest command
                     }
                     b' ' => {
-                        after = FALSE; // "Legal" illegal command
+                        after = false as c_uchar; // "Legal" illegal command
                     }
                     b'^' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         if get_dir() != 0 {
                             let hero = hero_pos();
                             delta.y += hero.y;
@@ -744,16 +742,16 @@ pub unsafe extern "C" fn command() {
                     }
                     b'+' => {
                         // Wizard toggle (was the `when '+'` arm under `#ifdef MASTER`)
-                        after = FALSE;
+                        after = false as c_uchar;
                         if MASTER {
                             if wizard != 0 {
                                 wizard = 0;
-                                turn_see(TRUE);
+                                turn_see(true as c_uchar);
                                 msg_str("not wizard any more");
                             } else {
                                 wizard = 1;
                                 noscore = 1;
-                                turn_see(FALSE);
+                                turn_see(false as c_uchar);
                                 msg_str(&format!(
                                     "you are suddenly as smart as Ken Arnold in dungeon #{}",
                                     dnum
@@ -762,15 +760,15 @@ pub unsafe extern "C" fn command() {
                         }
                     }
                     v if v == ESCAPE as u8 => {
-                        door_stop = FALSE;
+                        door_stop = false as c_uchar;
                         count = 0;
-                        after = FALSE;
-                        again = FALSE;
+                        after = false as c_uchar;
+                        again = false as c_uchar;
                     }
                     b'm' => {
-                        move_on = TRUE;
+                        move_on = true as c_uchar;
                         if get_dir() == 0 {
-                            after = FALSE;
+                            after = false as c_uchar;
                         } else {
                             ch = dir_ch as u8;
                             COUNTCH = dir_ch;
@@ -804,13 +802,13 @@ pub unsafe extern "C" fn command() {
                         );
                     }
                     b'@' => {
-                        stat_msg = TRUE;
+                        stat_msg = true as c_uchar;
                         status();
-                        stat_msg = FALSE;
-                        after = FALSE;
+                        stat_msg = false as c_uchar;
+                        after = false as c_uchar;
                     }
                     _ => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         if MASTER && wizard != 0 {
                             match ch {
                                 b'|' => {
@@ -824,7 +822,7 @@ pub unsafe extern "C" fn command() {
                                 CTRL_G => {
                                     let _ = inventory(lvl_obj, 0);
                                 }
-                                CTRL_W => whatis(FALSE, 0),
+                                CTRL_W => whatis(false as c_uchar, 0),
                                 CTRL_D => {
                                     level += 1;
                                     new_level();
@@ -840,7 +838,7 @@ pub unsafe extern "C" fn command() {
                                 }
                                 CTRL_C => add_pass(),
                                 CTRL_X => {
-                                    turn_see(if player_has(SEEMONST) { TRUE } else { FALSE });
+                                    turn_see(if player_has(SEEMONST) { true as c_uchar } else { false as c_uchar });
                                 }
                                 CTRL_TILDE => {
                                     let item = get_item(c"charge".as_ptr(), STICK as c_int);
@@ -861,7 +859,7 @@ pub unsafe extern "C" fn command() {
                                     init_weapon(obj, TWOSWORD);
                                     (*thing_o(obj)).o_hplus = 1;
                                     (*thing_o(obj)).o_dplus = 1;
-                                    add_pack(obj, TRUE);
+                                    add_pack(obj, true as c_uchar);
                                     cur_weapon = obj;
                                     /*
                                      * And his suit of armor
@@ -874,7 +872,7 @@ pub unsafe extern "C" fn command() {
                                     (*thing_o(obj)).o_count = 1;
                                     (*thing_o(obj)).o_group = 0;
                                     cur_armor = obj;
-                                    add_pack(obj, TRUE);
+                                    add_pack(obj, true as c_uchar);
                                 }
                                 b'*' => pr_list(),
                                 _ => illcom(ch as c_int),
@@ -895,7 +893,7 @@ pub unsafe extern "C" fn command() {
             pick_up(take);
         }
         if running == 0 {
-            door_stop = FALSE;
+            door_stop = false as c_uchar;
         }
         if after == 0 {
             ntimes += 1;
@@ -924,13 +922,13 @@ pub unsafe extern "C" fn command() {
 /// Uses globals: save_msg, count.
 #[no_mangle]
 pub unsafe extern "C" fn illcom(ch: c_int) {
-    save_msg = FALSE;
+    save_msg = false as c_uchar;
     count = 0;
     msg_str(&format!(
         "illegal command '{}'",
         CStr::from_ptr(cur::unctrl(ch)).to_string_lossy()
     ));
-    save_msg = TRUE;
+    save_msg = true as c_uchar;
 }
 
 // ─── search() ─────────────────────────────────────────────────────────────────
@@ -971,8 +969,8 @@ pub unsafe extern "C" fn search() {
                             crate::draw::reveal_secret_at(y, x);
                             msg_str("a secret door");
                             found = true;
-                            count = FALSE as c_int;
-                            running = FALSE;
+                            count = false as c_uchar as c_int;
+                            running = false as c_uchar;
                         }
                     }
                     b'.' => {
@@ -989,16 +987,16 @@ pub unsafe extern "C" fn search() {
                                 ).to_string_lossy());
                             }
                             found = true;
-                            count = FALSE as c_int;
-                            running = FALSE;
+                            count = false as c_uchar as c_int;
+                            running = false as c_uchar;
                         }
                     }
                     b' ' => {
                         if rnd(3 + probinc) == 0 {
                             crate::draw::reveal_secret_at(y, x);
                             found = true;
-                            count = FALSE as c_int;
-                            running = FALSE;
+                            count = false as c_uchar as c_int;
+                            running = false as c_uchar;
                         }
                     }
                     _ => {}
@@ -1010,7 +1008,7 @@ pub unsafe extern "C" fn search() {
     }
 
     if found {
-        look(FALSE);
+        look(false as c_uchar);
     }
 }
 
@@ -1039,13 +1037,13 @@ pub unsafe extern "C" fn help() {
         let mut i = 0;
         while i < helpstr.len() && !helpstr[i].h_desc.is_null() {
             if helpstr[i].h_ch == helpch {
-                lower_msg = TRUE;
+                lower_msg = true as c_uchar;
                 msg_str(&format!(
                     "{}{}",
                     CStr::from_ptr(cur::unctrl(helpstr[i].h_ch as c_int)).to_string_lossy(),
                     CStr::from_ptr(helpstr[i].h_desc).to_string_lossy()
                 ));
-                lower_msg = FALSE;
+                lower_msg = false as c_uchar;
                 return;
             }
             i += 1;
@@ -1095,7 +1093,7 @@ pub unsafe extern "C" fn help() {
     cur::waddstr(hw, c"--Press space to continue--".as_ptr());
     cur::wrefresh(hw);
     wait_for(b' ' as c_int);
-    cur::clearok(stdscr, TRUE);
+    cur::clearok(stdscr, true as c_uchar);
     msg_str("");
     cur::touchwin(stdscr);
     cur::wrefresh(stdscr);
@@ -1154,7 +1152,7 @@ pub unsafe extern "C" fn d_level() {
         msg_str("I see no way down");
     } else {
         level += 1;
-        seenstairs = FALSE;
+        seenstairs = false as c_uchar;
         new_level();
     }
 }
@@ -1193,10 +1191,10 @@ pub unsafe extern "C" fn u_level() {
 #[no_mangle]
 pub unsafe extern "C" fn levit_check() -> c_uchar {
     if !player_has(ISLEVIT) {
-        return FALSE;
+        return false as c_uchar;
     }
     msg_str("You can't.  You're floating off the ground!");
-    TRUE
+    true as c_uchar
 }
 
 // ─── call() ───────────────────────────────────────────────────────────────────
@@ -1314,18 +1312,18 @@ pub unsafe extern "C" fn call() {
 /// Uses globals: after, terse, inv_describe.
 #[no_mangle]
 pub unsafe extern "C" fn current(cur: *mut CThing, how: *const c_char, where_: *const c_char) {
-    after = FALSE;
+    after = false as c_uchar;
     if !cur.is_null() {
         if terse == 0 {
             addmsg_str(&format!("you are {} (", CStr::from_ptr(how).to_string_lossy()));
         }
-        inv_describe = FALSE;
+        inv_describe = false as c_uchar;
         addmsg_str(&format!(
             "{}) {}",
             (*thing_o(cur)).o_packch as u8 as char,
-            CStr::from_ptr(inv_name(cur, TRUE)).to_string_lossy()
+            CStr::from_ptr(inv_name(cur, true as c_uchar)).to_string_lossy()
         ));
-        inv_describe = TRUE;
+        inv_describe = true as c_uchar;
         if !where_.is_null() {
             addmsg_str(&format!(" {}", CStr::from_ptr(where_).to_string_lossy()));
         }
@@ -1355,7 +1353,7 @@ pub unsafe extern "C" fn pr_list() {
         msg_str(&format!(
             "{}) {}",
             (*thing_o(obj)).o_type as u8 as char,
-            CStr::from_ptr(inv_name(obj, FALSE)).to_string_lossy()
+            CStr::from_ptr(inv_name(obj, false as c_uchar)).to_string_lossy()
         ));
         obj = (*thing_t(obj)).l_next;
     }

@@ -9,8 +9,6 @@ const ISPROT: c_int = 0o000040;
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
 const R_SUSTARM: c_int = 13;
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 unsafe extern "C" {
     static mut terse: c_uchar;
@@ -53,7 +51,7 @@ pub unsafe extern "C" fn wear() {
             addmsg_str(".  You'll have to take it off first");
         }
         endmsg();
-        after = FALSE;
+        after = false as c_uchar;
         return;
     }
 
@@ -64,7 +62,7 @@ pub unsafe extern "C" fn wear() {
 
     waste_time();
     (*thing_o(obj)).o_flags |= ISKNOW;
-    let sp = inv_name(obj, TRUE);
+    let sp = inv_name(obj, true as c_uchar);
     cur_armor = obj;
     if terse == 0 {
         addmsg_str("you are now ");
@@ -77,7 +75,7 @@ pub unsafe extern "C" fn wear() {
 pub unsafe extern "C" fn take_off() {
     let obj = cur_armor;
     if obj.is_null() {
-        after = FALSE;
+        after = false as c_uchar;
         if terse != 0 {
             msg_str("not wearing armor");
         } else {
@@ -99,7 +97,7 @@ pub unsafe extern "C" fn take_off() {
     msg_str(&format!(
         " wearing {}) {}",
         (*thing_o(obj)).o_packch as u8 as char,
-        CStr::from_ptr(inv_name(obj, TRUE)).to_string_lossy()
+        CStr::from_ptr(inv_name(obj, true as c_uchar)).to_string_lossy()
     ));
 }
 

@@ -4,8 +4,6 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 use crate::curses as cur;
 use crate::player::{CStats, CThing, CThingMonster};
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 const ESCAPE: c_int = 27;
 const NUMCOLS: c_int = 80;
 const MAXSTR: usize = 1024;
@@ -123,16 +121,16 @@ pub unsafe fn addmsg_str(text: &str) {
 #[cfg(not(test))]
 #[no_mangle]
 pub unsafe extern "C" fn endmsg() -> c_int {
-    if save_msg != FALSE {
+    if save_msg != false as c_uchar {
         strcpy(huh.as_mut_ptr(), msgbuf.as_ptr());
     }
 
     if mpos != 0 {
-        look(FALSE);
+        look(false as c_uchar);
         cur::mvaddstr(0, mpos, c"--More--".as_ptr());
         cur::refresh();
 
-        if msg_esc == FALSE {
+        if msg_esc == false as c_uchar {
             wait_for(' ' as c_int);
         } else {
             loop {
@@ -150,7 +148,7 @@ pub unsafe extern "C" fn endmsg() -> c_int {
         }
     }
 
-    if islower(msgbuf[0] as c_int) != 0 && lower_msg == FALSE && msgbuf[1] != 0 {
+    if islower(msgbuf[0] as c_int) != 0 && lower_msg == false as c_uchar && msgbuf[1] != 0 {
         msgbuf[0] = toupper(msgbuf[0] as c_int) as c_char;
     }
 
@@ -167,7 +165,7 @@ pub unsafe extern "C" fn endmsg() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn step_ok(ch: c_int) -> c_int {
     match ch as u8 {
-        b' ' | b'|' | b'-' => FALSE as c_int,
+        b' ' | b'|' | b'-' => false as c_uchar as c_int,
         _ => if isalpha(ch) != 0 { 0 } else { 1 },
     }
 }
@@ -219,7 +217,7 @@ pub unsafe extern "C" fn status() {
         && s_str == pstats.s_str
         && s_lvl == level
         && s_hungry == hungry_state
-        && stat_msg == FALSE
+        && stat_msg == false as c_uchar
     {
         return;
     }
@@ -243,7 +241,7 @@ pub unsafe extern "C" fn status() {
     s_exp = pstats.s_exp;
     s_hungry = hungry_state;
 
-    if stat_msg != FALSE {
+    if stat_msg != false as c_uchar {
         cur::move_(0, 0);
         msg_str(&format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
@@ -315,6 +313,6 @@ pub unsafe extern "C" fn show_win(message: *const c_char) {
     cur::wmove(win, hero.y, hero.x);
     cur::wrefresh(win);
     wait_for(' ' as c_int);
-    cur::clearok(stdscr, TRUE);
+    cur::clearok(stdscr, true as c_uchar);
     cur::touchwin(stdscr);
 }

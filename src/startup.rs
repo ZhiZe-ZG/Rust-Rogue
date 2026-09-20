@@ -17,8 +17,6 @@ const AFTER: c_int = 2;
 const WANDERTIME: c_int = 70;
 const SEEMONST: i16 = 0o040000;
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 const INV_CLEAR: c_int = 2;
 const BUFSIZ: usize = 8192;
 const SIGINT: c_int = 2;
@@ -178,9 +176,9 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
     md_tstpresume();
     cur::raw();
     cur::noecho();
-    cur::keypad(stdscr, TRUE);
+    cur::keypad(stdscr, true as c_uchar);
     playltchars();
-    cur::clearok(curscr, TRUE);
+    cur::clearok(curscr, true as c_uchar);
     cur::wrefresh(curscr);
     let y = cur::getcury(curscr);
     let x = cur::getcurx(curscr);
@@ -201,9 +199,9 @@ pub unsafe extern "C" fn playit() {
      * set up defaults for slow terminals
      */
     if cur::baudrate() <= 1200 {
-        terse = TRUE;
-        jump = TRUE;
-        see_floor = FALSE;
+        terse = true as c_uchar;
+        jump = true as c_uchar;
+        see_floor = false as c_uchar;
     }
 
     if md_hasclreol() != 0 {
@@ -221,7 +219,7 @@ pub unsafe extern "C" fn playit() {
 
     oldpos = (*thing_t(&raw mut player)).t_pos;
     oldrp = roomin(&raw mut (*thing_t(&raw mut player)).t_pos);
-    while playing != FALSE {
+    while playing != false as c_uchar {
         command();              /* Command execution */
     }
     endit(0);
@@ -238,7 +236,7 @@ pub unsafe extern "C" fn quit(sig: c_int) {
     /*
      * Reset the signal in case we got here via an interrupt
      */
-    if q_comm == FALSE {
+    if q_comm == false as c_uchar {
         mpos = 0;
     }
     let oy = cur::getcury(curscr);
@@ -262,7 +260,7 @@ pub unsafe extern "C" fn quit(sig: c_int) {
         cur::refresh();
         mpos = 0;
         count = 0;
-        to_death = FALSE;
+        to_death = false as c_uchar;
     }
 }
 
@@ -297,8 +295,8 @@ pub unsafe extern "C" fn shell() {
     cur::endwin();
     resetltchars();
     putchar(b'\n' as c_int);
-    in_shell = TRUE;
-    after = FALSE;
+    in_shell = true as c_uchar;
+    after = false as c_uchar;
     fflush(stdout);
     /*
      * Fork and do a shell
@@ -309,11 +307,11 @@ pub unsafe extern "C" fn shell() {
     fflush(stdout);
     cur::noecho();
     cur::raw();
-    cur::keypad(stdscr, TRUE);
+    cur::keypad(stdscr, true as c_uchar);
     playltchars();
-    in_shell = FALSE;
+    in_shell = false as c_uchar;
     wait_for(b'\n' as c_int);
-    cur::clearok(stdscr, TRUE);
+    cur::clearok(stdscr, true as c_uchar);
 }
 
 /// my_exit:

@@ -9,8 +9,6 @@ const FLAME: c_int = 9;
 const ISKNOW: c_int = 0o000002;
 const ISMISL: c_int = 0o000004;
 const VS_MAGIC: c_int = 3;
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -256,7 +254,7 @@ pub unsafe extern "C" fn do_zap() {
         return;
     }
     if (*thing_o(obj)).o_type != STICK {
-        after = FALSE;
+        after = false as c_uchar;
         msg_str("you can't zap with that!");
         return;
     }
@@ -269,7 +267,7 @@ pub unsafe extern "C" fn do_zap() {
 
     match kind {
         Some(StickType::Light) => {
-            ws_info[StickType::Light.index()].oi_know = TRUE;
+            ws_info[StickType::Light.index()].oi_know = true as c_uchar;
             msg_str("the corridor glows and then fades");
         }
         Some(StickType::Drain) => {
@@ -296,7 +294,7 @@ pub unsafe extern "C" fn do_zap() {
             }
         }
         Some(StickType::Missile) => {
-            ws_info[StickType::Missile.index()].oi_know = TRUE;
+            ws_info[StickType::Missile.index()].oi_know = true as c_uchar;
             let mut bolt = std::mem::zeroed::<CThing>();
             (*thing_o(&mut bolt)).o_type = WEAPON;
             (*thing_o(&mut bolt)).o_which = FLAME;
@@ -340,7 +338,7 @@ pub unsafe extern "C" fn do_zap() {
             let mut hero = hero_pos();
             fire_bolt(&mut hero, &raw mut delta, name.as_ptr() as *mut c_char);
             if let Some(kind) = kind {
-                ws_info[kind.index()].oi_know = TRUE;
+                ws_info[kind.index()].oi_know = true as c_uchar;
             }
         }
         Some(StickType::Nop) => {}

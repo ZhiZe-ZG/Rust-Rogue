@@ -30,8 +30,6 @@ const ISLEVIT: c_short = 0o0000010;
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_REAL: c_char = 0x10u8 as c_char;
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -193,7 +191,7 @@ pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
     if chat_at(y, x) == DOOR
         || (flags & (F_REAL as u8 | F_PASS as u8)) == (F_REAL as u8 | F_PASS as u8)
     {
-        TRUE
+        true as c_uchar
     } else {
         0
     }
@@ -262,8 +260,8 @@ pub static mut nh: CCoord = CCoord { x: 0, y: 0 };
 /// Start the hero running in the chosen direction.
 #[no_mangle]
 pub unsafe extern "C" fn do_run(ch: c_char) {
-    running = TRUE;
-    after = FALSE;
+    running = true as c_uchar;
+    after = false as c_uchar;
     runch = ch;
 }
 
@@ -278,7 +276,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     let mut ch: c_char;
     let fl: c_char;
 
-    firstmove = FALSE;
+    firstmove = false as c_uchar;
     if no_move != 0 {
         no_move -= 1;
         msg_str("you are still stuck in the bear trap");
@@ -288,9 +286,9 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     if player_has(ISHUH) && rnd(5) != 0 {
         next_pos = *rndmove(&raw mut player);
         if coord_eq(next_pos, hero) {
-            after = FALSE;
-            running = FALSE;
-            to_death = FALSE;
+            after = false as c_uchar;
+            running = false as c_uchar;
+            to_death = false as c_uchar;
             return;
         }
     } else {
@@ -305,21 +303,21 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
                 next_pos.x = hero.x + current_dx;
                 continue;
             }
-            running = FALSE;
-            after = FALSE;
+            running = false as c_uchar;
+            after = false as c_uchar;
             return;
         }
         break;
     }
 
     if diag_ok(hero_ptr(), &mut next_pos) == 0 {
-        after = FALSE;
-        running = FALSE;
+        after = false as c_uchar;
+        running = false as c_uchar;
         return;
     }
 
     if running != 0 && coord_eq(hero, next_pos) {
-        running = FALSE;
+        running = false as c_uchar;
     }
 
     fl = flat_at(next_pos.y, next_pos.x);
@@ -336,11 +334,11 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     }
     match ch {
         SPACE | H_WALL | V_WALL => {
-            running = FALSE;
-            after = FALSE;
+            running = false as c_uchar;
+            after = false as c_uchar;
         }
         DOOR => {
-            running = FALSE;
+            running = false as c_uchar;
             if (flat_at(hero.y, hero.x) as u8 & F_PASS as u8) != 0 {
                 draw_enter_room(&mut next_pos);
             }
@@ -364,19 +362,19 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
             move_stuff(&mut next_pos, fl);
         }
         STAIRS => {
-            seenstairs = TRUE;
-            running = FALSE;
+            seenstairs = true as c_uchar;
+            running = false as c_uchar;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, cur_weapon, FALSE);
+                fight(&mut next_pos, cur_weapon, false as c_uchar);
             } else {
                 take = ch;
                 move_stuff(&mut next_pos, fl);
             }
         }
         _ => {
-            running = FALSE;
+            running = false as c_uchar;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, cur_weapon, FALSE);
+                fight(&mut next_pos, cur_weapon, false as c_uchar);
             } else {
                 if ch != STAIRS {
                     take = ch;

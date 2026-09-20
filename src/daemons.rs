@@ -20,8 +20,6 @@ use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const TRUE:  c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 // d_type flags (BEFORE/AFTER)
 const BEFORE: c_int = 1; // spread(1) == 1 always
@@ -280,8 +278,8 @@ pub unsafe extern "C" fn stomach() {
 
     if hungry_state != orig_hungry {
         (*thing_t(&raw mut player)).t_flags &= !ISRUN;
-        running  = FALSE;
-        to_death = FALSE;
+        running  = false as c_uchar;
+        to_death = false as c_uchar;
         count    = 0;
     }
 }

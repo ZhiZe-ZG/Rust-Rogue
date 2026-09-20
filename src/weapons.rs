@@ -21,8 +21,6 @@ const MAXWEAPONS: usize = 9;
 const ISMISL: c_int = 0o000004;
 const ISMANY: c_int = 0o000010;
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -141,10 +139,10 @@ unsafe extern "C" {
 
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
     fn dropcheck(obj: *mut CThing) -> c_uchar;
-    fn is_current(obj: *mut CThing) -> c_uchar;
+    fn is_current(obj: *mut CThing) -> bool;
     fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
     fn cansee(y: c_int, x: c_int) -> c_uchar;
-    fn show_floor() -> c_uchar;
+    fn show_floor() -> bool;
     fn step_ok(ch: c_int) -> c_int;
     fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;
     fn discard(item: *mut CThing);
@@ -206,16 +204,16 @@ pub unsafe extern "C" fn missile(ydelta: c_int, xdelta: c_int) {
     if obj.is_null() {
         return;
     }
-    if dropcheck(obj) == 0 || is_current(obj) != 0 {
+    if dropcheck(obj) == 0 || is_current(obj) {
         return;
     }
 
-    obj = leave_pack(obj, TRUE, FALSE);
+    obj = leave_pack(obj, true as c_uchar, false as c_uchar);
     do_motion(obj, ydelta, xdelta);
 
     let o = thing_o(obj);
     if moat((*o).o_pos.y, (*o).o_pos.x).is_null() || hit_monster((*o).o_pos.y, (*o).o_pos.x, obj) == 0 {
-        fall(obj, TRUE);
+        fall(obj, true as c_uchar);
     }
 }
 
@@ -229,7 +227,7 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
         let h = hero();
         if ((*o).o_pos.x != h.x || (*o).o_pos.y != h.y) && cansee((*o).o_pos.y, (*o).o_pos.x) != 0 && terse == 0 {
             let mut ch = chat((*o).o_pos.y, (*o).o_pos.x);
-            if ch == FLOOR && show_floor() == 0 {
+            if ch == FLOOR && !show_floor() {
                 ch = ' ' as c_int;
             }
             cur::mvaddch((*o).o_pos.y, (*o).o_pos.x, ch as c_uint);
@@ -317,7 +315,7 @@ pub unsafe extern "C" fn init_weapon(weap: *mut CThing, which: c_int) {
 #[no_mangle]
 pub unsafe extern "C" fn hit_monster(y: c_int, x: c_int, obj: *mut CThing) -> c_int {
     let mut mp = CCoord { x, y };
-    fight(&mut mp, obj, TRUE)
+    fight(&mut mp, obj, true as c_uchar)
 }
 
 /// Formats signed enchantment numbers for armor and weapons.
@@ -352,12 +350,12 @@ pub unsafe extern "C" fn wield() {
         after = 0;
         return;
     }
-    if is_current(obj) != 0 {
+            if is_current(obj) {
         after = 0;
         return;
     }
 
-    let sp = inv_name(obj, TRUE);
+    let sp = inv_name(obj, true as c_uchar);
     cur_weapon = obj;
     if terse == 0 {
         addmsg_str("you are now ");
@@ -389,5 +387,5 @@ pub unsafe extern "C" fn fallpos(pos: *mut CCoord, newpos: *mut CCoord) -> c_uch
             }
         }
     }
-    if cnt != 0 { TRUE } else { FALSE }
+    if cnt != 0 { true as c_uchar } else { false as c_uchar }
 }

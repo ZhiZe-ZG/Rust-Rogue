@@ -5,8 +5,6 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 const PASSAGE: c_char = b'#' as c_char;
 const DOOR: c_char = b'+' as c_char;
@@ -84,7 +82,7 @@ unsafe extern "C" {
     static mut runch: c_char;
     static mut running: c_uchar;
     static mut seenstairs: c_uchar;
-    static mut see_floor: c_uchar;
+    static mut see_floor: bool;
     static mut stairs: CCoord;
     static mut stdscr: *mut c_void;
     static mut terse: c_uchar;
@@ -152,12 +150,12 @@ unsafe fn first_is_vowel(s: *const c_char) -> bool {
 /// show_floor:
 /// Returns whether the floor of the player's room should be displayed.
 #[no_mangle]
-pub unsafe extern "C" fn show_floor() -> c_uchar {
+pub unsafe fn show_floor() -> bool {
     let player_room = (*thing_t(&raw mut player)).t_room;
     if (room_flags(player_room) & (ISGONE as c_short | ISDARK as c_short)) == ISDARK && !on(&raw mut player, ISBLIND) {
         return see_floor;
     }
-    TRUE
+    true
 }
 
 #[no_mangle]
@@ -209,7 +207,7 @@ pub unsafe extern "C" fn eat() {
     } else {
         msg_str("yum, that tasted good");
     }
-    leave_pack(obj, FALSE, FALSE);
+    leave_pack(obj, false as c_uchar, false as c_uchar);
 }
 
 #[no_mangle]
@@ -273,20 +271,20 @@ pub unsafe extern "C" fn add_str(sp: *mut c_uint, amt: c_int) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn add_haste(potion: c_uchar) -> c_uchar {
+pub unsafe fn add_haste(potion: bool) -> bool {
     if on(&raw mut player, ISHASTE) {
         no_command += rnd(8);
         (*thing_t(&raw mut player)).t_flags &= !(ISRUN as c_short | ISHASTE as c_short) as c_short;
         extinguish(nohaste as *const c_void);
         msg_str("you faint from exhaustion");
-        return FALSE;
+        return false;
     }
 
     (*thing_t(&raw mut player)).t_flags |= ISHASTE as c_short;
-    if potion != 0 {
+    if potion {
         fuse(nohaste as *const c_void, 0, rnd(4) + 4, AFTER);
     }
-    TRUE
+    true
 }
 
 #[no_mangle]
@@ -299,18 +297,18 @@ pub unsafe extern "C" fn aggravate() {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn is_current(obj: *mut CThing) -> c_uchar {
+pub unsafe fn is_current(obj: *mut CThing) -> bool {
     if obj.is_null() {
-        return FALSE;
+        return false;
     }
     if obj == cur_armor || obj == cur_weapon || obj == cur_ring[LEFT as usize] || obj == cur_ring[RIGHT as usize] {
         if terse == 0 {
             addmsg_str("That's already ");
         }
         msg_str("in use");
-        return TRUE;
+        return true;
     }
-    FALSE
+    false
 }
 
 #[no_mangle]
@@ -338,7 +336,7 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
                 b'u' | b'U' => { delta.y = -1; delta.x = 1; }
                 b'b' | b'B' => { delta.y = 1; delta.x = -1; }
                 b'n' | b'N' => { delta.y = 1; delta.x = 1; }
-                c if c as c_int == ESCAPE => { last_dir = 0; reset_last(); return FALSE; }
+                c if c as c_int == ESCAPE => { last_dir = 0; reset_last(); return false as c_uchar; }
                 _ => {
                     mpos = 0;
                     msg_str("which direction? ");
@@ -367,7 +365,7 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
         }
     }
     mpos = 0;
-    TRUE
+    true as c_uchar
 }
 
 #[no_mangle]

@@ -8,8 +8,6 @@ use crate::list::{_detach, discard, new_item};
 use crate::player::{CRoom, CThing};
 use crate::scrolls::ScrollType;
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 const MAXPACK: c_int = 23;
 const MAXSTR: usize = 1024;
 const PASSAGE: c_char = b'#' as c_char;
@@ -58,7 +56,7 @@ unsafe extern "C" {
     fn find_obj(y: c_int, x: c_int) -> *mut CThing;
     fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
     fn readchar() -> c_int;
-    fn show_floor() -> c_uchar;
+    fn show_floor() -> bool;
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut crate::player::CThingMonster {
@@ -124,7 +122,7 @@ unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
 unsafe fn floor_char_for_room() -> c_char {
     if room_flags(proom()) & ISGONE != 0 {
         PASSAGE
-    } else if show_floor() != 0 {
+    } else if show_floor() {
         FLOOR
     } else {
         b' ' as c_char
@@ -134,7 +132,7 @@ unsafe fn floor_char_for_room() -> c_char {
 #[no_mangle]
 pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
     let mut item = obj;
-    let mut from_floor = FALSE;
+    let mut from_floor = false as c_uchar;
     let mut op: *mut CThing;
     let mut lp: *mut CThing;
 
@@ -143,7 +141,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         if item.is_null() {
             return;
         }
-        from_floor = TRUE;
+        from_floor = true as c_uchar;
     }
 
     if (*thing_o(item)).o_type == SCROLL as c_int
@@ -243,7 +241,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
     }
 
     if (*thing_o(item)).o_type == AMULET as c_int {
-        amulet = TRUE;
+        amulet = true as c_uchar;
     }
 
     if silent == 0 {
@@ -273,7 +271,7 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_u
             move_msg(obj);
         }
         inpack = MAXPACK;
-        return FALSE;
+        return false as c_uchar;
     }
 
     if from_floor != 0 {
@@ -284,7 +282,7 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_u
     }
 
     inpack += 1;
-    TRUE
+    true as c_uchar
 }
 
 #[no_mangle]
@@ -307,7 +305,7 @@ pub unsafe extern "C" fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uc
         }
     } else {
         last_pick = std::ptr::null_mut();
-        pack_used[(*thing_o(obj)).o_packch as usize - 'a' as usize] = FALSE;
+        pack_used[(*thing_o(obj)).o_packch as usize - 'a' as usize] = false as c_uchar;
         {
             let head = &raw mut (*thing_t(&raw mut player)).t_pack as *mut *mut CThing;
             detach_list(head, obj);
@@ -320,7 +318,7 @@ pub unsafe extern "C" fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uc
 pub unsafe extern "C" fn pack_char() -> c_char {
     for i in 0..pack_used.len() {
         if pack_used[i] == 0 {
-            pack_used[i] = TRUE;
+            pack_used[i] = true as c_uchar;
             return (b'a' + i as u8) as c_char;
         }
     }
@@ -343,7 +341,7 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
         }
 
         n_objs += 1;
-        msg_esc = TRUE;
+        msg_esc = true as c_uchar;
         let mut inv_temp = [0 as c_char; MAXSTR];
         if (*thing_o(cur)).o_packch == 0 {
             std::ptr::copy_nonoverlapping(c"%s".as_ptr(), inv_temp.as_mut_ptr(), 3);
@@ -351,8 +349,8 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
             let format = [(*thing_o(cur)).o_packch, b')' as c_char, b' ' as c_char, b'%' as c_char, b's' as c_char, 0];
             std::ptr::copy_nonoverlapping(format.as_ptr(), inv_temp.as_mut_ptr(), format.len());
         }
-        let _ = add_line(inv_temp.as_mut_ptr(), inv_name(cur, FALSE));
-        msg_esc = FALSE;
+        let _ = add_line(inv_temp.as_mut_ptr(), inv_name(cur, false as c_uchar));
+        msg_esc = false as c_uchar;
         cur = next_item(cur);
     }
 
@@ -362,10 +360,10 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
         } else {
             msg_str(if type_ == 0 { "you are empty handed" } else { "you don't have anything appropriate" });
         }
-        return FALSE;
+        return false as c_uchar;
     }
 
-    TRUE
+    true as c_uchar
 }
 
 #[no_mangle]
@@ -392,7 +390,7 @@ pub unsafe extern "C" fn pick_up(ch: c_char) {
                 }
             }
             ARMOR | POTION | FOOD | WEAPON | SCROLL | AMULET | RING | STICK => {
-                add_pack(std::ptr::null_mut(), FALSE);
+                add_pack(std::ptr::null_mut(), false as c_uchar);
             }
             _ => {}
         }
@@ -429,7 +427,7 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
         mpos = 0;
         if ch == ESCAPE {
             reset_last();
-            after = FALSE;
+            after = false as c_uchar;
             msg_str("");
             return std::ptr::null_mut();
         }
@@ -437,7 +435,7 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
         if ch == '*' as c_int {
             mpos = 0;
             if inventory(pack_head(), type_) == 0 {
-                after = FALSE;
+                after = false as c_uchar;
                 return std::ptr::null_mut();
             }
             continue;
@@ -498,7 +496,7 @@ pub unsafe extern "C" fn move_msg(obj: *mut CThing) {
     }
     msg_str(&format!(
         "moved onto {}",
-        CStr::from_ptr(inv_name(obj, TRUE)).to_string_lossy()
+        CStr::from_ptr(inv_name(obj, true as c_uchar)).to_string_lossy()
     ));
 }
 
@@ -509,7 +507,7 @@ pub unsafe extern "C" fn picky_inven() {
     } else if next_item(pack_head()).is_null() {
         msg_str(&format!(
             "a) {}",
-            CStr::from_ptr(inv_name(pack_head(), FALSE)).to_string_lossy()
+            CStr::from_ptr(inv_name(pack_head(), false as c_uchar)).to_string_lossy()
         ));
     } else {
         msg_str(if terse != 0 { "item: " } else { "which item do you wish to inventory: " });
@@ -525,7 +523,7 @@ pub unsafe extern "C" fn picky_inven() {
                 msg_str(&format!(
                     "{}) {}",
                     mch as u8 as char,
-                    CStr::from_ptr(inv_name(obj, FALSE)).to_string_lossy()
+                    CStr::from_ptr(inv_name(obj, false as c_uchar)).to_string_lossy()
                 ));
                 return;
             }

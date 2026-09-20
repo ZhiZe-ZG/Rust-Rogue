@@ -99,8 +99,6 @@ impl ScrollType {
     }
 }
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -134,7 +132,7 @@ unsafe extern "C" {
     fn find_obj(y: c_int, x: c_int) -> *mut CThing;
     fn new_item() -> *mut CThing;
     fn new_monster(tp: *mut CThing, monster_type: c_char, cp: *mut CCoord);
-    fn randmonster(wander: c_uchar) -> c_char;
+    fn randmonster(wander: bool) -> c_char;
     fn whatis(insist: c_uchar, item_type: c_int);
     fn show_win(message: *const c_char);
     fn teleport();
@@ -216,7 +214,7 @@ pub unsafe extern "C" fn read_scroll() {
     }
 
     let discardit = (*thing_o(obj)).o_count == 1;
-    leave_pack(obj, FALSE, FALSE);
+    leave_pack(obj, false as c_uchar, false as c_uchar);
     let orig_obj = obj;
 
     let scroll_type = ScrollType::from_raw((*thing_o(obj)).o_which);
@@ -268,13 +266,13 @@ pub unsafe extern "C" fn read_scroll() {
                     addmsg_str("s");
                 }
                 endmsg();
-                scr_info[ScrollType::Hold.index()].oi_know = TRUE;
+                scr_info[ScrollType::Hold.index()].oi_know = true as c_uchar;
             } else {
                 msg_str("you feel a strange sense of loss");
             }
         }
         ScrollType::Sleep => {
-            scr_info[ScrollType::Sleep.index()].oi_know = TRUE;
+            scr_info[ScrollType::Sleep.index()].oi_know = true as c_uchar;
             no_command += rnd(SLEEPTIME) + 4;
             (*thing_t(&raw mut player)).t_flags &= !ISRUN;
             msg_str("you fall asleep");
@@ -312,7 +310,7 @@ pub unsafe extern "C" fn read_scroll() {
                 msg_str("you hear a faint cry of anguish in the distance");
             } else {
                 obj = new_item();
-                new_monster(obj, randmonster(FALSE), &mut mp);
+                new_monster(obj, randmonster(false), &mut mp);
             }
         }
         ScrollType::IdentifyPotion
@@ -322,15 +320,15 @@ pub unsafe extern "C" fn read_scroll() {
         | ScrollType::IdentifyRingOrStick => {
             let id_type: [c_int; ScrollType::IdentifyRingOrStick.index() + 1] =
                 [0, 0, 0, 0, 0, POTION, SCROLL, WEAPON, ARMOR, R_OR_S];
-            scr_info[(*thing_o(obj)).o_which as usize].oi_know = TRUE;
+            scr_info[(*thing_o(obj)).o_which as usize].oi_know = true as c_uchar;
             msg_str(&format!(
                 "this scroll is an {} scroll",
                 CStr::from_ptr(scr_info[(*thing_o(obj)).o_which as usize].oi_name).to_string_lossy()
             ));
-            whatis(TRUE, id_type[(*thing_o(obj)).o_which as usize]);
+            whatis(true as c_uchar, id_type[(*thing_o(obj)).o_which as usize]);
         }
         ScrollType::Map => {
-            scr_info[ScrollType::Map.index()].oi_know = TRUE;
+            scr_info[ScrollType::Map.index()].oi_know = true as c_uchar;
             msg_str("oh, now this scroll has a map on it");
 
     for y in 1..(NUMLINES - 1) {
@@ -349,19 +347,19 @@ pub unsafe extern "C" fn read_scroll() {
     }
         }
         ScrollType::FindFood => {
-            let mut found = FALSE;
+            let mut found = false as c_uchar;
             cur::wclear(hw);
             let mut it = lvl_obj;
             while !it.is_null() {
                 if (*thing_o(it)).o_type == FOOD {
-                    found = TRUE;
+                    found = true as c_uchar;
                     cur::wmove(hw, (*thing_o(it)).o_pos.y, (*thing_o(it)).o_pos.x);
                     cur::waddch(hw, FOOD as c_uint);
                 }
                 it = (*thing_o(it)).l_next;
             }
             if found != 0 {
-                scr_info[ScrollType::FindFood.index()].oi_know = TRUE;
+                scr_info[ScrollType::FindFood.index()].oi_know = true as c_uchar;
                 show_win(c"Your nose tingles and you smell food.--More--".as_ptr());
             } else {
                 msg_str("your nose tingles");
@@ -371,7 +369,7 @@ pub unsafe extern "C" fn read_scroll() {
             let cur_room = proom();
             teleport();
             if cur_room != proom() {
-                scr_info[ScrollType::Teleport.index()].oi_know = TRUE;
+                scr_info[ScrollType::Teleport.index()].oi_know = true as c_uchar;
             }
         }
         ScrollType::Enchant => {
@@ -423,7 +421,7 @@ pub unsafe extern "C" fn read_scroll() {
     }
 
     obj = orig_obj;
-    look(TRUE);
+    look(true as c_uchar);
     status();
 
     call_it(&mut scr_info[(*thing_o(obj)).o_which as usize]);

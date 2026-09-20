@@ -64,8 +64,6 @@ const NUMCOLS: c_int = 80;
 const MAXPASS: usize = 13;
 const LAMPDIST: c_int = 3;
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 // ─── Legacy C ABI surface ─────────────────────────────────────────────────────
 
@@ -460,7 +458,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
                     && ((*thing_t(tp)).t_flags & 0o002000) != 0 /* ISINVIS */
                 {
                     if door_stop != 0 && firstmove == 0 {
-                        running = FALSE;
+                        running = false as c_uchar;
                     }
                     continue;
                 }
@@ -524,7 +522,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
 
                 if ch == DOOR as c_int {
                     if x == hero.x || y == hero.y {
-                        running = FALSE;
+                        running = false as c_uchar;
                     }
                 } else if ch == PASSAGE as c_int {
                     if x == hero.x || y == hero.y {
@@ -536,14 +534,14 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
                     || ch == b' ' as c_int
                 {
                 } else {
-                    running = FALSE;
+                    running = false as c_uchar;
                 }
             }
         }
     }
 
     if door_stop != 0 && firstmove == 0 && passcount > 1 {
-        running = FALSE;
+        running = false as c_uchar;
     }
     if running == 0 || jump == 0 {
         cur::mvaddch(hero.y, hero.x, b'@' as c_uint);
@@ -742,9 +740,9 @@ pub unsafe extern "C" fn turnref() {
     let hero = hero_pos();
     if (flat_at(hero.y, hero.x) as u8 & F_SEEN as u8) == 0 {
         if jump != 0 {
-            cur::leaveok(stdscr as *mut crate::player::CWindow, TRUE as c_int);
+            cur::leaveok(stdscr as *mut crate::player::CWindow, true as c_uchar as c_int);
             cur::refresh();
-            cur::leaveok(stdscr as *mut crate::player::CWindow, FALSE as c_int);
+            cur::leaveok(stdscr as *mut crate::player::CWindow, false as c_uchar as c_int);
         }
         set_seen_at(hero.y, hero.x);
     }

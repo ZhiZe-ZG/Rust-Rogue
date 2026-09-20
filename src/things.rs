@@ -13,8 +13,6 @@ const MAXRINGS: usize = 13;
 const MAXSCROLLS: usize = 18;
 const MAXWEAPONS: usize = 9;
 const MAXSTICKS: usize = 14;
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 const POTION: c_int = b'!' as c_int;
 const SCROLL: c_int = b'?' as c_int;
@@ -240,14 +238,14 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
 #[no_mangle]
 pub unsafe extern "C" fn dropcheck(obj: *mut CThing) -> c_uchar {
     if obj.is_null() {
-        return TRUE;
+        return true as c_uchar;
     }
     if obj != cur_armor && obj != cur_weapon && obj != cur_ring[LEFT as usize] && obj != cur_ring[RIGHT as usize] {
-        return TRUE;
+        return true as c_uchar;
     }
     if ((*thing_o(obj)).o_flags & ISCURSED) != 0 {
         msg_str("you can't.  It appears to be cursed");
-        return FALSE;
+        return false as c_uchar;
     }
     if obj == cur_weapon {
         cur_weapon = std::ptr::null_mut();
@@ -262,7 +260,7 @@ pub unsafe extern "C" fn dropcheck(obj: *mut CThing) -> c_uchar {
             _ => {}
         }
     }
-    TRUE
+    true as c_uchar
 }
 
 #[no_mangle]
@@ -357,8 +355,8 @@ pub unsafe extern "C" fn drop() {
     if dropcheck(obj) == 0 {
         return;
     }
-    let all = if ((*thing_o(obj)).o_type & 0x1) == 0 { TRUE } else { FALSE };
-    let _ = leave_pack(obj, TRUE, all);
+    let all = if ((*thing_o(obj)).o_type & 0x1) == 0 { true as c_uchar } else { false as c_uchar };
+    let _ = leave_pack(obj, true as c_uchar, all);
 }
 
 #[no_mangle]

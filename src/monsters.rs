@@ -33,7 +33,6 @@ const R_AGGR: c_int = 6;
 const R_STEALTH: c_int = 12;
 const R_PROTECT: c_int = 0;
 
-const TRUE: c_uchar = 1;
 
 /// Layout mirror of the C `struct monster` stat table, tied to the `monsters[]`
 /// global the C engine exposes.
@@ -121,7 +120,7 @@ unsafe extern "C" {
     fn rnd_thing() -> c_char;
     fn new_item() -> *mut CThing;
     fn new_thing() -> *mut CThing;
-    fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_uchar, monst: c_uchar) -> c_uchar;
+    fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: bool) -> bool;
     fn dist(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int;
     fn lengthen(func: *const c_void, xtime: c_int);
     fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
@@ -165,8 +164,8 @@ unsafe fn iswearing(which: c_int) -> bool {
 
 /// Picks an appropriate monster glyph for the current depth.
 #[no_mangle]
-pub unsafe extern "C" fn randmonster(wander: c_uchar) -> c_char {
-    let mons = if wander != 0 { &WAND_MONS } else { &LVL_MONS };
+pub unsafe fn randmonster(wander: bool) -> c_char {
+    let mons = if wander { &WAND_MONS } else { &LVL_MONS };
     loop {
         let mut d = level + (rnd(10) - 6);
         if d < 0 {
@@ -213,7 +212,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
     if level > 29 {
         (*thing_t(tp)).t_flags |= ISHASTE;
     }
-    (*thing_t(tp)).t_turn = TRUE;
+    (*thing_t(tp)).t_turn = true as c_uchar;
     (*thing_t(tp)).t_pack = std::ptr::null_mut();
 
     if iswearing(R_AGGR) {
@@ -248,13 +247,13 @@ pub unsafe extern "C" fn wanderer() {
     let mut cp = CCoord { x: 0, y: 0 };
 
     loop {
-        let _ = find_floor(std::ptr::null_mut(), &mut cp, 0, 1);
+        let _ = find_floor(std::ptr::null_mut(), &mut cp, 0, true);
         if roomin(&mut cp) != (*player_t()).t_room {
             break;
         }
     }
 
-    new_monster(tp, randmonster(1), &mut cp);
+    new_monster(tp, randmonster(true), &mut cp);
 
     if player_has(SEEMONST) {
         cur::standout();

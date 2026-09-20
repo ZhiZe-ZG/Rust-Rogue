@@ -43,7 +43,7 @@ unsafe extern "C" {
     static mut mpos: c_int;
 
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn is_current(obj: *mut CThing) -> c_uchar;
+    fn is_current(obj: *mut CThing) -> bool;
     fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
     fn chg_str(amt: c_int);
     fn aggravate();
@@ -76,7 +76,7 @@ pub unsafe extern "C" fn ring_on() {
         return;
     }
 
-    if is_current(obj) != 0 {
+    if is_current(obj) {
         return;
     }
 

@@ -69,8 +69,6 @@ const HEALTIME: c_int = 30;
 const BEFORE: c_int = 1;
 const AFTER: c_int = 2;
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 /// Data structures mirrored from the C game so Rust can interact with
 /// the same in-memory layout expected by the FFI boundary.
@@ -200,7 +198,7 @@ unsafe extern "C" {
     fn status();
     fn check_level();
     fn come_down();
-    fn add_haste(potion: c_uchar) -> c_uchar;
+    fn add_haste(potion: bool) -> bool;
     fn unconfuse();
     fn unsee();
     fn sight();
@@ -324,7 +322,7 @@ unsafe fn do_pot_impl(type_id: c_int, knowit: c_uchar) {
     if !player_has(flags) {
         (*thing_t(&raw mut player)).t_flags |= flags;
         fuse(daemon, 0, t, AFTER);
-        look(FALSE);
+        look(false as c_uchar);
     } else {
         lengthen(daemon, t);
     }
@@ -358,12 +356,12 @@ pub unsafe extern "C" fn quaff() {
     }
 
     discardit = (*thing_o(obj)).o_count == 1;
-    leave_pack(obj, FALSE, FALSE);
+    leave_pack(obj, false as c_uchar, false as c_uchar);
 
     match (*thing_o(obj)).o_which {
-        P_CONFUSE => do_pot_impl(P_CONFUSE, if trip { FALSE } else { TRUE }),
+        P_CONFUSE => do_pot_impl(P_CONFUSE, if trip { false as c_uchar } else { true as c_uchar }),
         P_POISON => {
-            (*pot_info.as_mut_ptr().add(P_POISON as usize)).oi_know = TRUE;
+            (*pot_info.as_mut_ptr().add(P_POISON as usize)).oi_know = true as c_uchar;
             if ring_is(LEFT, R_SUSTSTR) || ring_is(RIGHT, R_SUSTSTR) {
                 msg_str("you feel momentarily sick");
             } else {
@@ -374,7 +372,7 @@ pub unsafe extern "C" fn quaff() {
         }
         P_HEALING => {
             let stats = thing_t(&raw mut player);
-            (*pot_info.as_mut_ptr().add(P_HEALING as usize)).oi_know = TRUE;
+            (*pot_info.as_mut_ptr().add(P_HEALING as usize)).oi_know = true as c_uchar;
             (*stats).t_stats.s_hpt += roll((*stats).t_stats.s_lvl, 4);
             if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp {
                 (*stats).t_stats.s_maxhp += 1;
@@ -384,14 +382,14 @@ pub unsafe extern "C" fn quaff() {
             msg_str("you begin to feel better");
         }
         P_STRENGTH => {
-            (*pot_info.as_mut_ptr().add(P_STRENGTH as usize)).oi_know = TRUE;
+            (*pot_info.as_mut_ptr().add(P_STRENGTH as usize)).oi_know = true as c_uchar;
             chg_str(1);
             msg_str("you feel stronger, now.  What bulging muscles!");
         }
         P_MFIND => {
             (*thing_t(&raw mut player)).t_flags |= SEEMONST;
-            fuse(turn_see as *const c_void, TRUE as c_int, HUHDURATION, AFTER);
-            if turn_see(FALSE) == 0 {
+            fuse(turn_see as *const c_void, true as c_uchar as c_int, HUHDURATION, AFTER);
+            if turn_see(false as c_uchar) == 0 {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
                     CStr::from_ptr(choose_str(c"normal".as_ptr(), c"strange".as_ptr())).to_string_lossy()
@@ -407,7 +405,7 @@ pub unsafe extern "C" fn quaff() {
                         show = true;
                         cur::wmove(hw, (*thing_o(tp)).o_pos.y, (*thing_o(tp)).o_pos.x);
                         cur::waddch(hw, MAGIC as c_uint);
-                        (*pot_info.as_mut_ptr().add(P_TFIND as usize)).oi_know = TRUE;
+                        (*pot_info.as_mut_ptr().add(P_TFIND as usize)).oi_know = true as c_uchar;
                     }
                     tp = next_thing(tp);
                 }
@@ -426,7 +424,7 @@ pub unsafe extern "C" fn quaff() {
                 }
             }
             if show {
-                (*pot_info.as_mut_ptr().add(P_TFIND as usize)).oi_know = TRUE;
+                (*pot_info.as_mut_ptr().add(P_TFIND as usize)).oi_know = true as c_uchar;
                 show_win(c"You sense the presence of magic on this level.--More--".as_ptr());
             } else {
                 msg_str(&format!(
@@ -438,12 +436,12 @@ pub unsafe extern "C" fn quaff() {
         P_LSD => {
             if !trip {
                 if player_has(SEEMONST) {
-                    turn_see(FALSE);
+                    turn_see(false as c_uchar);
                 }
                 start_daemon(visuals as *const c_void, 0, BEFORE);
                 seenstairs = seen_stairs();
             }
-            do_pot_impl(P_LSD, TRUE);
+            do_pot_impl(P_LSD, true as c_uchar);
         }
         P_SEEINVIS => {
             let _ = snprintf(
@@ -453,20 +451,20 @@ pub unsafe extern "C" fn quaff() {
                 fruit.as_ptr(),
             );
             show = player_has(CANSEE);
-            do_pot_impl(P_SEEINVIS, FALSE);
+            do_pot_impl(P_SEEINVIS, false as c_uchar);
             if !show {
                 invis_on();
             }
             sight();
         }
         P_RAISE => {
-            (*pot_info.as_mut_ptr().add(P_RAISE as usize)).oi_know = TRUE;
+            (*pot_info.as_mut_ptr().add(P_RAISE as usize)).oi_know = true as c_uchar;
             msg_str("you suddenly feel much more skillful");
             raise_level();
         }
         P_XHEAL => {
             let stats = thing_t(&raw mut player);
-            (*pot_info.as_mut_ptr().add(P_XHEAL as usize)).oi_know = TRUE;
+            (*pot_info.as_mut_ptr().add(P_XHEAL as usize)).oi_know = true as c_uchar;
             (*stats).t_stats.s_hpt += roll((*stats).t_stats.s_lvl, 8);
             if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp {
                 if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp + (*stats).t_stats.s_lvl + 1 {
@@ -480,9 +478,9 @@ pub unsafe extern "C" fn quaff() {
             msg_str("you begin to feel much better");
         }
         P_HASTE => {
-            (*pot_info.as_mut_ptr().add(P_HASTE as usize)).oi_know = TRUE;
-            after = FALSE;
-            if add_haste(TRUE) != 0 {
+            (*pot_info.as_mut_ptr().add(P_HASTE as usize)).oi_know = true as c_uchar;
+            after = false as c_uchar;
+            if add_haste(true) {
                 msg_str("you feel yourself moving much faster");
             }
         }
@@ -505,8 +503,8 @@ pub unsafe extern "C" fn quaff() {
             }
             msg_str("hey, this tastes great.  It make you feel warm all over");
         }
-        P_BLIND => do_pot_impl(P_BLIND, TRUE),
-        P_LEVIT => do_pot_impl(P_LEVIT, TRUE),
+        P_BLIND => do_pot_impl(P_BLIND, true as c_uchar),
+        P_LEVIT => do_pot_impl(P_LEVIT, true as c_uchar),
         _ => {
             msg_str("what an odd tasting potion!");
             return;

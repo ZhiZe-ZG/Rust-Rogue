@@ -4,8 +4,6 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 use crate::curses as cur;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster};
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 const ESCAPE: c_int = 27;
 const NORM: c_int = 0;
 const QUIT: c_int = 1;
@@ -134,9 +132,9 @@ pub unsafe extern "C" fn option() {
     paint(hw, "--Press space to continue--");
     cur::wrefresh(hw);
     wait_for(' ' as c_int);
-    cur::clearok(stdscr, TRUE);
+    cur::clearok(stdscr, true as c_uchar);
     cur::touchwin(stdscr);
-    after = FALSE;
+    after = false as c_uchar;
 }
 
 #[no_mangle]
@@ -183,11 +181,11 @@ pub unsafe extern "C" fn get_bool(vp: *mut c_void, win: *mut c_void) -> c_int {
         cur::wrefresh(win);
         match readchar() {
             ch if ch == 't' as c_int || ch == 'T' as c_int => {
-                *bp = TRUE;
+                *bp = true as c_uchar;
                 bad = false;
             }
             ch if ch == 'f' as c_int || ch == 'F' as c_int => {
-                *bp = FALSE;
+                *bp = false as c_uchar;
                 bad = false;
             }
             ch if ch == '\n' as c_int || ch == '\r' as c_int => {
@@ -218,11 +216,11 @@ pub unsafe extern "C" fn get_sf(vp: *mut c_void, win: *mut c_void) -> c_int {
     if was_sf != (*bp != 0) {
         if *bp == 0 {
             let mut hero = hero_pos();
-            see_floor = TRUE;
+            see_floor = true as c_uchar;
             erase_lamp(&mut hero, proom_ptr());
-            see_floor = FALSE;
+            see_floor = false as c_uchar;
         } else {
-            look(FALSE);
+            look(false as c_uchar);
         }
     }
     NORM
@@ -364,7 +362,7 @@ pub unsafe extern "C" fn parse_opts(str: *mut c_char) {
             if len == name.len() && strncmp(start, op.o_name, len) == 0 {
                 if op.o_putfunc == put_bool {
                     let bp = op.o_opt as *mut c_uchar;
-                    *bp = TRUE;
+                    *bp = true as c_uchar;
                 } else {
                     let mut value = p;
                     while !value.is_null() && *value == '=' as c_char {

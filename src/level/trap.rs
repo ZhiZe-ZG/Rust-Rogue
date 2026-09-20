@@ -40,7 +40,6 @@ const R_SUSTSTR: c_int = 2;
 const ARROW: c_int = 3;
 const VS_POISON: c_int = 0;
 
-const FALSE: c_uchar = 0;
 
 unsafe extern "C" {
     static mut running: c_uchar;
@@ -108,8 +107,8 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
         return Trap::Rust;
     }
 
-    running = FALSE;
-    count = FALSE as c_int;
+    running = false as c_uchar;
+    count = false as c_uchar as c_int;
     draw::reveal_trap_at(pos.y, pos.x);
 
     match trap {
@@ -181,7 +180,7 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
                 init_weapon(arrow, ARROW);
                 (*thing_o(arrow)).o_count = 1;
                 (*thing_o(arrow)).o_pos = hero_pos();
-                fall(arrow, FALSE);
+                fall(arrow, false as c_uchar);
                 msg_str("an arrow shoots past you");
             }
         }

@@ -17,8 +17,6 @@ use crate::player::{CStats, CThing, CThingMonster, CThingObject};
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const TRUE:  c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 const MAXSTR:     usize = 1024;
 const MAXNAME:    usize = 40;
@@ -249,7 +247,7 @@ const SYLLS: &[&str] = &[
 // MAX3(NCOLORS=27, NSTONES=26, NWOOD=33) = 33
 /// Shared boolean scratch array used by init_colors, init_stones,
 /// and init_materials (mirrors the C-side `static bool used[]`).
-static mut USED: [c_uchar; 33] = [FALSE; 33];
+static mut USED: [c_uchar; 33] = [false as c_uchar; 33];
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
@@ -316,7 +314,7 @@ pub unsafe extern "C" fn init_player() {
     let obj = new_item();
     (*thing_o(obj)).o_type  = FOOD;
     (*thing_o(obj)).o_count = 1;
-    add_pack(obj, TRUE);
+    add_pack(obj, true as c_uchar);
 
     // A suit of ring-mail armor
     let obj = new_item();
@@ -326,7 +324,7 @@ pub unsafe extern "C" fn init_player() {
     (*thing_o(obj)).o_flags |= ISKNOW;
     (*thing_o(obj)).o_count = 1;
     cur_armor = obj;
-    add_pack(obj, TRUE);
+    add_pack(obj, true as c_uchar);
 
     // A +1 mace
     let obj = new_item();
@@ -334,7 +332,7 @@ pub unsafe extern "C" fn init_player() {
     (*thing_o(obj)).o_hplus = 1;
     (*thing_o(obj)).o_dplus = 1;
     (*thing_o(obj)).o_flags |= ISKNOW;
-    add_pack(obj, TRUE);
+    add_pack(obj, true as c_uchar);
     cur_weapon = obj;
 
     // A +1 bow
@@ -342,30 +340,30 @@ pub unsafe extern "C" fn init_player() {
     init_weapon(obj, BOW);
     (*thing_o(obj)).o_hplus = 1;
     (*thing_o(obj)).o_flags |= ISKNOW;
-    add_pack(obj, TRUE);
+    add_pack(obj, true as c_uchar);
 
     // Arrows
     let obj = new_item();
     init_weapon(obj, ARROW);
     (*thing_o(obj)).o_count = rnd(15) + 25;
     (*thing_o(obj)).o_flags |= ISKNOW;
-    add_pack(obj, TRUE);
+    add_pack(obj, true as c_uchar);
 }
 
 /// Assign a random colour from `rainbow` to each potion.
 #[no_mangle]
 pub unsafe extern "C" fn init_colors() {
     for i in 0..NCOLORS {
-        USED[i] = FALSE;
+        USED[i] = false as c_uchar;
     }
     for i in 0..MAXPOTIONS {
         let j = loop {
             let j = rnd(NCOLORS as c_int) as usize;
-            if USED[j] == FALSE {
+            if USED[j] == false as c_uchar {
                 break j;
             }
         };
-        USED[j] = TRUE;
+        USED[j] = true as c_uchar;
         p_colors[i] = rainbow[j];
     }
 }
@@ -412,16 +410,16 @@ pub unsafe extern "C" fn init_names() {
 #[no_mangle]
 pub unsafe extern "C" fn init_stones() {
     for i in 0..NSTONES {
-        USED[i] = FALSE;
+        USED[i] = false as c_uchar;
     }
     for i in 0..MAXRINGS {
         let j = loop {
             let j = rnd(NSTONES as c_int) as usize;
-            if USED[j] == FALSE {
+            if USED[j] == false as c_uchar {
                 break j;
             }
         };
-        USED[j] = TRUE;
+        USED[j] = true as c_uchar;
         r_stones[i] = stones[j].st_name as *mut c_char;
         ring_info[i].oi_worth += stones[j].st_value;
     }
@@ -431,25 +429,25 @@ pub unsafe extern "C" fn init_stones() {
 #[no_mangle]
 pub unsafe extern "C" fn init_materials() {
     for i in 0..NWOOD {
-        USED[i] = FALSE;
+        USED[i] = false as c_uchar;
     }
-    let mut metused: [c_uchar; NMETAL] = [FALSE; NMETAL];
+    let mut metused: [c_uchar; NMETAL] = [false as c_uchar; NMETAL];
     for i in 0..MAXSTICKS {
         loop {
             if rnd(2) == 0 {
                 let j = rnd(NMETAL as c_int) as usize;
-                if metused[j] == FALSE {
+                if metused[j] == false as c_uchar {
                     ws_type[i] = b"wand\0".as_ptr() as *mut c_char;
                     ws_made[i] = metal[j];
-                    metused[j] = TRUE;
+                    metused[j] = true as c_uchar;
                     break;
                 }
             } else {
                 let j = rnd(NWOOD as c_int) as usize;
-                if USED[j] == FALSE {
+                if USED[j] == false as c_uchar {
                     ws_type[i] = b"staff\0".as_ptr() as *mut c_char;
                     ws_made[i] = wood[j];
-                    USED[j] = TRUE;
+                    USED[j] = true as c_uchar;
                     break;
                 }
             }

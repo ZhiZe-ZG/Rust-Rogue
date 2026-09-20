@@ -81,57 +81,57 @@ pub type CPlace = PlayerCPlace;
 #[no_mangle]
 pub static mut allscore: c_uchar = 1; // ALLSCORES is enabled in the standard build
 #[no_mangle]
-pub static mut after: c_uchar = 0;
+pub static mut after: bool = false;
 #[no_mangle]
-pub static mut again: c_uchar = 0;
+pub static mut again: bool = false;
 #[no_mangle]
 pub static mut noscore: c_int = 0;
 #[no_mangle]
 pub static mut seenstairs: c_uchar = 0;
 #[no_mangle]
-pub static mut amulet: c_uchar = 0;
+pub static mut amulet: bool = false;
 #[no_mangle]
-pub static mut door_stop: c_uchar = 0;
+pub static mut door_stop: bool = false;
 #[no_mangle]
 pub static mut fight_flush: c_uchar = 0;
 #[no_mangle]
-pub static mut firstmove: c_uchar = 0;
+pub static mut firstmove: bool = false;
 #[no_mangle]
-pub static mut got_ltc: c_uchar = 0;
+pub static mut got_ltc: bool = false;
 #[no_mangle]
-pub static mut has_hit: c_uchar = 0;
+pub static mut has_hit: bool = false;
 #[no_mangle]
 pub static mut in_shell: c_uchar = 0;
 #[no_mangle]
 pub static mut inv_describe: c_uchar = 1;
 #[no_mangle]
-pub static mut jump: c_uchar = 0;
+pub static mut jump: bool = false;
 #[no_mangle]
-pub static mut kamikaze: c_uchar = 0;
+pub static mut kamikaze: bool = false;
 #[no_mangle]
 pub static mut lower_msg: c_uchar = 0;
 #[no_mangle]
-pub static mut move_on: c_uchar = 0;
+pub static mut move_on: bool = false;
 #[no_mangle]
-pub static mut msg_esc: c_uchar = 0;
+pub static mut msg_esc: bool = false;
 #[no_mangle]
 pub static mut passgo: c_uchar = 0;
 #[no_mangle]
-pub static mut playing: c_uchar = 1;
+pub static mut playing: bool = true;
 #[no_mangle]
 pub static mut q_comm: c_uchar = 0;
 #[no_mangle]
-pub static mut running: c_uchar = 0;
+pub static mut running: bool = false;
 #[no_mangle]
 pub static mut save_msg: c_uchar = 1;
 #[no_mangle]
-pub static mut see_floor: c_uchar = 1;
+pub static mut see_floor: bool = true;
 #[no_mangle]
 pub static mut stat_msg: c_uchar = 0;
 #[no_mangle]
-pub static mut terse: c_uchar = 0;
+pub static mut terse: bool = false;
 #[no_mangle]
-pub static mut to_death: c_uchar = 0;
+pub static mut to_death: bool = false;
 #[no_mangle]
 pub static mut tombstone: c_uchar = 1;
 #[no_mangle]
