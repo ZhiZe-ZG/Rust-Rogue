@@ -18,6 +18,7 @@ mod tile;
 mod trap;
 
 pub use ffi::{door_open, new_level};
+pub(crate) use presence::find_floor;
 pub use level::{current_level, current_level_mut, Level, LevelFlags, LEVEL_HEIGHT, LEVEL_WIDTH};
 
 pub use passages::Passage;

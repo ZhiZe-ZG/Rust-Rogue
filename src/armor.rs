@@ -1,5 +1,10 @@
 use crate::io::{addmsg_str, msg_str};
+use crate::daemon::{do_daemons, do_fuses};
+use crate::misc::spread;
+use crate::pack::get_item;
 use crate::player::{CThing, CThingObject};
+use crate::things::{dropcheck, inv_name};
+use crate::io::endmsg;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
@@ -17,13 +22,6 @@ unsafe extern "C" {
     static mut cur_ring: [*mut CThing; 2];
     static mut to_death: c_uchar;
 
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn endmsg() -> c_int;
-    fn dropcheck(obj: *mut CThing) -> c_uchar;
-    fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
-    fn do_daemons(flag: c_int);
-    fn do_fuses(flag: c_int);
-    fn spread(nm: c_int) -> c_int;
 }
 
 #[inline]

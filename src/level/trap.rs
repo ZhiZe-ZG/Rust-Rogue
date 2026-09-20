@@ -9,11 +9,21 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 use crate::draw;
+use crate::armor::rust_armor;
+use crate::fight::swing;
 use crate::io::msg_str;
 use crate::machdep::flush_type;
+use crate::misc::{chg_str, spread};
+use crate::monsters::save;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
+use crate::rip::death;
+use crate::startup::roll;
 use crate::thing_list::new_item;
 use crate::rnd::rnd;
+use crate::weapons::{fall, init_weapon};
+use crate::wizard::teleport;
+
+use super::ffi::new_level;
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
@@ -68,17 +78,6 @@ unsafe extern "C" {
     static mut cur_armor: *mut CThing;
     static mut cur_ring: [*mut CThing; 2];
 
-    fn roll(num: c_int, sides: c_int) -> c_int;
-    fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_int;
-    fn save(which: c_int) -> c_int;
-    fn init_weapon(weap: *mut CThing, which: c_int);
-    fn fall(obj: *mut CThing, pr: c_uchar);
-    fn teleport();
-    fn chg_str(amt: c_int);
-    fn new_level();
-    fn rust_armor(arm: *mut CThing);
-    fn death(thing: c_char) -> !;
-    fn spread(nm: c_int) -> c_int;
 }
 
 #[inline]

@@ -3,6 +3,14 @@ use crate::curses as cur;
 use crate::io::{addmsg_str, msg_str};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::thing_list::{attach, new_item};
+use crate::chase::{dist, roomin, runto};
+use crate::daemon::{fuse, lengthen};
+use crate::daemons::unconfuse;
+use crate::level::find_floor;
+use crate::misc::{rnd_thing, spread};
+use crate::startup::roll;
+use crate::things::new_thing;
+use crate::fight::set_mname;
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -114,18 +122,6 @@ unsafe extern "C" {
     static mut cur_ring: [*mut CThing; 2];
     static mut wizard: c_int;
 
-    fn roomin(cp: *mut CCoord) -> *mut CRoom;
-    fn roll(number: c_int, sides: c_int) -> c_int;
-    fn runto(cp: *mut CCoord);
-    fn rnd_thing() -> c_char;
-    fn new_thing() -> *mut CThing;
-    fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: bool) -> bool;
-    fn dist(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int;
-    fn lengthen(func: *const c_void, xtime: c_int);
-    fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
-    fn unconfuse();
-    fn spread(nm: c_int) -> c_int;
-    fn set_mname(tp: *mut CThing) -> *mut c_char;
     fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
     fn abort() -> !;
 }

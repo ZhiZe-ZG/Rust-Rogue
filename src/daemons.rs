@@ -17,6 +17,13 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
+use crate::chase::{cansee, see_monst};
+use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon};
+use crate::draw::enter_room;
+use crate::misc::{rnd_thing, spread};
+use crate::monsters::wanderer;
+use crate::rings::ring_eat;
+use crate::startup::roll;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -73,21 +80,8 @@ unsafe extern "C" {
 // ─── Extern C functions ──────────────────────────────────────────────────────
 
 unsafe extern "C" {
-    fn roll(number: c_int, sides: c_int) -> c_int;
-    fn see_monst(mp: *mut CThing) -> c_uchar;
-    fn enter_room(cp: *mut CCoord);
     fn choose_str(ts: *const c_char, ns: *const c_char) -> *const c_char;
-    fn ring_eat(hand: c_int) -> c_int;
     fn death(monst: c_char);
-    fn wanderer();
-    fn cansee(y: c_int, x: c_int) -> c_uchar;
-    fn rnd_thing() -> c_char;
-    fn spread(nm: c_int) -> c_int;
-    // Daemon/fuse management (implemented in daemon.rs, same library)
-    fn start_daemon(func: *const c_void, arg: c_int, typ: c_int);
-    fn kill_daemon(func: *const c_void);
-    fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
-    fn extinguish(func: *const c_void);
 }
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
