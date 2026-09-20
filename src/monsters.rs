@@ -2,6 +2,7 @@ use crate::rnd::rnd;
 use crate::curses as cur;
 use crate::io::{addmsg_str, msg_str};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::thing_list::{_attach, new_item};
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -113,12 +114,10 @@ unsafe extern "C" {
     static mut cur_ring: [*mut CThing; 2];
     static mut wizard: c_int;
 
-    fn _attach(list: *mut *mut CThing, item: *mut CThing);
     fn roomin(cp: *mut CCoord) -> *mut CRoom;
     fn roll(number: c_int, sides: c_int) -> c_int;
     fn runto(cp: *mut CCoord);
     fn rnd_thing() -> c_char;
-    fn new_item() -> *mut CThing;
     fn new_thing() -> *mut CThing;
     fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: bool) -> bool;
     fn dist(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int;

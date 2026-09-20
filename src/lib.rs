@@ -13,7 +13,7 @@ pub mod io;
 pub mod options;
 pub mod pack;
 pub mod level;
-pub mod list;
+pub mod thing_list;
 pub mod machdep;
 pub mod mdport;
 pub mod misc;

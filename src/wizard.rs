@@ -8,6 +8,7 @@ use crate::draw;
 use crate::io::msg_str;
 use crate::machdep::flush_type;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
+use crate::thing_list::new_item;
 
 
 const POTION: c_int = b'!' as c_int;
@@ -108,7 +109,6 @@ unsafe extern "C" {
 
     fn inv_name(obj: *mut CThing, is_weapon: c_uchar) -> *mut c_char;
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn new_item() -> *mut CThing;
     fn add_pack(obj: *mut CThing, all: c_uchar);
     fn init_weapon(obj: *mut CThing, which: c_int);
     fn fix_stick(obj: *mut CThing);

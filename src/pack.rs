@@ -4,7 +4,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::draw::chat_at as draw_chat;
 use crate::io::{addmsg_str, msg_str};
-use crate::list::{_detach, discard, new_item};
+use crate::thing_list::{detach, discard, new_item};
 use crate::player::{CRoom, CThing};
 use crate::scrolls::ScrollType;
 
@@ -76,19 +76,15 @@ unsafe fn prev_item(item: *mut CThing) -> *mut CThing {
 }
 
 unsafe fn detach_list(head: *mut *mut CThing, item: *mut CThing) {
-    let list = std::mem::transmute::<*mut *mut CThing, *mut *mut crate::list::CThing>(head);
-    let ptr = std::mem::transmute::<*mut CThing, *mut crate::list::CThing>(item);
-    crate::list::_detach(list, ptr);
+    detach(head, item);
 }
 
 unsafe fn discard_item(item: *mut CThing) {
-    let ptr = std::mem::transmute::<*mut CThing, *mut crate::list::CThing>(item);
-    crate::list::discard(ptr);
+    discard(item);
 }
 
 unsafe fn alloc_item() -> *mut CThing {
-    let ptr = crate::list::new_item();
-    std::mem::transmute::<*mut crate::list::CThing, *mut CThing>(ptr)
+    new_item()
 }
 
 unsafe fn room_flags(rp: *mut CRoom) -> c_short {

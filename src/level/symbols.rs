@@ -9,6 +9,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::curses as cur;
 use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
+pub(crate) use crate::thing_list::{_attach, _free_list, new_item};
 
 use super::passages::MAX_PASSAGES;
 use super::roomgraph::MAX_ROOMS;
@@ -65,15 +66,12 @@ unsafe extern "C" {
     pub(crate) fn wake_monster(y: c_int, x: c_int);
     pub(crate) fn step_ok(ch: c_int) -> c_int;
     pub(crate) fn new_thing() -> *mut CThing;
-    pub(crate) fn new_item() -> *mut CThing;
-    pub(crate) fn _attach(list: *mut *mut CThing, item: *mut CThing);
     pub(crate) fn randmonster(wander: bool) -> c_char;
     pub(crate) fn new_monster(tp: *mut CThing, kind: c_char, cp: *mut CCoord);
     pub(crate) fn give_pack(tp: *mut CThing);
 
     pub(crate) fn enter_room(cp: *mut CCoord);
     pub(crate) fn turn_see(turn_off: bool) -> bool;
-    pub(crate) fn _free_list(ptr: *mut *mut CThing);
     pub(crate) fn roomin(cp: *mut CCoord) -> *mut CRoom;
     pub(crate) fn visuals();
 }

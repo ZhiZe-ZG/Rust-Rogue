@@ -14,6 +14,7 @@ use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 
 use crate::player::{CStats, CThing, CThingMonster, CThingObject};
+use crate::thing_list::new_item;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -285,7 +286,6 @@ unsafe extern "C" {
     fn add_pack(obj: *mut CThing, silent: c_uchar);
     fn init_weapon(obj: *mut CThing, which: c_int);
     fn malloc(size: usize) -> *mut c_void;
-    fn new_item() -> *mut CThing;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
 }

@@ -18,6 +18,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::machdep::flush_type;
 use crate::player::{CCoord, CStats, CThing, CThingMonster, CThingObject};
+use crate::thing_list::{_attach, _detach, discard, new_item};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -154,15 +155,11 @@ unsafe extern "C" {
     fn chg_str(amt: c_int);
     fn rust_armor(arm: *mut CThing);
     fn save(which: c_int) -> c_int;
-    fn new_item() -> *mut CThing;
     fn fallpos(pos: *mut CCoord, newpos: *mut CCoord) -> c_uchar;
     fn fall(obj: *mut CThing, pr: c_uchar);
-    fn discard(item: *mut CThing);
     fn inv_name(obj: *mut CThing, drop_it: c_uchar) -> *mut c_char;
     fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
     fn status();
-    fn _detach(list: *mut *mut CThing, item: *mut CThing);
-    fn _attach(list: *mut *mut CThing, item: *mut CThing);
     fn spread(nm: c_int) -> c_int;
 }
 

@@ -7,6 +7,7 @@ use crate::draw::{chat_at as draw_chat, map_cell_reveal, winat as draw_winat};
 use crate::game;
 use crate::io::{addmsg_str, msg_str};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::thing_list::{discard, new_item};
 
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
@@ -125,12 +126,10 @@ unsafe extern "C" {
 
     fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
     fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
-    fn discard(item: *mut CThing);
     fn pick_color(col: *const c_char) -> *mut c_char;
     fn endmsg() -> c_int;
     fn step_ok(ch: c_int) -> c_int;
     fn find_obj(y: c_int, x: c_int) -> *mut CThing;
-    fn new_item() -> *mut CThing;
     fn new_monster(tp: *mut CThing, monster_type: c_char, cp: *mut CCoord);
     fn randmonster(wander: bool) -> c_char;
     fn whatis(insist: c_uchar, item_type: c_int);

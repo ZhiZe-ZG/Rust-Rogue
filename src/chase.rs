@@ -11,6 +11,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::io::msg_str;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
+use crate::thing_list::{_attach, _detach};
 use crate::rnd::rnd;
 use crate::scrolls::ScrollType;
 
@@ -86,8 +87,6 @@ unsafe extern "C" {
     fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *mut c_char);
     fn sign(nm: c_int) -> c_int;
     fn rndmove(who: *mut CThing) -> *mut CCoord;
-    fn _detach(list: *mut *mut CThing, item: *mut CThing);
-    fn _attach(list: *mut *mut CThing, item: *mut CThing);
     fn abort() -> !;
 }
 

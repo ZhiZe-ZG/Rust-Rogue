@@ -12,6 +12,7 @@ use crate::draw;
 use crate::io::msg_str;
 use crate::machdep::flush_type;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
+use crate::thing_list::new_item;
 use crate::rnd::rnd;
 
 const LEFT: usize = 0;
@@ -70,7 +71,6 @@ unsafe extern "C" {
     fn roll(num: c_int, sides: c_int) -> c_int;
     fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_int;
     fn save(which: c_int) -> c_int;
-    fn new_item() -> *mut CThing;
     fn init_weapon(weap: *mut CThing, which: c_int);
     fn fall(obj: *mut CThing, pr: c_uchar);
     fn teleport();

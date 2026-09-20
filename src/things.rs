@@ -4,6 +4,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::player::{CThing, CThingObject};
+use crate::thing_list::new_item;
 
 const MAXSTR: usize = 1024;
 const NUMTHINGS: usize = 7;
@@ -68,7 +69,6 @@ unsafe extern "C" {
     fn init_weapon(obj: *mut CThing, which: c_int);
     fn isupper(ch: c_int) -> c_int;
     fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
-    fn new_item() -> *mut CThing;
     fn sprintf(buf: *mut c_char, fmt: *const c_char, ...) -> c_int;
     fn strcat(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;

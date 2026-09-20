@@ -10,6 +10,7 @@
 
 
 use crate::player::{CCoord, CPlace, CThing, CThingMonster, CThingObject};
+use crate::thing_list::new_item;
 use crate::rnd::rnd;
 use crate::curses as cur;
 use crate::io::{addmsg_str, msg_str};
@@ -274,7 +275,6 @@ unsafe extern "C" {
     fn look(wakeup: c_uchar);
     fn malloc(size: usize) -> *mut c_void;
     fn missile(ydelta: c_int, xdelta: c_int);
-    fn new_item() -> *mut CThing;
     fn new_level();
     fn option();
     fn pick_up(ch: c_char);

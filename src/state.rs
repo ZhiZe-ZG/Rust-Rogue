@@ -37,6 +37,7 @@ use crate::chase::runners;
 use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::thing_list::{allocated_count, new_item};
 use crate::things::CObjInfo;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -256,7 +257,6 @@ unsafe extern "C" {
 
     // daemons (defined in daemon.rs as `d_list`) and misc C-visible globals
     static mut d_list: [CDelayedAction; MAXDAEMONS];
-    static mut total: c_int;
     static mut between: c_int;
     static mut nh: CCoord;
     static mut group: c_int;
@@ -273,7 +273,6 @@ unsafe extern "C" {
     static mut cNMETAL: c_int;
 
     // libc / curses
-    fn new_item() -> *mut CThing;
     fn malloc(size: usize) -> *mut c_void;
     fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
     fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
@@ -2315,7 +2314,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 
     let _ = rs_write_daemons(savef, (&raw mut d_list) as *mut CDelayedAction, MAXDAEMONS as c_int);
     if MASTER {
-        let _ = rs_write_int(savef, total);                     /* 5.4-list.c */
+        let _ = rs_write_int(savef, allocated_count());          /* 5.4-list.c */
     } else {
         let _ = rs_write_int(savef, 0);
     }
