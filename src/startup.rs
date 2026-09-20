@@ -309,8 +309,8 @@ pub unsafe extern "C" fn shell() {
     cur::endwin();
     resetltchars();
     putchar(b'\n' as c_int);
-    in_shell = TRUE;
-    after = FALSE;
+    in_shell = true as c_uchar;
+    after = false as c_uchar;
     fflush(c_stdout());
     /*
      * Fork and do a shell
