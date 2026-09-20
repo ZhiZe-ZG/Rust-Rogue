@@ -21,7 +21,7 @@ use crate::curses as cur;
 use crate::game;
 use crate::io::step_ok;
 use crate::level::Trap;
-use crate::level::{current_level, current_level_mut, door_open, Tile, LEVEL_WIDTH};
+use crate::level::{door_open, with_current_level, with_current_level_mut, Tile, LEVEL_WIDTH};
 use crate::misc::find_obj;
 use crate::monsters::wake_monster;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
@@ -154,32 +154,33 @@ fn wall_glyph(lvl: &crate::level::Level, y: usize, x: usize) -> c_char {
 /// Hidden doors render like the wall segment they replace until revealed;
 /// hidden traps render like floor until seen; passages always render `#`.
 pub(crate) unsafe fn terrain_chat_at(y: c_int, x: c_int) -> c_char {
-    let lvl = current_level();
-    let (yu, xu) = (y as usize, x as usize);
-    let tile = lvl.map.get(yu, xu).unwrap_or(Tile::Empty);
-    let idx = cell_index(yu, xu);
-    match tile {
-        Tile::Empty => SPACE,
-        Tile::Floor => FLOOR,
-        Tile::Wall => wall_glyph(lvl, yu, xu),
-        Tile::HiddenDoor => {
-            if lvl.flags.real[idx] {
-                DOOR
-            } else {
-                wall_glyph(lvl, yu, xu)
+    with_current_level(|lvl| {
+        let (yu, xu) = (y as usize, x as usize);
+        let tile = lvl.map.get(yu, xu).unwrap_or(Tile::Empty);
+        let idx = cell_index(yu, xu);
+        match tile {
+            Tile::Empty => SPACE,
+            Tile::Floor => FLOOR,
+            Tile::Wall => wall_glyph(lvl, yu, xu),
+            Tile::HiddenDoor => {
+                if lvl.flags.real[idx] {
+                    DOOR
+                } else {
+                    wall_glyph(lvl, yu, xu)
+                }
+            }
+            Tile::Door => DOOR,
+            Tile::Passage => PASSAGE,
+            Tile::Stairs => STAIRS,
+            Tile::Trap => {
+                if lvl.flags.seen[idx] {
+                    TRAP
+                } else {
+                    FLOOR
+                }
             }
         }
-        Tile::Door => DOOR,
-        Tile::Passage => PASSAGE,
-        Tile::Stairs => STAIRS,
-        Tile::Trap => {
-            if lvl.flags.seen[idx] {
-                TRAP
-            } else {
-                FLOOR
-            }
-        }
-    }
+    })
 }
 
 /// Display glyph at `(y, x)`: a level object's type char if one lies here,
@@ -214,51 +215,51 @@ pub(crate) unsafe fn winat(y: c_int, x: c_int) -> c_char {
 /// grids: passage component number, `F_PASS`, `F_SEEN`, `F_REAL`, and the
 /// trap-kind nibble (overlapping low bits exactly as the legacy byte).
 pub(crate) unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
-    let lvl = current_level();
-    let idx = cell_index(y as usize, x as usize);
-    let mut f: u8 = lvl.flags.passnum[idx] & (F_PNUM as u8);
-    if lvl.flags.passage[idx] {
-        f |= F_PASS as u8;
-    }
-    if lvl.flags.seen[idx] {
-        f |= F_SEEN as u8;
-    }
-    if lvl.flags.real[idx] {
-        f |= F_REAL as u8;
-    }
-    f |= (lvl.flags.trap[idx] as u8) & (F_TMASK as u8);
-    f as c_char
+    with_current_level(|lvl| {
+        let idx = cell_index(y as usize, x as usize);
+        let mut f: u8 = lvl.flags.passnum[idx] & (F_PNUM as u8);
+        if lvl.flags.passage[idx] {
+            f |= F_PASS as u8;
+        }
+        if lvl.flags.seen[idx] {
+            f |= F_SEEN as u8;
+        }
+        if lvl.flags.real[idx] {
+            f |= F_REAL as u8;
+        }
+        f |= (lvl.flags.trap[idx] as u8) & (F_TMASK as u8);
+        f as c_char
+    })
 }
 
 /// Trap kind (0-7) at `(y, x)` from the level trap grid.
 pub(crate) unsafe fn trap_kind_at(y: c_int, x: c_int) -> Trap {
-    let lvl = current_level();
-    let idx = cell_index(y as usize, x as usize);
-    lvl.flags.trap[idx]
+    with_current_level(|lvl| lvl.flags.trap[cell_index(y as usize, x as usize)])
 }
 
 /// Whether the tile at `(y, x)` is a hidden trap.
 pub(crate) unsafe fn is_trap_cell(y: c_int, x: c_int) -> bool {
-    let lvl = current_level();
-    matches!(lvl.map.get(y as usize, x as usize), Some(Tile::Trap))
+    with_current_level(|lvl| matches!(lvl.map.get(y as usize, x as usize), Some(Tile::Trap)))
 }
 
 /// Mark `(y, x)` seen (drawn/identified).
 pub(crate) unsafe fn set_seen_at(y: c_int, x: c_int) {
-    let lvl = current_level_mut();
-    let idx = cell_index(y as usize, x as usize);
-    if let Some(seen) = lvl.flags.seen.get_mut(idx) {
-        *seen = true;
-    }
+    with_current_level_mut(|lvl| {
+        let idx = cell_index(y as usize, x as usize);
+        if let Some(seen) = lvl.flags.seen.get_mut(idx) {
+            *seen = true;
+        }
+    });
 }
 
 /// Reveal a secret door / wall segment at `(y, x)` (sets the real bit).
 pub(crate) unsafe fn reveal_secret_at(y: c_int, x: c_int) {
-    let lvl = current_level_mut();
-    let idx = cell_index(y as usize, x as usize);
-    if let Some(real) = lvl.flags.real.get_mut(idx) {
-        *real = true;
-    }
+    with_current_level_mut(|lvl| {
+        let idx = cell_index(y as usize, x as usize);
+        if let Some(real) = lvl.flags.real.get_mut(idx) {
+            *real = true;
+        }
+    });
 }
 
 /// Reveal cell `(y, x)` for a magic-map scroll, returning the glyph to draw.
@@ -268,9 +269,9 @@ pub(crate) unsafe fn reveal_secret_at(y: c_int, x: c_int) {
 /// as `+`, hidden passages as `#`, and hidden traps as `^`.
 pub(crate) unsafe fn map_cell_reveal(y: c_int, x: c_int) -> c_int {
     let ch = terrain_chat_at(y, x);
-    let lvl = current_level_mut();
-    let idx = cell_index(y as usize, x as usize);
-    match ch as u8 {
+    with_current_level_mut(|lvl| {
+        let idx = cell_index(y as usize, x as usize);
+        match ch as u8 {
         b'+' | b'%' => ch as c_int,
         b'-' | b'|' => {
             if !lvl.flags.real[idx] {
@@ -313,7 +314,8 @@ pub(crate) unsafe fn map_cell_reveal(y: c_int, x: c_int) -> c_int {
                 SPACE as c_int
             }
         }
-    }
+        }
+    })
 }
 
 // ─── Screen drawing (moved from misc.rs) ─────────────────────────────────────

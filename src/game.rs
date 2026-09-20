@@ -18,9 +18,9 @@
 //! `crate::draw`, which computes them from the [`Level`] tile map and flag
 //! grids on the fly.
 
-use std::cell::UnsafeCell;
 use std::os::raw::c_int;
 use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::Mutex;
 
 use crate::level::{Level, LEVEL_HEIGHT, LEVEL_WIDTH};
 use crate::player::{CPlace, CThing};
@@ -88,30 +88,30 @@ pub static EQUIPMENT: Equipment = Equipment::EMPTY;
 
 /// Lazily initialized owner of the live dungeon level.
 pub struct CurrentLevel {
-    level: UnsafeCell<Option<Level>>,
+    level: Mutex<Option<Level>>,
 }
-
-// The game has one process-wide level and retains its existing single-threaded
-// access contract through the unsafe accessors below.
-unsafe impl Sync for CurrentLevel {}
 
 impl CurrentLevel {
     const EMPTY: Self = Self {
-        level: UnsafeCell::new(None),
+        level: Mutex::new(None),
     };
 
     #[inline]
-    unsafe fn get_mut(&self) -> &mut Level {
-        let level = &mut *self.level.get();
+    pub fn with<R>(&self, operation: impl FnOnce(&Level) -> R) -> R {
+        let mut level = self.level.lock().unwrap_or_else(|poison| poison.into_inner());
         if level.is_none() {
             *level = Some(Level::new());
         }
-        level.as_mut().unwrap()
+        operation(level.as_ref().unwrap())
     }
 
     #[inline]
-    unsafe fn get(&self) -> &Level {
-        self.get_mut()
+    pub fn with_mut<R>(&self, operation: impl FnOnce(&mut Level) -> R) -> R {
+        let mut level = self.level.lock().unwrap_or_else(|poison| poison.into_inner());
+        if level.is_none() {
+            *level = Some(Level::new());
+        }
+        operation(level.as_mut().unwrap())
     }
 }
 
@@ -191,22 +191,20 @@ pub unsafe fn clear_level() {
 
 /// Process-wide owner for the live dungeon level.
 ///
-/// The canonical holder of the current level. `level::level` forwards its
-/// `current_level_mut` here so the whole crate keeps using the same singleton
-/// while ownership lives in the game-state module. The level is initialized
-/// lazily on its first access.
+/// The canonical holder of the current level. The level is initialized lazily
+/// on its first access and is available only through scoped closure access.
 pub static CURRENT_LEVEL: CurrentLevel = CurrentLevel::EMPTY;
 
-/// The live level owner. Initializes the singleton on first use.
+/// Run `operation` with immutable access to the live level.
 #[inline]
-pub unsafe fn current_level_mut() -> &'static mut Level {
-    CURRENT_LEVEL.get_mut()
+pub fn with_current_level<R>(operation: impl FnOnce(&Level) -> R) -> R {
+    CURRENT_LEVEL.with(operation)
 }
 
-/// Immutable access to the live level.
+/// Run `operation` with mutable access to the live level.
 #[inline]
-pub unsafe fn current_level() -> &'static Level {
-    CURRENT_LEVEL.get()
+pub fn with_current_level_mut<R>(operation: impl FnOnce(&mut Level) -> R) -> R {
+    CURRENT_LEVEL.with_mut(operation)
 }
 
 /// Convenience alias for the crate-wide level size constants.
@@ -235,8 +233,8 @@ mod tests {
     fn current_level_initializes_once() {
         let current_level = CurrentLevel::EMPTY;
 
-        let first = unsafe { current_level.get_mut() } as *mut Level;
-        let second = unsafe { current_level.get() } as *const Level;
+        let first = current_level.with_mut(|level| level as *mut Level);
+        let second = current_level.with(|level| level as *const Level);
 
         assert_eq!(first.cast_const(), second);
     }

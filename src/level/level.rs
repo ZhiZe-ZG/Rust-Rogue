@@ -230,8 +230,8 @@ impl Level {
     }
 }
 
-/// The live level singleton is owned by the game-state module.
-pub use crate::game::{current_level, current_level_mut};
+/// Scoped live-level access is owned by the game-state module.
+pub use crate::game::{with_current_level, with_current_level_mut};
 
 #[cfg(test)]
 mod tests {

@@ -913,7 +913,9 @@ pub unsafe extern "C" fn search() {
                     }
                     b'.' => {
                         if rnd(2 + probinc) == 0 {
-                            crate::level::current_level_mut().reveal_trap(y as usize, x as usize);
+                            crate::level::with_current_level_mut(|current| {
+                                current.reveal_trap(y as usize, x as usize);
+                            });
                             if terse == 0 {
                                 addmsg_str("you found ");
                             }

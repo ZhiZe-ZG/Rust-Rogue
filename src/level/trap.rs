@@ -115,7 +115,9 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
 
     running = false as c_uchar;
     count = false as c_uchar as c_int;
-    crate::level::current_level_mut().reveal_trap(pos.y as usize, pos.x as usize);
+    crate::level::with_current_level_mut(|current| {
+        current.reveal_trap(pos.y as usize, pos.x as usize);
+    });
 
     match trap {
         Trap::Door => {
@@ -196,7 +198,9 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
         }
         Trap::Teleport => {
             teleport();
-            crate::level::current_level_mut().reveal_trap(pos.y as usize, pos.x as usize);
+            crate::level::with_current_level_mut(|current| {
+                current.reveal_trap(pos.y as usize, pos.x as usize);
+            });
             draw::redraw_cell(pos.y, pos.x);
         }
         Trap::Dart => {

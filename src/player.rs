@@ -328,7 +328,9 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
 
     if (fl as u8 & F_REAL as u8) == 0 && ch == FLOOR {
         if !player_has(ISLEVIT) {
-            crate::level::current_level_mut().reveal_trap(next_pos.y as usize, next_pos.x as usize);
+            crate::level::with_current_level_mut(|level| {
+                level.reveal_trap(next_pos.y as usize, next_pos.x as usize);
+            });
             ch = TRAP;
         }
     } else if player_has(ISHELD) && ch != b'F' as c_char {

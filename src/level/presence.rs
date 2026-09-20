@@ -2,7 +2,7 @@
 //! the hero spawn.
 //!
 //! Room selection and geometry go through the Rust `Level` model
-//! (`Level::rnd_room`/`Level::rnd_pos` on `current_level_mut()`); the
+//! (`Level::rnd_room`/`Level::rnd_pos` through scoped level access); the
 //! remaining C `places`/`player` globals are touched via the raw symbols in
 //! [`super::symbols`]. [`super::ffi::new_level`] calls these after the
 //! rooms/passages have been dug and mirrored.
@@ -16,7 +16,7 @@ use crate::player::{CCoord, CRoom, CThing};
 use crate::rnd::rnd;
 
 use super::ffitools::{FLOOR, PASSAGE, STAIRS};
-use super::level::{current_level_mut, LevelFlags, LEVEL_WIDTH};
+use super::level::{with_current_level_mut, LevelFlags, LEVEL_WIDTH};
 use super::symbols::{
     amulet, attach, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch, new_item,
     new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, stairs,
@@ -56,7 +56,6 @@ pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: b
         return false;
     }
 
-    let current = current_level_mut();
     let room_idx = room_slot_of(rp);
 
     let mut cnt = limit;
@@ -75,13 +74,15 @@ pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: b
             return false;
         }
 
-        let idx = match room_idx {
-            Some(idx) => idx,
-            None => current.rnd_room(),
-        };
-        let room = &current.rooms[idx];
-        let compchar = if room.is_maze() { PASSAGE } else { FLOOR };
-        let pos = current.rnd_pos(room);
+        let (compchar, pos) = with_current_level_mut(|current| {
+            let idx = match room_idx {
+                Some(idx) => idx,
+                None => current.rnd_room(),
+            };
+            let room = &current.rooms[idx];
+            let compchar = if room.is_maze() { PASSAGE } else { FLOOR };
+            (compchar, current.rnd_pos(room))
+        });
 
         (*cp).x = pos.x;
         (*cp).y = pos.y;
@@ -103,13 +104,15 @@ pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: b
 
 /// Fill one treasure room with `MIN..MAX` objects and monsters.
 unsafe fn treas_room() {
-    let current = current_level_mut();
     let mut mp = CCoord { x: 0, y: 0 };
-    let idx = current.rnd_room();
-    let room = &current.rooms[idx];
+    let (idx, mut spots) = with_current_level_mut(|current| {
+        let idx = current.rnd_room();
+        let room = &current.rooms[idx];
+        let spots = (room.size.y - 2) * (room.size.x - 2) - MINTREAS;
+        (idx, spots)
+    });
     let rp = &mut rooms[idx];
 
-    let mut spots = (room.size.y - 2) * (room.size.x - 2) - MINTREAS;
     if spots > (MAXTREAS - MINTREAS) {
         spots = MAXTREAS - MINTREAS;
     }
@@ -129,7 +132,10 @@ unsafe fn treas_room() {
     if nm < num_monst + 2 {
         nm = num_monst + 2;
     }
-    spots = (room.size.y - 2) * (room.size.x - 2);
+    spots = with_current_level_mut(|current| {
+        let room = &current.rooms[idx];
+        (room.size.y - 2) * (room.size.x - 2)
+    });
     if nm > spots {
         nm = spots;
     }
@@ -287,13 +293,14 @@ unsafe fn place_traps() {
 
         // Record the trap in the level model: a floor cell becomes a hidden
         // trap (non-real, with its kind in the trap grid).
-        let current = current_level_mut();
-        current
-            .map
-            .set(stairs.y as usize, stairs.x as usize, Tile::Trap);
-        let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
-        current.flags.real[idx] = false;
-        current.flags.trap[idx] = Trap::from_raw(rnd(NTRAPS) as u8);
+        with_current_level_mut(|current| {
+            current
+                .map
+                .set(stairs.y as usize, stairs.x as usize, Tile::Trap);
+            let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
+            current.flags.real[idx] = false;
+            current.flags.trap[idx] = Trap::from_raw(rnd(NTRAPS) as u8);
+        });
         i -= 1;
     }
 }
@@ -306,9 +313,11 @@ unsafe fn place_traps() {
 unsafe fn place_stairs() {
     find_floor(std::ptr::null_mut(), &raw mut stairs, 0, false);
     // The staircase is a tile in the level map; it renders `%` via draw.
-    current_level_mut()
-        .map
-        .set(stairs.y as usize, stairs.x as usize, Tile::Stairs);
+    with_current_level_mut(|current| {
+        current
+            .map
+            .set(stairs.y as usize, stairs.x as usize, Tile::Stairs);
+    });
     seenstairs = false;
 }
 

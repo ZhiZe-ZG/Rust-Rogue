@@ -2159,29 +2159,30 @@ unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
         return WRITE_ERROR;
     }
 
-    let lvl = crate::game::current_level();
-    let mut i: c_int = 0;
-    while i < count {
-        let y = i / MAXCOLS;
-        let x = i % MAXCOLS;
-        let idx = (y as usize) * crate::level::LEVEL_WIDTH + (x as usize);
-        let tile = lvl
-            .map
-            .get(y as usize, x as usize)
-            .unwrap_or(crate::level::Tile::Empty);
-        let _ = rs_write_char(savef, tile.to_u8() as c_char);
-        let _ = rs_write_boolean(savef, lvl.flags.real[idx] as c_int);
-        let _ = rs_write_boolean(savef, lvl.flags.passage[idx] as c_int);
-        let _ = rs_write_boolean(savef, lvl.flags.seen[idx] as c_int);
-        let _ = rs_write_char(savef, lvl.flags.passnum[idx] as c_char);
-        let _ = rs_write_char(savef, lvl.flags.trap[idx] as u8 as c_char);
-        // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
-        let place_idx = ((x as usize) << 5) + (y as usize);
-        let _ = rs_write_thing_reference(savef, mlist, crate::game::places[place_idx].p_monst);
-        i += 1;
-    }
+    crate::game::with_current_level(|lvl| {
+        let mut i: c_int = 0;
+        while i < count {
+            let y = i / MAXCOLS;
+            let x = i % MAXCOLS;
+            let idx = (y as usize) * crate::level::LEVEL_WIDTH + (x as usize);
+            let tile = lvl
+                .map
+                .get(y as usize, x as usize)
+                .unwrap_or(crate::level::Tile::Empty);
+            let _ = rs_write_char(savef, tile.to_u8() as c_char);
+            let _ = rs_write_boolean(savef, lvl.flags.real[idx] as c_int);
+            let _ = rs_write_boolean(savef, lvl.flags.passage[idx] as c_int);
+            let _ = rs_write_boolean(savef, lvl.flags.seen[idx] as c_int);
+            let _ = rs_write_char(savef, lvl.flags.passnum[idx] as c_char);
+            let _ = rs_write_char(savef, lvl.flags.trap[idx] as u8 as c_char);
+            // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
+            let place_idx = ((x as usize) << 5) + (y as usize);
+            let _ = rs_write_thing_reference(savef, mlist, crate::game::places[place_idx].p_monst);
+            i += 1;
+        }
 
-    WRITE_ERROR
+        WRITE_ERROR
+    })
 }
 
 /// Restore the playable cell grid, resolving monster references against the
@@ -2194,46 +2195,47 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
         return read_stat();
     }
 
-    let lvl = crate::game::current_level_mut();
-    let mut i: c_int = 0;
-    while i < count {
-        let y = i / MAXCOLS;
-        let x = i % MAXCOLS;
-        let idx = (y as usize) * crate::level::LEVEL_WIDTH + (x as usize);
+    crate::game::with_current_level_mut(|lvl| {
+        let mut i: c_int = 0;
+        while i < count {
+            let y = i / MAXCOLS;
+            let x = i % MAXCOLS;
+            let idx = (y as usize) * crate::level::LEVEL_WIDTH + (x as usize);
 
-        let mut tile_disc: c_char = 0;
-        let mut real: c_uchar = 0;
-        let mut passage: c_uchar = 0;
-        let mut seen: c_uchar = 0;
-        let mut passnum: c_char = 0;
-        let mut trap_kind: c_char = 0;
-        let mut monst: *mut CThing = std::ptr::null_mut();
+            let mut tile_disc: c_char = 0;
+            let mut real: c_uchar = 0;
+            let mut passage: c_uchar = 0;
+            let mut seen: c_uchar = 0;
+            let mut passnum: c_char = 0;
+            let mut trap_kind: c_char = 0;
+            let mut monst: *mut CThing = std::ptr::null_mut();
 
-        let _ = rs_read_char(inf, &mut tile_disc);
-        let _ = rs_read_boolean(inf, &mut real);
-        let _ = rs_read_boolean(inf, &mut passage);
-        let _ = rs_read_boolean(inf, &mut seen);
-        let _ = rs_read_char(inf, &mut passnum);
-        let _ = rs_read_char(inf, &mut trap_kind);
-        let _ = rs_read_thing_reference(inf, mlist, &mut monst);
+            let _ = rs_read_char(inf, &mut tile_disc);
+            let _ = rs_read_boolean(inf, &mut real);
+            let _ = rs_read_boolean(inf, &mut passage);
+            let _ = rs_read_boolean(inf, &mut seen);
+            let _ = rs_read_char(inf, &mut passnum);
+            let _ = rs_read_char(inf, &mut trap_kind);
+            let _ = rs_read_thing_reference(inf, mlist, &mut monst);
 
-        let tile =
-            crate::level::Tile::from_u8(tile_disc as u8).unwrap_or(crate::level::Tile::Empty);
-        let _ = lvl.map.set(y as usize, x as usize, tile);
-        lvl.flags.real[idx] = real != 0;
-        lvl.flags.passage[idx] = passage != 0;
-        lvl.flags.seen[idx] = seen != 0;
-        lvl.flags.passnum[idx] = passnum as u8;
-        lvl.flags.trap[idx] = crate::level::Trap::from_raw(trap_kind as u8);
+            let tile = crate::level::Tile::from_u8(tile_disc as u8)
+                .unwrap_or(crate::level::Tile::Empty);
+            let _ = lvl.map.set(y as usize, x as usize, tile);
+            lvl.flags.real[idx] = real != 0;
+            lvl.flags.passage[idx] = passage != 0;
+            lvl.flags.seen[idx] = seen != 0;
+            lvl.flags.passnum[idx] = passnum as u8;
+            lvl.flags.trap[idx] = crate::level::Trap::from_raw(trap_kind as u8);
 
-        // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
-        let place_idx = ((x as usize) << 5) + (y as usize);
-        crate::game::places[place_idx].p_monst = monst;
-        crate::game::MONSTERS[place_idx] = monst;
-        i += 1;
-    }
+            // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
+            let place_idx = ((x as usize) << 5) + (y as usize);
+            crate::game::places[place_idx].p_monst = monst;
+            crate::game::MONSTERS[place_idx] = monst;
+            i += 1;
+        }
 
-    read_stat()
+        read_stat()
+    })
 }
 
 // ─── Whole-game save / restore ───────────────────────────────────────────────
