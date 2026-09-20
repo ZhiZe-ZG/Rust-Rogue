@@ -368,7 +368,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
             seenstairs = true as c_uchar;
             running = false as c_uchar;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, game::EQUIPMENT.weapon, false as c_uchar);
+                fight(&mut next_pos, game::EQUIPMENT.weapon(), false as c_uchar);
             } else {
                 take = ch;
                 move_stuff(&mut next_pos, fl);
@@ -377,7 +377,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         _ => {
             running = false as c_uchar;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, game::EQUIPMENT.weapon, false as c_uchar);
+                fight(&mut next_pos, game::EQUIPMENT.weapon(), false as c_uchar);
             } else {
                 if ch != STAIRS {
                     take = ch;

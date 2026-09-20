@@ -76,16 +76,16 @@ pub unsafe extern "C" fn ring_on() {
         return;
     }
 
-    let ring = if EQUIPMENT.rings[LEFT].is_null() && EQUIPMENT.rings[RIGHT].is_null() {
+    let left_hand = if EQUIPMENT.left_ring().is_null() && EQUIPMENT.right_ring().is_null() {
         let hand = gethand();
         if hand < 0 {
             return;
         }
-        hand as usize
-    } else if EQUIPMENT.rings[LEFT].is_null() {
-        LEFT
-    } else if EQUIPMENT.rings[RIGHT].is_null() {
-        RIGHT
+        hand as usize == LEFT
+    } else if EQUIPMENT.left_ring().is_null() {
+        true
+    } else if EQUIPMENT.right_ring().is_null() {
+        false
     } else {
         if terse == 0 {
             msg_str("you already have a ring on each hand");
@@ -95,7 +95,11 @@ pub unsafe extern "C" fn ring_on() {
         return;
     };
 
-    EQUIPMENT.rings[ring] = obj;
+    if left_hand {
+        EQUIPMENT.set_left_ring(obj);
+    } else {
+        EQUIPMENT.set_right_ring(obj);
+    }
 
     match (*thing_o(obj)).o_which {
         R_ADDSTR => chg_str((*thing_o(obj)).o_arm),
@@ -117,27 +121,31 @@ pub unsafe extern "C" fn ring_on() {
 /// Removes a worn ring from the chosen hand after passing drop constraints.
 #[no_mangle]
 pub unsafe extern "C" fn ring_off() {
-    let ring = if EQUIPMENT.rings[LEFT].is_null() && EQUIPMENT.rings[RIGHT].is_null() {
+    let left_hand = if EQUIPMENT.left_ring().is_null() && EQUIPMENT.right_ring().is_null() {
         if terse != 0 {
             msg_str("no rings");
         } else {
             msg_str("you aren't wearing any rings");
         }
         return;
-    } else if EQUIPMENT.rings[LEFT].is_null() {
-        RIGHT
-    } else if EQUIPMENT.rings[RIGHT].is_null() {
-        LEFT
+    } else if EQUIPMENT.left_ring().is_null() {
+        false
+    } else if EQUIPMENT.right_ring().is_null() {
+        true
     } else {
         let hand = gethand();
         if hand < 0 {
             return;
         }
-        hand as usize
+        hand as usize == LEFT
     };
 
     mpos = 0;
-    let obj = EQUIPMENT.rings[ring];
+    let obj = if left_hand {
+        EQUIPMENT.left_ring()
+    } else {
+        EQUIPMENT.right_ring()
+    };
     if obj.is_null() {
         msg_str("not wearing such a ring");
         return;
@@ -191,7 +199,11 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
         return 0;
     }
 
-    let ring = EQUIPMENT.rings[hand_idx];
+    let ring = match hand_idx {
+        LEFT => EQUIPMENT.left_ring(),
+        RIGHT => EQUIPMENT.right_ring(),
+        _ => return 0,
+    };
     if ring.is_null() {
         return 0;
     }

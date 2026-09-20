@@ -229,8 +229,8 @@ pub unsafe extern "C" fn do_zap() {
             (*thing_o(&mut bolt)).o_hplus = 100;
             (*thing_o(&mut bolt)).o_dplus = 1;
             (*thing_o(&mut bolt)).o_flags = ISMISL;
-            if !EQUIPMENT.weapon.is_null() {
-                (*thing_o(&mut bolt)).o_launch = (*thing_o(EQUIPMENT.weapon)).o_which;
+            if !EQUIPMENT.weapon().is_null() {
+                (*thing_o(&mut bolt)).o_launch = (*thing_o(EQUIPMENT.weapon())).o_which;
             }
             do_motion(&mut bolt, delta.y, delta.x);
             let bolt_pos = (*thing_o(&mut bolt)).o_pos;

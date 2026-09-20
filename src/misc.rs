@@ -47,8 +47,6 @@ const HUNGERTIME: c_int = 1300;
 const STOMACHSIZE: c_int = 2000;
 const AFTER: c_int = 2;
 const ESCAPE: c_int = 27;
-const LEFT: c_int = 0;
-const RIGHT: c_int = 1;
 const NORM: c_int = 0;
 const F_SEEN: c_uchar = 0x40;
 
@@ -192,8 +190,8 @@ pub unsafe extern "C" fn eat() {
         food_left = STOMACHSIZE;
     }
     hungry_state = 0;
-    if obj == EQUIPMENT.weapon {
-        EQUIPMENT.weapon = std::ptr::null_mut();
+    if obj == EQUIPMENT.weapon() {
+        EQUIPMENT.set_weapon(std::ptr::null_mut());
     }
     if (*thing_o(obj)).o_which == 1 {
         msg_str(&format!(
@@ -244,14 +242,14 @@ pub unsafe extern "C" fn chg_str(amt: c_int) {
     stats.s_str = new_strength as c_uint;
     let mut comp = stats.s_str;
 
-    if !EQUIPMENT.rings[LEFT as usize].is_null() {
-        let ring = EQUIPMENT.rings[LEFT as usize];
+    if !EQUIPMENT.left_ring().is_null() {
+        let ring = EQUIPMENT.left_ring();
         let bonus = (*thing_o(ring)).o_arm as c_int;
         let reduced = comp as c_int - bonus;
         comp = if reduced < 3 { 3 } else { reduced as c_uint };
     }
-    if !EQUIPMENT.rings[RIGHT as usize].is_null() {
-        let ring = EQUIPMENT.rings[RIGHT as usize];
+    if !EQUIPMENT.right_ring().is_null() {
+        let ring = EQUIPMENT.right_ring();
         let bonus = (*thing_o(ring)).o_arm as c_int;
         let reduced = comp as c_int - bonus;
         comp = if reduced < 3 { 3 } else { reduced as c_uint };
@@ -304,10 +302,10 @@ pub unsafe fn is_current(obj: *mut CThing) -> bool {
     if obj.is_null() {
         return false;
     }
-    if obj == EQUIPMENT.armor
-        || obj == EQUIPMENT.weapon
-        || obj == EQUIPMENT.rings[LEFT as usize]
-        || obj == EQUIPMENT.rings[RIGHT as usize]
+    if obj == EQUIPMENT.armor()
+        || obj == EQUIPMENT.weapon()
+        || obj == EQUIPMENT.left_ring()
+        || obj == EQUIPMENT.right_ring()
     {
         if terse == 0 {
             addmsg_str("That's already ");

@@ -194,8 +194,8 @@ pub unsafe extern "C" fn status() {
     let mut ox = 0;
     let pstats = &mut (*thing_t(&raw mut player)).t_stats;
     let max_hp = pstats.s_maxhp;
-    let mut temp = if !EQUIPMENT.armor.is_null() {
-        (*EQUIPMENT.armor).o.o_arm
+    let mut temp = if !EQUIPMENT.armor().is_null() {
+        (*EQUIPMENT.armor()).o.o_arm
     } else {
         pstats.s_arm
     };

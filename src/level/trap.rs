@@ -26,9 +26,6 @@ use crate::wizard::teleport;
 
 use super::ffi::new_level;
 
-const LEFT: usize = 0;
-const RIGHT: usize = 1;
-
 const ISLEVIT: c_short = 0o0000010;
 const ISRUN: c_short = 0o020000;
 
@@ -93,8 +90,7 @@ unsafe fn hero_pos() -> CCoord {
 }
 
 #[inline]
-unsafe fn ring_is(which: usize, ring_type: c_int) -> bool {
-    let ring = EQUIPMENT.rings[which];
+unsafe fn ring_is(ring: *mut CThing, ring_type: c_int) -> bool {
     !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
@@ -213,7 +209,10 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
                     msg_str("a poisoned dart killed you");
                     death(b'd' as c_char);
                 }
-                if !ring_is(LEFT, R_SUSTSTR) && !ring_is(RIGHT, R_SUSTSTR) && save(VS_POISON) == 0 {
+                if !ring_is(EQUIPMENT.left_ring(), R_SUSTSTR)
+                    && !ring_is(EQUIPMENT.right_ring(), R_SUSTSTR)
+                    && save(VS_POISON) == 0
+                {
                     chg_str(-1);
                 }
                 msg_str("a small dart just hit you in the shoulder");
@@ -221,7 +220,7 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
         }
         Trap::Rust => {
             msg_str("a gush of water hits you on the head");
-            rust_armor(EQUIPMENT.armor);
+            rust_armor(EQUIPMENT.armor());
         }
     }
 

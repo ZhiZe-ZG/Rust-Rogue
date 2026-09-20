@@ -12,8 +12,6 @@ use std::os::raw::{c_char, c_int, c_uchar};
 const ARMOR: c_int = ']' as c_int;
 const ISKNOW: c_int = 0o000002;
 const ISPROT: c_int = 0o000040;
-const LEFT: usize = 0;
-const RIGHT: usize = 1;
 const R_SUSTARM: c_int = 13;
 
 unsafe extern "C" {
@@ -29,8 +27,7 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn ring_is(which: usize, ring_type: c_int) -> bool {
-    let ring = EQUIPMENT.rings[which];
+unsafe fn ring_is(ring: *mut CThing, ring_type: c_int) -> bool {
     !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
@@ -42,7 +39,7 @@ pub unsafe extern "C" fn wear() {
         return;
     }
 
-    if !EQUIPMENT.armor.is_null() {
+    if !EQUIPMENT.armor().is_null() {
         addmsg_str("you are already wearing some");
         if terse == 0 {
             addmsg_str(".  You'll have to take it off first");
@@ -60,7 +57,7 @@ pub unsafe extern "C" fn wear() {
     waste_time();
     (*thing_o(obj)).o_flags |= ISKNOW;
     let sp = inv_name(obj, true as c_uchar);
-    EQUIPMENT.armor = obj;
+    EQUIPMENT.set_armor(obj);
     if terse == 0 {
         addmsg_str("you are now ");
     }
@@ -70,7 +67,7 @@ pub unsafe extern "C" fn wear() {
 /// Removes currently worn armor after curse/drop checks.
 #[no_mangle]
 pub unsafe extern "C" fn take_off() {
-    let obj = EQUIPMENT.armor;
+    let obj = EQUIPMENT.armor();
     if obj.is_null() {
         after = false as c_uchar;
         if terse != 0 {
@@ -81,11 +78,11 @@ pub unsafe extern "C" fn take_off() {
         return;
     }
 
-    if dropcheck(EQUIPMENT.armor) == 0 {
+    if dropcheck(EQUIPMENT.armor()) == 0 {
         return;
     }
 
-    EQUIPMENT.armor = std::ptr::null_mut();
+    EQUIPMENT.set_armor(std::ptr::null_mut());
     if terse != 0 {
         addmsg_str("was");
     } else {
@@ -120,8 +117,8 @@ pub unsafe extern "C" fn rust_armor(arm: *mut CThing) {
     }
 
     if ((*thing_o(arm)).o_flags & ISPROT) != 0
-        || ring_is(LEFT, R_SUSTARM)
-        || ring_is(RIGHT, R_SUSTARM)
+        || ring_is(EQUIPMENT.left_ring(), R_SUSTARM)
+        || ring_is(EQUIPMENT.right_ring(), R_SUSTARM)
     {
         if to_death == 0 {
             msg_str("the rust vanishes instantly");

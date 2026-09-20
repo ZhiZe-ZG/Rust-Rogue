@@ -19,27 +19,71 @@
 //! grids on the fly.
 
 use std::os::raw::c_int;
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 use crate::level::{Level, LEVEL_HEIGHT, LEVEL_WIDTH};
 use crate::player::{CPlace, CThing};
 
 /// Non-owning pointers to the objects currently equipped by the player.
 pub struct Equipment {
-    pub armor: *mut CThing,
-    pub rings: [*mut CThing; 2],
-    pub weapon: *mut CThing,
+    armor: AtomicPtr<CThing>,
+    rings: [AtomicPtr<CThing>; 2],
+    weapon: AtomicPtr<CThing>,
 }
 
 impl Equipment {
     const EMPTY: Self = Self {
-        armor: std::ptr::null_mut(),
-        rings: [std::ptr::null_mut(); 2],
-        weapon: std::ptr::null_mut(),
+        armor: AtomicPtr::new(std::ptr::null_mut()),
+        rings: [
+            AtomicPtr::new(std::ptr::null_mut()),
+            AtomicPtr::new(std::ptr::null_mut()),
+        ],
+        weapon: AtomicPtr::new(std::ptr::null_mut()),
     };
+
+    #[inline]
+    pub fn armor(&self) -> *mut CThing {
+        self.armor.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn set_armor(&self, armor: *mut CThing) {
+        self.armor.store(armor, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn left_ring(&self) -> *mut CThing {
+        self.rings[0].load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn right_ring(&self) -> *mut CThing {
+        self.rings[1].load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn set_left_ring(&self, ring: *mut CThing) {
+        self.rings[0].store(ring, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn set_right_ring(&self, ring: *mut CThing) {
+        self.rings[1].store(ring, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn weapon(&self) -> *mut CThing {
+        self.weapon.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn set_weapon(&self, weapon: *mut CThing) {
+        self.weapon.store(weapon, Ordering::Relaxed);
+    }
 }
 
 /// Current player equipment. Items remain owned by the player's pack.
-pub static mut EQUIPMENT: Equipment = Equipment::EMPTY;
+pub static EQUIPMENT: Equipment = Equipment::EMPTY;
 
 /// Index of a grid cell, matching the legacy C layout `&places[(x<<5)+y]`.
 #[inline]
@@ -140,3 +184,23 @@ pub unsafe fn current_level() -> &'static Level {
 
 /// Convenience alias for the crate-wide level size constants.
 pub use crate::level::{LEVEL_HEIGHT as GAME_HEIGHT, LEVEL_WIDTH as GAME_WIDTH};
+
+#[cfg(test)]
+mod tests {
+    use super::Equipment;
+    use crate::player::CThing;
+    use std::mem::MaybeUninit;
+
+    #[test]
+    fn ring_accessors_keep_hands_independent() {
+        let equipment = Equipment::EMPTY;
+        let mut left = MaybeUninit::<CThing>::uninit();
+        let mut right = MaybeUninit::<CThing>::uninit();
+
+        equipment.set_left_ring(left.as_mut_ptr());
+        equipment.set_right_ring(right.as_mut_ptr());
+
+        assert_eq!(equipment.left_ring(), left.as_mut_ptr());
+        assert_eq!(equipment.right_ring(), right.as_mut_ptr());
+    }
+}

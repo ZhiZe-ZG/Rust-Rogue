@@ -33,8 +33,6 @@ const STICK: c_int = b'/' as c_int;
 const GOLD: c_int = b'*' as c_int;
 const AMULET: c_int = b',' as c_int;
 
-const LEFT: c_int = 0;
-const RIGHT: c_int = 1;
 const ISCURSED: c_int = 0o000001;
 const ISKNOW: c_int = 0o000200;
 
@@ -238,15 +236,15 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
     }
 
     if inv_describe != 0 {
-        if obj == EQUIPMENT.armor {
+        if obj == EQUIPMENT.armor() {
             strcat(empty, c" (being worn)".as_ptr());
         }
-        if obj == EQUIPMENT.weapon {
+        if obj == EQUIPMENT.weapon() {
             strcat(empty, c" (weapon in hand)".as_ptr());
         }
-        if obj == EQUIPMENT.rings[LEFT as usize] {
+        if obj == EQUIPMENT.left_ring() {
             strcat(empty, c" (on left hand)".as_ptr());
-        } else if obj == EQUIPMENT.rings[RIGHT as usize] {
+        } else if obj == EQUIPMENT.right_ring() {
             strcat(empty, c" (on right hand)".as_ptr());
         }
     }
@@ -268,10 +266,10 @@ pub unsafe extern "C" fn dropcheck(obj: *mut CThing) -> c_uchar {
     if obj.is_null() {
         return true as c_uchar;
     }
-    if obj != EQUIPMENT.armor
-        && obj != EQUIPMENT.weapon
-        && obj != EQUIPMENT.rings[LEFT as usize]
-        && obj != EQUIPMENT.rings[RIGHT as usize]
+    if obj != EQUIPMENT.armor()
+        && obj != EQUIPMENT.weapon()
+        && obj != EQUIPMENT.left_ring()
+        && obj != EQUIPMENT.right_ring()
     {
         return true as c_uchar;
     }
@@ -279,18 +277,17 @@ pub unsafe extern "C" fn dropcheck(obj: *mut CThing) -> c_uchar {
         msg_str("you can't.  It appears to be cursed");
         return false as c_uchar;
     }
-    if obj == EQUIPMENT.weapon {
-        EQUIPMENT.weapon = std::ptr::null_mut();
-    } else if obj == EQUIPMENT.armor {
+    if obj == EQUIPMENT.weapon() {
+        EQUIPMENT.set_weapon(std::ptr::null_mut());
+    } else if obj == EQUIPMENT.armor() {
         waste_time();
-        EQUIPMENT.armor = std::ptr::null_mut();
+        EQUIPMENT.set_armor(std::ptr::null_mut());
     } else {
-        let idx = if obj == EQUIPMENT.rings[LEFT as usize] {
-            LEFT
+        if obj == EQUIPMENT.left_ring() {
+            EQUIPMENT.set_left_ring(std::ptr::null_mut());
         } else {
-            RIGHT
-        };
-        EQUIPMENT.rings[idx as usize] = std::ptr::null_mut();
+            EQUIPMENT.set_right_ring(std::ptr::null_mut());
+        }
         match (*thing_o(obj)).o_which {
             0 => chg_str(-(*thing_o(obj)).o_arm),
             _ => {}

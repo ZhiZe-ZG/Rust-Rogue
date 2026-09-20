@@ -40,9 +40,6 @@ const H_WALL: c_int = '-' as c_int;
 const V_WALL: c_int = '|' as c_int;
 const TRAP: c_int = '^' as c_int;
 
-const LEFT: usize = 0;
-const RIGHT: usize = 1;
-
 const ISHUH: c_short = 0o0001000;
 const ISHALU: c_short = 0o0004000;
 const CANSEE: c_short = 0o0000002;
@@ -182,8 +179,7 @@ unsafe fn thing_has(tp: *mut CThing, flag: c_short) -> bool {
 }
 
 #[inline]
-unsafe fn ring_is(which: usize, ring_type: c_int) -> bool {
-    let ring = EQUIPMENT.rings[which];
+unsafe fn ring_is(ring: *mut CThing, ring_type: c_int) -> bool {
     !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
@@ -291,8 +287,8 @@ pub unsafe extern "C" fn quaff() {
         }
         return;
     }
-    if obj == EQUIPMENT.weapon {
-        EQUIPMENT.weapon = ptr::null_mut();
+    if obj == EQUIPMENT.weapon() {
+        EQUIPMENT.set_weapon(ptr::null_mut());
     }
 
     discardit = (*thing_o(obj)).o_count == 1;
@@ -310,7 +306,9 @@ pub unsafe extern "C" fn quaff() {
         ),
         PotionType::Poison => {
             (*pot_info.as_mut_ptr().add(PotionType::Poison.index())).oi_know = true as c_uchar;
-            if ring_is(LEFT, R_SUSTSTR) || ring_is(RIGHT, R_SUSTSTR) {
+            if ring_is(EQUIPMENT.left_ring(), R_SUSTSTR)
+                || ring_is(EQUIPMENT.right_ring(), R_SUSTSTR)
+            {
                 msg_str("you feel momentarily sick");
             } else {
                 chg_str(-(rnd(3) + 1));
@@ -444,31 +442,31 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::Restore => {
             let stats = thing_t(&raw mut player);
-            if ring_is(LEFT, R_ADDSTR) {
+            if ring_is(EQUIPMENT.left_ring(), R_ADDSTR) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
-                    -(*thing_o(EQUIPMENT.rings[LEFT])).o_arm,
+                    -(*thing_o(EQUIPMENT.left_ring())).o_arm,
                 );
             }
-            if ring_is(RIGHT, R_ADDSTR) {
+            if ring_is(EQUIPMENT.right_ring(), R_ADDSTR) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
-                    -(*thing_o(EQUIPMENT.rings[RIGHT])).o_arm,
+                    -(*thing_o(EQUIPMENT.right_ring())).o_arm,
                 );
             }
             if (*stats).t_stats.s_str < max_stats.s_str {
                 (*stats).t_stats.s_str = max_stats.s_str;
             }
-            if ring_is(LEFT, R_ADDSTR) {
+            if ring_is(EQUIPMENT.left_ring(), R_ADDSTR) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
-                    (*thing_o(EQUIPMENT.rings[LEFT])).o_arm,
+                    (*thing_o(EQUIPMENT.left_ring())).o_arm,
                 );
             }
-            if ring_is(RIGHT, R_ADDSTR) {
+            if ring_is(EQUIPMENT.right_ring(), R_ADDSTR) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
-                    (*thing_o(EQUIPMENT.rings[RIGHT])).o_arm,
+                    (*thing_o(EQUIPMENT.right_ring())).o_arm,
                 );
             }
             msg_str("hey, this tastes great.  It make you feel warm all over");

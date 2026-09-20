@@ -2347,18 +2347,22 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_coord(savef, stairs);
 
     let _ = rs_write_thing(savef, &raw mut player);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, EQUIPMENT.armor);
+    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, EQUIPMENT.armor());
     let _ = rs_write_object_reference(
         savef,
         (*thing_t(&raw mut player)).t_pack,
-        EQUIPMENT.rings[0],
+        EQUIPMENT.left_ring(),
     );
     let _ = rs_write_object_reference(
         savef,
         (*thing_t(&raw mut player)).t_pack,
-        EQUIPMENT.rings[1],
+        EQUIPMENT.right_ring(),
     );
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, EQUIPMENT.weapon);
+    let _ = rs_write_object_reference(
+        savef,
+        (*thing_t(&raw mut player)).t_pack,
+        EQUIPMENT.weapon(),
+    );
     let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, l_last_pick);
     let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, last_pick);
 
@@ -2540,26 +2544,31 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_coord(inf, &mut stairs);
 
     let _ = rs_read_thing(inf, &raw mut player);
+    let mut equipment_item = std::ptr::null_mut();
     let _ = rs_read_object_reference(
         inf,
         (*thing_t(&raw mut player)).t_pack,
-        &raw mut EQUIPMENT.armor,
+        &raw mut equipment_item,
     );
+    EQUIPMENT.set_armor(equipment_item);
     let _ = rs_read_object_reference(
         inf,
         (*thing_t(&raw mut player)).t_pack,
-        &raw mut EQUIPMENT.rings[0],
+        &raw mut equipment_item,
     );
+    EQUIPMENT.set_left_ring(equipment_item);
     let _ = rs_read_object_reference(
         inf,
         (*thing_t(&raw mut player)).t_pack,
-        &raw mut EQUIPMENT.rings[1],
+        &raw mut equipment_item,
     );
+    EQUIPMENT.set_right_ring(equipment_item);
     let _ = rs_read_object_reference(
         inf,
         (*thing_t(&raw mut player)).t_pack,
-        &raw mut EQUIPMENT.weapon,
+        &raw mut equipment_item,
     );
+    EQUIPMENT.set_weapon(equipment_item);
     let _ = rs_read_object_reference(
         inf,
         (*thing_t(&raw mut player)).t_pack,

@@ -312,12 +312,12 @@ pub unsafe extern "C" fn num(n1: c_int, n2: c_int, obj_type: c_char) -> *mut c_c
 /// Equips a selected weapon after validating curses and item type constraints.
 #[no_mangle]
 pub unsafe extern "C" fn wield() {
-    let oweapon = EQUIPMENT.weapon;
-    if dropcheck(EQUIPMENT.weapon) == 0 {
-        EQUIPMENT.weapon = oweapon;
+    let oweapon = EQUIPMENT.weapon();
+    if dropcheck(EQUIPMENT.weapon()) == 0 {
+        EQUIPMENT.set_weapon(oweapon);
         return;
     }
-    EQUIPMENT.weapon = oweapon;
+    EQUIPMENT.set_weapon(oweapon);
 
     let obj = get_item(c"wield".as_ptr(), WEAPON as c_int);
     if obj.is_null() {
@@ -336,7 +336,7 @@ pub unsafe extern "C" fn wield() {
     }
 
     let sp = inv_name(obj, true as c_uchar);
-    EQUIPMENT.weapon = obj;
+    EQUIPMENT.set_weapon(obj);
     if terse == 0 {
         addmsg_str("you are now ");
     }

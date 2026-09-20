@@ -37,8 +37,6 @@ const ISHALU: c_short = 0o004000;
 const ISRUN: c_short = 0o020000;
 const SEEMONST: c_short = 0o040000;
 
-const LEFT: usize = 0;
-const RIGHT: usize = 1;
 const R_AGGR: c_int = 6;
 const R_STEALTH: c_int = 12;
 const R_PROTECT: c_int = 0;
@@ -152,9 +150,9 @@ unsafe fn player_has(flag: c_short) -> bool {
 
 #[inline]
 unsafe fn iswearing(which: c_int) -> bool {
-    (!EQUIPMENT.rings[LEFT].is_null() && (*thing_o(EQUIPMENT.rings[LEFT])).o_which == which)
-        || (!EQUIPMENT.rings[RIGHT].is_null()
-            && (*thing_o(EQUIPMENT.rings[RIGHT])).o_which == which)
+    (!EQUIPMENT.left_ring().is_null() && (*thing_o(EQUIPMENT.left_ring())).o_which == which)
+        || (!EQUIPMENT.right_ring().is_null()
+            && (*thing_o(EQUIPMENT.right_ring())).o_which == which)
 }
 
 /// Picks an appropriate monster glyph for the current depth.
@@ -361,15 +359,15 @@ pub unsafe extern "C" fn save_throw(which: c_int, tp: *mut CThing) -> c_int {
 pub unsafe extern "C" fn save(which: c_int) -> c_int {
     let mut adj = which;
     if which == VS_MAGIC {
-        if !EQUIPMENT.rings[LEFT].is_null()
-            && (*thing_o(EQUIPMENT.rings[LEFT])).o_which == R_PROTECT
+        if !EQUIPMENT.left_ring().is_null()
+            && (*thing_o(EQUIPMENT.left_ring())).o_which == R_PROTECT
         {
-            adj -= (*thing_o(EQUIPMENT.rings[LEFT])).o_arm;
+            adj -= (*thing_o(EQUIPMENT.left_ring())).o_arm;
         }
-        if !EQUIPMENT.rings[RIGHT].is_null()
-            && (*thing_o(EQUIPMENT.rings[RIGHT])).o_which == R_PROTECT
+        if !EQUIPMENT.right_ring().is_null()
+            && (*thing_o(EQUIPMENT.right_ring())).o_which == R_PROTECT
         {
-            adj -= (*thing_o(EQUIPMENT.rings[RIGHT])).o_arm;
+            adj -= (*thing_o(EQUIPMENT.right_ring())).o_arm;
         }
     }
     save_throw(adj, &raw mut player)

@@ -84,8 +84,6 @@ const NTRAPS: c_int = 8;
 // Ring types
 const R_SEARCH: c_int = 3;
 const R_TELEPORT: c_int = 11;
-const LEFT: usize = 0;
-const RIGHT: usize = 1;
 
 // Escape
 const ESCAPE: c_int = 27;
@@ -364,8 +362,8 @@ unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
 }
 
 #[inline]
-unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
-    !EQUIPMENT.rings[hand].is_null() && (*thing_o(EQUIPMENT.rings[hand])).o_which == ring_type
+unsafe fn isring(ring: *mut CThing, ring_type: c_int) -> bool {
+    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
 // ─── command() ────────────────────────────────────────────────────────────────
@@ -805,14 +803,18 @@ pub unsafe extern "C" fn command() {
                         }
                     }
                     b')' => {
-                        current(EQUIPMENT.weapon, c"wielding".as_ptr(), std::ptr::null_mut());
+                        current(
+                            EQUIPMENT.weapon(),
+                            c"wielding".as_ptr(),
+                            std::ptr::null_mut(),
+                        );
                     }
                     b']' => {
-                        current(EQUIPMENT.armor, c"wearing".as_ptr(), std::ptr::null_mut());
+                        current(EQUIPMENT.armor(), c"wearing".as_ptr(), std::ptr::null_mut());
                     }
                     b'=' => {
                         current(
-                            EQUIPMENT.rings[LEFT],
+                            EQUIPMENT.left_ring(),
                             c"wearing".as_ptr(),
                             if terse != 0 {
                                 c"(L)".as_ptr()
@@ -821,7 +823,7 @@ pub unsafe extern "C" fn command() {
                             },
                         );
                         current(
-                            EQUIPMENT.rings[RIGHT],
+                            EQUIPMENT.right_ring(),
                             c"wearing".as_ptr(),
                             if terse != 0 {
                                 c"(R)".as_ptr()
@@ -893,7 +895,7 @@ pub unsafe extern "C" fn command() {
                                     (*thing_o(obj)).o_hplus = 1;
                                     (*thing_o(obj)).o_dplus = 1;
                                     add_pack(obj, true as c_uchar);
-                                    EQUIPMENT.weapon = obj;
+                                    EQUIPMENT.set_weapon(obj);
                                     /*
                                      * And his suit of armor
                                      */
@@ -904,7 +906,7 @@ pub unsafe extern "C" fn command() {
                                     (*thing_o(obj)).o_flags = (*thing_o(obj)).o_flags | ISKNOW;
                                     (*thing_o(obj)).o_count = 1;
                                     (*thing_o(obj)).o_group = 0;
-                                    EQUIPMENT.armor = obj;
+                                    EQUIPMENT.set_armor(obj);
                                     add_pack(obj, true as c_uchar);
                                 }
                                 b'*' => pr_list(),
@@ -935,14 +937,14 @@ pub unsafe extern "C" fn command() {
 
     do_daemons(AFTER);
     do_fuses(AFTER);
-    if isring(LEFT, R_SEARCH) {
+    if isring(EQUIPMENT.left_ring(), R_SEARCH) {
         search();
-    } else if isring(LEFT, R_TELEPORT) && rnd(50) == 0 {
+    } else if isring(EQUIPMENT.left_ring(), R_TELEPORT) && rnd(50) == 0 {
         teleport();
     }
-    if isring(RIGHT, R_SEARCH) {
+    if isring(EQUIPMENT.right_ring(), R_SEARCH) {
         search();
-    } else if isring(RIGHT, R_TELEPORT) && rnd(50) == 0 {
+    } else if isring(EQUIPMENT.right_ring(), R_TELEPORT) && rnd(50) == 0 {
         teleport();
     }
 }

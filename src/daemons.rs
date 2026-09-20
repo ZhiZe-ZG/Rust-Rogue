@@ -91,8 +91,8 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 /// ISRING(hand, ring_type): true when the player wears ring_type on hand.
 #[inline]
-unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
-    !EQUIPMENT.rings[hand].is_null() && (*thing_o(EQUIPMENT.rings[hand])).o_which == ring_type
+unsafe fn isring(ring: *mut CThing, ring_type: c_int) -> bool {
+    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
 // ─── Module globals ───────────────────────────────────────────────────────────
@@ -118,10 +118,10 @@ pub unsafe extern "C" fn doctor() {
     } else if quiet >= 3 {
         (*thing_t(&raw mut player)).t_stats.s_hpt += rnd(lv - 7) + 1;
     }
-    if isring(LEFT, R_REGEN) {
+    if isring(EQUIPMENT.left_ring(), R_REGEN) {
         (*thing_t(&raw mut player)).t_stats.s_hpt += 1;
     }
-    if isring(RIGHT, R_REGEN) {
+    if isring(EQUIPMENT.right_ring(), R_REGEN) {
         (*thing_t(&raw mut player)).t_stats.s_hpt += 1;
     }
     if ohp != (*thing_t(&raw mut player)).t_stats.s_hpt {

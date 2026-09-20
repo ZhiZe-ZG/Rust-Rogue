@@ -396,7 +396,7 @@ pub unsafe extern "C" fn init_player() {
     (*thing_o(obj)).o_arm = a_class[RING_MAIL as usize] - 1;
     (*thing_o(obj)).o_flags |= ISKNOW;
     (*thing_o(obj)).o_count = 1;
-    EQUIPMENT.armor = obj;
+    EQUIPMENT.set_armor(obj);
     add_pack(obj, true as c_uchar);
 
     // A +1 mace
@@ -406,7 +406,7 @@ pub unsafe extern "C" fn init_player() {
     (*thing_o(obj)).o_dplus = 1;
     (*thing_o(obj)).o_flags |= ISKNOW;
     add_pack(obj, true as c_uchar);
-    EQUIPMENT.weapon = obj;
+    EQUIPMENT.set_weapon(obj);
 
     // A +1 bow
     let obj = new_item();
