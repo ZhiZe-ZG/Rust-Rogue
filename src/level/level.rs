@@ -32,15 +32,18 @@ pub const LEVEL_WIDTH: usize = 80;
 /// nibble (0-7, the legacy `F_TMASK` bits) set by `place_traps`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LevelFlags {
-    /// `false` marks a non-real (secret) wall or door cell.
+    /// Whether each cell is real and visible as solid terrain; `false` marks
+    /// a secret wall or door that has not been revealed.
     pub real: Vec<bool>,
-    /// `true` marks a passage (`#`) cell.
+    /// Whether each cell belongs to a passage corridor rendered as `#`.
     pub passage: Vec<bool>,
-    /// `true` marks a cell already drawn by `add_pass`.
+    /// Whether each cell has already been seen or drawn by the player.
     pub seen: Vec<bool>,
-    /// Passage component number (0-15) assigned by `number_passages`.
+    /// Passage component number for each cell, assigned by
+    /// [`number_passages`]; zero means that no component is assigned.
     pub passnum: Vec<u8>,
-    /// Trap kind (0-7) of a hidden trap cell; 0 elsewhere.
+    /// Encoded trap kind for each cell, using values `0..=7`; non-trap cells
+    /// contain zero.
     pub trap: Vec<u8>,
 }
 
