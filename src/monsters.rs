@@ -197,8 +197,8 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
 
     (*thing_t(tp)).t_oldch = crate::draw::chat_at((*cp).y, (*cp).x);
     (*thing_t(tp)).t_room = roomin(cp);
-    // Write into the Rust-owned `places` grid via the local layout mirror.
-    (*place_at((&raw mut places) as *mut CPlace, (*cp).y, (*cp).x)).p_monst = tp;
+    // Keep the authoritative Rust occupancy map and legacy places mirror in sync.
+    crate::game::set_monster((*cp).y, (*cp).x, tp);
 
     let mp = &monsters[(monster_type as i32 - 'A' as i32) as usize];
     (*thing_t(tp)).t_stats.s_lvl = mp.m_stats.s_lvl + lev_add;
