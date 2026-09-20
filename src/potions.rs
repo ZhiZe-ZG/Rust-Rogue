@@ -47,21 +47,54 @@ const ISPROT: c_int = 0o000040;
 const R_ADDSTR: c_int = 1;
 const R_SUSTSTR: c_int = 2;
 
-const P_CONFUSE: c_int = 0;
-const P_LSD: c_int = 1;
-const P_POISON: c_int = 2;
-const P_STRENGTH: c_int = 3;
-const P_SEEINVIS: c_int = 4;
-const P_HEALING: c_int = 5;
-const P_MFIND: c_int = 6;
-const P_TFIND: c_int = 7;
-const P_RAISE: c_int = 8;
-const P_XHEAL: c_int = 9;
-const P_HASTE: c_int = 10;
-const P_RESTORE: c_int = 11;
-const P_BLIND: c_int = 12;
-const P_LEVIT: c_int = 13;
 const MAXPOTIONS: usize = 14;
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PotionType {
+    Confuse = 0,
+    Lsd = 1,
+    Poison = 2,
+    Strength = 3,
+    SeeInvisible = 4,
+    Healing = 5,
+    MonsterFind = 6,
+    TrapFind = 7,
+    Raise = 8,
+    ExtraHealing = 9,
+    Haste = 10,
+    Restore = 11,
+    Blind = 12,
+    Levitate = 13,
+}
+
+impl PotionType {
+    #[inline]
+    fn from_raw(value: c_int) -> Self {
+        match value {
+            0 => Self::Confuse,
+            1 => Self::Lsd,
+            2 => Self::Poison,
+            3 => Self::Strength,
+            4 => Self::SeeInvisible,
+            5 => Self::Healing,
+            6 => Self::MonsterFind,
+            7 => Self::TrapFind,
+            8 => Self::Raise,
+            9 => Self::ExtraHealing,
+            10 => Self::Haste,
+            11 => Self::Restore,
+            12 => Self::Blind,
+            13 => Self::Levitate,
+            _ => panic!("invalid potion type: {value}"),
+        }
+    }
+
+    #[inline]
+    const fn index(self) -> usize {
+        self as usize
+    }
+}
 
 const HUHDURATION: c_int = 20;
 const SEEDURATION: c_int = 850;
@@ -267,39 +300,39 @@ unsafe fn is_magic_local(obj: *mut CThing) -> bool {
 
 /// Shared implementation for potion effects that need the normal fuse/flag
 /// setup and knowledge tracking used by the C version.
-unsafe fn do_pot_impl(type_id: c_int, knowit: c_uchar) {
+unsafe fn do_pot_impl(potion: PotionType, knowit: c_uchar) {
     let (flags, daemon, base_time, high_msg, straight_msg) = {
         let taste_ptr = (&raw mut prbuf) as *mut [c_char; 2048] as *mut c_char as *const c_char;
-        match type_id {
-            P_CONFUSE => (
+        match potion {
+            PotionType::Confuse => (
                 ISHUH,
                 unconfuse as *const c_void,
                 HUHDURATION,
                 c"what a tripy feeling!".as_ptr(),
                 c"wait, what's going on here. Huh? What? Who?".as_ptr(),
             ),
-            P_LSD => (
+            PotionType::Lsd => (
                 ISHALU,
                 come_down as *const c_void,
                 SEEDURATION,
                 c"Oh, wow!  Everything seems so cosmic!".as_ptr(),
                 c"Oh, wow!  Everything seems so cosmic!".as_ptr(),
             ),
-            P_SEEINVIS => (
+            PotionType::SeeInvisible => (
                 CANSEE,
                 unsee as *const c_void,
                 SEEDURATION,
                 taste_ptr,
                 taste_ptr,
             ),
-            P_BLIND => (
+            PotionType::Blind => (
                 ISBLIND,
                 sight as *const c_void,
                 SEEDURATION,
                 c"oh, bummer!  Everything is dark!  Help!".as_ptr(),
                 c"a cloak of darkness falls around you".as_ptr(),
             ),
-            P_LEVIT => (
+            PotionType::Levitate => (
                 ISLEVIT,
                 land as *const c_void,
                 HEALTIME,
@@ -310,9 +343,7 @@ unsafe fn do_pot_impl(type_id: c_int, knowit: c_uchar) {
         }
     };
 
-    if type_id >= 0 && (type_id as usize) < MAXPOTIONS && (*pot_info.as_mut_ptr().add(type_id as usize)).oi_know == 0 {
-        (*pot_info.as_mut_ptr().add(type_id as usize)).oi_know = knowit;
-    }
+    (*pot_info.as_mut_ptr().add(potion.index())).oi_know = knowit;
 
     if flags == 0 || daemon.is_null() {
         return;
@@ -358,10 +389,11 @@ pub unsafe extern "C" fn quaff() {
     discardit = (*thing_o(obj)).o_count == 1;
     leave_pack(obj, false as c_uchar, false as c_uchar);
 
-    match (*thing_o(obj)).o_which {
-        P_CONFUSE => do_pot_impl(P_CONFUSE, if trip { false as c_uchar } else { true as c_uchar }),
-        P_POISON => {
-            (*pot_info.as_mut_ptr().add(P_POISON as usize)).oi_know = true as c_uchar;
+    let potion = PotionType::from_raw((*thing_o(obj)).o_which);
+    match potion {
+        PotionType::Confuse => do_pot_impl(PotionType::Confuse, if trip { false as c_uchar } else { true as c_uchar }),
+        PotionType::Poison => {
+            (*pot_info.as_mut_ptr().add(PotionType::Poison.index())).oi_know = true as c_uchar;
             if ring_is(LEFT, R_SUSTSTR) || ring_is(RIGHT, R_SUSTSTR) {
                 msg_str("you feel momentarily sick");
             } else {
@@ -370,9 +402,9 @@ pub unsafe extern "C" fn quaff() {
                 come_down();
             }
         }
-        P_HEALING => {
+        PotionType::Healing => {
             let stats = thing_t(&raw mut player);
-            (*pot_info.as_mut_ptr().add(P_HEALING as usize)).oi_know = true as c_uchar;
+            (*pot_info.as_mut_ptr().add(PotionType::Healing.index())).oi_know = true as c_uchar;
             (*stats).t_stats.s_hpt += roll((*stats).t_stats.s_lvl, 4);
             if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp {
                 (*stats).t_stats.s_maxhp += 1;
@@ -381,12 +413,12 @@ pub unsafe extern "C" fn quaff() {
             sight();
             msg_str("you begin to feel better");
         }
-        P_STRENGTH => {
-            (*pot_info.as_mut_ptr().add(P_STRENGTH as usize)).oi_know = true as c_uchar;
+        PotionType::Strength => {
+            (*pot_info.as_mut_ptr().add(PotionType::Strength.index())).oi_know = true as c_uchar;
             chg_str(1);
             msg_str("you feel stronger, now.  What bulging muscles!");
         }
-        P_MFIND => {
+        PotionType::MonsterFind => {
             (*thing_t(&raw mut player)).t_flags |= SEEMONST;
             fuse(turn_see as *const c_void, true as c_uchar as c_int, HUHDURATION, AFTER);
             if turn_see(false as c_uchar) == 0 {
@@ -396,7 +428,7 @@ pub unsafe extern "C" fn quaff() {
                 ));
             }
         }
-        P_TFIND => {
+        PotionType::TrapFind => {
             if !lvl_obj.is_null() {
                 cur::wclear(hw);
                 tp = lvl_obj;
@@ -405,7 +437,7 @@ pub unsafe extern "C" fn quaff() {
                         show = true;
                         cur::wmove(hw, (*thing_o(tp)).o_pos.y, (*thing_o(tp)).o_pos.x);
                         cur::waddch(hw, MAGIC as c_uint);
-                        (*pot_info.as_mut_ptr().add(P_TFIND as usize)).oi_know = true as c_uchar;
+                        (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know = true as c_uchar;
                     }
                     tp = next_thing(tp);
                 }
@@ -424,7 +456,7 @@ pub unsafe extern "C" fn quaff() {
                 }
             }
             if show {
-                (*pot_info.as_mut_ptr().add(P_TFIND as usize)).oi_know = true as c_uchar;
+                (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know = true as c_uchar;
                 show_win(c"You sense the presence of magic on this level.--More--".as_ptr());
             } else {
                 msg_str(&format!(
@@ -433,7 +465,7 @@ pub unsafe extern "C" fn quaff() {
                 ));
             }
         }
-        P_LSD => {
+        PotionType::Lsd => {
             if !trip {
                 if player_has(SEEMONST) {
                     turn_see(false as c_uchar);
@@ -441,9 +473,9 @@ pub unsafe extern "C" fn quaff() {
                 start_daemon(visuals as *const c_void, 0, BEFORE);
                 seenstairs = seen_stairs();
             }
-            do_pot_impl(P_LSD, true as c_uchar);
+            do_pot_impl(PotionType::Lsd, true as c_uchar);
         }
-        P_SEEINVIS => {
+        PotionType::SeeInvisible => {
             let _ = snprintf(
                 (&raw mut prbuf) as *mut [c_char; 2048] as *mut c_char,
                 prbuf.len(),
@@ -451,20 +483,20 @@ pub unsafe extern "C" fn quaff() {
                 fruit.as_ptr(),
             );
             show = player_has(CANSEE);
-            do_pot_impl(P_SEEINVIS, false as c_uchar);
+            do_pot_impl(PotionType::SeeInvisible, false as c_uchar);
             if !show {
                 invis_on();
             }
             sight();
         }
-        P_RAISE => {
-            (*pot_info.as_mut_ptr().add(P_RAISE as usize)).oi_know = true as c_uchar;
+        PotionType::Raise => {
+            (*pot_info.as_mut_ptr().add(PotionType::Raise.index())).oi_know = true as c_uchar;
             msg_str("you suddenly feel much more skillful");
             raise_level();
         }
-        P_XHEAL => {
+        PotionType::ExtraHealing => {
             let stats = thing_t(&raw mut player);
-            (*pot_info.as_mut_ptr().add(P_XHEAL as usize)).oi_know = true as c_uchar;
+            (*pot_info.as_mut_ptr().add(PotionType::ExtraHealing.index())).oi_know = true as c_uchar;
             (*stats).t_stats.s_hpt += roll((*stats).t_stats.s_lvl, 8);
             if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp {
                 if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp + (*stats).t_stats.s_lvl + 1 {
@@ -477,14 +509,14 @@ pub unsafe extern "C" fn quaff() {
             come_down();
             msg_str("you begin to feel much better");
         }
-        P_HASTE => {
-            (*pot_info.as_mut_ptr().add(P_HASTE as usize)).oi_know = true as c_uchar;
+        PotionType::Haste => {
+            (*pot_info.as_mut_ptr().add(PotionType::Haste.index())).oi_know = true as c_uchar;
             after = false as c_uchar;
             if add_haste(true) {
                 msg_str("you feel yourself moving much faster");
             }
         }
-        P_RESTORE => {
+        PotionType::Restore => {
             let stats = thing_t(&raw mut player);
             if ring_is(LEFT, R_ADDSTR) {
                 add_str(&mut (*stats).t_stats.s_str, -(*thing_o(cur_ring[LEFT])).o_arm);
@@ -503,8 +535,8 @@ pub unsafe extern "C" fn quaff() {
             }
             msg_str("hey, this tastes great.  It make you feel warm all over");
         }
-        P_BLIND => do_pot_impl(P_BLIND, true as c_uchar),
-        P_LEVIT => do_pot_impl(P_LEVIT, true as c_uchar),
+        PotionType::Blind => do_pot_impl(PotionType::Blind, true as c_uchar),
+        PotionType::Levitate => do_pot_impl(PotionType::Levitate, true as c_uchar),
         _ => {
             msg_str("what an odd tasting potion!");
             return;
@@ -625,5 +657,5 @@ pub unsafe extern "C" fn raise_level() {
 /// Do a potion with the standard fuse/flag setup.
 #[no_mangle]
 pub unsafe extern "C" fn do_pot(type_id: c_int, knowit: c_uchar) {
-    do_pot_impl(type_id, knowit);
+    do_pot_impl(PotionType::from_raw(type_id), knowit);
 }
