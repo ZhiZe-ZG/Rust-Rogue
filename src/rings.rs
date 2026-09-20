@@ -17,29 +17,70 @@ const RING_TYPE: c_int = '=' as c_int;
 const ESCAPE: u8 = 27;
 const ISKNOW: c_int = 0o000002;
 
-const R_PROTECT: c_int = 0;
-const R_ADDSTR: c_int = 1;
-const R_SEEINVIS: c_int = 4;
-const R_AGGR: c_int = 6;
-const R_ADDHIT: c_int = 7;
-const R_ADDDAM: c_int = 8;
-const R_DIGEST: c_int = 10;
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RingType {
+    Protection = 0,
+    AddStrength = 1,
+    SustainStrength = 2,
+    Searching = 3,
+    SeeInvisible = 4,
+    Adornment = 5,
+    Aggravate = 6,
+    AddHit = 7,
+    AddDamage = 8,
+    Regeneration = 9,
+    Digest = 10,
+    Teleport = 11,
+    Stealth = 12,
+    SustainArmor = 13,
+}
 
-const USES: [c_int; 14] = [
-    1,  // R_PROTECT
-    1,  // R_ADDSTR
-    1,  // R_SUSTSTR
-    -3, // R_SEARCH
-    -5, // R_SEEINVIS
-    0,  // R_NOP
-    0,  // R_AGGR
-    -3, // R_ADDHIT
-    -3, // R_ADDDAM
-    2,  // R_REGEN
-    -2, // R_DIGEST
-    0,  // R_TELEPORT
-    1,  // R_STEALTH
-    1,  // R_SUSTARM
+impl RingType {
+    pub const COUNT: usize = 14;
+
+    #[inline]
+    pub const fn from_raw(value: c_int) -> Option<Self> {
+        match value {
+            0 => Some(Self::Protection),
+            1 => Some(Self::AddStrength),
+            2 => Some(Self::SustainStrength),
+            3 => Some(Self::Searching),
+            4 => Some(Self::SeeInvisible),
+            5 => Some(Self::Adornment),
+            6 => Some(Self::Aggravate),
+            7 => Some(Self::AddHit),
+            8 => Some(Self::AddDamage),
+            9 => Some(Self::Regeneration),
+            10 => Some(Self::Digest),
+            11 => Some(Self::Teleport),
+            12 => Some(Self::Stealth),
+            13 => Some(Self::SustainArmor),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub const fn index(self) -> usize {
+        self as usize
+    }
+}
+
+const USES: [c_int; RingType::COUNT] = [
+    1,  // Protection
+    1,  // AddStrength
+    1,  // SustainStrength
+    -3, // Searching
+    -5, // SeeInvisible
+    0,  // Adornment
+    0,  // Aggravate
+    -3, // AddHit
+    -3, // AddDamage
+    2,  // Regeneration
+    -2, // Digest
+    0,  // Teleport
+    1,  // Stealth
+    1,  // SustainArmor
 ];
 
 unsafe extern "C" {
@@ -101,10 +142,10 @@ pub unsafe extern "C" fn ring_on() {
         EQUIPMENT.set_right_ring(obj);
     }
 
-    match (*thing_o(obj)).o_which {
-        R_ADDSTR => chg_str((*thing_o(obj)).o_arm),
-        R_SEEINVIS => invis_on(),
-        R_AGGR => aggravate(),
+    match RingType::from_raw((*thing_o(obj)).o_which) {
+        Some(RingType::AddStrength) => chg_str((*thing_o(obj)).o_arm),
+        Some(RingType::SeeInvisible) => invis_on(),
+        Some(RingType::Aggravate) => aggravate(),
         _ => {}
     }
 
@@ -208,16 +249,16 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
         return 0;
     }
 
-    let which = (*thing_o(ring)).o_which as usize;
-    if which >= USES.len() {
-        return 0;
-    }
+    let ring_type = match RingType::from_raw((*thing_o(ring)).o_which) {
+        Some(ring_type) => ring_type,
+        None => return 0,
+    };
 
-    let mut eat = USES[which];
+    let mut eat = USES[ring_type.index()];
     if eat < 0 {
         eat = if rnd(-eat) == 0 { 1 } else { 0 };
     }
-    if (*thing_o(ring)).o_which == R_DIGEST {
+    if ring_type == RingType::Digest {
         eat = -eat;
     }
     eat
@@ -232,8 +273,8 @@ unsafe fn ring_num(obj: *mut CThing) -> *mut c_char {
         return c"".as_ptr() as *mut c_char;
     }
 
-    match (*thing_o(obj)).o_which {
-        R_PROTECT | R_ADDSTR | R_ADDDAM | R_ADDHIT => {
+    match RingType::from_raw((*thing_o(obj)).o_which) {
+        Some(RingType::Protection | RingType::AddStrength | RingType::AddDamage | RingType::AddHit) => {
             let _ = snprintf(
                 (&raw mut RING_NUM_BUF) as *mut c_char,
                 10,
@@ -243,5 +284,38 @@ unsafe fn ring_num(obj: *mut CThing) -> *mut c_char {
             (&raw mut RING_NUM_BUF) as *mut c_char
         }
         _ => c"".as_ptr() as *mut c_char,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RingType;
+
+    #[test]
+    fn ring_types_match_the_legacy_ids() {
+        let ring_types = [
+            RingType::Protection,
+            RingType::AddStrength,
+            RingType::SustainStrength,
+            RingType::Searching,
+            RingType::SeeInvisible,
+            RingType::Adornment,
+            RingType::Aggravate,
+            RingType::AddHit,
+            RingType::AddDamage,
+            RingType::Regeneration,
+            RingType::Digest,
+            RingType::Teleport,
+            RingType::Stealth,
+            RingType::SustainArmor,
+        ];
+
+        assert_eq!(ring_types.len(), RingType::COUNT);
+        for (index, ring_type) in ring_types.into_iter().enumerate() {
+            assert_eq!(ring_type.index(), index);
+            assert_eq!(RingType::from_raw(index as i32), Some(ring_type));
+        }
+        assert_eq!(RingType::from_raw(-1), None);
+        assert_eq!(RingType::from_raw(RingType::COUNT as i32), None);
     }
 }

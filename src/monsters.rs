@@ -9,6 +9,7 @@ use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
+use crate::rings::RingType;
 use crate::startup::roll;
 use crate::thing_list::{attach, new_item};
 use crate::things::new_thing;
@@ -35,9 +36,6 @@ const ISHALU: c_short = 0o004000;
 const ISRUN: c_short = 0o020000;
 const SEEMONST: c_short = 0o040000;
 
-const R_AGGR: c_int = 6;
-const R_STEALTH: c_int = 12;
-const R_PROTECT: c_int = 0;
 
 /// Layout mirror of the C `struct monster` stat table, tied to the `monsters[]`
 /// global the C engine exposes.
@@ -146,10 +144,11 @@ unsafe fn player_has(flag: c_short) -> bool {
 }
 
 #[inline]
-unsafe fn iswearing(which: c_int) -> bool {
-    (!EQUIPMENT.left_ring().is_null() && (*thing_o(EQUIPMENT.left_ring())).o_which == which)
+unsafe fn iswearing(which: RingType) -> bool {
+    (!EQUIPMENT.left_ring().is_null()
+        && RingType::from_raw((*thing_o(EQUIPMENT.left_ring())).o_which) == Some(which))
         || (!EQUIPMENT.right_ring().is_null()
-            && (*thing_o(EQUIPMENT.right_ring())).o_which == which)
+            && RingType::from_raw((*thing_o(EQUIPMENT.right_ring())).o_which) == Some(which))
 }
 
 /// Picks an appropriate monster glyph for the current depth.
@@ -205,7 +204,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
     (*thing_t(tp)).t_turn = true as c_uchar;
     (*thing_t(tp)).t_pack = std::ptr::null_mut();
 
-    if iswearing(R_AGGR) {
+    if iswearing(RingType::Aggravate) {
         runto(cp);
     }
     if monster_type == 'X' as c_char {
@@ -281,7 +280,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
         && rnd(3) != 0
         && has_flag(tp, ISMEAN)
         && !has_flag(tp, ISHELD)
-        && !iswearing(R_STEALTH)
+        && !iswearing(RingType::Stealth)
         && !player_has(ISLEVIT)
     {
         (*thing_t(tp)).t_dest = &mut (*player_t()).t_pos;
@@ -357,12 +356,14 @@ pub unsafe extern "C" fn save(which: c_int) -> c_int {
     let mut adj = which;
     if which == VS_MAGIC {
         if !EQUIPMENT.left_ring().is_null()
-            && (*thing_o(EQUIPMENT.left_ring())).o_which == R_PROTECT
+            && RingType::from_raw((*thing_o(EQUIPMENT.left_ring())).o_which)
+                == Some(RingType::Protection)
         {
             adj -= (*thing_o(EQUIPMENT.left_ring())).o_arm;
         }
         if !EQUIPMENT.right_ring().is_null()
-            && (*thing_o(EQUIPMENT.right_ring())).o_which == R_PROTECT
+            && RingType::from_raw((*thing_o(EQUIPMENT.right_ring())).o_which)
+                == Some(RingType::Protection)
         {
             adj -= (*thing_o(EQUIPMENT.right_ring())).o_arm;
         }

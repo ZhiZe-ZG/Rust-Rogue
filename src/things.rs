@@ -10,6 +10,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::player::{CThing, CThingObject};
+use crate::rings::RingType;
 use crate::sticks::fix_stick;
 use crate::thing_list::new_item;
 use crate::weapons::init_weapon;
@@ -18,7 +19,7 @@ const MAXSTR: usize = 1024;
 const NUMTHINGS: usize = 7;
 const MAXARMORS: usize = 8;
 const MAXPOTIONS: usize = 14;
-const MAXRINGS: usize = 13;
+const MAXRINGS: usize = RingType::COUNT;
 const MAXSCROLLS: usize = 18;
 const MAXWEAPONS: usize = 9;
 const MAXSTICKS: usize = 14;
@@ -362,10 +363,17 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
         }
         5 => {
             (*thing_o(cur)).o_type = RING;
-            (*thing_o(cur)).o_which =
-                pick_one(ring_info.as_ptr() as *mut CObjInfo, MAXRINGS as c_int);
-            match (*thing_o(cur)).o_which {
-                0 | 2 | 7 | 8 => {
+            let ring_type = RingType::from_raw(pick_one(
+                ring_info.as_ptr() as *mut CObjInfo,
+                MAXRINGS as c_int,
+            ))
+            .expect("ring metadata produced an invalid ring type");
+            (*thing_o(cur)).o_which = ring_type as c_int;
+            match ring_type {
+                RingType::Protection
+                | RingType::SustainStrength
+                | RingType::AddHit
+                | RingType::AddDamage => {
                     let mut arm = rnd(3);
                     if arm == 0 {
                         arm = -1;
@@ -373,7 +381,7 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
                     }
                     (*thing_o(cur)).o_arm = arm;
                 }
-                5 | 6 => {
+                RingType::Adornment | RingType::Aggravate => {
                     (*thing_o(cur)).o_flags |= ISCURSED;
                 }
                 _ => {}

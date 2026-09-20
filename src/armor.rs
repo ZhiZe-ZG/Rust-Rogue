@@ -5,6 +5,7 @@ use crate::io::{addmsg_str, msg_str};
 use crate::misc::spread;
 use crate::pack::get_item;
 use crate::player::{CThing, CThingObject};
+use crate::rings::RingType;
 use crate::things::{dropcheck, inv_name};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
@@ -12,7 +13,6 @@ use std::os::raw::{c_char, c_int, c_uchar};
 const ARMOR: c_int = ']' as c_int;
 const ISKNOW: c_int = 0o000002;
 const ISPROT: c_int = 0o000040;
-const R_SUSTARM: c_int = 13;
 
 unsafe extern "C" {
     static mut terse: c_uchar;
@@ -27,8 +27,8 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn ring_is(ring: *mut CThing, ring_type: c_int) -> bool {
-    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
+unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
+    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
 /// Equips selected armor if valid and no armor is already worn.
@@ -117,8 +117,8 @@ pub unsafe extern "C" fn rust_armor(arm: *mut CThing) {
     }
 
     if ((*thing_o(arm)).o_flags & ISPROT) != 0
-        || ring_is(EQUIPMENT.left_ring(), R_SUSTARM)
-        || ring_is(EQUIPMENT.right_ring(), R_SUSTARM)
+        || ring_is(EQUIPMENT.left_ring(), RingType::SustainArmor)
+        || ring_is(EQUIPMENT.right_ring(), RingType::SustainArmor)
     {
         if to_death == 0 {
             msg_str("the rust vanishes instantly");

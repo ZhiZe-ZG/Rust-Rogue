@@ -13,6 +13,7 @@ use crate::io::{endmsg, msg_str, show_win, status};
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
 use crate::pack::{get_item, leave_pack};
 use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::rings::RingType;
 use crate::startup::roll;
 use crate::thing_list::discard;
 use std::ffi::CStr;
@@ -51,8 +52,6 @@ const SEEMONST: c_short = 0o040000;
 const ISCURSED: c_int = 0o000001;
 const ISPROT: c_int = 0o000040;
 
-const R_ADDSTR: c_int = 1;
-const R_SUSTSTR: c_int = 2;
 
 const MAXPOTIONS: usize = 14;
 
@@ -179,8 +178,8 @@ unsafe fn thing_has(tp: *mut CThing, flag: c_short) -> bool {
 }
 
 #[inline]
-unsafe fn ring_is(ring: *mut CThing, ring_type: c_int) -> bool {
-    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
+unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
+    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
 #[inline]
@@ -306,8 +305,8 @@ pub unsafe extern "C" fn quaff() {
         ),
         PotionType::Poison => {
             (*pot_info.as_mut_ptr().add(PotionType::Poison.index())).oi_know = true as c_uchar;
-            if ring_is(EQUIPMENT.left_ring(), R_SUSTSTR)
-                || ring_is(EQUIPMENT.right_ring(), R_SUSTSTR)
+            if ring_is(EQUIPMENT.left_ring(), RingType::SustainStrength)
+                || ring_is(EQUIPMENT.right_ring(), RingType::SustainStrength)
             {
                 msg_str("you feel momentarily sick");
             } else {
@@ -442,13 +441,13 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::Restore => {
             let stats = thing_t(&raw mut player);
-            if ring_is(EQUIPMENT.left_ring(), R_ADDSTR) {
+            if ring_is(EQUIPMENT.left_ring(), RingType::AddStrength) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
                     -(*thing_o(EQUIPMENT.left_ring())).o_arm,
                 );
             }
-            if ring_is(EQUIPMENT.right_ring(), R_ADDSTR) {
+            if ring_is(EQUIPMENT.right_ring(), RingType::AddStrength) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
                     -(*thing_o(EQUIPMENT.right_ring())).o_arm,
@@ -457,13 +456,13 @@ pub unsafe extern "C" fn quaff() {
             if (*stats).t_stats.s_str < max_stats.s_str {
                 (*stats).t_stats.s_str = max_stats.s_str;
             }
-            if ring_is(EQUIPMENT.left_ring(), R_ADDSTR) {
+            if ring_is(EQUIPMENT.left_ring(), RingType::AddStrength) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
                     (*thing_o(EQUIPMENT.left_ring())).o_arm,
                 );
             }
-            if ring_is(EQUIPMENT.right_ring(), R_ADDSTR) {
+            if ring_is(EQUIPMENT.right_ring(), RingType::AddStrength) {
                 add_str(
                     &mut (*stats).t_stats.s_str,
                     (*thing_o(EQUIPMENT.right_ring())).o_arm,

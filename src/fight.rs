@@ -27,6 +27,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::machdep::flush_type;
 use crate::player::{CCoord, CStats, CThing, CThingMonster, CThingObject};
+use crate::rings::RingType;
 use crate::startup::roll;
 use crate::thing_list::{attach, detach, discard, new_item};
 use crate::things::inv_name;
@@ -39,12 +40,6 @@ const MAXSTR: usize = 1024;
 // Item types
 const WEAPON: c_int = b')' as c_int;
 const GOLD: c_int = b'*' as c_int;
-
-// Ring types
-const R_ADDDAM: c_int = 8;
-const R_ADDHIT: c_int = 7;
-const R_PROTECT: c_int = 0;
-const R_SUSTSTR: c_int = 2;
 
 // Object flags
 const ISMISL: c_int = 0o000004;
@@ -193,12 +188,12 @@ unsafe fn chat(y: c_int, x: c_int) -> c_char {
 }
 
 #[inline]
-unsafe fn isring(ring: *mut CThing, ring_type: c_int) -> bool {
-    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
+unsafe fn isring(ring: *mut CThing, ring_type: RingType) -> bool {
+    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
 #[inline]
-unsafe fn iswearing(ring_type: c_int) -> bool {
+unsafe fn iswearing(ring_type: RingType) -> bool {
     isring(EQUIPMENT.left_ring(), ring_type) || isring(EQUIPMENT.right_ring(), ring_type)
 }
 
@@ -370,7 +365,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
             } else if mtype == b'R' as c_char {
                 // Rattlesnake: poisonous bite
                 if save(VS_POISON) == 0 {
-                    if !iswearing(R_SUSTSTR) {
+                    if !iswearing(RingType::SustainStrength) {
                         chg_str(-1);
                         if terse == 0 {
                             msg_str("you feel a bite in your leg and now feel weaker");
@@ -596,14 +591,14 @@ pub unsafe extern "C" fn roll_em(
         let mut hp = (*thing_o(weap)).o_hplus;
         let mut dp = (*thing_o(weap)).o_dplus;
         if weap == EQUIPMENT.weapon() {
-            if isring(EQUIPMENT.left_ring(), R_ADDDAM) {
+            if isring(EQUIPMENT.left_ring(), RingType::AddDamage) {
                 dp += (*thing_o(EQUIPMENT.left_ring())).o_arm;
-            } else if isring(EQUIPMENT.left_ring(), R_ADDHIT) {
+            } else if isring(EQUIPMENT.left_ring(), RingType::AddHit) {
                 hp += (*thing_o(EQUIPMENT.left_ring())).o_arm;
             }
-            if isring(EQUIPMENT.right_ring(), R_ADDDAM) {
+            if isring(EQUIPMENT.right_ring(), RingType::AddDamage) {
                 dp += (*thing_o(EQUIPMENT.right_ring())).o_arm;
-            } else if isring(EQUIPMENT.right_ring(), R_ADDHIT) {
+            } else if isring(EQUIPMENT.right_ring(), RingType::AddHit) {
                 hp += (*thing_o(EQUIPMENT.right_ring())).o_arm;
             }
         }
@@ -652,10 +647,10 @@ unsafe fn roll_em_inner(
         if !EQUIPMENT.armor().is_null() {
             def_arm = (*thing_o(EQUIPMENT.armor())).o_arm;
         }
-        if isring(EQUIPMENT.left_ring(), R_PROTECT) {
+        if isring(EQUIPMENT.left_ring(), RingType::Protection) {
             def_arm -= (*thing_o(EQUIPMENT.left_ring())).o_arm;
         }
-        if isring(EQUIPMENT.right_ring(), R_PROTECT) {
+        if isring(EQUIPMENT.right_ring(), RingType::Protection) {
             def_arm -= (*thing_o(EQUIPMENT.right_ring())).o_arm;
         }
     }

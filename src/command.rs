@@ -22,7 +22,7 @@ use crate::options::{get_str, option};
 use crate::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
 use crate::player::{do_move, do_run, CCoord, CPlace, CThing, CThingMonster, CThingObject};
 use crate::potions::{quaff, raise_level, turn_see};
-use crate::rings::{ring_off, ring_on};
+use crate::rings::{ring_off, ring_on, RingType};
 use crate::rip::total_winner;
 use crate::rnd::rnd;
 use crate::save::save_game;
@@ -81,10 +81,6 @@ const F_TMASK: c_char = 0x07u8 as c_char;
 
 // Trap count
 const NTRAPS: c_int = 8;
-
-// Ring types
-const R_SEARCH: c_int = 3;
-const R_TELEPORT: c_int = 11;
 
 // Escape
 const ESCAPE: c_int = 27;
@@ -265,8 +261,8 @@ unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
 }
 
 #[inline]
-unsafe fn isring(ring: *mut CThing, ring_type: c_int) -> bool {
-    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
+unsafe fn isring(ring: *mut CThing, ring_type: RingType) -> bool {
+    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
 // ─── command() ────────────────────────────────────────────────────────────────
@@ -840,14 +836,14 @@ pub unsafe extern "C" fn command() {
 
     do_daemons(AFTER);
     do_fuses(AFTER);
-    if isring(EQUIPMENT.left_ring(), R_SEARCH) {
+    if isring(EQUIPMENT.left_ring(), RingType::Searching) {
         search();
-    } else if isring(EQUIPMENT.left_ring(), R_TELEPORT) && rnd(50) == 0 {
+    } else if isring(EQUIPMENT.left_ring(), RingType::Teleport) && rnd(50) == 0 {
         teleport();
     }
-    if isring(EQUIPMENT.right_ring(), R_SEARCH) {
+    if isring(EQUIPMENT.right_ring(), RingType::Searching) {
         search();
-    } else if isring(EQUIPMENT.right_ring(), R_TELEPORT) && rnd(50) == 0 {
+    } else if isring(EQUIPMENT.right_ring(), RingType::Teleport) && rnd(50) == 0 {
         teleport();
     }
 }

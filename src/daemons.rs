@@ -23,7 +23,7 @@ use crate::game::EQUIPMENT;
 use crate::misc::{choose_str, rnd_thing, spread};
 use crate::monsters::wanderer;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
-use crate::rings::ring_eat;
+use crate::rings::{ring_eat, RingType};
 use crate::rip::death;
 use crate::startup::roll;
 
@@ -47,8 +47,6 @@ const ISLEVIT: c_short = 0o0000010;
 // Room flags
 const ISGONE: c_short = 0o0000002;
 
-// Ring types
-const R_REGEN: c_int = 9;
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
 
@@ -91,8 +89,8 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 /// ISRING(hand, ring_type): true when the player wears ring_type on hand.
 #[inline]
-unsafe fn isring(ring: *mut CThing, ring_type: c_int) -> bool {
-    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
+unsafe fn isring(ring: *mut CThing, ring_type: RingType) -> bool {
+    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
 // ─── Module globals ───────────────────────────────────────────────────────────
@@ -118,10 +116,10 @@ pub unsafe extern "C" fn doctor() {
     } else if quiet >= 3 {
         (*thing_t(&raw mut player)).t_stats.s_hpt += rnd(lv - 7) + 1;
     }
-    if isring(EQUIPMENT.left_ring(), R_REGEN) {
+    if isring(EQUIPMENT.left_ring(), RingType::Regeneration) {
         (*thing_t(&raw mut player)).t_stats.s_hpt += 1;
     }
-    if isring(EQUIPMENT.right_ring(), R_REGEN) {
+    if isring(EQUIPMENT.right_ring(), RingType::Regeneration) {
         (*thing_t(&raw mut player)).t_stats.s_hpt += 1;
     }
     if ohp != (*thing_t(&raw mut player)).t_stats.s_hpt {

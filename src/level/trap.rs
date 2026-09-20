@@ -13,6 +13,7 @@ use crate::draw;
 use crate::fight::swing;
 use crate::game::EQUIPMENT;
 use crate::io::msg_str;
+use crate::rings::RingType;
 use crate::machdep::flush_type;
 use crate::misc::{chg_str, spread};
 use crate::monsters::save;
@@ -59,7 +60,6 @@ impl Trap {
     }
 }
 
-const R_SUSTSTR: c_int = 2;
 const ARROW: c_int = 3;
 const VS_POISON: c_int = 0;
 
@@ -90,8 +90,8 @@ unsafe fn hero_pos() -> CCoord {
 }
 
 #[inline]
-unsafe fn ring_is(ring: *mut CThing, ring_type: c_int) -> bool {
-    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
+unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
+    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
 /// Pick a color name from the C `rainbow` table.
@@ -213,8 +213,8 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
                     msg_str("a poisoned dart killed you");
                     death(b'd' as c_char);
                 }
-                if !ring_is(EQUIPMENT.left_ring(), R_SUSTSTR)
-                    && !ring_is(EQUIPMENT.right_ring(), R_SUSTSTR)
+                if !ring_is(EQUIPMENT.left_ring(), RingType::SustainStrength)
+                    && !ring_is(EQUIPMENT.right_ring(), RingType::SustainStrength)
                     && save(VS_POISON) == 0
                 {
                     chg_str(-1);
