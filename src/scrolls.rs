@@ -42,25 +42,62 @@ const F_PASS: c_char = 0x80u8 as c_char;
 const F_SEEN: c_char = 0x40u8 as c_char;
 const F_REAL: c_char = 0x10;
 
-const S_CONFUSE: c_int = 0;
-const S_MAP: c_int = 1;
-const S_HOLD: c_int = 2;
-const S_SLEEP: c_int = 3;
-const S_ARMOR: c_int = 4;
-const S_ID_POTION: c_int = 5;
-const S_ID_SCROLL: c_int = 6;
-const S_ID_WEAPON: c_int = 7;
-const S_ID_ARMOR: c_int = 8;
-const S_ID_R_OR_S: c_int = 9;
-const S_SCARE: c_int = 10;
-const S_FDET: c_int = 11;
-const S_TELEP: c_int = 12;
-const S_ENCH: c_int = 13;
-const S_CREATE: c_int = 14;
-const S_REMOVE: c_int = 15;
-const S_AGGR: c_int = 16;
-const S_PROTECT: c_int = 17;
 const MAXSCROLLS: usize = 18;
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ScrollType {
+    Confuse = 0,
+    Map = 1,
+    Hold = 2,
+    Sleep = 3,
+    Armor = 4,
+    IdentifyPotion = 5,
+    IdentifyScroll = 6,
+    IdentifyWeapon = 7,
+    IdentifyArmor = 8,
+    IdentifyRingOrStick = 9,
+    Scare = 10,
+    FindFood = 11,
+    Teleport = 12,
+    Enchant = 13,
+    CreateMonster = 14,
+    RemoveCurse = 15,
+    Aggravate = 16,
+    Protect = 17,
+}
+
+impl ScrollType {
+    #[inline]
+    fn from_raw(value: c_int) -> Self {
+        match value {
+            0 => Self::Confuse,
+            1 => Self::Map,
+            2 => Self::Hold,
+            3 => Self::Sleep,
+            4 => Self::Armor,
+            5 => Self::IdentifyPotion,
+            6 => Self::IdentifyScroll,
+            7 => Self::IdentifyWeapon,
+            8 => Self::IdentifyArmor,
+            9 => Self::IdentifyRingOrStick,
+            10 => Self::Scare,
+            11 => Self::FindFood,
+            12 => Self::Teleport,
+            13 => Self::Enchant,
+            14 => Self::CreateMonster,
+            15 => Self::RemoveCurse,
+            16 => Self::Aggravate,
+            17 => Self::Protect,
+            _ => panic!("invalid scroll type: {value}"),
+        }
+    }
+
+    #[inline]
+    const fn index(self) -> usize {
+        self as usize
+    }
+}
 
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
@@ -182,15 +219,16 @@ pub unsafe extern "C" fn read_scroll() {
     leave_pack(obj, FALSE, FALSE);
     let orig_obj = obj;
 
-    match (*thing_o(obj)).o_which {
-        S_CONFUSE => {
+    let scroll_type = ScrollType::from_raw((*thing_o(obj)).o_which);
+    match scroll_type {
+        ScrollType::Confuse => {
             (*thing_t(&raw mut player)).t_flags |= CANHUH;
             msg_str(&format!(
                 "your hands begin to glow {}",
                 CStr::from_ptr(pick_color(c"red".as_ptr())).to_string_lossy()
             ));
         }
-        S_ARMOR => {
+        ScrollType::Armor => {
             if !cur_armor.is_null() {
                 (*thing_o(cur_armor)).o_arm -= 1;
                 (*thing_o(cur_armor)).o_flags &= !ISCURSED;
@@ -200,7 +238,7 @@ pub unsafe extern "C" fn read_scroll() {
                 ));
             }
         }
-        S_HOLD => {
+        ScrollType::Hold => {
             let mut ch: c_char = 0;
             let h = hero();
             for x in (h.x - 2)..=(h.x + 2) {
@@ -230,18 +268,18 @@ pub unsafe extern "C" fn read_scroll() {
                     addmsg_str("s");
                 }
                 endmsg();
-                scr_info[S_HOLD as usize].oi_know = TRUE;
+                scr_info[ScrollType::Hold.index()].oi_know = TRUE;
             } else {
                 msg_str("you feel a strange sense of loss");
             }
         }
-        S_SLEEP => {
-            scr_info[S_SLEEP as usize].oi_know = TRUE;
+        ScrollType::Sleep => {
+            scr_info[ScrollType::Sleep.index()].oi_know = TRUE;
             no_command += rnd(SLEEPTIME) + 4;
             (*thing_t(&raw mut player)).t_flags &= !ISRUN;
             msg_str("you fall asleep");
         }
-        S_CREATE => {
+        ScrollType::CreateMonster => {
             let mut i = 0;
             let mut mp = CCoord { y: 0, x: 0 };
             let h = hero();
@@ -256,7 +294,9 @@ pub unsafe extern "C" fn read_scroll() {
                     }
                     if ch == SCROLL {
                         let found = find_obj(y, x);
-                        if !found.is_null() && (*thing_o(found)).o_which == S_SCARE {
+                        if !found.is_null()
+                            && (*thing_o(found)).o_which == ScrollType::Scare as c_int
+                        {
                             continue;
                         }
                     }
@@ -275,8 +315,12 @@ pub unsafe extern "C" fn read_scroll() {
                 new_monster(obj, randmonster(FALSE), &mut mp);
             }
         }
-        S_ID_POTION | S_ID_SCROLL | S_ID_WEAPON | S_ID_ARMOR | S_ID_R_OR_S => {
-            let id_type: [c_int; (S_ID_R_OR_S as usize) + 1] =
+        ScrollType::IdentifyPotion
+        | ScrollType::IdentifyScroll
+        | ScrollType::IdentifyWeapon
+        | ScrollType::IdentifyArmor
+        | ScrollType::IdentifyRingOrStick => {
+            let id_type: [c_int; ScrollType::IdentifyRingOrStick.index() + 1] =
                 [0, 0, 0, 0, 0, POTION, SCROLL, WEAPON, ARMOR, R_OR_S];
             scr_info[(*thing_o(obj)).o_which as usize].oi_know = TRUE;
             msg_str(&format!(
@@ -285,8 +329,8 @@ pub unsafe extern "C" fn read_scroll() {
             ));
             whatis(TRUE, id_type[(*thing_o(obj)).o_which as usize]);
         }
-        S_MAP => {
-            scr_info[S_MAP as usize].oi_know = TRUE;
+        ScrollType::Map => {
+            scr_info[ScrollType::Map.index()].oi_know = TRUE;
             msg_str("oh, now this scroll has a map on it");
 
     for y in 1..(NUMLINES - 1) {
@@ -304,7 +348,7 @@ pub unsafe extern "C" fn read_scroll() {
         }
     }
         }
-        S_FDET => {
+        ScrollType::FindFood => {
             let mut found = FALSE;
             cur::wclear(hw);
             let mut it = lvl_obj;
@@ -317,20 +361,20 @@ pub unsafe extern "C" fn read_scroll() {
                 it = (*thing_o(it)).l_next;
             }
             if found != 0 {
-                scr_info[S_FDET as usize].oi_know = TRUE;
+                scr_info[ScrollType::FindFood.index()].oi_know = TRUE;
                 show_win(c"Your nose tingles and you smell food.--More--".as_ptr());
             } else {
                 msg_str("your nose tingles");
             }
         }
-        S_TELEP => {
+        ScrollType::Teleport => {
             let cur_room = proom();
             teleport();
             if cur_room != proom() {
-                scr_info[S_TELEP as usize].oi_know = TRUE;
+                scr_info[ScrollType::Teleport.index()].oi_know = TRUE;
             }
         }
-        S_ENCH => {
+        ScrollType::Enchant => {
             if cur_weapon.is_null() || (*thing_o(cur_weapon)).o_type != WEAPON {
                 msg_str("you feel a strange sense of loss");
             } else {
@@ -347,10 +391,10 @@ pub unsafe extern "C" fn read_scroll() {
                 ));
             }
         }
-        S_SCARE => {
+        ScrollType::Scare => {
             msg_str("you hear maniacal laughter in the distance");
         }
-        S_REMOVE => {
+        ScrollType::RemoveCurse => {
             uncurse(cur_armor);
             uncurse(cur_weapon);
             uncurse(cur_ring[LEFT]);
@@ -360,11 +404,11 @@ pub unsafe extern "C" fn read_scroll() {
                 c"you feel as if somebody is watching over you".as_ptr(),
             )).to_string_lossy());
         }
-        S_AGGR => {
+        ScrollType::Aggravate => {
             aggravate();
             msg_str("you hear a high pitched humming noise");
         }
-        S_PROTECT => {
+        ScrollType::Protect => {
             if !cur_armor.is_null() {
                 (*thing_o(cur_armor)).o_flags |= ISPROT;
                 msg_str(&format!(

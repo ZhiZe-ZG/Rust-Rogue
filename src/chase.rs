@@ -12,6 +12,7 @@ use crate::curses as cur;
 use crate::io::msg_str;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
+use crate::scrolls::ScrollType;
 
 const NUMLINES: c_int = 24;
 const NUMCOLS: c_int = 80;
@@ -46,7 +47,6 @@ const DOOR: c_char = b'+' as c_char;
 const FLOOR: c_char = b'.' as c_char;
 const PASSAGE: c_char = b'#' as c_char;
 const SCROLL: c_char = b'?' as c_char;
-const S_SCARE: c_int = 10;
 const BOLT_LENGTH: c_int = 6;
 const LAMPDIST: c_int = 3;
 
@@ -516,7 +516,7 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut CCoord) -> c_uchar {
                                 }
                                 obj = (*thing_o(obj)).l_next;
                             }
-                            if !obj.is_null() && (*thing_o(obj)).o_which == S_SCARE {
+                            if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
                                 y += 1;
                                 continue;
                             }
@@ -656,7 +656,9 @@ pub unsafe extern "C" fn find_dest(tp: *mut CThing) -> *mut CCoord {
     }
     let mut obj = lvl_obj;
     while !obj.is_null() {
-        if (*thing_o(obj)).o_type == SCROLL as c_int && (*thing_o(obj)).o_which == S_SCARE {
+        if (*thing_o(obj)).o_type == SCROLL as c_int
+            && (*thing_o(obj)).o_which == ScrollType::Scare as c_int
+        {
             obj = (*thing_o(obj)).l_next;
             continue;
         }

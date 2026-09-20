@@ -6,6 +6,7 @@ use crate::draw::chat_at as draw_chat;
 use crate::io::{addmsg_str, msg_str};
 use crate::list::{_detach, discard, new_item};
 use crate::player::{CRoom, CThing};
+use crate::scrolls::ScrollType;
 
 const TRUE: c_uchar = 1;
 const FALSE: c_uchar = 0;
@@ -24,7 +25,6 @@ const RING: c_int = b'=' as c_int;
 const STICK: c_int = b'/' as c_int;
 const CALLABLE: c_int = -1;
 const R_OR_S: c_int = -2;
-const S_SCARE: c_int = 10;
 const ESCAPE: c_int = 27;
 const ISFOUND: c_int = 0o0000020;
 const ISGONE: c_short = 0o0000002;
@@ -146,7 +146,8 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         from_floor = TRUE;
     }
 
-    if (*thing_o(item)).o_type == SCROLL as c_int && (*thing_o(item)).o_which == S_SCARE
+    if (*thing_o(item)).o_type == SCROLL as c_int
+        && (*thing_o(item)).o_which == ScrollType::Scare as c_int
         && ((*thing_o(item)).o_flags & ISFOUND) != 0
     {
         detach_list(&raw mut lvl_obj, item);

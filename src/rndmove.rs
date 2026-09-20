@@ -2,9 +2,9 @@ use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
+use crate::scrolls::ScrollType;
 
 const SCROLL: c_char = b'?' as c_char;
-const S_SCARE: c_int = 10;
 
 unsafe extern "C" {
     static mut lvl_obj: *mut CThing;
@@ -70,7 +70,7 @@ pub unsafe extern "C" fn rndmove(who: *mut CThing) -> *mut CCoord {
             }
             obj = (*thing_o(obj)).l_next;
         }
-        if !obj.is_null() && (*thing_o(obj)).o_which == S_SCARE {
+        if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
             RET = pos;
             return &raw mut RET;
         }
