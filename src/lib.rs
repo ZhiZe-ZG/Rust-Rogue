@@ -8,6 +8,7 @@ pub mod draw;
 pub mod fight;
 pub mod game;
 pub mod globals;
+pub mod help;
 pub mod init;
 pub mod io;
 pub mod level;

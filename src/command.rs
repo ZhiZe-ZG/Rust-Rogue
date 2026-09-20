@@ -14,7 +14,8 @@ use crate::curses as cur;
 use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
 use crate::game::EQUIPMENT;
-use crate::io::{addmsg_str, endmsg, msg_str, readchar, status, wait_for};
+use crate::help::{help, identify};
+use crate::io::{addmsg_str, endmsg, msg_str, readchar, status};
 use crate::level::new_level;
 use crate::misc::{eat, get_dir};
 use crate::options::{get_str, option};
@@ -139,15 +140,6 @@ const MASTER: bool = true;
 
 // ─── C ABI structs ────────────────────────────────────────────────────────────
 
-/// Mirrors the C `struct h_list` used by the help table.
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CHList {
-    pub h_ch: c_char,
-    pub h_desc: *mut c_char,
-    pub h_print: c_uchar,
-}
-
 /// Mirrors the C `struct obj_info`.
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -165,88 +157,6 @@ static mut COUNTCH: c_char = 0;
 static mut DIRECTION: c_char = 0;
 static mut NEWCOUNT: c_uchar = false as c_uchar;
 
-/// Identify table (static in the C `identify()`).  Uses `&'static str` so the
-/// table can live in an immutable `static` (raw pointers are not `Sync`).
-struct IdentItem {
-    ch: u8,
-    desc: &'static str,
-}
-
-static IDENT_LIST: [IdentItem; 18] = [
-    IdentItem {
-        ch: b'|',
-        desc: "wall of a room",
-    },
-    IdentItem {
-        ch: b'-',
-        desc: "wall of a room",
-    },
-    IdentItem {
-        ch: GOLD as u8,
-        desc: "gold",
-    },
-    IdentItem {
-        ch: STAIRS as u8,
-        desc: "a staircase",
-    },
-    IdentItem {
-        ch: DOOR as u8,
-        desc: "door",
-    },
-    IdentItem {
-        ch: FLOOR as u8,
-        desc: "room floor",
-    },
-    IdentItem {
-        ch: b'@',
-        desc: "you",
-    },
-    IdentItem {
-        ch: PASSAGE as u8,
-        desc: "passage",
-    },
-    IdentItem {
-        ch: TRAP as u8,
-        desc: "trap",
-    },
-    IdentItem {
-        ch: POTION as u8,
-        desc: "potion",
-    },
-    IdentItem {
-        ch: SCROLL as u8,
-        desc: "scroll",
-    },
-    IdentItem {
-        ch: FOOD as u8,
-        desc: "food",
-    },
-    IdentItem {
-        ch: WEAPON as u8,
-        desc: "weapon",
-    },
-    IdentItem {
-        ch: b' ',
-        desc: "solid rock",
-    },
-    IdentItem {
-        ch: ARMOR as u8,
-        desc: "armor",
-    },
-    IdentItem {
-        ch: AMULET as u8,
-        desc: "the Amulet of Yendor",
-    },
-    IdentItem {
-        ch: RING as u8,
-        desc: "ring",
-    },
-    IdentItem {
-        ch: STICK as u8,
-        desc: "wand or staff",
-    },
-];
-
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
 unsafe extern "C" {
@@ -262,9 +172,7 @@ unsafe extern "C" {
     static mut firstmove: c_uchar;
     static mut food_left: c_int;
     static mut has_hit: c_uchar;
-    static mut helpstr: [CHList; 80];
     static mut huh: [c_char; MAXSTR];
-    static mut hw: *mut c_void;
     static mut inpack: c_int;
     static mut inv_describe: c_uchar;
     static mut jump: c_uchar;
@@ -277,7 +185,6 @@ unsafe extern "C" {
     static mut last_pick: *mut CThing;
     static mut lastscore: c_int;
     static mut level: c_int;
-    static mut lower_msg: c_uchar;
     static mut lvl_obj: *mut CThing;
     static mut max_hit: c_int;
     static mut move_on: c_uchar;
@@ -299,7 +206,6 @@ unsafe extern "C" {
     static mut take: c_char;
     static mut terse: c_uchar;
     static mut to_death: c_uchar;
-    static mut monsters: [crate::monsters::CMonster; 26];
     static mut tr_name: [*mut c_char; NTRAPS as usize];
     static mut r_stones: [*mut c_char; 14];
     static mut p_colors: [*mut c_char; 14];
@@ -310,15 +216,12 @@ unsafe extern "C" {
     static mut scr_info: [CObjInfo; 18];
     static mut ws_info: [CObjInfo; 14];
     static mut wizard: c_int;
-    static mut LINES: c_int;
-    static mut COLS: c_int;
 }
 
 // ─── Extern C functions called from this module ───────────────────────────────
 
 unsafe extern "C" {
     fn free(ptr: *mut c_void);
-    fn isupper(c: c_int) -> c_int;
     fn malloc(size: usize) -> *mut c_void;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
@@ -1051,134 +954,6 @@ pub unsafe extern "C" fn search() {
     if found {
         look(false as c_uchar);
     }
-}
-
-// ─── help() ───────────────────────────────────────────────────────────────────
-
-/// help:
-/// Give single character help, or the whole mess if he wants it.
-///
-/// Uses globals: mpos, helpstr, lower_msg, hw.
-#[no_mangle]
-pub unsafe extern "C" fn help() {
-    let mut helpch: c_char;
-    let mut numprint: c_int;
-    let mut cnt: c_int;
-
-    msg_str("character you want help for (* for all): ");
-    helpch = readchar() as c_char;
-    mpos = 0;
-
-    /*
-     * If it's not a *, print the right help string
-     * or an error if he typed a funny character.
-     */
-    if helpch != b'*' as c_char {
-        cur::move_(0, 0);
-        let mut i = 0;
-        while i < helpstr.len() && !helpstr[i].h_desc.is_null() {
-            if helpstr[i].h_ch == helpch {
-                lower_msg = true as c_uchar;
-                msg_str(&format!(
-                    "{}{}",
-                    CStr::from_ptr(cur::unctrl(helpstr[i].h_ch as c_int)).to_string_lossy(),
-                    CStr::from_ptr(helpstr[i].h_desc).to_string_lossy()
-                ));
-                lower_msg = false as c_uchar;
-                return;
-            }
-            i += 1;
-        }
-        msg_str(&format!(
-            "unknown character '{}'",
-            CStr::from_ptr(cur::unctrl(helpch as c_int)).to_string_lossy()
-        ));
-        return;
-    }
-
-    /*
-     * Here we print help for everything.
-     * Then wait before we return to command mode
-     */
-    numprint = 0;
-    let mut i = 0;
-    while i < helpstr.len() && !helpstr[i].h_desc.is_null() {
-        if helpstr[i].h_print != 0 {
-            numprint += 1;
-        }
-        i += 1;
-    }
-    if numprint & 01 != 0 {
-        numprint += 1;
-    }
-    numprint /= 2;
-    if numprint > LINES - 1 {
-        numprint = LINES - 1;
-    }
-
-    cur::wclear(hw);
-    cnt = 0;
-    let mut i = 0;
-    while i < helpstr.len() && !helpstr[i].h_desc.is_null() && cnt < numprint * 2 {
-        if helpstr[i].h_print != 0 {
-            cur::wmove(
-                hw,
-                cnt % numprint,
-                if cnt >= numprint { COLS / 2 } else { 0 },
-            );
-            if helpstr[i].h_ch != 0 {
-                cur::waddstr(hw, cur::unctrl(helpstr[i].h_ch as c_int));
-            }
-            cur::waddstr(hw, helpstr[i].h_desc);
-            cnt += 1;
-        }
-        i += 1;
-    }
-    cur::wmove(hw, LINES - 1, 0);
-    cur::waddstr(hw, c"--Press space to continue--".as_ptr());
-    cur::wrefresh(hw);
-    wait_for(b' ' as c_int);
-    cur::clearok(stdscr, true as c_uchar);
-    msg_str("");
-    cur::touchwin(stdscr);
-    cur::wrefresh(stdscr);
-}
-
-// ─── identify() ───────────────────────────────────────────────────────────────
-
-/// identify:
-/// Tell the player what a certain thing is.
-///
-/// Uses globals: mpos, monsters.
-#[no_mangle]
-pub unsafe extern "C" fn identify() {
-    let mut ch: c_int;
-    let mut str_: *const c_char;
-
-    msg_str("what do you want identified? ");
-    ch = readchar();
-    mpos = 0;
-    if ch == ESCAPE {
-        msg_str("");
-        return;
-    }
-
-    if isupper(ch) != 0 {
-        str_ = monsters[(ch - b'A' as c_int) as usize].m_name;
-    } else {
-        str_ = c"unknown character".as_ptr();
-        for hp in IDENT_LIST.iter() {
-            if hp.ch as c_int == ch {
-                str_ = hp.desc.as_ptr() as *const c_char;
-                break;
-            }
-        }
-    }
-    msg_str(&format!(
-        "'{}': {}",
-        CStr::from_ptr(cur::unctrl(ch)).to_string_lossy(),
-        CStr::from_ptr(str_).to_string_lossy()
-    ));
 }
 
 // ─── d_level() / u_level() / levit_check() ────────────────────────────────────
