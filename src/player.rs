@@ -7,7 +7,7 @@ use crate::draw::{
 };
 use crate::game;
 use crate::io::msg_str;
-use crate::level::{be_trapped, T_DOOR, T_TELEP};
+use crate::level::{be_trapped, Trap};
 use crate::rndmove::rndmove;
 
 const NUMCOLS: c_int = 80;
@@ -348,7 +348,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         }
         TRAP => {
             let trap = be_trapped(next_pos);
-            if trap == T_DOOR || trap == T_TELEP {
+            if trap == Trap::Door || trap == Trap::Teleport {
                 return;
             }
             move_stuff(&mut next_pos, fl);

@@ -19,6 +19,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::game;
 use crate::level::{current_level, current_level_mut, door_open, Tile, LEVEL_WIDTH};
+use crate::level::Trap;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
@@ -226,10 +227,20 @@ pub(crate) unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
 }
 
 /// Trap kind (0-7) at `(y, x)` from the level trap grid.
-pub(crate) unsafe fn trap_kind_at(y: c_int, x: c_int) -> c_char {
+pub(crate) unsafe fn trap_kind_at(y: c_int, x: c_int) -> Trap {
     let lvl = current_level();
     let idx = cell_index(y as usize, x as usize);
-    lvl.flags.trap[idx] as c_char
+    match lvl.flags.trap[idx] {
+        0 => Trap::Door,
+        1 => Trap::Arrow,
+        2 => Trap::Sleep,
+        3 => Trap::Bear,
+        4 => Trap::Teleport,
+        5 => Trap::Dart,
+        6 => Trap::Rust,
+        7 => Trap::Mystery,
+        _ => unreachable!("trap kind must fit in the trap flag nibble"),
+    }
 }
 
 /// Whether the tile at `(y, x)` is a hidden trap.

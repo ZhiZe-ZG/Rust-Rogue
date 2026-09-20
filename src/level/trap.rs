@@ -23,14 +23,18 @@ const TRAP: c_char = b'^' as c_char;
 const ISLEVIT: c_short = 0o0000010;
 const ISRUN: c_short = 0o020000;
 
-pub const T_DOOR: c_char = 0;
-pub const T_ARROW: c_char = 1;
-pub const T_SLEEP: c_char = 2;
-pub const T_BEAR: c_char = 3;
-pub const T_TELEP: c_char = 4;
-pub const T_DART: c_char = 5;
-pub const T_RUST: c_char = 6;
-pub const T_MYST: c_char = 7;
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Trap {
+    Door = 0,
+    Arrow = 1,
+    Sleep = 2,
+    Bear = 3,
+    Teleport = 4,
+    Dart = 5,
+    Rust = 6,
+    Mystery = 7,
+}
 
 const R_SUSTSTR: c_int = 2;
 const ARROW: c_int = 3;
@@ -97,11 +101,11 @@ unsafe fn rainbow_color() -> *const c_char {
 /// levitating, no trap effect applies. Uses the C engine helpers (`msg`,
 /// `roll`, `spread`, `teleport`, ...) exactly as the legacy `be_trapped` did,
 /// but is callable only from Rust.
-pub unsafe fn be_trapped(pos: CCoord) -> c_char {
+pub unsafe fn be_trapped(pos: CCoord) -> Trap {
     let trap = draw::trap_kind_at(pos.y, pos.x);
 
     if ((*thing_t(&raw mut player)).t_flags & ISLEVIT) != 0 {
-        return T_RUST;
+        return Trap::Rust;
     }
 
     running = FALSE;
@@ -109,16 +113,16 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
     draw::reveal_trap_at(pos.y, pos.x);
 
     match trap {
-        T_DOOR => {
+        Trap::Door => {
             level += 1;
             new_level();
             msg_str("you fell into a trap!");
         }
-        T_BEAR => {
+        Trap::Bear => {
             no_move += spread(3);
             msg_str("you are caught in a bear trap");
         }
-        T_MYST => {
+        Trap::Mystery => {
             let color = || CStr::from_ptr(rainbow_color()).to_string_lossy().into_owned();
             match rnd(11) {
                 0 => {
@@ -157,12 +161,12 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
                 _ => {}
             }
         }
-        T_SLEEP => {
+        Trap::Sleep => {
             no_command += spread(5);
             (*thing_t(&raw mut player)).t_flags &= !ISRUN;
             msg_str("a strange white mist envelops you and you fall asleep");
         }
-        T_ARROW => {
+        Trap::Arrow => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;
             if swing(stats.s_lvl - 1, stats.s_arm, 1) != 0 {
                 stats.s_hpt -= roll(1, 6);
@@ -181,11 +185,11 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
                 msg_str("an arrow shoots past you");
             }
         }
-        T_TELEP => {
+        Trap::Teleport => {
             teleport();
             cur::mvaddch(pos.y, pos.x, TRAP as c_uint);
         }
-        T_DART => {
+        Trap::Dart => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;
             if swing(stats.s_lvl + 1, stats.s_arm, 1) == 0 {
                 msg_str("a small dart whizzes by your ear and vanishes");
@@ -201,11 +205,10 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
                 msg_str("a small dart just hit you in the shoulder");
             }
         }
-        T_RUST => {
+        Trap::Rust => {
             msg_str("a gush of water hits you on the head");
             rust_armor(cur_armor);
         }
-        _ => {}
     }
 
     flush_type();
