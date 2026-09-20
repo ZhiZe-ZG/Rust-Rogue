@@ -3,7 +3,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::draw::{
     chat_at, enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room,
-    reveal_trap_at, turnref as draw_turnref, winat,
+    turnref as draw_turnref, winat,
 };
 use crate::game;
 use crate::io::msg_str;
@@ -325,7 +325,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
 
     if (fl as u8 & F_REAL as u8) == 0 && ch == FLOOR {
         if !player_has(ISLEVIT) {
-            reveal_trap_at(next_pos.y, next_pos.x);
+            crate::level::current_level_mut().reveal_trap(next_pos.y as usize, next_pos.x as usize);
             ch = TRAP;
         }
     } else if player_has(ISHELD) && ch != b'F' as c_char {

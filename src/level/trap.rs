@@ -126,7 +126,7 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
 
     running = false as c_uchar;
     count = false as c_uchar as c_int;
-    draw::reveal_trap_at(pos.y, pos.x);
+    crate::level::current_level_mut().reveal_trap(pos.y as usize, pos.x as usize);
 
     match trap {
         Trap::Door => {

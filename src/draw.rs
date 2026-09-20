@@ -255,18 +255,6 @@ pub(crate) unsafe fn reveal_secret_at(y: c_int, x: c_int) {
     }
 }
 
-/// Reveal a hidden trap at `(y, x)` (real + seen, so it renders `^`).
-pub(crate) unsafe fn reveal_trap_at(y: c_int, x: c_int) {
-    let lvl = current_level_mut();
-    let idx = cell_index(y as usize, x as usize);
-    if let Some(real) = lvl.flags.real.get_mut(idx) {
-        *real = true;
-    }
-    if let Some(seen) = lvl.flags.seen.get_mut(idx) {
-        *seen = true;
-    }
-}
-
 /// Reveal cell `(y, x)` for a magic-map scroll, returning the glyph to draw.
 ///
 /// Equivalent of the legacy `map_cell_reveal` over the C `places` grid,

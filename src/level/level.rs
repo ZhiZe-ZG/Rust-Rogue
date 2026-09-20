@@ -100,6 +100,17 @@ impl Level {
         self.flags = LevelFlags::cleared();
     }
 
+    /// Reveal the trap at `(y, x)` by making the cell real and seen.
+    pub fn reveal_trap(&mut self, y: usize, x: usize) {
+        let idx = LevelFlags::flag_idx(y, x);
+        if let Some(real) = self.flags.real.get_mut(idx) {
+            *real = true;
+        }
+        if let Some(seen) = self.flags.seen.get_mut(idx) {
+            *seen = true;
+        }
+    }
+
     /// Dig a single corridor between two adjacent rooms `r1` and `r2`.
     ///
     /// Works in three phases: first the corridor geometry is generated purely
