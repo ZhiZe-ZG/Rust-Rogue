@@ -6,9 +6,8 @@
 //! [`crate::player`]; the legacy C ABI is intentionally not retained.
 
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
-use crate::curses as cur;
 use crate::draw;
 use crate::io::msg_str;
 use crate::machdep::flush_type;
@@ -17,8 +16,6 @@ use crate::rnd::rnd;
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
-
-const TRAP: c_char = b'^' as c_char;
 
 const ISLEVIT: c_short = 0o0000010;
 const ISRUN: c_short = 0o020000;
@@ -203,7 +200,8 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
         }
         Trap::Teleport => {
             teleport();
-            cur::mvaddch(pos.y, pos.x, TRAP as c_uint);
+            crate::level::current_level_mut().reveal_trap(pos.y as usize, pos.x as usize);
+            draw::redraw_cell(pos.y, pos.x);
         }
         Trap::Dart => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;

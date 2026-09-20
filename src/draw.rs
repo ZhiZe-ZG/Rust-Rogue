@@ -193,6 +193,11 @@ pub(crate) unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
     }
 }
 
+/// Redraw one cell from the current game model.
+pub(crate) unsafe fn redraw_cell(y: c_int, x: c_int) {
+    cur::mvaddch(y, x, chat_at(y, x) as c_uint);
+}
+
 /// Visible glyph at `(y, x)`: a monster's disguise if one stands here,
 /// otherwise [`chat_at`].
 pub(crate) unsafe fn winat(y: c_int, x: c_int) -> c_char {
