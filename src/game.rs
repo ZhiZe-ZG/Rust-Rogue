@@ -18,6 +18,7 @@
 //! `crate::draw`, which computes them from the [`Level`] tile map and flag
 //! grids on the fly.
 
+use std::cell::UnsafeCell;
 use std::os::raw::c_int;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
@@ -84,6 +85,35 @@ impl Equipment {
 
 /// Current player equipment. Items remain owned by the player's pack.
 pub static EQUIPMENT: Equipment = Equipment::EMPTY;
+
+/// Lazily initialized owner of the live dungeon level.
+pub struct CurrentLevel {
+    level: UnsafeCell<Option<Level>>,
+}
+
+// The game has one process-wide level and retains its existing single-threaded
+// access contract through the unsafe accessors below.
+unsafe impl Sync for CurrentLevel {}
+
+impl CurrentLevel {
+    const EMPTY: Self = Self {
+        level: UnsafeCell::new(None),
+    };
+
+    #[inline]
+    unsafe fn get_mut(&self) -> &mut Level {
+        let level = &mut *self.level.get();
+        if level.is_none() {
+            *level = Some(Level::new());
+        }
+        level.as_mut().unwrap()
+    }
+
+    #[inline]
+    unsafe fn get(&self) -> &Level {
+        self.get_mut()
+    }
+}
 
 /// Index of a grid cell, matching the legacy C layout `&places[(x<<5)+y]`.
 #[inline]
@@ -159,27 +189,24 @@ pub unsafe fn clear_level() {
     }
 }
 
-/// Process-wide singleton for the live dungeon level.
+/// Process-wide owner for the live dungeon level.
 ///
 /// The canonical holder of the current level. `level::level` forwards its
 /// `current_level_mut` here so the whole crate keeps using the same singleton
-/// while ownership lives in the game-state module.
-pub static mut CURRENT_LEVEL: Option<Level> = None;
+/// while ownership lives in the game-state module. The level is initialized
+/// lazily on its first access.
+pub static CURRENT_LEVEL: CurrentLevel = CurrentLevel::EMPTY;
 
 /// The live level owner. Initializes the singleton on first use.
 #[inline]
 pub unsafe fn current_level_mut() -> &'static mut Level {
-    let current_level = &raw mut CURRENT_LEVEL;
-    if (*current_level).is_none() {
-        (*current_level) = Some(Level::new());
-    }
-    (*current_level).as_mut().unwrap()
+    CURRENT_LEVEL.get_mut()
 }
 
 /// Immutable access to the live level.
 #[inline]
 pub unsafe fn current_level() -> &'static Level {
-    current_level_mut()
+    CURRENT_LEVEL.get()
 }
 
 /// Convenience alias for the crate-wide level size constants.
@@ -187,7 +214,7 @@ pub use crate::level::{LEVEL_HEIGHT as GAME_HEIGHT, LEVEL_WIDTH as GAME_WIDTH};
 
 #[cfg(test)]
 mod tests {
-    use super::Equipment;
+    use super::{CurrentLevel, Equipment, Level};
     use crate::player::CThing;
     use std::mem::MaybeUninit;
 
@@ -202,5 +229,15 @@ mod tests {
 
         assert_eq!(equipment.left_ring(), left.as_mut_ptr());
         assert_eq!(equipment.right_ring(), right.as_mut_ptr());
+    }
+
+    #[test]
+    fn current_level_initializes_once() {
+        let current_level = CurrentLevel::EMPTY;
+
+        let first = unsafe { current_level.get_mut() } as *mut Level;
+        let second = unsafe { current_level.get() } as *const Level;
+
+        assert_eq!(first.cast_const(), second);
     }
 }
