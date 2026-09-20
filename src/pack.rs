@@ -3,10 +3,12 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::curses as cur;
 use crate::draw::chat_at as draw_chat;
-use crate::io::{addmsg_str, msg_str};
-use crate::thing_list::{detach, discard, new_item};
+use crate::io::{addmsg_str, endmsg, msg_str, readchar};
+use crate::misc::{find_obj, show_floor};
 use crate::player::{CRoom, CThing};
 use crate::scrolls::ScrollType;
+use crate::thing_list::{detach, discard, new_item};
+use crate::things::{add_line, inv_name};
 
 const MAXPACK: c_int = 23;
 const MAXSTR: usize = 1024;
@@ -51,12 +53,6 @@ unsafe extern "C" {
     static mut purse: c_int;
     static mut terse: c_uchar;
 
-    fn add_line(fmt: *mut c_char, arg: *mut c_char) -> c_char;
-    fn endmsg() -> c_int;
-    fn find_obj(y: c_int, x: c_int) -> *mut CThing;
-    fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
-    fn readchar() -> c_int;
-    fn show_floor() -> bool;
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut crate::player::CThingMonster {
@@ -88,7 +84,11 @@ unsafe fn alloc_item() -> *mut CThing {
 }
 
 unsafe fn room_flags(rp: *mut CRoom) -> c_short {
-    if rp.is_null() { 0 } else { (*rp).r_flags }
+    if rp.is_null() {
+        0
+    } else {
+        (*rp).r_flags
+    }
 }
 
 unsafe fn pack_head() -> *mut CThing {
@@ -147,7 +147,11 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         detach_list(&raw mut lvl_obj, item);
         // The object is removed from `lvl_obj`, so the terrain glyph shows
         // automatically via draw.
-        cur::mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
+        cur::mvaddch(
+            hero_coord().y,
+            hero_coord().x,
+            floor_char_for_room() as c_uint,
+        );
         discard_item(item);
         msg_str("the scroll turns to dust as you pick it up");
         return;
@@ -164,15 +168,22 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
             if (*thing_o(op)).o_type != (*thing_o(item)).o_type {
                 lp = op;
             } else {
-                while (*thing_o(op)).o_type == (*thing_o(item)).o_type && (*thing_o(op)).o_which != (*thing_o(item)).o_which {
+                while (*thing_o(op)).o_type == (*thing_o(item)).o_type
+                    && (*thing_o(op)).o_which != (*thing_o(item)).o_which
+                {
                     lp = op;
                     if next_item(op).is_null() {
                         break;
                     }
                     op = next_item(op);
                 }
-                if (*thing_o(op)).o_type == (*thing_o(item)).o_type && (*thing_o(op)).o_which == (*thing_o(item)).o_which {
-                    if ((*thing_o(op)).o_type == FOOD as c_int || (*thing_o(op)).o_type == POTION as c_int || (*thing_o(op)).o_type == SCROLL as c_int) {
+                if (*thing_o(op)).o_type == (*thing_o(item)).o_type
+                    && (*thing_o(op)).o_which == (*thing_o(item)).o_which
+                {
+                    if ((*thing_o(op)).o_type == FOOD as c_int
+                        || (*thing_o(op)).o_type == POTION as c_int
+                        || (*thing_o(op)).o_type == SCROLL as c_int)
+                    {
                         if pack_room(from_floor, item) == 0 {
                             return;
                         }
@@ -184,14 +195,20 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
                     }
                     if (*thing_o(item)).o_group != 0 {
                         lp = op;
-                        while (*thing_o(op)).o_type == (*thing_o(item)).o_type && (*thing_o(op)).o_which == (*thing_o(item)).o_which && (*thing_o(op)).o_group != (*thing_o(item)).o_group {
+                        while (*thing_o(op)).o_type == (*thing_o(item)).o_type
+                            && (*thing_o(op)).o_which == (*thing_o(item)).o_which
+                            && (*thing_o(op)).o_group != (*thing_o(item)).o_group
+                        {
                             lp = op;
                             if next_item(op).is_null() {
                                 break;
                             }
                             op = next_item(op);
                         }
-                        if (*thing_o(op)).o_type == (*thing_o(item)).o_type && (*thing_o(op)).o_which == (*thing_o(item)).o_which && (*thing_o(op)).o_group == (*thing_o(item)).o_group {
+                        if (*thing_o(op)).o_type == (*thing_o(item)).o_type
+                            && (*thing_o(op)).o_which == (*thing_o(item)).o_which
+                            && (*thing_o(op)).o_group == (*thing_o(item)).o_group
+                        {
                             (*thing_o(op)).o_count += (*thing_o(item)).o_count;
                             inpack -= 1;
                             if pack_room(from_floor, item) == 0 {
@@ -274,7 +291,11 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_u
         detach_list(&raw mut lvl_obj, obj);
         // The object is removed from `lvl_obj`, so the terrain glyph shows
         // automatically via draw.
-        cur::mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
+        cur::mvaddch(
+            hero_coord().y,
+            hero_coord().x,
+            floor_char_for_room() as c_uint,
+        );
     }
 
     inpack += 1;
@@ -282,7 +303,11 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_u
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing {
+pub unsafe extern "C" fn leave_pack(
+    obj: *mut CThing,
+    newobj: c_uchar,
+    all: c_uchar,
+) -> *mut CThing {
     let mut nobj = obj;
 
     inpack -= 1;
@@ -329,8 +354,11 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
     while !cur.is_null() {
         if type_ != 0
             && type_ != (*thing_o(cur)).o_type
-            && !(type_ == CALLABLE && (*thing_o(cur)).o_type != FOOD && (*thing_o(cur)).o_type != AMULET)
-            && !(type_ == R_OR_S && ((*thing_o(cur)).o_type == RING || (*thing_o(cur)).o_type == STICK))
+            && !(type_ == CALLABLE
+                && (*thing_o(cur)).o_type != FOOD
+                && (*thing_o(cur)).o_type != AMULET)
+            && !(type_ == R_OR_S
+                && ((*thing_o(cur)).o_type == RING || (*thing_o(cur)).o_type == STICK))
         {
             cur = next_item(cur);
             continue;
@@ -342,7 +370,14 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
         if (*thing_o(cur)).o_packch == 0 {
             std::ptr::copy_nonoverlapping(c"%s".as_ptr(), inv_temp.as_mut_ptr(), 3);
         } else {
-            let format = [(*thing_o(cur)).o_packch, b')' as c_char, b' ' as c_char, b'%' as c_char, b's' as c_char, 0];
+            let format = [
+                (*thing_o(cur)).o_packch,
+                b')' as c_char,
+                b' ' as c_char,
+                b'%' as c_char,
+                b's' as c_char,
+                0,
+            ];
             std::ptr::copy_nonoverlapping(format.as_ptr(), inv_temp.as_mut_ptr(), format.len());
         }
         let _ = add_line(inv_temp.as_mut_ptr(), inv_name(cur, false as c_uchar));
@@ -352,9 +387,17 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
 
     if n_objs == 0 {
         if terse != 0 {
-            msg_str(if type_ == 0 { "empty handed" } else { "nothing appropriate" });
+            msg_str(if type_ == 0 {
+                "empty handed"
+            } else {
+                "nothing appropriate"
+            });
         } else {
-            msg_str(if type_ == 0 { "you are empty handed" } else { "you don't have anything appropriate" });
+            msg_str(if type_ == 0 {
+                "you are empty handed"
+            } else {
+                "you don't have anything appropriate"
+            });
         }
         return false as c_uchar;
     }
@@ -454,7 +497,11 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
 pub unsafe extern "C" fn money(value: c_int) {
     purse += value;
     // The gold object was discarded, so the terrain glyph shows via draw.
-    cur::mvaddch(hero_coord().y, hero_coord().x, floor_char_for_room() as c_uint);
+    cur::mvaddch(
+        hero_coord().y,
+        hero_coord().x,
+        floor_char_for_room() as c_uint,
+    );
     if value > 0 {
         if terse == 0 {
             addmsg_str("you found ");
@@ -506,7 +553,11 @@ pub unsafe extern "C" fn picky_inven() {
             CStr::from_ptr(inv_name(pack_head(), false as c_uchar)).to_string_lossy()
         ));
     } else {
-        msg_str(if terse != 0 { "item: " } else { "which item do you wish to inventory: " });
+        msg_str(if terse != 0 {
+            "item: "
+        } else {
+            "which item do you wish to inventory: "
+        });
         mpos = 0;
         let mch = readchar() as c_char;
         if mch as c_int == ESCAPE {
@@ -532,7 +583,6 @@ pub unsafe extern "C" fn picky_inven() {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn pick_up_char(ch: c_char) {
+unsafe fn pick_up_char(ch: c_char) {
     pick_up(ch);
 }

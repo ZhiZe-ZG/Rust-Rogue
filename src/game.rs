@@ -36,10 +36,9 @@ fn cell_index(y: c_int, x: c_int) -> usize {
 /// existing `extern "C" { static mut places: [CPlace; 32 * 80] }`
 /// declaration links against this storage unchanged.
 #[no_mangle]
-pub static mut places: [CPlace; LEVEL_HEIGHT * LEVEL_WIDTH] =
-    [CPlace {
-        p_monst: std::ptr::null_mut(),
-    }; LEVEL_HEIGHT * LEVEL_WIDTH];
+pub static mut places: [CPlace; LEVEL_HEIGHT * LEVEL_WIDTH] = [CPlace {
+    p_monst: std::ptr::null_mut(),
+}; LEVEL_HEIGHT * LEVEL_WIDTH];
 
 /// Dense per-cell monster occupancy map.
 ///

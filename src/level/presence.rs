@@ -17,15 +17,15 @@ use crate::rnd::rnd;
 
 use super::ffitools::{FLOOR, PASSAGE, STAIRS};
 use super::level::{current_level_mut, LevelFlags, LEVEL_WIDTH};
-use super::trap::Trap;
 use super::symbols::{
-    AMULET, AMULETLEVEL, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN, MAXOBJ,
-    MAXROOMS, MAXTRAPS, MAXTRIES, MAXTREAS, MINTREAS, NTRAPS, PLAYER, SEEMONST, TREAS_ROOM,
-    attach, amulet, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch,
-    new_item, new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs,
-    stairs, step_ok, thing_o, thing_t, turn_see, visuals,
+    amulet, attach, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch, new_item,
+    new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, stairs,
+    step_ok, thing_o, thing_t, turn_see, visuals, AMULET, AMULETLEVEL, GOLD, GOLDGRP, ISGONE,
+    ISHALU, ISMANY, ISMEAN, MAXOBJ, MAXROOMS, MAXTRAPS, MAXTREAS, MAXTRIES, MINTREAS, NTRAPS,
+    PLAYER, SEEMONST, TREAS_ROOM,
 };
 use super::tile::Tile;
+use super::trap::Trap;
 
 /// Map a pointer into the C `rooms` array back to its Rust room-slot index.
 ///
@@ -233,8 +233,26 @@ unsafe fn put_things() {
         (*og).o_dplus = 0;
         // Copy "0x0" into the 8-byte damage strings (zero-padded), matching
         // C's strncpy(obj->o_damage, "0x0", sizeof(obj->o_damage)).
-        (*og).o_damage = [b'0' as c_char, b'x' as c_char, b'0' as c_char, 0, 0, 0, 0, 0];
-        (*og).o_hurldmg = [b'0' as c_char, b'x' as c_char, b'0' as c_char, 0, 0, 0, 0, 0];
+        (*og).o_damage = [
+            b'0' as c_char,
+            b'x' as c_char,
+            b'0' as c_char,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        (*og).o_hurldmg = [
+            b'0' as c_char,
+            b'x' as c_char,
+            b'0' as c_char,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
         (*og).o_arm = 11;
         (*og).o_type = AMULET as c_int;
         // Put it somewhere.
@@ -270,7 +288,9 @@ unsafe fn place_traps() {
         // Record the trap in the level model: a floor cell becomes a hidden
         // trap (non-real, with its kind in the trap grid).
         let current = current_level_mut();
-        current.map.set(stairs.y as usize, stairs.x as usize, Tile::Trap);
+        current
+            .map
+            .set(stairs.y as usize, stairs.x as usize, Tile::Trap);
         let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
         current.flags.real[idx] = false;
         current.flags.trap[idx] = Trap::from_raw(rnd(NTRAPS) as u8);
@@ -315,7 +335,12 @@ pub(crate) unsafe fn link_monsters_to_rooms() {
 /// Uses globals: player, places (via find_floor).
 /// ```
 unsafe fn place_hero() {
-    find_floor(std::ptr::null_mut(), &raw mut (*thing_t(&raw mut player)).t_pos, 0, true);
+    find_floor(
+        std::ptr::null_mut(),
+        &raw mut (*thing_t(&raw mut player)).t_pos,
+        0,
+        true,
+    );
     enter_room(&raw mut (*thing_t(&raw mut player)).t_pos);
     mvaddch(
         (*thing_t(&raw mut player)).t_pos.y,
@@ -323,7 +348,7 @@ unsafe fn place_hero() {
         PLAYER as c_uint,
     );
     if ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0 {
-        turn_see(false);
+        turn_see(false as c_uchar);
     }
     if ((*thing_t(&raw mut player)).t_flags & ISHALU) != 0 {
         visuals();

@@ -41,8 +41,18 @@ pub unsafe extern "C" fn rd_score(top_ten: *mut Score) {
 
     for i in 0..numscores as usize {
         let entry = top_ten.add(i);
-        let _ = fread((*entry).sc_name.as_mut_ptr() as *mut u8, 1, MAXSTR, scoreboard);
-        let _ = fread(scoreline.as_mut_ptr() as *mut u8, 1, SCORELINE_LEN, scoreboard);
+        let _ = fread(
+            (*entry).sc_name.as_mut_ptr() as *mut u8,
+            1,
+            MAXSTR,
+            scoreboard,
+        );
+        let _ = fread(
+            scoreline.as_mut_ptr() as *mut u8,
+            1,
+            SCORELINE_LEN,
+            scoreboard,
+        );
         let _ = sscanf(
             scoreline.as_ptr(),
             c" %u %d %u %hu %d %x \n".as_ptr(),
@@ -73,7 +83,12 @@ pub unsafe extern "C" fn wr_score(top_ten: *mut Score) {
         let entry = top_ten.add(i);
         scoreline.fill(0);
 
-        let _ = fwrite((*entry).sc_name.as_ptr() as *const u8, 1, MAXSTR, scoreboard);
+        let _ = fwrite(
+            (*entry).sc_name.as_ptr() as *const u8,
+            1,
+            MAXSTR,
+            scoreboard,
+        );
         let _ = snprintf(
             scoreline.as_mut_ptr(),
             SCORELINE_LEN,
@@ -85,7 +100,12 @@ pub unsafe extern "C" fn wr_score(top_ten: *mut Score) {
             (*entry).sc_level,
             (*entry).sc_time,
         );
-        let _ = fwrite(scoreline.as_ptr() as *const u8, 1, SCORELINE_LEN, scoreboard);
+        let _ = fwrite(
+            scoreline.as_ptr() as *const u8,
+            1,
+            SCORELINE_LEN,
+            scoreboard,
+        );
     }
 
     rewind(scoreboard);

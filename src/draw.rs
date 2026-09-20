@@ -16,10 +16,14 @@
 
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::chase::{roomin, see_monst};
 use crate::curses as cur;
 use crate::game;
-use crate::level::{current_level, current_level_mut, door_open, Tile, LEVEL_WIDTH};
+use crate::io::step_ok;
 use crate::level::Trap;
+use crate::level::{current_level, current_level_mut, door_open, Tile, LEVEL_WIDTH};
+use crate::misc::find_obj;
+use crate::monsters::wake_monster;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
@@ -64,7 +68,6 @@ const NUMCOLS: c_int = 80;
 const MAXPASS: usize = 13;
 const LAMPDIST: c_int = 3;
 
-
 // ─── Legacy C ABI surface ─────────────────────────────────────────────────────
 
 unsafe extern "C" {
@@ -84,11 +87,6 @@ unsafe extern "C" {
     static mut stdscr: *mut crate::player::CWindow;
     static mut lvl_obj: *mut CThing;
 
-    fn roomin(cp: *mut CCoord) -> *mut CRoom;
-    fn see_monst(mp: *mut CThing) -> c_uchar;
-    fn wake_monster(y: c_int, x: c_int);
-    fn step_ok(ch: c_int) -> c_int;
-    fn find_obj(y: c_int, x: c_int) -> *mut CThing;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -128,7 +126,10 @@ fn cell_index(y: usize, x: usize) -> usize {
 /// Whether `tile` is a solid boundary cell (wall, hidden door, or open door).
 #[inline]
 fn is_wall(tile: Option<Tile>) -> bool {
-    matches!(tile, Some(Tile::Wall) | Some(Tile::HiddenDoor) | Some(Tile::Door))
+    matches!(
+        tile,
+        Some(Tile::Wall) | Some(Tile::HiddenDoor) | Some(Tile::Door)
+    )
 }
 
 /// Pick the ASCII glyph for a boundary cell from its neighbours.
@@ -437,8 +438,8 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             if tp.is_null() {
                 ch = trip_ch(y, x, ch);
             } else {
-                if player_has(SEEMONST)
-                    && ((*thing_t(tp)).t_flags & 0o002000) != 0 /* ISINVIS */
+                if player_has(SEEMONST) && ((*thing_t(tp)).t_flags & 0o002000) != 0
+                /* ISINVIS */
                 {
                     if door_stop != 0 && firstmove == 0 {
                         running = false as c_uchar;
@@ -464,8 +465,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             cur::r#move(y, x);
             let player_room = (*thing_t(&raw mut player)).t_room;
             if !player_room.is_null()
-                && ((*player_room).r_flags & (ISGONE as c_short | ISDARK as c_short))
-                    == ISDARK
+                && ((*player_room).r_flags & (ISGONE as c_short | ISDARK as c_short)) == ISDARK
                 && see_floor == 0
                 && ch == FLOOR as c_int
             {
@@ -723,9 +723,15 @@ pub unsafe extern "C" fn turnref() {
     let hero = hero_pos();
     if (flat_at(hero.y, hero.x) as u8 & F_SEEN as u8) == 0 {
         if jump != 0 {
-            cur::leaveok(stdscr as *mut crate::player::CWindow, true as c_uchar as c_int);
+            cur::leaveok(
+                stdscr as *mut crate::player::CWindow,
+                true as c_uchar as c_int,
+            );
             cur::refresh();
-            cur::leaveok(stdscr as *mut crate::player::CWindow, false as c_uchar as c_int);
+            cur::leaveok(
+                stdscr as *mut crate::player::CWindow,
+                false as c_uchar as c_int,
+            );
         }
         set_seen_at(hero.y, hero.x);
     }

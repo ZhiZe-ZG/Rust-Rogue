@@ -15,7 +15,7 @@ use crate::player::{CCoord, CRoom};
 use super::level::Level;
 use super::passages::{MAX_EXITS, MAX_PASSAGES};
 use super::rooms::Room;
-use super::symbols::{ISDARK, ISGONE, ISMAZE, rooms, passages};
+use super::symbols::{passages, rooms, ISDARK, ISGONE, ISMAZE};
 use super::tile::Tile;
 
 /// Convert one C `CRoom` into a Rust [`Room`].
@@ -104,7 +104,10 @@ pub(crate) unsafe fn sync_passages_to_c(lvl: &Level) {
         let rp = &mut passages[i];
         rp.r_nexits = links.exits.len().min(MAX_EXITS) as c_int;
         for (j, exit) in links.exits.iter().take(MAX_EXITS).enumerate() {
-            rp.r_exit[j] = CCoord { x: exit.x, y: exit.y };
+            rp.r_exit[j] = CCoord {
+                x: exit.x,
+                y: exit.y,
+            };
         }
     }
 }

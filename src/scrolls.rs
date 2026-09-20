@@ -3,11 +3,16 @@ use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::curses as cur;
-use crate::draw::{chat_at as draw_chat, map_cell_reveal, winat as draw_winat};
+use crate::draw::{chat_at as draw_chat, look, map_cell_reveal, winat as draw_winat};
 use crate::game;
-use crate::io::{addmsg_str, msg_str};
+use crate::init::pick_color;
+use crate::io::{addmsg_str, endmsg, msg_str, show_win, status, step_ok};
+use crate::misc::{aggravate, call_it, choose_str, find_obj};
+use crate::monsters::{new_monster, randmonster};
+use crate::pack::{get_item, leave_pack};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::thing_list::{discard, new_item};
+use crate::wizard::{teleport, whatis};
 
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
@@ -100,7 +105,6 @@ impl ScrollType {
     }
 }
 
-
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CObjInfo {
@@ -124,22 +128,6 @@ unsafe extern "C" {
     static mut scr_info: [CObjInfo; MAXSCROLLS];
     static mut weap_info: [CObjInfo; 10];
 
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
-    fn pick_color(col: *const c_char) -> *mut c_char;
-    fn endmsg() -> c_int;
-    fn step_ok(ch: c_int) -> c_int;
-    fn find_obj(y: c_int, x: c_int) -> *mut CThing;
-    fn new_monster(tp: *mut CThing, monster_type: c_char, cp: *mut CCoord);
-    fn randmonster(wander: bool) -> c_char;
-    fn whatis(insist: c_uchar, item_type: c_int);
-    fn show_win(message: *const c_char);
-    fn teleport();
-    fn look(wakeup: c_uchar);
-    fn status();
-    fn call_it(info: *mut CObjInfo);
-    fn choose_str(ts: *const c_char, ns: *const c_char) -> *mut c_char;
-    fn aggravate();
 }
 
 #[inline]
@@ -222,7 +210,7 @@ pub unsafe extern "C" fn read_scroll() {
             (*thing_t(&raw mut player)).t_flags |= CANHUH;
             msg_str(&format!(
                 "your hands begin to glow {}",
-                CStr::from_ptr(pick_color(c"red".as_ptr())).to_string_lossy()
+                CStr::from_ptr(pick_color(c"red".as_ptr().cast_mut())).to_string_lossy()
             ));
         }
         ScrollType::Armor => {
@@ -231,7 +219,7 @@ pub unsafe extern "C" fn read_scroll() {
                 (*thing_o(cur_armor)).o_flags &= !ISCURSED;
                 msg_str(&format!(
                     "your armor glows {} for a moment",
-                    CStr::from_ptr(pick_color(c"silver".as_ptr())).to_string_lossy()
+                    CStr::from_ptr(pick_color(c"silver".as_ptr().cast_mut())).to_string_lossy()
                 ));
             }
         }
@@ -322,7 +310,8 @@ pub unsafe extern "C" fn read_scroll() {
             scr_info[(*thing_o(obj)).o_which as usize].oi_know = true as c_uchar;
             msg_str(&format!(
                 "this scroll is an {} scroll",
-                CStr::from_ptr(scr_info[(*thing_o(obj)).o_which as usize].oi_name).to_string_lossy()
+                CStr::from_ptr(scr_info[(*thing_o(obj)).o_which as usize].oi_name)
+                    .to_string_lossy()
             ));
             whatis(true as c_uchar, id_type[(*thing_o(obj)).o_which as usize]);
         }
@@ -330,20 +319,20 @@ pub unsafe extern "C" fn read_scroll() {
             scr_info[ScrollType::Map.index()].oi_know = true as c_uchar;
             msg_str("oh, now this scroll has a map on it");
 
-    for y in 1..(NUMLINES - 1) {
-        for x in 0..NUMCOLS {
-            let ch = map_cell_reveal(y, x);
-            if ch != SPACE {
-                let tp = moat(y, x);
-                if !tp.is_null() {
-                    (*thing_t(tp)).t_oldch = ch as c_char;
-                }
-                if tp.is_null() || !player_has(SEEMONST) {
-                    cur::mvaddch(y, x, ch as c_uint);
+            for y in 1..(NUMLINES - 1) {
+                for x in 0..NUMCOLS {
+                    let ch = map_cell_reveal(y, x);
+                    if ch != SPACE {
+                        let tp = moat(y, x);
+                        if !tp.is_null() {
+                            (*thing_t(tp)).t_oldch = ch as c_char;
+                        }
+                        if tp.is_null() || !player_has(SEEMONST) {
+                            cur::mvaddch(y, x, ch as c_uint);
+                        }
+                    }
                 }
             }
-        }
-    }
         }
         ScrollType::FindFood => {
             let mut found = false as c_uchar;
@@ -383,8 +372,9 @@ pub unsafe extern "C" fn read_scroll() {
                 }
                 msg_str(&format!(
                     "your {} glows {} for a moment",
-                    CStr::from_ptr(weap_info[(*thing_o(cur_weapon)).o_which as usize].oi_name).to_string_lossy(),
-                    CStr::from_ptr(pick_color(c"blue".as_ptr())).to_string_lossy()
+                    CStr::from_ptr(weap_info[(*thing_o(cur_weapon)).o_which as usize].oi_name)
+                        .to_string_lossy(),
+                    CStr::from_ptr(pick_color(c"blue".as_ptr().cast_mut())).to_string_lossy()
                 ));
             }
         }
@@ -396,10 +386,13 @@ pub unsafe extern "C" fn read_scroll() {
             uncurse(cur_weapon);
             uncurse(cur_ring[LEFT]);
             uncurse(cur_ring[RIGHT]);
-            msg_str(&CStr::from_ptr(choose_str(
-                c"you feel in touch with the Universal Onenes".as_ptr(),
-                c"you feel as if somebody is watching over you".as_ptr(),
-            )).to_string_lossy());
+            msg_str(
+                &CStr::from_ptr(choose_str(
+                    c"you feel in touch with the Universal Onenes".as_ptr(),
+                    c"you feel as if somebody is watching over you".as_ptr(),
+                ))
+                .to_string_lossy(),
+            );
         }
         ScrollType::Aggravate => {
             aggravate();
@@ -410,7 +403,7 @@ pub unsafe extern "C" fn read_scroll() {
                 (*thing_o(cur_armor)).o_flags |= ISPROT;
                 msg_str(&format!(
                     "your armor is covered by a shimmering {} shield",
-                    CStr::from_ptr(pick_color(c"gold".as_ptr())).to_string_lossy()
+                    CStr::from_ptr(pick_color(c"gold".as_ptr().cast_mut())).to_string_lossy()
                 ));
             } else {
                 msg_str("you feel a strange sense of loss");
@@ -423,7 +416,7 @@ pub unsafe extern "C" fn read_scroll() {
     look(true as c_uchar);
     status();
 
-    call_it(&mut scr_info[(*thing_o(obj)).o_which as usize]);
+    call_it((&mut scr_info[(*thing_o(obj)).o_which as usize] as *mut CObjInfo).cast());
     if discardit {
         discard(obj);
     }

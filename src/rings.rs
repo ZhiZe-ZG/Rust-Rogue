@@ -1,10 +1,14 @@
-use crate::rnd::rnd;
 use crate::player::{CThing, CThingObject};
+use crate::potions::invis_on;
+use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
-use crate::potions::invis_on;
 
-use crate::io::{addmsg_str, msg_str};
+use crate::io::{addmsg_str, msg_str, readchar};
+use crate::misc::{aggravate, chg_str, is_current};
+use crate::pack::get_item;
+use crate::things::{dropcheck, inv_name};
+use crate::weapons::num;
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
@@ -42,14 +46,6 @@ unsafe extern "C" {
     static mut terse: c_uchar;
     static mut mpos: c_int;
 
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn is_current(obj: *mut CThing) -> bool;
-    fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
-    fn chg_str(amt: c_int);
-    fn aggravate();
-    fn dropcheck(obj: *mut CThing) -> c_uchar;
-    fn readchar() -> c_int;
-    fn num(n1: c_int, n2: c_int, obj_type: c_char) -> *mut c_char;
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
@@ -216,8 +212,7 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
 }
 
 /// Returns bracketed ring bonus text for known stat-modifier rings.
-#[no_mangle]
-pub unsafe extern "C" fn ring_num(obj: *mut CThing) -> *mut c_char {
+unsafe fn ring_num(obj: *mut CThing) -> *mut c_char {
     if obj.is_null() {
         return c"".as_ptr() as *mut c_char;
     }

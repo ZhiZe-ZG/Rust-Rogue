@@ -7,7 +7,7 @@
 //! raw C ABI.
 
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uint, c_uchar, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 /// Opaque window handle used by the legacy code: the ncurses crate uses
 /// `WINDOW = *mut i8`, the game uses `*mut c_void`. They are the same bytes.

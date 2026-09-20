@@ -1,14 +1,17 @@
-use crate::rnd::rnd;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use crate::chase::{diag_ok, roomin};
 use crate::curses as cur;
 use crate::draw::{
     chat_at, enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room,
     turnref as draw_turnref, winat,
 };
+use crate::fight::fight;
 use crate::game;
 use crate::io::msg_str;
 use crate::level::{be_trapped, Trap};
+use crate::pack::floor_at;
+use crate::rnd::rnd;
 use crate::rndmove::rndmove;
+use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 const NUMCOLS: c_int = 80;
 const NUMLINES: c_int = 24;
@@ -29,7 +32,6 @@ const ISLEVIT: c_short = 0o0000010;
 
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_REAL: c_char = 0x10u8 as c_char;
-
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -142,10 +144,6 @@ unsafe extern "C" {
     static mut runch: c_char;
     static mut places: [CPlace; 32 * 80];
 
-    fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
-    fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;
-    fn roomin(cp: *mut CCoord) -> *mut CRoom;
-    fn floor_at() -> c_char;
 }
 
 #[inline]
@@ -210,7 +208,12 @@ unsafe fn move_stuff(next_pos: &mut CCoord, fl: c_char) {
 #[inline]
 unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
     let current_room = (*thing_t(&raw mut player)).t_room;
-    if passgo == 0 || running == 0 || current_room.is_null() || ((*current_room).r_flags & 0o000002) == 0 || player_has(ISBLIND) {
+    if passgo == 0
+        || running == 0
+        || current_room.is_null()
+        || ((*current_room).r_flags & 0o000002) == 0
+        || player_has(ISBLIND)
+    {
         return false;
     }
 
@@ -297,7 +300,8 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     }
 
     loop {
-        if next_pos.x < 0 || next_pos.x >= NUMCOLS || next_pos.y <= 0 || next_pos.y >= NUMLINES - 1 {
+        if next_pos.x < 0 || next_pos.x >= NUMCOLS || next_pos.y <= 0 || next_pos.y >= NUMLINES - 1
+        {
             if try_passgo_turn(&mut current_dy, &mut current_dx) {
                 next_pos.y = hero.y + current_dy;
                 next_pos.x = hero.x + current_dx;

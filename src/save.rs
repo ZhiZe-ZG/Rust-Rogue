@@ -1,8 +1,15 @@
-use crate::rnd::set_seed;
 use crate::curses as cur;
-use crate::io::msg_str;
+use crate::io::{msg_str, readchar};
 use crate::machdep::{resetltchars, setup};
+use crate::mdport::{
+    md_chmod, md_getpid, md_ignoreallsignals, md_tstphold, md_tstpresume, md_unlink,
+    md_unlink_open_file,
+};
+use crate::options::get_str;
 use crate::player::{CThing, CThingMonster};
+use crate::rnd::set_seed;
+use crate::startup::playit;
+use crate::state::{rs_restore_file, rs_save_file};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr;
@@ -30,29 +37,16 @@ extern "C" {
     static mut master_mode_enabled: c_uchar;
     static mut player: CThing;
 
-    fn readchar() -> c_int;
-    fn get_str(s: *mut c_char, win: *mut CWindow) -> c_int;
-    fn md_unlink(file: *mut c_char) -> c_int;
-
     fn putchar(c: c_int) -> c_int;
-    fn md_tstphold();
-    fn md_tstpresume();
     fn perror(s: *const c_char);
     fn strlen(s: *const c_char) -> usize;
     fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
     fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
     fn sscanf(buf: *const c_char, fmt: *const c_char, ...) -> c_int;
-    fn rs_restore_file(inf: *mut CFile) -> c_int;
-    fn md_getpid() -> c_int;
-    fn playit();
-    fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int;
     fn fopen(path: *const c_char, mode: *const c_char) -> *mut CFile;
     fn access(path: *const c_char, mode: c_int) -> c_int;
-    fn md_ignoreallsignals();
-    fn md_unlink_open_file(file: *mut c_char, inf: *mut CFile) -> c_int;
     fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
     fn strerror(errnum: c_int) -> *const c_char;
-    fn rs_save_file(savef: *mut CFile);
     fn fflush(stream: *mut CFile) -> c_int;
     fn fclose(stream: *mut CFile) -> c_int;
     fn exit(status: c_int) -> !;
@@ -101,7 +95,10 @@ unsafe fn copy_cstr(dst: *mut c_char, src: *const c_char, max: usize) {
 
 /// Checks the restored player state and reports whether the saved game is already dead.
 unsafe fn restore_player_dead() -> bool {
-    (*(std::ptr::addr_of_mut!(player) as *mut CThingMonster)).t_stats.s_hpt <= 0
+    (*(std::ptr::addr_of_mut!(player) as *mut CThingMonster))
+        .t_stats
+        .s_hpt
+        <= 0
 }
 
 /// Implements the interactive save command flow and then delegates the actual write to save_file.
@@ -127,7 +124,8 @@ pub unsafe extern "C" fn save_game() {
                     msg_str("");
                     return;
                 }
-                if c == 'n' as c_int || c == 'N' as c_int || c == 'y' as c_int || c == 'Y' as c_int {
+                if c == 'n' as c_int || c == 'N' as c_int || c == 'y' as c_int || c == 'Y' as c_int
+                {
                     break;
                 }
                 msg_str("please answer Y or N");
@@ -150,7 +148,7 @@ pub unsafe extern "C" fn save_game() {
             if buf[0] == 0 {
                 mpos = 0;
                 msg_str("file name: ");
-                if get_str(buf.as_mut_ptr(), stdscr) == QUIT {
+                if get_str(buf.as_mut_ptr().cast(), stdscr.cast()) == QUIT {
                     msg_str("");
                     return;
                 }
@@ -221,7 +219,7 @@ pub unsafe extern "C" fn save_file(savef: *mut CFile) {
     buf[..header.len()].copy_from_slice(header.as_bytes());
     fwrite(buf.as_ptr(), 1, buf.len(), savef);
 
-    rs_save_file(savef);
+    rs_save_file(savef.cast());
     fflush(savef);
     fclose(savef);
     exit(0)
@@ -291,9 +289,9 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
 
     hw = cur::newwin(LINES, COLS, 0, 0) as *mut CWindow;
     setup();
-    let _ = rs_restore_file(inf);
+    let _ = rs_restore_file(inf.cast());
 
-    if (master_mode_enabled == 0 || wizard == 0) && md_unlink_open_file(file_ptr, inf) < 0 {
+    if (master_mode_enabled == 0 || wizard == 0) && md_unlink_open_file(file_ptr, inf.cast()) < 0 {
         msg_str("Cannot unlink file\n");
         return 0;
     }
@@ -333,10 +331,11 @@ pub unsafe extern "C" fn auto_save(sig: c_int) {
         && ((!{
             savef = fopen(file_name_ptr, mode.as_ptr());
             savef.is_null()
-        }) || (md_unlink_open_file(file_name_ptr, savef) >= 0 && !{
-            savef = fopen(file_name_ptr, mode.as_ptr());
-            savef.is_null()
-        }))
+        }) || (md_unlink_open_file(file_name_ptr, savef.cast()) >= 0
+            && !{
+                savef = fopen(file_name_ptr, mode.as_ptr());
+                savef.is_null()
+            }))
     {
         save_file(savef);
     }

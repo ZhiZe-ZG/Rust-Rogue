@@ -2,10 +2,17 @@ use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 use std::ptr;
 
+use crate::chase::see_monst;
 use crate::curses as cur;
+use crate::daemon::{fuse, lengthen, start_daemon};
+use crate::daemons::{come_down, land, sight, unconfuse, unsee, visuals};
+use crate::draw::look;
 use crate::draw::place_at;
-use crate::io::msg_str;
+use crate::io::{endmsg, msg_str, show_win, status};
+use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
+use crate::pack::{get_item, leave_pack};
 use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::startup::roll;
 use crate::thing_list::discard;
 use std::ffi::CStr;
 
@@ -104,7 +111,6 @@ const HEALTIME: c_int = 30;
 const BEFORE: c_int = 1;
 const AFTER: c_int = 2;
 
-
 /// Data structures mirrored from the C game so Rust can interact with
 /// the same in-memory layout expected by the FFI boundary.
 #[repr(C)]
@@ -146,32 +152,7 @@ unsafe extern "C" {
     static mut stairs: CCoord;
     static mut e_levels: [c_int; 21];
 
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
-    fn endmsg() -> c_int;
-    fn roll(num: c_int, sides: c_int) -> c_int;
-    fn chg_str(amt: c_int);
-    fn add_str(sp: *mut c_uint, amt: c_int);
-    fn pick_color(col: *const c_char) -> *mut c_char;
-    fn choose_str(ts: *const c_char, ns: *const c_char) -> *mut c_char;
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
-    fn show_win(message: *const c_char);
-    fn call_it(info: *mut CObjInfo);
-    fn look(wakeup: c_uchar);
-    fn status();
-    fn check_level();
-    fn come_down();
-    fn add_haste(potion: bool) -> bool;
-    fn unconfuse();
-    fn unsee();
-    fn sight();
-    fn land();
-    fn visuals();
-    fn start_daemon(func: *const c_void, arg: c_int, typ: c_int);
-    fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
-    fn lengthen(func: *const c_void, xtime: c_int);
-    fn spread(nm: c_int) -> c_int;
-    fn see_monst(mp: *mut CThing) -> c_uchar;
 }
 
 /// Cast a generic thing pointer to the monster portion of the union.
@@ -220,8 +201,7 @@ unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
 #[inline]
 unsafe fn is_magic_local(obj: *mut CThing) -> bool {
     match (*thing_o(obj)).o_type {
-        ARMOR => (((*thing_o(obj)).o_flags & ISPROT) != 0)
-            || (*thing_o(obj)).o_arm != 0,
+        ARMOR => (((*thing_o(obj)).o_flags & ISPROT) != 0) || (*thing_o(obj)).o_arm != 0,
         WEAPON => (*thing_o(obj)).o_hplus != 0 || (*thing_o(obj)).o_dplus != 0,
         POTION | SCROLL | STICK | RING | AMULET => true,
         _ => false,
@@ -321,7 +301,14 @@ pub unsafe extern "C" fn quaff() {
 
     let potion = PotionType::from_raw((*thing_o(obj)).o_which);
     match potion {
-        PotionType::Confuse => do_pot_impl(PotionType::Confuse, if trip { false as c_uchar } else { true as c_uchar }),
+        PotionType::Confuse => do_pot_impl(
+            PotionType::Confuse,
+            if trip {
+                false as c_uchar
+            } else {
+                true as c_uchar
+            },
+        ),
         PotionType::Poison => {
             (*pot_info.as_mut_ptr().add(PotionType::Poison.index())).oi_know = true as c_uchar;
             if ring_is(LEFT, R_SUSTSTR) || ring_is(RIGHT, R_SUSTSTR) {
@@ -350,11 +337,17 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::MonsterFind => {
             (*thing_t(&raw mut player)).t_flags |= SEEMONST;
-            fuse(turn_see as *const c_void, true as c_uchar as c_int, HUHDURATION, AFTER);
+            fuse(
+                turn_see as *const c_void,
+                true as c_uchar as c_int,
+                HUHDURATION,
+                AFTER,
+            );
             if turn_see(false as c_uchar) == 0 {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
-                    CStr::from_ptr(choose_str(c"normal".as_ptr(), c"strange".as_ptr())).to_string_lossy()
+                    CStr::from_ptr(choose_str(c"normal".as_ptr(), c"strange".as_ptr()))
+                        .to_string_lossy()
                 ));
             }
         }
@@ -367,7 +360,8 @@ pub unsafe extern "C" fn quaff() {
                         show = true;
                         cur::wmove(hw, (*thing_o(tp)).o_pos.y, (*thing_o(tp)).o_pos.x);
                         cur::waddch(hw, MAGIC as c_uint);
-                        (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know = true as c_uchar;
+                        (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know =
+                            true as c_uchar;
                     }
                     tp = next_thing(tp);
                 }
@@ -386,12 +380,14 @@ pub unsafe extern "C" fn quaff() {
                 }
             }
             if show {
-                (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know = true as c_uchar;
+                (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know =
+                    true as c_uchar;
                 show_win(c"You sense the presence of magic on this level.--More--".as_ptr());
             } else {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
-                    CStr::from_ptr(choose_str(c"normal".as_ptr(), c"strange".as_ptr())).to_string_lossy()
+                    CStr::from_ptr(choose_str(c"normal".as_ptr(), c"strange".as_ptr()))
+                        .to_string_lossy()
                 ));
             }
         }
@@ -426,7 +422,8 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::ExtraHealing => {
             let stats = thing_t(&raw mut player);
-            (*pot_info.as_mut_ptr().add(PotionType::ExtraHealing.index())).oi_know = true as c_uchar;
+            (*pot_info.as_mut_ptr().add(PotionType::ExtraHealing.index())).oi_know =
+                true as c_uchar;
             (*stats).t_stats.s_hpt += roll((*stats).t_stats.s_lvl, 8);
             if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp {
                 if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp + (*stats).t_stats.s_lvl + 1 {
@@ -449,19 +446,31 @@ pub unsafe extern "C" fn quaff() {
         PotionType::Restore => {
             let stats = thing_t(&raw mut player);
             if ring_is(LEFT, R_ADDSTR) {
-                add_str(&mut (*stats).t_stats.s_str, -(*thing_o(cur_ring[LEFT])).o_arm);
+                add_str(
+                    &mut (*stats).t_stats.s_str,
+                    -(*thing_o(cur_ring[LEFT])).o_arm,
+                );
             }
             if ring_is(RIGHT, R_ADDSTR) {
-                add_str(&mut (*stats).t_stats.s_str, -(*thing_o(cur_ring[RIGHT])).o_arm);
+                add_str(
+                    &mut (*stats).t_stats.s_str,
+                    -(*thing_o(cur_ring[RIGHT])).o_arm,
+                );
             }
             if (*stats).t_stats.s_str < max_stats.s_str {
                 (*stats).t_stats.s_str = max_stats.s_str;
             }
             if ring_is(LEFT, R_ADDSTR) {
-                add_str(&mut (*stats).t_stats.s_str, (*thing_o(cur_ring[LEFT])).o_arm);
+                add_str(
+                    &mut (*stats).t_stats.s_str,
+                    (*thing_o(cur_ring[LEFT])).o_arm,
+                );
             }
             if ring_is(RIGHT, R_ADDSTR) {
-                add_str(&mut (*stats).t_stats.s_str, (*thing_o(cur_ring[RIGHT])).o_arm);
+                add_str(
+                    &mut (*stats).t_stats.s_str,
+                    (*thing_o(cur_ring[RIGHT])).o_arm,
+                );
             }
             msg_str("hey, this tastes great.  It make you feel warm all over");
         }
@@ -474,7 +483,7 @@ pub unsafe extern "C" fn quaff() {
     }
 
     status();
-    call_it(&mut pot_info[(*thing_o(obj)).o_which as usize]);
+    call_it((&mut pot_info[(*thing_o(obj)).o_which as usize] as *mut CObjInfo).cast());
     if discardit {
         discard(obj);
     }
@@ -502,7 +511,11 @@ pub unsafe extern "C" fn invis_on() {
     (*thing_t(&raw mut player)).t_flags |= CANSEE;
     while !mp.is_null() {
         if thing_has(mp, ISINVIS) && see_monst(mp) != 0 && !player_has(ISHALU) {
-            cur::mvaddch((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_disguise as c_uint);
+            cur::mvaddch(
+                (*thing_t(mp)).t_pos.y,
+                (*thing_t(mp)).t_pos.x,
+                (*thing_t(mp)).t_disguise as c_uint,
+            );
         }
         mp = next_thing(mp);
     }
@@ -545,7 +558,11 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
         (*thing_t(&raw mut player)).t_flags |= SEEMONST;
     }
 
-    if add_new != 0 { 1 } else { 0 }
+    if add_new != 0 {
+        1
+    } else {
+        0
+    }
 }
 
 /// seen_stairs:
@@ -579,13 +596,13 @@ pub unsafe extern "C" fn seen_stairs() -> c_uchar {
 /// The player just magically went up a level.
 #[no_mangle]
 pub unsafe extern "C" fn raise_level() {
-    (*thing_t(&raw mut player)).t_stats.s_exp = e_levels[(*thing_t(&raw mut player)).t_stats.s_lvl as usize - 1] + 1;
+    (*thing_t(&raw mut player)).t_stats.s_exp =
+        e_levels[(*thing_t(&raw mut player)).t_stats.s_lvl as usize - 1] + 1;
     check_level();
 }
 
 /// do_pot:
 /// Do a potion with the standard fuse/flag setup.
-#[no_mangle]
-pub unsafe extern "C" fn do_pot(type_id: c_int, knowit: c_uchar) {
+unsafe fn do_pot(type_id: c_int, knowit: c_uchar) {
     do_pot_impl(PotionType::from_raw(type_id), knowit);
 }

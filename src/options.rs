@@ -2,6 +2,8 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::curses as cur;
+use crate::draw::{erase_lamp, look};
+use crate::io::{readchar, wait_for};
 use crate::player::{CCoord, CRoom, CThing, CThingMonster};
 
 const ESCAPE: c_int = 27;
@@ -42,17 +44,13 @@ unsafe extern "C" {
     static mut tombstone: c_uchar;
     static mut whoami: [c_char; MAXSTR];
 
-    fn erase_lamp(pos: *mut CCoord, rp: *mut CRoom);
     fn isalpha(c: c_int) -> c_int;
     fn isprint(c: c_int) -> c_int;
-    fn look(wakeup: c_uchar);
-    fn readchar() -> c_int;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
     fn strlen(s: *const c_char) -> usize;
     fn toupper(c: c_int) -> c_int;
-    fn wait_for(ch: c_int);
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
@@ -74,16 +72,76 @@ unsafe fn getyx_(win: *mut c_void, y: *mut c_int, x: *mut c_int) {
 
 unsafe fn option_list() -> [OPTION; 10] {
     [
-        OPTION { o_name: c"terse".as_ptr() as *mut c_char, o_prompt: c"Terse output".as_ptr() as *mut c_char, o_opt: (&raw mut terse) as *mut c_void, o_putfunc: put_bool, o_getfunc: get_bool },
-        OPTION { o_name: c"flush".as_ptr() as *mut c_char, o_prompt: c"Flush typeahead during battle".as_ptr() as *mut c_char, o_opt: (&raw mut fight_flush) as *mut c_void, o_putfunc: put_bool, o_getfunc: get_bool },
-        OPTION { o_name: c"jump".as_ptr() as *mut c_char, o_prompt: c"Show position only at end of run".as_ptr() as *mut c_char, o_opt: (&raw mut jump) as *mut c_void, o_putfunc: put_bool, o_getfunc: get_bool },
-        OPTION { o_name: c"seefloor".as_ptr() as *mut c_char, o_prompt: c"Show the lamp-illuminated floor".as_ptr() as *mut c_char, o_opt: (&raw mut see_floor) as *mut c_void, o_putfunc: put_bool, o_getfunc: get_sf },
-        OPTION { o_name: c"passgo".as_ptr() as *mut c_char, o_prompt: c"Follow turnings in passageways".as_ptr() as *mut c_char, o_opt: (&raw mut passgo) as *mut c_void, o_putfunc: put_bool, o_getfunc: get_bool },
-        OPTION { o_name: c"tombstone".as_ptr() as *mut c_char, o_prompt: c"Print out tombstone when killed".as_ptr() as *mut c_char, o_opt: (&raw mut tombstone) as *mut c_void, o_putfunc: put_bool, o_getfunc: get_bool },
-        OPTION { o_name: c"inven".as_ptr() as *mut c_char, o_prompt: c"Inventory style".as_ptr() as *mut c_char, o_opt: (&raw mut inv_type) as *mut c_void, o_putfunc: put_inv_t, o_getfunc: get_inv_t },
-        OPTION { o_name: c"name".as_ptr() as *mut c_char, o_prompt: c"Name".as_ptr() as *mut c_char, o_opt: (&raw mut whoami) as *mut c_void, o_putfunc: put_str, o_getfunc: get_str },
-        OPTION { o_name: c"fruit".as_ptr() as *mut c_char, o_prompt: c"Fruit".as_ptr() as *mut c_char, o_opt: (&raw mut fruit) as *mut c_void, o_putfunc: put_str, o_getfunc: get_str },
-        OPTION { o_name: c"file".as_ptr() as *mut c_char, o_prompt: c"Save file".as_ptr() as *mut c_char, o_opt: (&raw mut file_name) as *mut c_void, o_putfunc: put_str, o_getfunc: get_str },
+        OPTION {
+            o_name: c"terse".as_ptr() as *mut c_char,
+            o_prompt: c"Terse output".as_ptr() as *mut c_char,
+            o_opt: (&raw mut terse) as *mut c_void,
+            o_putfunc: put_bool,
+            o_getfunc: get_bool,
+        },
+        OPTION {
+            o_name: c"flush".as_ptr() as *mut c_char,
+            o_prompt: c"Flush typeahead during battle".as_ptr() as *mut c_char,
+            o_opt: (&raw mut fight_flush) as *mut c_void,
+            o_putfunc: put_bool,
+            o_getfunc: get_bool,
+        },
+        OPTION {
+            o_name: c"jump".as_ptr() as *mut c_char,
+            o_prompt: c"Show position only at end of run".as_ptr() as *mut c_char,
+            o_opt: (&raw mut jump) as *mut c_void,
+            o_putfunc: put_bool,
+            o_getfunc: get_bool,
+        },
+        OPTION {
+            o_name: c"seefloor".as_ptr() as *mut c_char,
+            o_prompt: c"Show the lamp-illuminated floor".as_ptr() as *mut c_char,
+            o_opt: (&raw mut see_floor) as *mut c_void,
+            o_putfunc: put_bool,
+            o_getfunc: get_sf,
+        },
+        OPTION {
+            o_name: c"passgo".as_ptr() as *mut c_char,
+            o_prompt: c"Follow turnings in passageways".as_ptr() as *mut c_char,
+            o_opt: (&raw mut passgo) as *mut c_void,
+            o_putfunc: put_bool,
+            o_getfunc: get_bool,
+        },
+        OPTION {
+            o_name: c"tombstone".as_ptr() as *mut c_char,
+            o_prompt: c"Print out tombstone when killed".as_ptr() as *mut c_char,
+            o_opt: (&raw mut tombstone) as *mut c_void,
+            o_putfunc: put_bool,
+            o_getfunc: get_bool,
+        },
+        OPTION {
+            o_name: c"inven".as_ptr() as *mut c_char,
+            o_prompt: c"Inventory style".as_ptr() as *mut c_char,
+            o_opt: (&raw mut inv_type) as *mut c_void,
+            o_putfunc: put_inv_t,
+            o_getfunc: get_inv_t,
+        },
+        OPTION {
+            o_name: c"name".as_ptr() as *mut c_char,
+            o_prompt: c"Name".as_ptr() as *mut c_char,
+            o_opt: (&raw mut whoami) as *mut c_void,
+            o_putfunc: put_str,
+            o_getfunc: get_str,
+        },
+        OPTION {
+            o_name: c"fruit".as_ptr() as *mut c_char,
+            o_prompt: c"Fruit".as_ptr() as *mut c_char,
+            o_opt: (&raw mut fruit) as *mut c_void,
+            o_putfunc: put_str,
+            o_getfunc: get_str,
+        },
+        OPTION {
+            o_name: c"file".as_ptr() as *mut c_char,
+            o_prompt: c"Save file".as_ptr() as *mut c_char,
+            o_opt: (&raw mut file_name) as *mut c_void,
+            o_putfunc: put_str,
+            o_getfunc: get_str,
+        },
     ]
 }
 
@@ -137,8 +195,7 @@ pub unsafe extern "C" fn option() {
     after = false as c_uchar;
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn pr_optname(op: *mut OPTION) {
+unsafe fn pr_optname(op: *mut OPTION) {
     if op.is_null() {
         return;
     }
@@ -148,7 +205,11 @@ pub unsafe extern "C" fn pr_optname(op: *mut OPTION) {
 #[no_mangle]
 pub unsafe extern "C" fn put_bool(vp: *mut c_void) {
     let bp = vp as *mut c_uchar;
-    let text = if *bp != 0 { c"True".as_ptr() } else { c"False".as_ptr() };
+    let text = if *bp != 0 {
+        c"True".as_ptr()
+    } else {
+        c"False".as_ptr()
+    };
     cur::waddstr(hw, text);
 }
 
@@ -175,7 +236,14 @@ pub unsafe extern "C" fn get_bool(vp: *mut c_void, win: *mut c_void) -> c_int {
     let mut bad = true;
 
     getyx_(win, &mut oy, &mut ox);
-    cur::waddstr(win, if *bp != 0 { c"True".as_ptr() } else { c"False".as_ptr() });
+    cur::waddstr(
+        win,
+        if *bp != 0 {
+            c"True".as_ptr()
+        } else {
+            c"False".as_ptr()
+        },
+    );
     while bad {
         cur::wmove(win, oy, ox);
         cur::wrefresh(win);
@@ -200,7 +268,14 @@ pub unsafe extern "C" fn get_bool(vp: *mut c_void, win: *mut c_void) -> c_int {
         }
     }
     cur::wmove(win, oy, ox);
-    cur::waddstr(win, if *bp != 0 { c"True".as_ptr() } else { c"False".as_ptr() });
+    cur::waddstr(
+        win,
+        if *bp != 0 {
+            c"True".as_ptr()
+        } else {
+            c"False".as_ptr()
+        },
+    );
     cur::waddch(win, '\n' as c_uint);
     NORM
 }
@@ -275,7 +350,11 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
         std::ptr::copy_nonoverlapping(tmp.as_ptr(), opt, len as usize + 1);
     }
 
-    let msg = if opt.is_null() { String::new() } else { CStr::from_ptr(opt).to_string_lossy().to_string() };
+    let msg = if opt.is_null() {
+        String::new()
+    } else {
+        CStr::from_ptr(opt).to_string_lossy().to_string()
+    };
     let out = format!("{}\n", msg);
     cur::wmove(win, oy, ox);
     paint(win, &out);
@@ -380,17 +459,29 @@ pub unsafe extern "C" fn parse_opts(str: *mut c_char) {
                     }
                     if op.o_putfunc == put_inv_t {
                         let mut tmp = value;
-                        if !tmp.is_null() && isalpha(*tmp as c_int) != 0 && *tmp as u8 >= b'a' && *tmp as u8 <= b'z' {
+                        if !tmp.is_null()
+                            && isalpha(*tmp as c_int) != 0
+                            && *tmp as u8 >= b'a'
+                            && *tmp as u8 <= b'z'
+                        {
                             *tmp = toupper(*tmp as c_int) as c_char;
                         }
                         for i in 0..inv_t_name.len() {
-                            if !value.is_null() && !end.is_null() && strncmp(value, inv_t_name[i], (end as usize - value as usize)) == 0 {
+                            if !value.is_null()
+                                && !end.is_null()
+                                && strncmp(value, inv_t_name[i], (end as usize - value as usize))
+                                    == 0
+                            {
                                 inv_type = i as c_int;
                                 break;
                             }
                         }
                     } else {
-                        let limit = if end.is_null() { 0 } else { end as usize - value as usize };
+                        let limit = if end.is_null() {
+                            0
+                        } else {
+                            end as usize - value as usize
+                        };
                         if limit > 0 {
                             strucpy(start_ptr, value, limit as c_int);
                         }

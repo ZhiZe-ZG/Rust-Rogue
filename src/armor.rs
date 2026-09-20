@@ -1,10 +1,10 @@
-use crate::io::{addmsg_str, msg_str};
 use crate::daemon::{do_daemons, do_fuses};
+use crate::io::endmsg;
+use crate::io::{addmsg_str, msg_str};
 use crate::misc::spread;
 use crate::pack::get_item;
 use crate::player::{CThing, CThingObject};
 use crate::things::{dropcheck, inv_name};
-use crate::io::endmsg;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
@@ -112,11 +112,18 @@ pub unsafe extern "C" fn waste_time() {
 /// Rust the given armor if it is a legal kind to rust.
 #[no_mangle]
 pub unsafe extern "C" fn rust_armor(arm: *mut CThing) {
-    if arm.is_null() || (*thing_o(arm)).o_type != ARMOR || (*thing_o(arm)).o_which == 0 || (*thing_o(arm)).o_arm >= 9 {
+    if arm.is_null()
+        || (*thing_o(arm)).o_type != ARMOR
+        || (*thing_o(arm)).o_which == 0
+        || (*thing_o(arm)).o_arm >= 9
+    {
         return;
     }
 
-    if ((*thing_o(arm)).o_flags & ISPROT) != 0 || ring_is(LEFT, R_SUSTARM) || ring_is(RIGHT, R_SUSTARM) {
+    if ((*thing_o(arm)).o_flags & ISPROT) != 0
+        || ring_is(LEFT, R_SUSTARM)
+        || ring_is(RIGHT, R_SUSTARM)
+    {
         if to_death == 0 {
             msg_str("the rust vanishes instantly");
         }

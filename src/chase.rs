@@ -9,11 +9,15 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::curses as cur;
-use crate::io::msg_str;
+use crate::fight::attack;
+use crate::io::{endmsg, msg_str, step_ok};
+use crate::misc::sign;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
-use crate::thing_list::{attach, detach};
 use crate::rnd::rnd;
+use crate::rndmove::rndmove;
 use crate::scrolls::ScrollType;
+use crate::sticks::fire_bolt;
+use crate::thing_list::{attach, detach};
 
 const NUMLINES: c_int = 24;
 const NUMCOLS: c_int = 80;
@@ -21,7 +25,6 @@ const MAXROOMS: usize = 9;
 const MAXPASS: usize = 13;
 
 const DRAGONSHOT: c_int = 5; // one chance in DRAGONSHOT that a dragon will flame
-
 
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_PNUM: c_char = 0x0fu8 as c_char;
@@ -81,12 +84,6 @@ unsafe extern "C" {
     static mut delta: CCoord;
     static mut monsters: [crate::monsters::CMonster; 26];
 
-    fn endmsg() -> c_int;
-    fn step_ok(ch: c_int) -> c_int;
-    fn attack(mp: *mut CThing) -> c_int;
-    fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *mut c_char);
-    fn sign(nm: c_int) -> c_int;
-    fn rndmove(who: *mut CThing) -> *mut CCoord;
     fn abort() -> !;
 }
 
@@ -225,7 +222,11 @@ pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut CCoord) {
         (*thing_t(th)).t_room = roomin(new_loc);
         set_oldch(th, new_loc);
         let oroom = (*thing_t(th)).t_room;
-        set_moat_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x, std::ptr::null_mut());
+        set_moat_at(
+            (*thing_t(th)).t_pos.y,
+            (*thing_t(th)).t_pos.x,
+            std::ptr::null_mut(),
+        );
 
         if oroom != (*thing_t(th)).t_room {
             (*thing_t(th)).t_dest = find_dest(th);
@@ -288,7 +289,8 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
                 }
             }
             if loop_door {
-                let pnum = (flat_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x) & F_PNUM) as usize;
+                let pnum =
+                    (flat_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x) & F_PNUM) as usize;
                 loop_rer = &raw mut passages[pnum] as *mut CRoom;
                 loop_door = false;
                 continue;
@@ -513,7 +515,9 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut CCoord) -> c_uchar {
                                 }
                                 obj = (*thing_o(obj)).l_next;
                             }
-                            if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
+                            if !obj.is_null()
+                                && (*thing_o(obj)).o_which == ScrollType::Scare as c_int
+                            {
                                 y += 1;
                                 continue;
                             }
@@ -576,11 +580,7 @@ pub unsafe extern "C" fn roomin(cp: *mut CCoord) -> *mut CRoom {
         }
     }
 
-    msg_str(&format!(
-        "in some bizarre place ({}, {})",
-        (*cp).y,
-        (*cp).x
-    ));
+    msg_str(&format!("in some bizarre place ({}, {})", (*cp).y, (*cp).x));
     if MASTER {
         abort();
     }
@@ -648,7 +648,10 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
 #[no_mangle]
 pub unsafe extern "C" fn find_dest(tp: *mut CThing) -> *mut CCoord {
     let prob = monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry;
-    if prob <= 0 || (*thing_t(tp)).t_room == (*thing_t(&raw mut player)).t_room || see_monst(tp) != false as c_uchar {
+    if prob <= 0
+        || (*thing_t(tp)).t_room == (*thing_t(&raw mut player)).t_room
+        || see_monst(tp) != false as c_uchar
+    {
         return hero_ptr();
     }
     let mut obj = lvl_obj;

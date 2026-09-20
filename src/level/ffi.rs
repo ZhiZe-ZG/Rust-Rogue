@@ -16,19 +16,17 @@ use crate::game::clear_level;
 use crate::player::{CRoom, CThing};
 
 use super::level::current_level_mut;
-use super::mirror::{
-    apply_room_to_c, read_c_room_data, sync_passages_to_c, sync_rooms_to_c,
-};
-use crate::draw::winat;
+use super::mirror::{apply_room_to_c, read_c_room_data, sync_passages_to_c, sync_rooms_to_c};
 use super::passages::SCREEN_COLS;
 use super::presence::populate_level;
 use super::rooms::Room;
 use super::structure::Structure;
 use super::symbols::{
-    ISGONE, ISHELD, MAXROOMS, free_list, level, lvl_obj, max_level, mlist, no_food,
-    player, thing_t, wake_monster,
+    free_list, level, lvl_obj, max_level, mlist, no_food, player, thing_t, wake_monster, ISGONE,
+    ISHELD, MAXROOMS,
 };
 use super::tile::Tile;
+use crate::draw::winat;
 
 /// Generate this depth's room grid, models, and room-to-room connections.
 ///
@@ -51,7 +49,7 @@ unsafe fn generate_rooms_and_connections() -> [Room; MAXROOMS] {
 /// This must happen before placing gold and monsters, because `find_floor`
 /// looks for floor cells already drawn in `places`.
 unsafe fn write_rust_data_back_to_c_and_ncurses(generated: &[Room; MAXROOMS]) {
-    use super::symbols::{rooms as c_rooms};
+    use super::symbols::rooms as c_rooms;
 
     for i in 0..MAXROOMS {
         let rp = (&raw mut c_rooms[i]) as *mut CRoom;

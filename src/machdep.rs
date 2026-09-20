@@ -9,20 +9,23 @@
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::curses as cur;
 use crate::globals::{fruit, got_ltc, orig_dsusp, prbuf, scoreboard, whoami};
+use crate::mdport::{
+    md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
+};
 
 const MAXSTR: usize = 1024;
 
 // Build-time feature flags mirroring config.h for the standard build.
 const SCOREFILE_ENABLED: bool = true; // config.h: #define SCOREFILE "rogue.scr"
-const LOCKFILE_ENABLED: bool = true;  // config.h: #define LOCKFILE "rogue.lck"
-const CHECKTIME: bool = false;        // config.h: /* #undef CHECKTIME */
-const DUMP: bool = false;             // not set in the standard build
+const LOCKFILE_ENABLED: bool = true; // config.h: #define LOCKFILE "rogue.lck"
+const CHECKTIME: bool = false; // config.h: /* #undef CHECKTIME */
+const DUMP: bool = false; // not set in the standard build
 
 const SCOREFILE: &[u8] = b"rogue.scr";
 const LOCKFILE: &[u8] = b"rogue.lck";
@@ -45,15 +48,6 @@ unsafe extern "C" {
     fn rewind(stream: *mut crate::score::CFile);
     fn strerror(errnum: c_int) -> *const c_char;
 
-    // Machine-dependent helpers now implemented in src/rust/src/mdport.rs.
-    fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int;
-    fn md_dsuspchar() -> c_int;
-    fn md_getuid() -> c_uint;
-    fn md_onsignal_default();
-    fn md_setdsuspchar(c: c_int) -> c_int;
-    fn md_sleep(s: c_int);
-    fn md_suspchar() -> c_int;
-    fn md_unlink(file: *mut c_char) -> c_int;
 }
 
 #[cfg(target_os = "macos")]
@@ -163,10 +157,10 @@ pub unsafe extern "C" fn setup() {
         // md_start_checkout_timer(CHECKTIME * 60);
     }
 
-    cur::raw();                                /* Raw mode */
-    cur::noecho();                             /* Echo off */
+    cur::raw(); /* Raw mode */
+    cur::noecho(); /* Echo off */
     cur::keypad(stdscr, true as c_uchar);
-    getltchars();                              /* get the local tty chars */
+    getltchars(); /* get the local tty chars */
 }
 
 /// getltchars:
@@ -215,8 +209,7 @@ pub unsafe extern "C" fn start_score() {
 /// is_symlink:
 /// See if the file is not a regular file (i.e. a symbolic link or
 /// special file).
-#[no_mangle]
-pub unsafe extern "C" fn is_symlink(sp: *mut c_char) -> c_uchar {
+unsafe fn is_symlink(sp: *mut c_char) -> c_uchar {
     if sp.is_null() {
         return false as c_uchar;
     }
@@ -224,7 +217,11 @@ pub unsafe extern "C" fn is_symlink(sp: *mut c_char) -> c_uchar {
     match std::fs::symlink_metadata(path.as_ref()) {
         Ok(md) => {
             // Original C: ((sbuf2.st_mode & S_IFMT) != S_IFREG)
-            if md.file_type().is_file() { false as c_uchar } else { true as c_uchar }
+            if md.file_type().is_file() {
+                false as c_uchar
+            } else {
+                true as c_uchar
+            }
         }
         Err(_) => false as c_uchar,
     }

@@ -1,12 +1,17 @@
-use crate::rnd::rnd;
+use crate::chase::cansee;
 use crate::curses as cur;
-use crate::io::{addmsg_str, msg_str};
+use crate::fight::fight;
+use crate::io::{addmsg_str, endmsg, msg_str, step_ok};
+use crate::misc::{is_current, show_floor};
+use crate::pack::{get_item, leave_pack};
+use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::draw::{self, chat_at, place_at, winat as draw_winat};
 use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::thing_list::{attach, discard};
+use crate::things::{dropcheck, inv_name};
 
 const NO_WEAPON: c_int = -1;
 
@@ -22,7 +27,6 @@ const MAXWEAPONS: usize = 9;
 
 const ISMISL: c_int = 0o000004;
 const ISMANY: c_int = 0o000010;
-
 
 #[repr(C)]
 pub struct CObjInfo {
@@ -42,15 +46,60 @@ struct InitWeap {
 }
 
 static INIT_DAM: [InitWeap; MAXWEAPONS] = [
-    InitWeap { iw_dam: b"2x4\0", iw_hrl: b"1x3\0", iw_launch: NO_WEAPON, iw_flags: 0 },
-    InitWeap { iw_dam: b"3x4\0", iw_hrl: b"1x2\0", iw_launch: NO_WEAPON, iw_flags: 0 },
-    InitWeap { iw_dam: b"1x1\0", iw_hrl: b"1x1\0", iw_launch: NO_WEAPON, iw_flags: 0 },
-    InitWeap { iw_dam: b"1x1\0", iw_hrl: b"2x3\0", iw_launch: BOW, iw_flags: ISMANY | ISMISL },
-    InitWeap { iw_dam: b"1x6\0", iw_hrl: b"1x4\0", iw_launch: NO_WEAPON, iw_flags: ISMISL | ISMISL },
-    InitWeap { iw_dam: b"4x4\0", iw_hrl: b"1x2\0", iw_launch: NO_WEAPON, iw_flags: 0 },
-    InitWeap { iw_dam: b"1x1\0", iw_hrl: b"1x3\0", iw_launch: NO_WEAPON, iw_flags: ISMANY | ISMISL },
-    InitWeap { iw_dam: b"1x2\0", iw_hrl: b"2x4\0", iw_launch: NO_WEAPON, iw_flags: ISMANY | ISMISL },
-    InitWeap { iw_dam: b"2x3\0", iw_hrl: b"1x6\0", iw_launch: NO_WEAPON, iw_flags: ISMISL },
+    InitWeap {
+        iw_dam: b"2x4\0",
+        iw_hrl: b"1x3\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: 0,
+    },
+    InitWeap {
+        iw_dam: b"3x4\0",
+        iw_hrl: b"1x2\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: 0,
+    },
+    InitWeap {
+        iw_dam: b"1x1\0",
+        iw_hrl: b"1x1\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: 0,
+    },
+    InitWeap {
+        iw_dam: b"1x1\0",
+        iw_hrl: b"2x3\0",
+        iw_launch: BOW,
+        iw_flags: ISMANY | ISMISL,
+    },
+    InitWeap {
+        iw_dam: b"1x6\0",
+        iw_hrl: b"1x4\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: ISMISL | ISMISL,
+    },
+    InitWeap {
+        iw_dam: b"4x4\0",
+        iw_hrl: b"1x2\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: 0,
+    },
+    InitWeap {
+        iw_dam: b"1x1\0",
+        iw_hrl: b"1x3\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: ISMANY | ISMISL,
+    },
+    InitWeap {
+        iw_dam: b"1x2\0",
+        iw_hrl: b"2x4\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: ISMANY | ISMISL,
+    },
+    InitWeap {
+        iw_dam: b"2x3\0",
+        iw_hrl: b"1x6\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: ISMISL,
+    },
 ];
 
 #[no_mangle]
@@ -69,16 +118,6 @@ unsafe extern "C" {
     static mut lvl_obj: *mut CThing;
     static mut weap_info: [CObjInfo; MAXWEAPONS + 1];
 
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn dropcheck(obj: *mut CThing) -> c_uchar;
-    fn is_current(obj: *mut CThing) -> bool;
-    fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
-    fn cansee(y: c_int, x: c_int) -> c_uchar;
-    fn show_floor() -> bool;
-    fn step_ok(ch: c_int) -> c_int;
-    fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;
-    fn endmsg() -> c_int;
-    fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
@@ -142,7 +181,9 @@ pub unsafe extern "C" fn missile(ydelta: c_int, xdelta: c_int) {
     do_motion(obj, ydelta, xdelta);
 
     let o = thing_o(obj);
-    if moat((*o).o_pos.y, (*o).o_pos.x).is_null() || hit_monster((*o).o_pos.y, (*o).o_pos.x, obj) == 0 {
+    if moat((*o).o_pos.y, (*o).o_pos.x).is_null()
+        || hit_monster((*o).o_pos.y, (*o).o_pos.x, obj) == 0
+    {
         fall(obj, true as c_uchar);
     }
 }
@@ -155,7 +196,10 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
 
     loop {
         let h = hero();
-        if ((*o).o_pos.x != h.x || (*o).o_pos.y != h.y) && cansee((*o).o_pos.y, (*o).o_pos.x) != 0 && terse == 0 {
+        if ((*o).o_pos.x != h.x || (*o).o_pos.y != h.y)
+            && cansee((*o).o_pos.y, (*o).o_pos.x) != 0
+            && terse == 0
+        {
             let mut ch = chat((*o).o_pos.y, (*o).o_pos.x);
             if ch == FLOOR && !show_floor() {
                 ch = ' ' as c_int;
@@ -252,7 +296,13 @@ pub unsafe extern "C" fn hit_monster(y: c_int, x: c_int, obj: *mut CThing) -> c_
 #[no_mangle]
 pub unsafe extern "C" fn num(n1: c_int, n2: c_int, obj_type: c_char) -> *mut c_char {
     if obj_type == WEAPON {
-        let _ = snprintf((&raw mut NUMBUF) as *mut c_char, 10, c"%+d,%+d".as_ptr(), n1, n2);
+        let _ = snprintf(
+            (&raw mut NUMBUF) as *mut c_char,
+            10,
+            c"%+d,%+d".as_ptr(),
+            n1,
+            n2,
+        );
     } else {
         let _ = snprintf((&raw mut NUMBUF) as *mut c_char, 10, c"%+d".as_ptr(), n1);
     }
@@ -280,7 +330,7 @@ pub unsafe extern "C" fn wield() {
         after = 0;
         return;
     }
-            if is_current(obj) {
+    if is_current(obj) {
         after = 0;
         return;
     }
@@ -317,5 +367,9 @@ pub unsafe extern "C" fn fallpos(pos: *mut CCoord, newpos: *mut CCoord) -> c_uch
             }
         }
     }
-    if cnt != 0 { true as c_uchar } else { false as c_uchar }
+    if cnt != 0 {
+        true as c_uchar
+    } else {
+        false as c_uchar
+    }
 }

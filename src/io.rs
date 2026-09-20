@@ -2,7 +2,10 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::curses as cur;
+use crate::draw::look;
+use crate::mdport::md_readchar;
 use crate::player::{CStats, CThing, CThingMonster};
+use crate::startup::quit;
 
 const ESCAPE: c_int = 27;
 const NUMCOLS: c_int = 80;
@@ -31,9 +34,6 @@ unsafe extern "C" {
 
     fn isalpha(c: c_int) -> c_int;
     fn islower(c: c_int) -> c_int;
-    fn look(wakeup: c_uchar);
-    fn md_readchar() -> c_int;
-    fn quit(status: c_int) -> c_int;
     fn strcat(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
@@ -166,7 +166,13 @@ pub unsafe extern "C" fn endmsg() -> c_int {
 pub unsafe extern "C" fn step_ok(ch: c_int) -> c_int {
     match ch as u8 {
         b' ' | b'|' | b'-' => false as c_uchar as c_int,
-        _ => if isalpha(ch) != 0 { 0 } else { 1 },
+        _ => {
+            if isalpha(ch) != 0 {
+                0
+            } else {
+                1
+            }
+        }
     }
 }
 
@@ -316,3 +322,27 @@ pub unsafe extern "C" fn show_win(message: *const c_char) {
     cur::clearok(stdscr, true as c_uchar);
     cur::touchwin(stdscr);
 }
+
+#[cfg(test)]
+pub unsafe fn endmsg() -> c_int {
+    !ESCAPE
+}
+
+#[cfg(test)]
+pub unsafe fn step_ok(ch: c_int) -> c_int {
+    (!matches!(ch as u8, b' ' | b'|' | b'-') && !(ch as u8).is_ascii_alphabetic()) as c_int
+}
+
+#[cfg(test)]
+pub unsafe fn readchar() -> c_int {
+    ESCAPE
+}
+
+#[cfg(test)]
+pub unsafe fn status() {}
+
+#[cfg(test)]
+pub unsafe fn wait_for(_ch: c_int) {}
+
+#[cfg(test)]
+pub unsafe fn show_win(_message: *const c_char) {}

@@ -4,11 +4,24 @@ use std::ffi::{CStr, CString};
 use std::io::Write;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_void};
 
+use crate::chase::{roomin, runners};
+use crate::command::command;
 use crate::curses as cur;
-use crate::io::msg_str;
+use crate::daemon::{fuse, start_daemon};
+use crate::daemons::{doctor, stomach, swander};
+use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
+use crate::io::{msg_str, readchar, status, wait_for};
+use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
+use crate::mdport::{
+    md_gethomedir, md_getpid, md_getusername, md_hasclreol, md_init, md_normaluser, md_shellescape,
+    md_tstpresume, md_tstpsignal,
+};
+use crate::options::{parse_opts, strucpy};
 use crate::player::{CCoord, CRoom, CThing, CThingMonster};
+use crate::rip::{death, death_monst, score};
 use crate::rnd::{rnd, set_seed};
+use crate::save::restore;
 
 const MAXSTR: usize = 1024;
 const NUMLINES: c_int = 24;
@@ -59,49 +72,16 @@ unsafe extern "C" {
     static mut terse: c_uchar;
     static mut to_death: c_uchar;
 
-    fn death(monst: c_char);
-    fn death_monst() -> c_char;
-    fn doctor();
-    fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
-    fn init_colors();
-    fn init_materials();
-    fn init_names();
-    fn init_player();
-    fn init_probs();
-    fn init_stones();
-    fn md_gethomedir() -> *mut c_char;
-    fn md_getpid() -> c_int;
-    fn md_getusername() -> *mut c_char;
-    fn md_init();
-    fn md_normaluser();
-    fn new_level();
-    fn parse_opts(options: *mut c_char);
-    fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c_uchar;
-    fn runners();
-    fn score(amount: c_int, flags: c_int, monst: c_char);
-    fn start_daemon(func: *const c_void, arg: c_int, typ: c_int);
-    fn stomach();
-    fn strucpy(destination: *mut c_char, source: *mut c_char, length: c_int);
-    fn swander();
     fn time(timer: *mut c_long) -> c_long;
     static mut stdscr: *mut c_void;
 
     // ── Terminal, curses, and machdep functions used by game control ──────
-    fn command();
     fn exit(status: c_int) -> !;
     fn fflush(stream: *mut c_void) -> c_int;
-    fn md_hasclreol() -> c_int;
-    fn md_shellescape();
-    fn md_tstpsignal();
-    fn md_tstpresume();
     fn printf(fmt: *const c_char, ...) -> c_int;
     fn putchar(c: c_int) -> c_int;
-    fn readchar() -> c_int;
-    fn roomin(cp: *mut CCoord) -> *mut CRoom;
     fn setbuf(stream: *mut c_void, buf: *mut c_char);
     fn signal(sig: c_int, handler: usize) -> usize;
-    fn status();
-    fn wait_for(ch: c_int);
 }
 
 #[inline]
@@ -220,7 +200,7 @@ pub unsafe extern "C" fn playit() {
     oldpos = (*thing_t(&raw mut player)).t_pos;
     oldrp = roomin(&raw mut (*thing_t(&raw mut player)).t_pos);
     while playing != false as c_uchar {
-        command();              /* Command execution */
+        command(); /* Command execution */
     }
     endit(0);
 }
@@ -270,7 +250,7 @@ pub unsafe extern "C" fn quit(sig: c_int) {
 pub unsafe extern "C" fn leave(sig: c_int) {
     let _ = sig;
 
-    setbuf(stdout, LEAVE_BUF.as_mut_ptr());   /* throw away pending output */
+    setbuf(stdout, LEAVE_BUF.as_mut_ptr()); /* throw away pending output */
 
     if cur::isendwin() == 0 {
         cur::mvcur(0, COLS - 1, LINES - 1, 0);
@@ -349,25 +329,40 @@ pub unsafe extern "C" fn rogue_main(
     }
 
     let home_dir = md_gethomedir();
-    let home_len = CStr::from_ptr(home_dir).to_bytes_with_nul().len().min(MAXSTR);
+    let home_len = CStr::from_ptr(home_dir)
+        .to_bytes_with_nul()
+        .len()
+        .min(MAXSTR);
     std::ptr::copy_nonoverlapping(home_dir, home.as_mut_ptr(), home_len);
     std::ptr::copy_nonoverlapping(home_dir, file_name.as_mut_ptr(), home_len);
     let save_name = b"rogue.save\0";
     let name_start = home_len.saturating_sub(1);
-    std::ptr::copy_nonoverlapping(save_name.as_ptr() as *const c_char, file_name.as_mut_ptr().add(name_start), save_name.len());
+    std::ptr::copy_nonoverlapping(
+        save_name.as_ptr() as *const c_char,
+        file_name.as_mut_ptr().add(name_start),
+        save_name.len(),
+    );
 
-    let options = std::env::var_os("ROGUEOPTS").and_then(|value| CString::new(value.into_encoded_bytes()).ok());
+    let options = std::env::var_os("ROGUEOPTS")
+        .and_then(|value| CString::new(value.into_encoded_bytes()).ok());
     if let Some(options) = options.as_ref() {
         parse_opts(options.as_ptr() as *mut c_char);
     }
     if options.is_none() || whoami[0] == 0 {
         let username = md_getusername();
-        strucpy(whoami.as_mut_ptr(), username, CStr::from_ptr(username).to_bytes().len() as c_int);
+        strucpy(
+            whoami.as_mut_ptr(),
+            username,
+            CStr::from_ptr(username).to_bytes().len() as c_int,
+        );
     }
 
     let clock_seed = time(std::ptr::null_mut()) as c_int + md_getpid();
     dnum = if master_mode_enabled != 0 && wizard != 0 {
-        std::env::var("SEED").ok().and_then(|value| value.parse().ok()).unwrap_or(clock_seed)
+        std::env::var("SEED")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(clock_seed)
     } else {
         clock_seed
     };
@@ -404,15 +399,27 @@ pub unsafe extern "C" fn rogue_main(
     }
 
     if master_mode_enabled != 0 && wizard != 0 {
-        print!("Hello {}, welcome to dungeon #{}", CStr::from_ptr(whoami.as_ptr()).to_string_lossy(), dnum);
+        print!(
+            "Hello {}, welcome to dungeon #{}",
+            CStr::from_ptr(whoami.as_ptr()).to_string_lossy(),
+            dnum
+        );
     } else {
-        print!("Hello {}, just a moment while I dig the dungeon...", CStr::from_ptr(whoami.as_ptr()).to_string_lossy());
+        print!(
+            "Hello {}, just a moment while I dig the dungeon...",
+            CStr::from_ptr(whoami.as_ptr()).to_string_lossy()
+        );
     }
-    std::io::stdout().flush().expect("failed to flush startup message");
+    std::io::stdout()
+        .flush()
+        .expect("failed to flush startup message");
     cur::initscr();
     if LINES < NUMLINES || COLS < NUMCOLS {
         cur::endwin();
-        eprintln!("Sorry, the screen must be at least {}x{}", NUMLINES, NUMCOLS);
+        eprintln!(
+            "Sorry, the screen must be at least {}x{}",
+            NUMLINES, NUMCOLS
+        );
         eprintln!("Current terminal size: {}x{}", COLS, LINES);
         my_exit(1);
     }

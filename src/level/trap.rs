@@ -8,8 +8,8 @@
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
-use crate::draw;
 use crate::armor::rust_armor;
+use crate::draw;
 use crate::fight::swing;
 use crate::io::msg_str;
 use crate::machdep::flush_type;
@@ -17,9 +17,9 @@ use crate::misc::{chg_str, spread};
 use crate::monsters::save;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::rip::death;
+use crate::rnd::rnd;
 use crate::startup::roll;
 use crate::thing_list::new_item;
-use crate::rnd::rnd;
 use crate::weapons::{fall, init_weapon};
 use crate::wizard::teleport;
 
@@ -64,7 +64,6 @@ impl Trap {
 const R_SUSTSTR: c_int = 2;
 const ARROW: c_int = 3;
 const VS_POISON: c_int = 0;
-
 
 unsafe extern "C" {
     static mut running: c_uchar;
@@ -135,7 +134,11 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
             msg_str("you are caught in a bear trap");
         }
         Trap::Mystery => {
-            let color = || CStr::from_ptr(rainbow_color()).to_string_lossy().into_owned();
+            let color = || {
+                CStr::from_ptr(rainbow_color())
+                    .to_string_lossy()
+                    .into_owned()
+            };
             match rnd(11) {
                 0 => {
                     msg_str("you are suddenly in a parallel dimension");

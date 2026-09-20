@@ -1,10 +1,15 @@
+use crate::chase::runto;
+use crate::daemon::{extinguish, fuse};
+use crate::daemons::nohaste;
+use crate::io::{addmsg_str, msg_str, readchar};
+use crate::options::get_str;
+use crate::pack::{get_item, leave_pack, reset_last};
 use crate::rnd::rnd;
-use crate::io::{addmsg_str, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
-
+use crate::startup::roll;
 
 const PASSAGE: c_char = b'#' as c_char;
 const DOOR: c_char = b'+' as c_char;
@@ -92,25 +97,12 @@ unsafe extern "C" {
     static mut lvl_obj: *mut CThing;
     static mut mlist: *mut CThing;
 
-    fn extinguish(func: *const c_void);
     fn free(ptr: *mut c_void);
-    fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
-    fn nohaste();
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn get_str(s: *mut c_char, win: *mut c_void) -> c_int;
     fn isupper(c: c_int) -> c_int;
-    fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
     fn malloc(size: usize) -> *mut c_void;
-    fn readchar() -> c_int;
-    fn reset_last();
-    fn roll(num: c_int, sides: c_int) -> c_int;
-    fn runto(cp: *mut CCoord);
-    fn see_monst(mp: *mut CThing) -> c_uchar;
-    fn step_ok(ch: c_int) -> c_int;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
     fn tolower(c: c_int) -> c_int;
-    fn wake_monster(y: c_int, x: c_int);
 }
 
 #[inline]
@@ -130,7 +122,11 @@ unsafe fn on(thing: *mut CThing, flag: c_short) -> bool {
 
 #[inline]
 unsafe fn room_flags(rp: *mut CRoom) -> c_short {
-    if rp.is_null() { 0 } else { (*rp).r_flags }
+    if rp.is_null() {
+        0
+    } else {
+        (*rp).r_flags
+    }
 }
 
 #[inline]
@@ -144,7 +140,10 @@ unsafe fn first_is_vowel(s: *const c_char) -> bool {
     if bytes.is_empty() {
         return false;
     }
-    matches!(bytes[0], b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U')
+    matches!(
+        bytes[0],
+        b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U'
+    )
 }
 
 /// show_floor:
@@ -152,7 +151,9 @@ unsafe fn first_is_vowel(s: *const c_char) -> bool {
 #[no_mangle]
 pub unsafe fn show_floor() -> bool {
     let player_room = (*thing_t(&raw mut player)).t_room;
-    if (room_flags(player_room) & (ISGONE as c_short | ISDARK as c_short)) == ISDARK && !on(&raw mut player, ISBLIND) {
+    if (room_flags(player_room) & (ISGONE as c_short | ISDARK as c_short)) == ISDARK
+        && !on(&raw mut player, ISBLIND)
+    {
         return see_floor;
     }
     true
@@ -265,9 +266,13 @@ pub unsafe extern "C" fn chg_str(amt: c_int) {
 #[no_mangle]
 pub unsafe extern "C" fn add_str(sp: *mut c_uint, amt: c_int) {
     let newv = (*sp).wrapping_add(amt as c_uint);
-    if newv < 3 { *sp = 3; }
-    else if newv > 31 { *sp = 31; }
-    else { *sp = newv; }
+    if newv < 3 {
+        *sp = 3;
+    } else if newv > 31 {
+        *sp = 31;
+    } else {
+        *sp = newv;
+    }
 }
 
 #[no_mangle]
@@ -301,7 +306,11 @@ pub unsafe fn is_current(obj: *mut CThing) -> bool {
     if obj.is_null() {
         return false;
     }
-    if obj == cur_armor || obj == cur_weapon || obj == cur_ring[LEFT as usize] || obj == cur_ring[RIGHT as usize] {
+    if obj == cur_armor
+        || obj == cur_weapon
+        || obj == cur_ring[LEFT as usize]
+        || obj == cur_ring[RIGHT as usize]
+    {
         if terse == 0 {
             addmsg_str("That's already ");
         }
@@ -328,15 +337,43 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
             gotit = true;
             dir_ch = readchar() as c_char;
             match dir_ch as u8 {
-                b'h' | b'H' => { delta.y = 0; delta.x = -1; }
-                b'j' | b'J' => { delta.y = 1; delta.x = 0; }
-                b'k' | b'K' => { delta.y = -1; delta.x = 0; }
-                b'l' | b'L' => { delta.y = 0; delta.x = 1; }
-                b'y' | b'Y' => { delta.y = -1; delta.x = -1; }
-                b'u' | b'U' => { delta.y = -1; delta.x = 1; }
-                b'b' | b'B' => { delta.y = 1; delta.x = -1; }
-                b'n' | b'N' => { delta.y = 1; delta.x = 1; }
-                c if c as c_int == ESCAPE => { last_dir = 0; reset_last(); return false as c_uchar; }
+                b'h' | b'H' => {
+                    delta.y = 0;
+                    delta.x = -1;
+                }
+                b'j' | b'J' => {
+                    delta.y = 1;
+                    delta.x = 0;
+                }
+                b'k' | b'K' => {
+                    delta.y = -1;
+                    delta.x = 0;
+                }
+                b'l' | b'L' => {
+                    delta.y = 0;
+                    delta.x = 1;
+                }
+                b'y' | b'Y' => {
+                    delta.y = -1;
+                    delta.x = -1;
+                }
+                b'u' | b'U' => {
+                    delta.y = -1;
+                    delta.x = 1;
+                }
+                b'b' | b'B' => {
+                    delta.y = 1;
+                    delta.x = -1;
+                }
+                b'n' | b'N' => {
+                    delta.y = 1;
+                    delta.x = 1;
+                }
+                c if c as c_int == ESCAPE => {
+                    last_dir = 0;
+                    reset_last();
+                    return false as c_uchar;
+                }
                 _ => {
                     mpos = 0;
                     msg_str("which direction? ");
@@ -370,7 +407,13 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
 
 #[no_mangle]
 pub unsafe extern "C" fn sign(nm: c_int) -> c_int {
-    if nm < 0 { -1 } else if nm > 0 { 1 } else { 0 }
+    if nm < 0 {
+        -1
+    } else if nm > 0 {
+        1
+    } else {
+        0
+    }
 }
 
 #[no_mangle]
@@ -391,7 +434,7 @@ pub unsafe extern "C" fn call_it(info: *mut CObjInfo) {
         } else {
             msg_str("what do you want to call it? ");
         }
-        if get_str(prbuf.as_mut_ptr(), stdscr) == NORM {
+        if get_str(prbuf.as_mut_ptr().cast(), stdscr) == NORM {
             if !(*info).oi_guess.is_null() {
                 free((*info).oi_guess as *mut c_void);
             }
@@ -407,18 +450,27 @@ pub unsafe extern "C" fn call_it(info: *mut CObjInfo) {
 
 #[no_mangle]
 pub unsafe extern "C" fn rnd_thing() -> c_char {
-    let thing_list = [POTION, SCROLL, RING, STICK, FOOD, WEAPON, ARMOR, STAIRS, GOLD, AMULET];
-    let idx = if level >= AMULETLEVEL { rnd(thing_list.len() as c_int) } else { rnd((thing_list.len() - 1) as c_int) };
+    let thing_list = [
+        POTION, SCROLL, RING, STICK, FOOD, WEAPON, ARMOR, STAIRS, GOLD, AMULET,
+    ];
+    let idx = if level >= AMULETLEVEL {
+        rnd(thing_list.len() as c_int)
+    } else {
+        rnd((thing_list.len() - 1) as c_int)
+    };
     thing_list[idx as usize]
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn choose_str(ts: *const c_char, ns: *const c_char) -> *mut c_char {
-    if on(&raw mut player, ISHALU) { ts as *mut c_char } else { ns as *mut c_char }
+    if on(&raw mut player, ISHALU) {
+        ts as *mut c_char
+    } else {
+        ns as *mut c_char
+    }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn vowelstr(str: *mut c_char) -> *mut c_char {
+unsafe fn vowelstr(str: *mut c_char) -> *mut c_char {
     if first_is_vowel(str) {
         c"n".as_ptr() as *mut c_char
     } else {

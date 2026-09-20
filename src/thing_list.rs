@@ -5,8 +5,8 @@
 //! this vector, so list operations no longer depend on a C allocator or ABI.
 
 use crate::player::{CThing, CThingMonster};
-use std::sync::{Mutex, OnceLock};
 use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 struct OwnedThing(Box<CThing>);
 
@@ -59,9 +59,10 @@ pub unsafe fn free_list(list: *mut *mut CThing) {
 
 pub unsafe fn discard(item: *mut CThing) {
     let mut things = things().lock().expect("thing store poisoned");
-    if let Some(index) = things.iter().position(|thing| {
-        (&*thing.0 as *const CThing).cast_mut() == item
-    }) {
+    if let Some(index) = things
+        .iter()
+        .position(|thing| (&*thing.0 as *const CThing).cast_mut() == item)
+    {
         things.swap_remove(index);
         TOTAL.fetch_sub(1, Ordering::Relaxed);
     }

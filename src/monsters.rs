@@ -1,16 +1,16 @@
-use crate::rnd::rnd;
-use crate::curses as cur;
-use crate::io::{addmsg_str, msg_str};
-use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
-use crate::thing_list::{attach, new_item};
 use crate::chase::{dist, roomin, runto};
+use crate::curses as cur;
 use crate::daemon::{fuse, lengthen};
 use crate::daemons::unconfuse;
+use crate::fight::set_mname;
+use crate::io::{addmsg_str, msg_str};
 use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
+use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::rnd::rnd;
 use crate::startup::roll;
+use crate::thing_list::{attach, new_item};
 use crate::things::new_thing;
-use crate::fight::set_mname;
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -41,7 +41,6 @@ const RIGHT: usize = 1;
 const R_AGGR: c_int = 6;
 const R_STEALTH: c_int = 12;
 const R_PROTECT: c_int = 0;
-
 
 /// Layout mirror of the C `struct monster` stat table, tied to the `monsters[]`
 /// global the C engine exposes.
@@ -265,7 +264,8 @@ pub unsafe extern "C" fn wanderer() {
     if wizard != 0 {
         msg_str(&format!(
             "started a wandering {}",
-            CStr::from_ptr(monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_name).to_string_lossy()
+            CStr::from_ptr(monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_name)
+                .to_string_lossy()
         ));
     }
 }
@@ -337,7 +337,9 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
 #[no_mangle]
 pub unsafe extern "C" fn give_pack(tp: *mut CThing) {
-    if level >= max_level && rnd(100) < monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry {
+    if level >= max_level
+        && rnd(100) < monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry
+    {
         attach(&mut (*thing_t(tp)).t_pack, new_thing());
     }
 }

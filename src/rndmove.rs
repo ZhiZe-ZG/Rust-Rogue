@@ -1,5 +1,7 @@
 use std::os::raw::{c_char, c_int, c_uchar};
 
+use crate::chase::diag_ok;
+use crate::io::step_ok;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 use crate::scrolls::ScrollType;
@@ -8,9 +10,6 @@ const SCROLL: c_char = b'?' as c_char;
 
 unsafe extern "C" {
     static mut lvl_obj: *mut CThing;
-
-    fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
-    fn step_ok(ch: c_int) -> c_int;
 }
 
 #[inline]
@@ -21,11 +20,6 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
     tp as *mut CThingObject
-}
-
-#[inline]
-unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    crate::draw::chat_at(y, x)
 }
 
 #[inline]

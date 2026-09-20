@@ -15,6 +15,8 @@
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 
 use crate::curses as cur;
+use crate::save::auto_save;
+use crate::startup::{endit, quit, tstp};
 
 /// Ncurses key codes used by the keypad/arrow-key reader.  The `ncurses`
 /// crate's `raw_constants.rs` exposes these as `i32`; we re-export the ones
@@ -38,10 +40,10 @@ const KEY_END: c_int = ncurses::KEY_END;
 // The ncurses crate does not expose these legacy/extended keypad codes.
 // Values match the ncurses public header (keys.h) so behaviour is identical
 // to the original C mdport.c.
-const KEY_B1: c_int = 353;  // keypad lower-left
-const KEY_B3: c_int = 354;  // keypad lower-right
-const KEY_A2: c_int = 355;  // keypad up
-const KEY_C2: c_int = 356;  // keypad down
+const KEY_B1: c_int = 353; // keypad lower-left
+const KEY_B3: c_int = 354; // keypad lower-right
+const KEY_A2: c_int = 355; // keypad up
+const KEY_C2: c_int = 356; // keypad down
 const KEY_SUP: c_int = 337; // shift up
 const KEY_SDOWN: c_int = 336; // shift down
 const KEY_SEND: c_int = ncurses::KEY_SEND;
@@ -99,17 +101,11 @@ pub unsafe extern "C" fn md_onsignal_exit() {
 
 /// md_onsignal_autosave:
 /// Arrange for signals to auto-save the game.
-#[no_mangle]
-pub unsafe extern "C" fn md_onsignal_autosave() {
+unsafe fn md_onsignal_autosave() {
     // The auto-save handlers (auto_save, endit, quit) are Rust `#[no_mangle]`
     // functions; wire them up to the signals on Unix.
     #[cfg(unix)]
     {
-        extern "C" {
-            fn auto_save(sig: c_int);
-            fn endit(sig: c_int);
-            fn quit(sig: c_int);
-        }
         libc::signal(libc::SIGHUP, auto_save as libc::sighandler_t);
         libc::signal(libc::SIGQUIT, endit as libc::sighandler_t);
         libc::signal(libc::SIGILL, auto_save as libc::sighandler_t);
@@ -158,8 +154,7 @@ pub unsafe extern "C" fn md_hasclreol() -> c_int {
 
 /// md_putchar:
 /// Output a single character.
-#[no_mangle]
-pub unsafe extern "C" fn md_putchar(c: c_int) {
+unsafe fn md_putchar(c: c_int) {
     libc::putchar(c);
 }
 
@@ -467,8 +462,7 @@ pub unsafe extern "C" fn md_shellescape() -> c_int {
 
 /// directory_exists:
 /// Return 1 if the given path is a directory, 0 otherwise.
-#[no_mangle]
-pub unsafe extern "C" fn directory_exists(dirname: *mut c_char) -> c_int {
+unsafe fn directory_exists(dirname: *mut c_char) -> c_int {
     if dirname.is_null() {
         return 0;
     }
@@ -488,8 +482,7 @@ pub unsafe extern "C" fn directory_exists(dirname: *mut c_char) -> c_int {
 /// md_getrealname:
 /// Return the real (login) name for the given uid, or the numeric uid
 /// string if no passwd entry exists.
-#[no_mangle]
-pub unsafe extern "C" fn md_getrealname(uid: c_int) -> *mut c_char {
+unsafe fn md_getrealname(uid: c_int) -> *mut c_char {
     static mut UIDSTR: [c_char; 20] = [0; 20];
     #[cfg(unix)]
     {
@@ -514,15 +507,13 @@ pub unsafe extern "C" fn md_getrealname(uid: c_int) -> *mut c_char {
 
 /// md_erasechar:
 /// Return the terminal erase character.
-#[no_mangle]
-pub unsafe extern "C" fn md_erasechar() -> c_int {
+unsafe fn md_erasechar() -> c_int {
     cur::erasechar()
 }
 
 /// md_killchar:
 /// Return the terminal kill character.
-#[no_mangle]
-pub unsafe extern "C" fn md_killchar() -> c_int {
+unsafe fn md_killchar() -> c_int {
     cur::killchar()
 }
 
@@ -562,8 +553,7 @@ pub unsafe extern "C" fn md_suspchar() -> c_int {
 
 /// md_setsuspchar:
 /// Set the terminal suspend character.
-#[no_mangle]
-pub unsafe extern "C" fn md_setsuspchar(_c: c_int) -> c_int {
+unsafe fn md_setsuspchar(_c: c_int) -> c_int {
     // Changing the suspend char is rarely needed; keep the ncurses setting.
     0
 }
@@ -685,10 +675,10 @@ pub unsafe extern "C" fn md_readchar() -> c_int {
                     mode = M_TRAIL;
                 }
                 // PuTTY ESC O sequences.
-                0x44 => ch = ctrl('H'), // 'D'
-                0x43 => ch = ctrl('L'), // 'C'
-                0x41 => ch = ctrl('K'), // 'A'
-                0x42 => ch = ctrl('J'), // 'B'
+                0x44 => ch = ctrl('H'),    // 'D'
+                0x43 => ch = ctrl('L'),    // 'C'
+                0x41 => ch = ctrl('K'),    // 'A'
+                0x42 => ch = ctrl('J'),    // 'B'
                 0x74 => ch = 'h' as c_int, // 't'
                 0x76 => ch = 'l' as c_int, // 'v'
                 0x78 => ch = 'k' as c_int, // 'x'
@@ -779,8 +769,7 @@ unsafe extern "C" {
 
 /// md_loadav:
 /// Fill `avg` (3 doubles) with the 1/5/15 minute load averages.
-#[no_mangle]
-pub unsafe extern "C" fn md_loadav(avg: *mut f64) {
+unsafe fn md_loadav(avg: *mut f64) {
     if avg.is_null() {
         return;
     }
@@ -800,8 +789,7 @@ pub unsafe extern "C" fn md_loadav(avg: *mut f64) {
 /// which lived in mach_dep.c under `#ifdef CHECKTIME`.  CHECKTIME is not
 /// enabled in the standard build, so we only need the exported symbol; the
 /// alarm is not armed.
-#[no_mangle]
-pub unsafe extern "C" fn md_start_checkout_timer(_time: c_int) {
+unsafe fn md_start_checkout_timer(_time: c_int) {
     // CHECKTIME is disabled in the standard build; keep SIGALRM at its
     // default disposition so no reference to the removed `checkout()` is
     // emitted.
@@ -813,8 +801,7 @@ pub unsafe extern "C" fn md_start_checkout_timer(_time: c_int) {
 
 /// md_stop_checkout_timer:
 /// Disable the SIGALRM checkout timer.
-#[no_mangle]
-pub unsafe extern "C" fn md_stop_checkout_timer() {
+unsafe fn md_stop_checkout_timer() {
     #[cfg(unix)]
     {
         libc::signal(libc::SIGALRM, libc::SIG_IGN);
@@ -841,9 +828,6 @@ pub unsafe extern "C" fn md_tstphold() {
 pub unsafe extern "C" fn md_tstpresume() {
     #[cfg(unix)]
     {
-        extern "C" {
-            fn tstp(v: c_int);
-        }
         libc::signal(libc::SIGTSTP, tstp as libc::sighandler_t);
     }
 }

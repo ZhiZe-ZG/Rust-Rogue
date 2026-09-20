@@ -1,7 +1,14 @@
-use crate::rnd::rnd;
+use crate::chase::{cansee, runto};
 use crate::curses as cur;
-use crate::io::msg_str;
+use crate::fight::set_mname;
+use crate::io::{endmsg, msg_str, step_ok};
+use crate::monsters::{save, save_throw};
+use crate::pack::get_item;
 use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::rip::death;
+use crate::rnd::rnd;
+use crate::startup::roll;
+use crate::weapons::{do_motion, hit_monster};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 const STICK: c_int = '/' as c_int;
@@ -80,20 +87,6 @@ unsafe extern "C" {
     static mut player: CThing;
     static mut weap_info: [CObjInfo; 10];
 
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn endmsg() -> c_int;
-    fn save_throw(kind: c_int, tp: *mut CThing) -> c_uchar;
-    fn save(kind: c_int) -> c_uchar;
-    fn hit_monster(y: c_int, x: c_int, obj: *mut CThing);
-    fn do_motion(obj: *mut CThing, y: c_int, x: c_int);
-    fn roll(num: c_int, sides: c_int) -> c_int;
-    fn death(thing: c_char) -> !;
-    fn runto(pos: *mut CCoord);
-    fn set_mname(tp: *mut CThing) -> *mut c_char;
-    fn cansee(y: c_int, x: c_int) -> c_uchar;
-    fn step_ok(ch: c_char) -> c_uchar;
-    fn new_monster(tp: *mut CThing, kind: c_char, delta: *const CCoord);
-    fn relocate(tp: *mut CThing, new_pos: *const CCoord);
 }
 
 #[inline]
@@ -133,7 +126,11 @@ unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
 
 #[inline]
 unsafe fn ce_coord(a: CCoord, b: CCoord) -> c_uchar {
-    if a.x == b.x && a.y == b.y { 1 } else { 0 }
+    if a.x == b.x && a.y == b.y {
+        1
+    } else {
+        0
+    }
 }
 
 #[inline]
@@ -215,7 +212,7 @@ pub unsafe extern "C" fn do_zap() {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
-            while step_ok(winat(y, x)) != 0 {
+            while step_ok(winat(y, x) as c_int) != 0 {
                 y += delta.y;
                 x += delta.x;
             }
@@ -251,7 +248,7 @@ pub unsafe extern "C" fn do_zap() {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
-            while step_ok(winat(y, x)) != 0 {
+            while step_ok(winat(y, x) as c_int) != 0 {
                 y += delta.y;
                 x += delta.x;
             }
@@ -331,8 +328,7 @@ pub unsafe extern "C" fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *
 
 /// charge_str:
 /// Return an appropriate string for a wand charge display.
-#[no_mangle]
-pub unsafe extern "C" fn charge_str(obj: *mut CThing) -> *mut c_char {
+unsafe fn charge_str(obj: *mut CThing) -> *mut c_char {
     static mut BUF: [c_char; 20] = [0; 20];
     if (*thing_o(obj)).o_flags & ISKNOW == 0 {
         BUF[0] = 0;

@@ -137,12 +137,21 @@ pub(crate) fn entry_point(
         loop {
             if direc == 'd' {
                 p.x = room.position.x + rnd(room.size.x - 2) + 1;
-                p.y = if start { room.position.y + room.size.y - 1 } else { room.position.y };
+                p.y = if start {
+                    room.position.y + room.size.y - 1
+                } else {
+                    room.position.y
+                };
             } else {
                 p.y = room.position.y + rnd(room.size.y - 2) + 1;
-                p.x = if start { room.position.x + room.size.x - 1 } else { room.position.x };
+                p.x = if start {
+                    room.position.x + room.size.x - 1
+                } else {
+                    room.position.x
+                };
             }
-            if !room.is_maze() || matches!(map.get(p.y as usize, p.x as usize), Some(Tile::Passage)) {
+            if !room.is_maze() || matches!(map.get(p.y as usize, p.x as usize), Some(Tile::Passage))
+            {
                 break;
             }
         }
@@ -157,7 +166,11 @@ pub(crate) fn entry_point(
 /// perpendicular turn, and the random position of the turn.
 pub(crate) fn plan_corridor(rooms: &[Room], map: &Structure, r1: usize, r2: usize) -> CorridorPlan {
     let (direc, base_room) = corridor_direction(r1, r2);
-    let partner_room = if direc == 'd' { base_room + 3 } else { base_room + 1 };
+    let partner_room = if direc == 'd' {
+        base_room + 3
+    } else {
+        base_room + 1
+    };
 
     let step = if direc == 'd' {
         IVec2::new(0, 1)
@@ -182,7 +195,11 @@ pub(crate) fn plan_corridor(rooms: &[Room], map: &Structure, r1: usize, r2: usiz
         )
     };
 
-    let turn_spot = if distance > 1 { rnd(distance - 1) + 1 } else { 1 };
+    let turn_spot = if distance > 1 {
+        rnd(distance - 1) + 1
+    } else {
+        1
+    };
 
     CorridorPlan {
         base_room,
@@ -384,7 +401,11 @@ pub(crate) fn apply_passage(
     // gone rooms were never recorded as entry points).
     for rel in &passage.entry_points {
         let abs = *rel + passage.position;
-        let room_index = if abs == plan.start { plan.base_room } else { plan.partner_room };
+        let room_index = if abs == plan.start {
+            plan.base_room
+        } else {
+            plan.partner_room
+        };
         stamp_door(map, flags, rooms, room_index, abs, depth);
     }
 
