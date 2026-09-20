@@ -1,5 +1,5 @@
-use crate::rnd::rnd;
 use crate::curses as cur;
+use crate::rnd::rnd;
 /*
  * All the daemon and fuse callback functions.
  *
@@ -16,80 +16,65 @@ use crate::io::{addmsg_str, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
+use crate::chase::{cansee, see_monst};
+use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon};
+use crate::draw::enter_room;
+use crate::game::EQUIPMENT;
+use crate::misc::{choose_str, rnd_thing, spread};
+use crate::monsters::wanderer;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
+use crate::rings::ring_eat;
+use crate::rip::death;
+use crate::startup::roll;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const TRUE:  c_uchar = 1;
-const FALSE: c_uchar = 0;
-
 // d_type flags (BEFORE/AFTER)
 const BEFORE: c_int = 1; // spread(1) == 1 always
-const AFTER:  c_int = 2; // spread(2) == 2 always
+const AFTER: c_int = 2; // spread(2) == 2 always
 
 // Player-flags
-const ISBLIND:  c_short = 0o0000004;
-const ISHASTE:  c_short = 0o0000100;
-const ISHUH:    c_short = 0o0001000;
-const ISINVIS:  c_short = 0o0002000;
-const ISHALU:   c_short = 0o0004000;
-const ISRUN:    c_short = 0o0020000;
+const ISBLIND: c_short = 0o0000004;
+const ISHASTE: c_short = 0o0000100;
+const ISHUH: c_short = 0o0001000;
+const ISINVIS: c_short = 0o0002000;
+const ISHALU: c_short = 0o0004000;
+const ISRUN: c_short = 0o0020000;
 const SEEMONST: c_short = 0o0040000;
-const CANSEE:   c_short = 0o0000002;
-const ISLEVIT:  c_short = 0o0000010;
+const CANSEE: c_short = 0o0000002;
+const ISLEVIT: c_short = 0o0000010;
 
 // Room flags
 const ISGONE: c_short = 0o0000002;
 
 // Ring types
-const R_REGEN:  c_int = 9;
-const LEFT:     usize = 0;
-const RIGHT:    usize = 1;
+const R_REGEN: c_int = 9;
+const LEFT: usize = 0;
+const RIGHT: usize = 1;
 
 // Food constants
-const MORETIME:   c_int = 150;
+const MORETIME: c_int = 150;
 const STARVETIME: c_int = 850;
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
 unsafe extern "C" {
-    static mut player:       CThing;
-    static mut quiet:        c_int;
-    static mut cur_ring:     [*mut CThing; 2];
-    static mut mlist:        *mut CThing;
-    static mut lvl_obj:      *mut CThing;
+    static mut player: CThing;
+    static mut quiet: c_int;
+    static mut mlist: *mut CThing;
+    static mut lvl_obj: *mut CThing;
     static mut hungry_state: c_int;
-    static mut food_left:    c_int;
-    static mut no_command:   c_int;
-    static mut terse:        c_uchar;
-    static mut amulet:       c_uchar;
-    static mut running:      c_uchar;
-    static mut to_death:     c_uchar;
-    static mut count:        c_int;
-    static mut after:        c_uchar;
-    static mut jump:         c_uchar;
-    static mut seenstairs:   c_uchar;
-    static mut stairs:       CCoord;
-}
-
-// ─── Extern C functions ──────────────────────────────────────────────────────
-
-unsafe extern "C" {
-    fn roll(number: c_int, sides: c_int) -> c_int;
-    fn see_monst(mp: *mut CThing) -> c_uchar;
-    fn enter_room(cp: *mut CCoord);
-    fn choose_str(ts: *const c_char, ns: *const c_char) -> *const c_char;
-    fn ring_eat(hand: c_int) -> c_int;
-    fn death(monst: c_char);
-    fn wanderer();
-    fn cansee(y: c_int, x: c_int) -> c_uchar;
-    fn rnd_thing() -> c_char;
-    fn spread(nm: c_int) -> c_int;
-    // Daemon/fuse management (implemented in daemon.rs, same library)
-    fn start_daemon(func: *const c_void, arg: c_int, typ: c_int);
-    fn kill_daemon(func: *const c_void);
-    fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
-    fn extinguish(func: *const c_void);
+    static mut food_left: c_int;
+    static mut no_command: c_int;
+    static mut terse: c_uchar;
+    static mut amulet: c_uchar;
+    static mut running: c_uchar;
+    static mut to_death: c_uchar;
+    static mut count: c_int;
+    static mut after: c_uchar;
+    static mut jump: c_uchar;
+    static mut seenstairs: c_uchar;
+    static mut stairs: CCoord;
 }
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
@@ -106,9 +91,8 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 /// ISRING(hand, ring_type): true when the player wears ring_type on hand.
 #[inline]
-unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
-    !cur_ring[hand].is_null()
-        && (*thing_o(cur_ring[hand])).o_which == ring_type
+unsafe fn isring(ring: *mut CThing, ring_type: c_int) -> bool {
+    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
 // ─── Module globals ───────────────────────────────────────────────────────────
@@ -124,7 +108,7 @@ pub static mut between: c_int = 0;
 /// A healing daemon that restores hit points after rest.
 #[no_mangle]
 pub unsafe extern "C" fn doctor() {
-    let lv  = (*thing_t(&raw mut player)).t_stats.s_lvl;
+    let lv = (*thing_t(&raw mut player)).t_stats.s_lvl;
     let ohp = (*thing_t(&raw mut player)).t_stats.s_hpt;
     quiet += 1;
     if lv < 8 {
@@ -134,10 +118,10 @@ pub unsafe extern "C" fn doctor() {
     } else if quiet >= 3 {
         (*thing_t(&raw mut player)).t_stats.s_hpt += rnd(lv - 7) + 1;
     }
-    if isring(LEFT, R_REGEN) {
+    if isring(EQUIPMENT.left_ring(), R_REGEN) {
         (*thing_t(&raw mut player)).t_stats.s_hpt += 1;
     }
-    if isring(RIGHT, R_REGEN) {
+    if isring(EQUIPMENT.right_ring(), R_REGEN) {
         (*thing_t(&raw mut player)).t_stats.s_hpt += 1;
     }
     if ohp != (*thing_t(&raw mut player)).t_stats.s_hpt {
@@ -211,10 +195,13 @@ pub unsafe extern "C" fn sight() {
         if !proom.is_null() && ((*proom).r_flags & ISGONE) == 0 {
             enter_room(&mut (*thing_t(&raw mut player)).t_pos);
         }
-        msg_str(&CStr::from_ptr(choose_str(
-            c"far out!  Everything is all cosmic again".as_ptr(),
-            c"the veil of darkness lifts".as_ptr(),
-        )).to_string_lossy());
+        msg_str(
+            &CStr::from_ptr(choose_str(
+                c"far out!  Everything is all cosmic again".as_ptr(),
+                c"the veil of darkness lifts".as_ptr(),
+            ))
+            .to_string_lossy(),
+        );
     }
 }
 
@@ -246,43 +233,58 @@ pub unsafe extern "C" fn stomach() {
         no_command += rnd(8) + 4;
         hungry_state = 3;
         if terse == 0 {
-            addmsg_str(&CStr::from_ptr(choose_str(
-                c"the munchies overpower your motor capabilities.  ".as_ptr(),
-                c"you feel too weak from lack of food.  ".as_ptr(),
-            )).to_string_lossy());
+            addmsg_str(
+                &CStr::from_ptr(choose_str(
+                    c"the munchies overpower your motor capabilities.  ".as_ptr(),
+                    c"you feel too weak from lack of food.  ".as_ptr(),
+                ))
+                .to_string_lossy(),
+            );
         }
-        msg_str(&CStr::from_ptr(choose_str(c"You freak out".as_ptr(), c"You faint".as_ptr())).to_string_lossy());
+        msg_str(
+            &CStr::from_ptr(choose_str(c"You freak out".as_ptr(), c"You faint".as_ptr()))
+                .to_string_lossy(),
+        );
     } else {
         let oldfood = food_left;
         food_left -= ring_eat(LEFT as c_int) + ring_eat(RIGHT as c_int) + 1 - amulet as c_int;
 
         if food_left < MORETIME && oldfood >= MORETIME {
             hungry_state = 2;
-            msg_str(&CStr::from_ptr(choose_str(
-                c"the munchies are interfering with your motor capabilites".as_ptr(),
-                c"you are starting to feel weak".as_ptr(),
-            )).to_string_lossy());
+            msg_str(
+                &CStr::from_ptr(choose_str(
+                    c"the munchies are interfering with your motor capabilites".as_ptr(),
+                    c"you are starting to feel weak".as_ptr(),
+                ))
+                .to_string_lossy(),
+            );
         } else if food_left < 2 * MORETIME && oldfood >= 2 * MORETIME {
             hungry_state = 1;
             if terse != 0 {
-                msg_str(&CStr::from_ptr(choose_str(
-                    c"getting the munchies".as_ptr(),
-                    c"getting hungry".as_ptr(),
-                )).to_string_lossy());
+                msg_str(
+                    &CStr::from_ptr(choose_str(
+                        c"getting the munchies".as_ptr(),
+                        c"getting hungry".as_ptr(),
+                    ))
+                    .to_string_lossy(),
+                );
             } else {
-                msg_str(&CStr::from_ptr(choose_str(
-                    c"you are getting the munchies".as_ptr(),
-                    c"you are starting to get hungry".as_ptr(),
-                )).to_string_lossy());
+                msg_str(
+                    &CStr::from_ptr(choose_str(
+                        c"you are getting the munchies".as_ptr(),
+                        c"you are starting to get hungry".as_ptr(),
+                    ))
+                    .to_string_lossy(),
+                );
             }
         }
     }
 
     if hungry_state != orig_hungry {
         (*thing_t(&raw mut player)).t_flags &= !ISRUN;
-        running  = FALSE;
-        to_death = FALSE;
-        count    = 0;
+        running = false as c_uchar;
+        to_death = false as c_uchar;
+        count = 0;
     }
 }
 
@@ -349,7 +351,11 @@ pub unsafe extern "C" fn visuals() {
     while !tp.is_null() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
-            cur::mvaddch((*op).o_pos.y, (*op).o_pos.x, rnd_thing() as c_uchar as c_uint);
+            cur::mvaddch(
+                (*op).o_pos.y,
+                (*op).o_pos.x,
+                rnd_thing() as c_uchar as c_uint,
+            );
         }
         tp = (*thing_t(tp)).l_next;
     }
@@ -386,8 +392,11 @@ pub unsafe extern "C" fn visuals() {
 #[no_mangle]
 pub unsafe extern "C" fn land() {
     (*thing_t(&raw mut player)).t_flags &= !ISLEVIT;
-    msg_str(&CStr::from_ptr(choose_str(
-        c"bummer!  You've hit the ground".as_ptr(),
-        c"you float gently to the ground".as_ptr(),
-    )).to_string_lossy());
+    msg_str(
+        &CStr::from_ptr(choose_str(
+            c"bummer!  You've hit the ground".as_ptr(),
+            c"you float gently to the ground".as_ptr(),
+        ))
+        .to_string_lossy(),
+    );
 }

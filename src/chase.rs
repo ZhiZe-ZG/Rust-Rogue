@@ -9,9 +9,15 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::curses as cur;
-use crate::io::msg_str;
+use crate::fight::attack;
+use crate::io::{endmsg, msg_str, step_ok};
+use crate::misc::sign;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
+use crate::rndmove::rndmove;
+use crate::scrolls::ScrollType;
+use crate::sticks::fire_bolt;
+use crate::thing_list::{attach, detach};
 
 const NUMLINES: c_int = 24;
 const NUMCOLS: c_int = 80;
@@ -19,9 +25,6 @@ const MAXROOMS: usize = 9;
 const MAXPASS: usize = 13;
 
 const DRAGONSHOT: c_int = 5; // one chance in DRAGONSHOT that a dragon will flame
-
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_PNUM: c_char = 0x0fu8 as c_char;
@@ -46,7 +49,6 @@ const DOOR: c_char = b'+' as c_char;
 const FLOOR: c_char = b'.' as c_char;
 const PASSAGE: c_char = b'#' as c_char;
 const SCROLL: c_char = b'?' as c_char;
-const S_SCARE: c_int = 10;
 const BOLT_LENGTH: c_int = 6;
 const LAMPDIST: c_int = 3;
 
@@ -82,14 +84,6 @@ unsafe extern "C" {
     static mut delta: CCoord;
     static mut monsters: [crate::monsters::CMonster; 26];
 
-    fn endmsg() -> c_int;
-    fn step_ok(ch: c_int) -> c_int;
-    fn attack(mp: *mut CThing) -> c_int;
-    fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *mut c_char);
-    fn sign(nm: c_int) -> c_int;
-    fn rndmove(who: *mut CThing) -> *mut CCoord;
-    fn _detach(list: *mut *mut CThing, item: *mut CThing);
-    fn _attach(list: *mut *mut CThing, item: *mut CThing);
     fn abort() -> !;
 }
 
@@ -180,14 +174,14 @@ pub unsafe extern "C" fn runners() {
             }
             if wastarget && !coord_eq(orig_pos, (*thing_t(tp)).t_pos) {
                 (*thing_t(tp)).t_flags &= !ISTARGET;
-                to_death = FALSE;
+                to_death = false as c_uchar;
             }
         }
         tp = next;
     }
     if has_hit != 0 {
         endmsg();
-        has_hit = FALSE;
+        has_hit = false as c_uchar;
     }
 }
 
@@ -205,7 +199,7 @@ pub unsafe extern "C" fn move_monst(tp: *mut CThing) -> c_int {
             return -1;
         }
     }
-    (*thing_t(tp)).t_turn ^= TRUE;
+    (*thing_t(tp)).t_turn ^= true as c_uchar;
     0
 }
 
@@ -228,7 +222,11 @@ pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut CCoord) {
         (*thing_t(th)).t_room = roomin(new_loc);
         set_oldch(th, new_loc);
         let oroom = (*thing_t(th)).t_room;
-        set_moat_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x, std::ptr::null_mut());
+        set_moat_at(
+            (*thing_t(th)).t_pos.y,
+            (*thing_t(th)).t_pos.x,
+            std::ptr::null_mut(),
+        );
 
         if oroom != (*thing_t(th)).t_room {
             (*thing_t(th)).t_dest = find_dest(th);
@@ -237,7 +235,7 @@ pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut CCoord) {
         set_moat_at((*new_loc).y, (*new_loc).x, th);
     }
     cur::r#move((*new_loc).y, (*new_loc).x);
-    if see_monst(th) != FALSE {
+    if see_monst(th) != false as c_uchar {
         cur::addch((*thing_t(th)).t_disguise as c_uint);
     } else if player_has(SEEMONST) {
         cur::standout();
@@ -255,7 +253,7 @@ pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut CCoord) {
 pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
     let mut mindist: c_int = 32767;
     let mut curdist: c_int;
-    let mut stoprun = false; // TRUE means we are there
+    let mut stoprun = false; // true as c_uchar means we are there
     let mut door: bool;
     let mut obj: *mut CThing;
 
@@ -291,7 +289,8 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
                 }
             }
             if loop_door {
-                let pnum = (flat_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x) & F_PNUM) as usize;
+                let pnum =
+                    (flat_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x) & F_PNUM) as usize;
                 loop_rer = &raw mut passages[pnum] as *mut CRoom;
                 loop_door = false;
                 continue;
@@ -322,12 +321,12 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
                     &raw mut delta,
                     c"flame".as_ptr() as *mut c_char,
                 );
-                running = FALSE;
+                running = false as c_uchar;
                 count = 0;
                 quiet = 0;
                 if to_death != 0 && !monster_has(th, ISTARGET) {
-                    to_death = FALSE;
-                    kamikaze = FALSE;
+                    to_death = false as c_uchar;
+                    kamikaze = false as c_uchar;
                 }
                 return 0;
             }
@@ -338,15 +337,15 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
     // This now contains what we want to run to this time
     // so we run to it.  If we hit it we either want to fight it
     // or stop running.
-    if chase(th, &raw mut THIS) == FALSE {
+    if chase(th, &raw mut THIS) == false as c_uchar {
         if coord_eq(THIS, hero_pos()) {
             return attack(th);
         } else if coord_eq(THIS, *(*thing_t(th)).t_dest) {
             obj = lvl_obj;
             while !obj.is_null() {
                 if (*thing_t(th)).t_dest == &raw mut (*thing_o(obj)).o_pos {
-                    _detach(&raw mut lvl_obj, obj);
-                    _attach(&raw mut (*thing_t(th)).t_pack, obj);
+                    detach(&raw mut lvl_obj, obj);
+                    attach(&raw mut (*thing_t(th)).t_pack, obj);
                     // Objects render from the `lvl_obj` list; the floor glyph
                     // under a picked-up object is then the terrain char.
                     (*thing_t(th)).t_dest = find_dest(th);
@@ -393,16 +392,16 @@ pub unsafe extern "C" fn set_oldch(tp: *mut CThing, cp: *mut CCoord) {
 }
 
 /// see_monst:
-/// Return TRUE if the hero can see the monster
+/// Return true as c_uchar if the hero can see the monster
 ///
 /// Uses globals: player, hero, proom, places (via chat).
 #[no_mangle]
 pub unsafe extern "C" fn see_monst(mp: *mut CThing) -> c_uchar {
     if player_has(ISBLIND) {
-        return FALSE;
+        return false as c_uchar;
     }
     if monster_has(mp, ISINVIS) && !player_has(CANSEE) {
-        return FALSE;
+        return false as c_uchar;
     }
     let y = (*thing_t(mp)).t_pos.y;
     let x = (*thing_t(mp)).t_pos.x;
@@ -412,17 +411,17 @@ pub unsafe extern "C" fn see_monst(mp: *mut CThing) -> c_uchar {
             && step_ok(chat_at(y, hero_pos().x) as c_int) == 0
             && step_ok(chat_at(hero_pos().y, x) as c_int) == 0
         {
-            return FALSE;
+            return false as c_uchar;
         }
-        return TRUE;
+        return true as c_uchar;
     }
     if (*thing_t(mp)).t_room != (*thing_t(&raw mut player)).t_room {
-        return FALSE;
+        return false as c_uchar;
     }
     if ((*(*thing_t(mp)).t_room).r_flags & ISDARK) != 0 {
-        FALSE
+        false as c_uchar
     } else {
-        TRUE
+        true as c_uchar
     }
 }
 
@@ -453,8 +452,8 @@ pub unsafe extern "C" fn runto(runner: *mut CCoord) {
 
 /// chase:
 /// Find the spot for the chaser(er) to move closer to the
-/// chasee(ee).  Returns TRUE if we want to keep on chasing later
-/// FALSE if we reach the goal.
+/// chasee(ee).  Returns true as c_uchar if we want to keep on chasing later
+/// false as c_uchar if we reach the goal.
 ///
 /// Uses globals: hero, lvl_obj, places (via moat/chat/winat).
 #[no_mangle]
@@ -503,7 +502,7 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut CCoord) -> c_uchar {
                 let mut y = (*er).y - 1;
                 while y <= ey {
                     TRYP.y = y;
-                    if diag_ok(er, &raw mut TRYP) == FALSE {
+                    if diag_ok(er, &raw mut TRYP) == false as c_uchar {
                         y += 1;
                         continue;
                     }
@@ -519,7 +518,9 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut CCoord) -> c_uchar {
                                 }
                                 obj = (*thing_o(obj)).l_next;
                             }
-                            if !obj.is_null() && (*thing_o(obj)).o_which == S_SCARE {
+                            if !obj.is_null()
+                                && (*thing_o(obj)).o_which == ScrollType::Scare as c_int
+                            {
                                 y += 1;
                                 continue;
                             }
@@ -551,9 +552,9 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut CCoord) -> c_uchar {
         }
     }
     if curdist != 0 && !coord_eq(CH_RET, hero_pos()) {
-        TRUE
+        true as c_uchar
     } else {
-        FALSE
+        false as c_uchar
     }
 }
 
@@ -582,11 +583,7 @@ pub unsafe extern "C" fn roomin(cp: *mut CCoord) -> *mut CRoom {
         }
     }
 
-    msg_str(&format!(
-        "in some bizarre place ({}, {})",
-        (*cp).y,
-        (*cp).x
-    ));
+    msg_str(&format!("in some bizarre place ({}, {})", (*cp).y, (*cp).x));
     if MASTER {
         abort();
     }
@@ -600,17 +597,17 @@ pub unsafe extern "C" fn roomin(cp: *mut CCoord) -> *mut CRoom {
 #[no_mangle]
 pub unsafe extern "C" fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar {
     if (*ep).x < 0 || (*ep).x >= NUMCOLS || (*ep).y <= 0 || (*ep).y >= NUMLINES - 1 {
-        return FALSE;
+        return false as c_uchar;
     }
     if (*ep).x == (*sp).x || (*ep).y == (*sp).y {
-        return TRUE;
+        return true as c_uchar;
     }
     if step_ok(chat_at((*ep).y, (*sp).x) as c_int) != 0
         && step_ok(chat_at((*sp).y, (*ep).x) as c_int) != 0
     {
-        TRUE
+        true as c_uchar
     } else {
-        FALSE
+        false as c_uchar
     }
 }
 
@@ -621,7 +618,7 @@ pub unsafe extern "C" fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar {
 #[no_mangle]
 pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
     if player_has(ISBLIND) {
-        return FALSE;
+        return false as c_uchar;
     }
     if dist(y, x, hero_pos().y, hero_pos().x) < LAMPDIST {
         if (flat_at(y, x) & F_PASS) != 0 {
@@ -630,10 +627,10 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
                 && step_ok(chat_at(y, hero_pos().x) as c_int) == 0
                 && step_ok(chat_at(hero_pos().y, x) as c_int) == 0
             {
-                return FALSE;
+                return false as c_uchar;
             }
         }
-        return TRUE;
+        return true as c_uchar;
     }
     // We can only see if the hero in the same room as
     // the coordinate and the room is lit or if it is close.
@@ -641,9 +638,9 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
     CANSEE_TP.x = x;
     let rer = roomin(&raw mut CANSEE_TP);
     if rer == (*thing_t(&raw mut player)).t_room && ((*rer).r_flags & ISDARK) == 0 {
-        TRUE
+        true as c_uchar
     } else {
-        FALSE
+        false as c_uchar
     }
 }
 
@@ -654,12 +651,17 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
 #[no_mangle]
 pub unsafe extern "C" fn find_dest(tp: *mut CThing) -> *mut CCoord {
     let prob = monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry;
-    if prob <= 0 || (*thing_t(tp)).t_room == (*thing_t(&raw mut player)).t_room || see_monst(tp) != FALSE {
+    if prob <= 0
+        || (*thing_t(tp)).t_room == (*thing_t(&raw mut player)).t_room
+        || see_monst(tp) != false as c_uchar
+    {
         return hero_ptr();
     }
     let mut obj = lvl_obj;
     while !obj.is_null() {
-        if (*thing_o(obj)).o_type == SCROLL as c_int && (*thing_o(obj)).o_which == S_SCARE {
+        if (*thing_o(obj)).o_type == SCROLL as c_int
+            && (*thing_o(obj)).o_which == ScrollType::Scare as c_int
+        {
             obj = (*thing_o(obj)).l_next;
             continue;
         }

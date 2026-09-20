@@ -36,7 +36,9 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 use crate::chase::runners;
 use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
+use crate::game::EQUIPMENT;
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::thing_list::{allocated_count, new_item};
 use crate::things::CObjInfo;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -137,7 +139,7 @@ struct CMonsterState {
 }
 
 /// Delayed-action callback slot type (same representation as `daemon::DFunc`).
-type DFunc = Option<unsafe extern "C" fn(c_int)>;
+type DFunc = Option<unsafe extern "C" fn()>;
 
 // ─── Extern C globals (defined in vers.c) ────────────────────────────────────
 
@@ -229,9 +231,6 @@ unsafe extern "C" {
 
     // player / lists
     static mut player: CThing;
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
-    static mut cur_weapon: *mut CThing;
     static mut l_last_pick: *mut CThing;
     static mut last_pick: *mut CThing;
     static mut lvl_obj: *mut CThing;
@@ -256,7 +255,6 @@ unsafe extern "C" {
 
     // daemons (defined in daemon.rs as `d_list`) and misc C-visible globals
     static mut d_list: [CDelayedAction; MAXDAEMONS];
-    static mut total: c_int;
     static mut between: c_int;
     static mut nh: CCoord;
     static mut group: c_int;
@@ -273,7 +271,6 @@ unsafe extern "C" {
     static mut cNMETAL: c_int;
 
     // libc / curses
-    fn new_item() -> *mut CThing;
     fn malloc(size: usize) -> *mut c_void;
     fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
     fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
@@ -297,12 +294,10 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
     tp as *mut CThingObject
 }
 
-/// Convert a ZST/single-address `extern "C" fn()` daemon callback into the
-/// `fn(c_int)` slot representation used by `d_list` (matches daemon.rs's
-/// transmute convention for storing C void* pointers).
+/// Wrap a daemon callback in the nullable function-pointer representation.
 #[inline]
 unsafe fn fn_to_dfunc(f: unsafe extern "C" fn()) -> DFunc {
-    std::mem::transmute::<unsafe extern "C" fn(), DFunc>(f)
+    Some(f)
 }
 
 // ─── Low-level primitives ────────────────────────────────────────────────────
@@ -713,7 +708,11 @@ unsafe fn rs_write_string(savef: *mut CFile, s: *const c_char) -> c_int {
         return WRITE_ERROR;
     }
 
-    let len: c_int = if s.is_null() { 0 } else { strlen(s) as c_int + 1 };
+    let len: c_int = if s.is_null() {
+        0
+    } else {
+        strlen(s) as c_int + 1
+    };
 
     let _ = rs_write_int(savef, len);
     let _ = rs_write_chars(savef, s as *mut c_char, len);
@@ -1162,7 +1161,12 @@ unsafe fn rs_write_potions(savef: *mut CFile) -> c_int {
 
     let mut i = 0;
     while i < MAXPOTIONS {
-        let _ = rs_write_string_index(savef, (&raw mut rainbow) as *mut *mut c_char, cNCOLORS, p_colors[i]);
+        let _ = rs_write_string_index(
+            savef,
+            (&raw mut rainbow) as *mut *mut c_char,
+            cNCOLORS,
+            p_colors[i],
+        );
         i += 1;
     }
 
@@ -1179,7 +1183,12 @@ unsafe fn rs_read_potions(inf: *mut CFile) -> c_int {
 
     let mut i = 0;
     while i < MAXPOTIONS {
-        let _ = rs_read_string_index(inf, (&raw mut rainbow) as *mut *mut c_char, cNCOLORS, &mut p_colors[i]);
+        let _ = rs_read_string_index(
+            inf,
+            (&raw mut rainbow) as *mut *mut c_char,
+            cNCOLORS,
+            &mut p_colors[i],
+        );
         i += 1;
     }
 
@@ -1196,7 +1205,12 @@ unsafe fn rs_write_rings(savef: *mut CFile) -> c_int {
 
     let mut i = 0;
     while i < MAXRINGS {
-        let _ = rs_write_stone_index(savef, (&raw const stones) as *const CStone, cNSTONES, r_stones[i]);
+        let _ = rs_write_stone_index(
+            savef,
+            (&raw const stones) as *const CStone,
+            cNSTONES,
+            r_stones[i],
+        );
         i += 1;
     }
 
@@ -1213,7 +1227,12 @@ unsafe fn rs_read_rings(inf: *mut CFile) -> c_int {
 
     let mut i = 0;
     while i < MAXRINGS {
-        let _ = rs_read_stone_index(inf, (&raw const stones) as *const CStone, cNSTONES, &mut r_stones[i]);
+        let _ = rs_read_stone_index(
+            inf,
+            (&raw const stones) as *const CStone,
+            cNSTONES,
+            &mut r_stones[i],
+        );
         i += 1;
     }
 
@@ -1232,10 +1251,20 @@ unsafe fn rs_write_sticks(savef: *mut CFile) -> c_int {
     while i < MAXSTICKS {
         if strcmp(ws_type[i], c"staff".as_ptr()) == 0 {
             let _ = rs_write_int(savef, 0);
-            let _ = rs_write_string_index(savef, (&raw mut wood) as *mut *mut c_char, cNWOOD, ws_made[i]);
+            let _ = rs_write_string_index(
+                savef,
+                (&raw mut wood) as *mut *mut c_char,
+                cNWOOD,
+                ws_made[i],
+            );
         } else {
             let _ = rs_write_int(savef, 1);
-            let _ = rs_write_string_index(savef, (&raw mut metal) as *mut *mut c_char, cNMETAL, ws_made[i]);
+            let _ = rs_write_string_index(
+                savef,
+                (&raw mut metal) as *mut *mut c_char,
+                cNMETAL,
+                ws_made[i],
+            );
         }
         i += 1;
     }
@@ -1258,10 +1287,20 @@ unsafe fn rs_read_sticks(inf: *mut CFile) -> c_int {
         let _ = rs_read_int(inf, &mut list);
 
         if list == 0 {
-            let _ = rs_read_string_index(inf, (&raw mut wood) as *mut *mut c_char, cNWOOD, &mut ws_made[i as usize]);
+            let _ = rs_read_string_index(
+                inf,
+                (&raw mut wood) as *mut *mut c_char,
+                cNWOOD,
+                &mut ws_made[i as usize],
+            );
             ws_type[i as usize] = c"staff".as_ptr() as *mut c_char;
         } else {
-            let _ = rs_read_string_index(inf, (&raw mut metal) as *mut *mut c_char, cNMETAL, &mut ws_made[i as usize]);
+            let _ = rs_read_string_index(
+                inf,
+                (&raw mut metal) as *mut *mut c_char,
+                cNMETAL,
+                &mut ws_made[i as usize],
+            );
             ws_type[i as usize] = c"wand".as_ptr() as *mut c_char;
         }
         i += 1;
@@ -1703,7 +1742,11 @@ unsafe fn rs_read_object_list(inf: *mut CFile, list: *mut *mut CThing) -> c_int 
     read_stat()
 }
 
-unsafe fn rs_write_object_reference(savef: *mut CFile, list: *mut CThing, item: *mut CThing) -> c_int {
+unsafe fn rs_write_object_reference(
+    savef: *mut CFile,
+    list: *mut CThing,
+    item: *mut CThing,
+) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1713,7 +1756,11 @@ unsafe fn rs_write_object_reference(savef: *mut CFile, list: *mut CThing, item: 
     rs_write_int(savef, i)
 }
 
-unsafe fn rs_read_object_reference(inf: *mut CFile, list: *mut CThing, item: *mut *mut CThing) -> c_int {
+unsafe fn rs_read_object_reference(
+    inf: *mut CFile,
+    list: *mut CThing,
+    item: *mut *mut CThing,
+) -> c_int {
     let mut i: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -2019,7 +2066,11 @@ unsafe fn rs_fix_thing_list(list: *mut CThing) {
     }
 }
 
-unsafe fn rs_write_thing_reference(savef: *mut CFile, list: *mut CThing, item: *mut CThing) -> c_int {
+unsafe fn rs_write_thing_reference(
+    savef: *mut CFile,
+    list: *mut CThing,
+    item: *mut CThing,
+) -> c_int {
     let mut i: c_int;
 
     if WRITE_ERROR != 0 {
@@ -2036,7 +2087,11 @@ unsafe fn rs_write_thing_reference(savef: *mut CFile, list: *mut CThing, item: *
     WRITE_ERROR
 }
 
-unsafe fn rs_read_thing_reference(inf: *mut CFile, list: *mut CThing, item: *mut *mut CThing) -> c_int {
+unsafe fn rs_read_thing_reference(
+    inf: *mut CFile,
+    list: *mut CThing,
+    item: *mut *mut CThing,
+) -> c_int {
     let mut i: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -2119,7 +2174,7 @@ unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
         let _ = rs_write_boolean(savef, lvl.flags.passage[idx] as c_int);
         let _ = rs_write_boolean(savef, lvl.flags.seen[idx] as c_int);
         let _ = rs_write_char(savef, lvl.flags.passnum[idx] as c_char);
-        let _ = rs_write_char(savef, lvl.flags.trap[idx] as c_char);
+        let _ = rs_write_char(savef, lvl.flags.trap[idx] as u8 as c_char);
         // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
         let place_idx = ((x as usize) << 5) + (y as usize);
         let _ = rs_write_thing_reference(savef, mlist, crate::game::places[place_idx].p_monst);
@@ -2162,13 +2217,14 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
         let _ = rs_read_char(inf, &mut trap_kind);
         let _ = rs_read_thing_reference(inf, mlist, &mut monst);
 
-        let tile = crate::level::Tile::from_u8(tile_disc as u8).unwrap_or(crate::level::Tile::Empty);
+        let tile =
+            crate::level::Tile::from_u8(tile_disc as u8).unwrap_or(crate::level::Tile::Empty);
         let _ = lvl.map.set(y as usize, x as usize, tile);
         lvl.flags.real[idx] = real != 0;
         lvl.flags.passage[idx] = passage != 0;
         lvl.flags.seen[idx] = seen != 0;
         lvl.flags.passnum[idx] = passnum as u8;
-        lvl.flags.trap[idx] = trap_kind as u8;
+        lvl.flags.trap[idx] = crate::level::Trap::from_raw(trap_kind as u8);
 
         // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
         let place_idx = ((x as usize) << 5) + (y as usize);
@@ -2179,7 +2235,6 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
 
     read_stat()
 }
-
 
 // ─── Whole-game save / restore ───────────────────────────────────────────────
 
@@ -2196,7 +2251,7 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
 /// n_objs, ntraps, hungry_state, inpack, inv_type, level, max_level,
 /// mpos, no_food, a_class, count, food_left, lastscore, no_command,
 /// no_move, purse, quiet, vf_hit, dnum, seed, e_levels, delta, oldpos,
-/// stairs, player, cur_armor, cur_ring, cur_weapon, l_last_pick,
+/// stairs, player, equipment slots, l_last_pick,
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
 /// scr_info, weap_info, ws_info, d_list, total, between, nh, group,
@@ -2207,44 +2262,49 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
         return WRITE_ERROR;
     }
 
-    let _ = rs_write_boolean(savef, after as c_int);             /* 1  */ /* extern.c */
-    let _ = rs_write_boolean(savef, again as c_int);             /* 2  */
-    let _ = rs_write_int(savef, noscore);                        /* 3  */
-    let _ = rs_write_boolean(savef, seenstairs as c_int);        /* 4  */
-    let _ = rs_write_boolean(savef, amulet as c_int);            /* 5  */
-    let _ = rs_write_boolean(savef, door_stop as c_int);         /* 6  */
-    let _ = rs_write_boolean(savef, fight_flush as c_int);       /* 7  */
-    let _ = rs_write_boolean(savef, firstmove as c_int);         /* 8  */
-    let _ = rs_write_boolean(savef, got_ltc as c_int);           /* 9  */
-    let _ = rs_write_boolean(savef, has_hit as c_int);           /* 10 */
-    let _ = rs_write_boolean(savef, in_shell as c_int);          /* 11 */
-    let _ = rs_write_boolean(savef, inv_describe as c_int);      /* 12 */
-    let _ = rs_write_boolean(savef, jump as c_int);              /* 13 */
-    let _ = rs_write_boolean(savef, kamikaze as c_int);          /* 14 */
-    let _ = rs_write_boolean(savef, lower_msg as c_int);         /* 15 */
-    let _ = rs_write_boolean(savef, move_on as c_int);           /* 16 */
-    let _ = rs_write_boolean(savef, msg_esc as c_int);           /* 17 */
-    let _ = rs_write_boolean(savef, passgo as c_int);            /* 18 */
-    let _ = rs_write_boolean(savef, playing as c_int);           /* 19 */
-    let _ = rs_write_boolean(savef, q_comm as c_int);            /* 20 */
-    let _ = rs_write_boolean(savef, running as c_int);           /* 21 */
-    let _ = rs_write_boolean(savef, save_msg as c_int);          /* 22 */
-    let _ = rs_write_boolean(savef, see_floor as c_int);         /* 23 */
-    let _ = rs_write_boolean(savef, stat_msg as c_int);          /* 24 */
-    let _ = rs_write_boolean(savef, terse as c_int);             /* 25 */
-    let _ = rs_write_boolean(savef, to_death as c_int);          /* 26 */
-    let _ = rs_write_boolean(savef, tombstone as c_int);         /* 27 */
+    let _ = rs_write_boolean(savef, after as c_int); /* 1  */
+    /* extern.c */
+    let _ = rs_write_boolean(savef, again as c_int); /* 2  */
+    let _ = rs_write_int(savef, noscore); /* 3  */
+    let _ = rs_write_boolean(savef, seenstairs as c_int); /* 4  */
+    let _ = rs_write_boolean(savef, amulet as c_int); /* 5  */
+    let _ = rs_write_boolean(savef, door_stop as c_int); /* 6  */
+    let _ = rs_write_boolean(savef, fight_flush as c_int); /* 7  */
+    let _ = rs_write_boolean(savef, firstmove as c_int); /* 8  */
+    let _ = rs_write_boolean(savef, got_ltc as c_int); /* 9  */
+    let _ = rs_write_boolean(savef, has_hit as c_int); /* 10 */
+    let _ = rs_write_boolean(savef, in_shell as c_int); /* 11 */
+    let _ = rs_write_boolean(savef, inv_describe as c_int); /* 12 */
+    let _ = rs_write_boolean(savef, jump as c_int); /* 13 */
+    let _ = rs_write_boolean(savef, kamikaze as c_int); /* 14 */
+    let _ = rs_write_boolean(savef, lower_msg as c_int); /* 15 */
+    let _ = rs_write_boolean(savef, move_on as c_int); /* 16 */
+    let _ = rs_write_boolean(savef, msg_esc as c_int); /* 17 */
+    let _ = rs_write_boolean(savef, passgo as c_int); /* 18 */
+    let _ = rs_write_boolean(savef, playing as c_int); /* 19 */
+    let _ = rs_write_boolean(savef, q_comm as c_int); /* 20 */
+    let _ = rs_write_boolean(savef, running as c_int); /* 21 */
+    let _ = rs_write_boolean(savef, save_msg as c_int); /* 22 */
+    let _ = rs_write_boolean(savef, see_floor as c_int); /* 23 */
+    let _ = rs_write_boolean(savef, stat_msg as c_int); /* 24 */
+    let _ = rs_write_boolean(savef, terse as c_int); /* 25 */
+    let _ = rs_write_boolean(savef, to_death as c_int); /* 26 */
+    let _ = rs_write_boolean(savef, tombstone as c_int); /* 27 */
     if MASTER {
-        let _ = rs_write_int(savef, wizard);                     /* 28 */
+        let _ = rs_write_int(savef, wizard); /* 28 */
     } else {
-        let _ = rs_write_int(savef, 0);                          /* 28 */
+        let _ = rs_write_int(savef, 0); /* 28 */
     }
     let _ = rs_write_booleans(savef, (&raw mut pack_used) as *mut c_uchar, 26); /* 29 */
     let _ = rs_write_char(savef, dir_ch);
     let _ = rs_write_chars(savef, (&raw mut file_name) as *mut c_char, MAXSTR as c_int);
     let _ = rs_write_chars(savef, (&raw mut huh) as *mut c_char, MAXSTR as c_int);
     let _ = rs_write_potions(savef);
-    let _ = rs_write_chars(savef, (&raw mut prbuf) as *mut c_char, (2 * MAXSTR) as c_int);
+    let _ = rs_write_chars(
+        savef,
+        (&raw mut prbuf) as *mut c_char,
+        (2 * MAXSTR) as c_int,
+    );
     let _ = rs_write_rings(savef);
     let _ = rs_write_string(savef, release);
     let _ = rs_write_char(savef, runch);
@@ -2287,10 +2347,22 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_coord(savef, stairs);
 
     let _ = rs_write_thing(savef, &raw mut player);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, cur_armor);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, cur_ring[0]);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, cur_ring[1]);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, cur_weapon);
+    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, EQUIPMENT.armor());
+    let _ = rs_write_object_reference(
+        savef,
+        (*thing_t(&raw mut player)).t_pack,
+        EQUIPMENT.left_ring(),
+    );
+    let _ = rs_write_object_reference(
+        savef,
+        (*thing_t(&raw mut player)).t_pack,
+        EQUIPMENT.right_ring(),
+    );
+    let _ = rs_write_object_reference(
+        savef,
+        (*thing_t(&raw mut player)).t_pack,
+        EQUIPMENT.weapon(),
+    );
     let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, l_last_pick);
     let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, last_pick);
 
@@ -2304,24 +2376,60 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_room_reference(savef, oldrp);
     let _ = rs_write_rooms(savef, (&raw mut passages) as *mut CRoom, MAXPASS as c_int);
 
-    let _ = rs_write_monsters(savef, (&raw mut monsters) as *mut CMonsterState, MAXMONSTERS as c_int);
-    let _ = rs_write_obj_info(savef, (&raw mut things) as *mut CObjInfo, NUMTHINGS as c_int);
-    let _ = rs_write_obj_info(savef, (&raw mut arm_info) as *mut CObjInfo, MAXARMORS as c_int);
-    let _ = rs_write_obj_info(savef, (&raw mut pot_info) as *mut CObjInfo, MAXPOTIONS as c_int);
-    let _ = rs_write_obj_info(savef, (&raw mut ring_info) as *mut CObjInfo, MAXRINGS as c_int);
-    let _ = rs_write_obj_info(savef, (&raw mut scr_info) as *mut CObjInfo, MAXSCROLLS as c_int);
-    let _ = rs_write_obj_info(savef, (&raw mut weap_info) as *mut CObjInfo, (MAXWEAPONS + 1) as c_int);
-    let _ = rs_write_obj_info(savef, (&raw mut ws_info) as *mut CObjInfo, MAXSTICKS as c_int);
+    let _ = rs_write_monsters(
+        savef,
+        (&raw mut monsters) as *mut CMonsterState,
+        MAXMONSTERS as c_int,
+    );
+    let _ = rs_write_obj_info(
+        savef,
+        (&raw mut things) as *mut CObjInfo,
+        NUMTHINGS as c_int,
+    );
+    let _ = rs_write_obj_info(
+        savef,
+        (&raw mut arm_info) as *mut CObjInfo,
+        MAXARMORS as c_int,
+    );
+    let _ = rs_write_obj_info(
+        savef,
+        (&raw mut pot_info) as *mut CObjInfo,
+        MAXPOTIONS as c_int,
+    );
+    let _ = rs_write_obj_info(
+        savef,
+        (&raw mut ring_info) as *mut CObjInfo,
+        MAXRINGS as c_int,
+    );
+    let _ = rs_write_obj_info(
+        savef,
+        (&raw mut scr_info) as *mut CObjInfo,
+        MAXSCROLLS as c_int,
+    );
+    let _ = rs_write_obj_info(
+        savef,
+        (&raw mut weap_info) as *mut CObjInfo,
+        (MAXWEAPONS + 1) as c_int,
+    );
+    let _ = rs_write_obj_info(
+        savef,
+        (&raw mut ws_info) as *mut CObjInfo,
+        MAXSTICKS as c_int,
+    );
 
-    let _ = rs_write_daemons(savef, (&raw mut d_list) as *mut CDelayedAction, MAXDAEMONS as c_int);
+    let _ = rs_write_daemons(
+        savef,
+        (&raw mut d_list) as *mut CDelayedAction,
+        MAXDAEMONS as c_int,
+    );
     if MASTER {
-        let _ = rs_write_int(savef, total);                     /* 5.4-list.c */
+        let _ = rs_write_int(savef, allocated_count()); /* 5.4-list.c */
     } else {
         let _ = rs_write_int(savef, 0);
     }
-    let _ = rs_write_int(savef, between);                        /* 5.4-daemons.c */
-    let _ = rs_write_coord(savef, nh);                           /* 5.4-move.c */
-    let _ = rs_write_int(savef, group);                          /* 5.4-weapons.rs */
+    let _ = rs_write_int(savef, between); /* 5.4-daemons.c */
+    let _ = rs_write_coord(savef, nh); /* 5.4-move.c */
+    let _ = rs_write_int(savef, group); /* 5.4-weapons.rs */
 
     let _ = rs_write_window(savef, stdscr as *mut CWindow);
 
@@ -2342,7 +2450,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 /// n_objs, ntraps, hungry_state, inpack, inv_type, level, max_level,
 /// mpos, no_food, a_class, count, food_left, lastscore, no_command,
 /// no_move, purse, quiet, vf_hit, dnum, seed, e_levels, delta, oldpos,
-/// stairs, player, cur_armor, cur_ring, cur_weapon, l_last_pick,
+/// stairs, player, equipment slots, l_last_pick,
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
 /// scr_info, weap_info, ws_info, d_list, total, between, nh, group,
@@ -2355,37 +2463,38 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
         return read_stat();
     }
 
-    let _ = rs_read_boolean(inf, &mut after);               /* 1  */ /* extern.c */
-    let _ = rs_read_boolean(inf, &mut again);               /* 2  */
-    let _ = rs_read_int(inf, &mut noscore);                 /* 3  */
-    let _ = rs_read_boolean(inf, &mut seenstairs);          /* 4  */
-    let _ = rs_read_boolean(inf, &mut amulet);              /* 5  */
-    let _ = rs_read_boolean(inf, &mut door_stop);           /* 6  */
-    let _ = rs_read_boolean(inf, &mut fight_flush);         /* 7  */
-    let _ = rs_read_boolean(inf, &mut firstmove);           /* 8  */
-    let _ = rs_read_boolean(inf, &mut got_ltc);             /* 9  */
-    let _ = rs_read_boolean(inf, &mut has_hit);             /* 10 */
-    let _ = rs_read_boolean(inf, &mut in_shell);            /* 11 */
-    let _ = rs_read_boolean(inf, &mut inv_describe);        /* 12 */
-    let _ = rs_read_boolean(inf, &mut jump);                /* 13 */
-    let _ = rs_read_boolean(inf, &mut kamikaze);            /* 14 */
-    let _ = rs_read_boolean(inf, &mut lower_msg);           /* 15 */
-    let _ = rs_read_boolean(inf, &mut move_on);             /* 16 */
-    let _ = rs_read_boolean(inf, &mut msg_esc);             /* 17 */
-    let _ = rs_read_boolean(inf, &mut passgo);              /* 18 */
-    let _ = rs_read_boolean(inf, &mut playing);             /* 19 */
-    let _ = rs_read_boolean(inf, &mut q_comm);              /* 20 */
-    let _ = rs_read_boolean(inf, &mut running);             /* 21 */
-    let _ = rs_read_boolean(inf, &mut save_msg);            /* 22 */
-    let _ = rs_read_boolean(inf, &mut see_floor);           /* 23 */
-    let _ = rs_read_boolean(inf, &mut stat_msg);            /* 24 */
-    let _ = rs_read_boolean(inf, &mut terse);               /* 25 */
-    let _ = rs_read_boolean(inf, &mut to_death);            /* 26 */
-    let _ = rs_read_boolean(inf, &mut tombstone);           /* 27 */
+    let _ = rs_read_boolean(inf, &mut after); /* 1  */
+    /* extern.c */
+    let _ = rs_read_boolean(inf, &mut again); /* 2  */
+    let _ = rs_read_int(inf, &mut noscore); /* 3  */
+    let _ = rs_read_boolean(inf, &mut seenstairs); /* 4  */
+    let _ = rs_read_boolean(inf, &mut amulet); /* 5  */
+    let _ = rs_read_boolean(inf, &mut door_stop); /* 6  */
+    let _ = rs_read_boolean(inf, &mut fight_flush); /* 7  */
+    let _ = rs_read_boolean(inf, &mut firstmove); /* 8  */
+    let _ = rs_read_boolean(inf, &mut got_ltc); /* 9  */
+    let _ = rs_read_boolean(inf, &mut has_hit); /* 10 */
+    let _ = rs_read_boolean(inf, &mut in_shell); /* 11 */
+    let _ = rs_read_boolean(inf, &mut inv_describe); /* 12 */
+    let _ = rs_read_boolean(inf, &mut jump); /* 13 */
+    let _ = rs_read_boolean(inf, &mut kamikaze); /* 14 */
+    let _ = rs_read_boolean(inf, &mut lower_msg); /* 15 */
+    let _ = rs_read_boolean(inf, &mut move_on); /* 16 */
+    let _ = rs_read_boolean(inf, &mut msg_esc); /* 17 */
+    let _ = rs_read_boolean(inf, &mut passgo); /* 18 */
+    let _ = rs_read_boolean(inf, &mut playing); /* 19 */
+    let _ = rs_read_boolean(inf, &mut q_comm); /* 20 */
+    let _ = rs_read_boolean(inf, &mut running); /* 21 */
+    let _ = rs_read_boolean(inf, &mut save_msg); /* 22 */
+    let _ = rs_read_boolean(inf, &mut see_floor); /* 23 */
+    let _ = rs_read_boolean(inf, &mut stat_msg); /* 24 */
+    let _ = rs_read_boolean(inf, &mut terse); /* 25 */
+    let _ = rs_read_boolean(inf, &mut to_death); /* 26 */
+    let _ = rs_read_boolean(inf, &mut tombstone); /* 27 */
     if MASTER {
-        let _ = rs_read_int(inf, &mut wizard);              /* 28 */
+        let _ = rs_read_int(inf, &mut wizard); /* 28 */
     } else {
-        let _ = rs_read_int(inf, &mut dummyint);            /* 28 */
+        let _ = rs_read_int(inf, &mut dummyint); /* 28 */
     }
     let _ = rs_read_booleans(inf, (&raw mut pack_used) as *mut c_uchar, 26); /* 29 */
     let _ = rs_read_char(inf, &mut dir_ch);
@@ -2435,11 +2544,36 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_coord(inf, &mut stairs);
 
     let _ = rs_read_thing(inf, &raw mut player);
-    let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut cur_armor);
-    let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut cur_ring[0]);
-    let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut cur_ring[1]);
-    let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut cur_weapon);
-    let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut l_last_pick);
+    let mut equipment_item = std::ptr::null_mut();
+    let _ = rs_read_object_reference(
+        inf,
+        (*thing_t(&raw mut player)).t_pack,
+        &raw mut equipment_item,
+    );
+    EQUIPMENT.set_armor(equipment_item);
+    let _ = rs_read_object_reference(
+        inf,
+        (*thing_t(&raw mut player)).t_pack,
+        &raw mut equipment_item,
+    );
+    EQUIPMENT.set_left_ring(equipment_item);
+    let _ = rs_read_object_reference(
+        inf,
+        (*thing_t(&raw mut player)).t_pack,
+        &raw mut equipment_item,
+    );
+    EQUIPMENT.set_right_ring(equipment_item);
+    let _ = rs_read_object_reference(
+        inf,
+        (*thing_t(&raw mut player)).t_pack,
+        &raw mut equipment_item,
+    );
+    EQUIPMENT.set_weapon(equipment_item);
+    let _ = rs_read_object_reference(
+        inf,
+        (*thing_t(&raw mut player)).t_pack,
+        &raw mut l_last_pick,
+    );
     let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut last_pick);
 
     let _ = rs_read_object_list(inf, &raw mut lvl_obj);
@@ -2454,20 +2588,49 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_room_reference(inf, &raw mut oldrp);
     let _ = rs_read_rooms(inf, (&raw mut passages) as *mut CRoom, MAXPASS as c_int);
 
-    let _ = rs_read_monsters(inf, (&raw mut monsters) as *mut CMonsterState, MAXMONSTERS as c_int);
+    let _ = rs_read_monsters(
+        inf,
+        (&raw mut monsters) as *mut CMonsterState,
+        MAXMONSTERS as c_int,
+    );
     let _ = rs_read_obj_info(inf, (&raw mut things) as *mut CObjInfo, NUMTHINGS as c_int);
-    let _ = rs_read_obj_info(inf, (&raw mut arm_info) as *mut CObjInfo, MAXARMORS as c_int);
-    let _ = rs_read_obj_info(inf, (&raw mut pot_info) as *mut CObjInfo, MAXPOTIONS as c_int);
-    let _ = rs_read_obj_info(inf, (&raw mut ring_info) as *mut CObjInfo, MAXRINGS as c_int);
-    let _ = rs_read_obj_info(inf, (&raw mut scr_info) as *mut CObjInfo, MAXSCROLLS as c_int);
-    let _ = rs_read_obj_info(inf, (&raw mut weap_info) as *mut CObjInfo, (MAXWEAPONS + 1) as c_int);
+    let _ = rs_read_obj_info(
+        inf,
+        (&raw mut arm_info) as *mut CObjInfo,
+        MAXARMORS as c_int,
+    );
+    let _ = rs_read_obj_info(
+        inf,
+        (&raw mut pot_info) as *mut CObjInfo,
+        MAXPOTIONS as c_int,
+    );
+    let _ = rs_read_obj_info(
+        inf,
+        (&raw mut ring_info) as *mut CObjInfo,
+        MAXRINGS as c_int,
+    );
+    let _ = rs_read_obj_info(
+        inf,
+        (&raw mut scr_info) as *mut CObjInfo,
+        MAXSCROLLS as c_int,
+    );
+    let _ = rs_read_obj_info(
+        inf,
+        (&raw mut weap_info) as *mut CObjInfo,
+        (MAXWEAPONS + 1) as c_int,
+    );
     let _ = rs_read_obj_info(inf, (&raw mut ws_info) as *mut CObjInfo, MAXSTICKS as c_int);
 
-    let _ = rs_read_daemons(inf, (&raw mut d_list) as *mut CDelayedAction, MAXDAEMONS as c_int);
-    let _ = rs_read_int(inf, &mut dummyint);                  /* total */ /* 5.4-list.c */
-    let _ = rs_read_int(inf, &mut between);                    /* 5.4-daemons.c */
-    let _ = rs_read_coord(inf, &mut nh);                       /* 5.4-move.c */
-    let _ = rs_read_int(inf, &mut group);                      /* 5.4-weapons.rs */
+    let _ = rs_read_daemons(
+        inf,
+        (&raw mut d_list) as *mut CDelayedAction,
+        MAXDAEMONS as c_int,
+    );
+    let _ = rs_read_int(inf, &mut dummyint); /* total */
+    /* 5.4-list.c */
+    let _ = rs_read_int(inf, &mut between); /* 5.4-daemons.c */
+    let _ = rs_read_coord(inf, &mut nh); /* 5.4-move.c */
+    let _ = rs_read_int(inf, &mut group); /* 5.4-weapons.rs */
 
     let _ = rs_read_window(inf, stdscr as *mut CWindow);
 

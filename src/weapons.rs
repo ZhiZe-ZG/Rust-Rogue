@@ -1,10 +1,18 @@
-use crate::rnd::rnd;
+use crate::chase::cansee;
 use crate::curses as cur;
-use crate::io::{addmsg_str, msg_str};
+use crate::fight::fight;
+use crate::game::EQUIPMENT;
+use crate::io::{addmsg_str, endmsg, msg_str, step_ok};
+use crate::misc::{is_current, show_floor};
+use crate::pack::{get_item, leave_pack};
+use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::draw::{self, chat_at, place_at, winat as draw_winat};
+use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::thing_list::{attach, discard};
+use crate::things::{dropcheck, inv_name};
 
 const NO_WEAPON: c_int = -1;
 
@@ -20,79 +28,6 @@ const MAXWEAPONS: usize = 9;
 
 const ISMISL: c_int = 0o000004;
 const ISMANY: c_int = 0o000010;
-
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CCoord {
-    pub x: c_int,
-    pub y: c_int,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CStats {
-    pub s_str: c_uint,
-    pub s_exp: c_int,
-    pub s_lvl: c_int,
-    pub s_arm: c_int,
-    pub s_hpt: c_int,
-    pub s_dmg: [c_char; 13],
-    pub s_maxhp: c_int,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CThingMonster {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
-    pub t_pos: CCoord,
-    pub t_turn: c_uchar,
-    pub t_type: c_char,
-    pub t_disguise: c_char,
-    pub t_oldch: c_char,
-    pub t_dest: *mut CCoord,
-    pub t_flags: c_short,
-    pub t_stats: CStats,
-    pub t_room: *mut c_char,
-    pub t_pack: *mut CThing,
-    pub t_reserved: c_int,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CThingObject {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
-    pub o_type: c_int,
-    pub o_pos: CCoord,
-    pub o_text: *mut c_char,
-    pub o_launch: c_int,
-    pub o_packch: c_char,
-    pub o_damage: [c_char; 8],
-    pub o_hurldmg: [c_char; 8],
-    pub o_count: c_int,
-    pub o_which: c_int,
-    pub o_hplus: c_int,
-    pub o_dplus: c_int,
-    pub o_arm: c_int,
-    pub o_flags: c_int,
-    pub o_group: c_int,
-    pub o_label: *mut c_char,
-}
-
-#[repr(C)]
-pub union CThing {
-    pub t: CThingMonster,
-    pub o: CThingObject,
-}
-
-#[repr(C)]
-pub struct CPlace {
-    pub p_monst: *mut CThing,
-}
 
 #[repr(C)]
 pub struct CObjInfo {
@@ -112,15 +47,60 @@ struct InitWeap {
 }
 
 static INIT_DAM: [InitWeap; MAXWEAPONS] = [
-    InitWeap { iw_dam: b"2x4\0", iw_hrl: b"1x3\0", iw_launch: NO_WEAPON, iw_flags: 0 },
-    InitWeap { iw_dam: b"3x4\0", iw_hrl: b"1x2\0", iw_launch: NO_WEAPON, iw_flags: 0 },
-    InitWeap { iw_dam: b"1x1\0", iw_hrl: b"1x1\0", iw_launch: NO_WEAPON, iw_flags: 0 },
-    InitWeap { iw_dam: b"1x1\0", iw_hrl: b"2x3\0", iw_launch: BOW, iw_flags: ISMANY | ISMISL },
-    InitWeap { iw_dam: b"1x6\0", iw_hrl: b"1x4\0", iw_launch: NO_WEAPON, iw_flags: ISMISL | ISMISL },
-    InitWeap { iw_dam: b"4x4\0", iw_hrl: b"1x2\0", iw_launch: NO_WEAPON, iw_flags: 0 },
-    InitWeap { iw_dam: b"1x1\0", iw_hrl: b"1x3\0", iw_launch: NO_WEAPON, iw_flags: ISMANY | ISMISL },
-    InitWeap { iw_dam: b"1x2\0", iw_hrl: b"2x4\0", iw_launch: NO_WEAPON, iw_flags: ISMANY | ISMISL },
-    InitWeap { iw_dam: b"2x3\0", iw_hrl: b"1x6\0", iw_launch: NO_WEAPON, iw_flags: ISMISL },
+    InitWeap {
+        iw_dam: b"2x4\0",
+        iw_hrl: b"1x3\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: 0,
+    },
+    InitWeap {
+        iw_dam: b"3x4\0",
+        iw_hrl: b"1x2\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: 0,
+    },
+    InitWeap {
+        iw_dam: b"1x1\0",
+        iw_hrl: b"1x1\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: 0,
+    },
+    InitWeap {
+        iw_dam: b"1x1\0",
+        iw_hrl: b"2x3\0",
+        iw_launch: BOW,
+        iw_flags: ISMANY | ISMISL,
+    },
+    InitWeap {
+        iw_dam: b"1x6\0",
+        iw_hrl: b"1x4\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: ISMISL | ISMISL,
+    },
+    InitWeap {
+        iw_dam: b"4x4\0",
+        iw_hrl: b"1x2\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: 0,
+    },
+    InitWeap {
+        iw_dam: b"1x1\0",
+        iw_hrl: b"1x3\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: ISMANY | ISMISL,
+    },
+    InitWeap {
+        iw_dam: b"1x2\0",
+        iw_hrl: b"2x4\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: ISMANY | ISMISL,
+    },
+    InitWeap {
+        iw_dam: b"2x3\0",
+        iw_hrl: b"1x6\0",
+        iw_launch: NO_WEAPON,
+        iw_flags: ISMISL,
+    },
 ];
 
 #[no_mangle]
@@ -135,22 +115,9 @@ unsafe extern "C" {
     static mut has_hit: c_uchar;
     static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
-    static mut cur_weapon: *mut CThing;
     static mut lvl_obj: *mut CThing;
     static mut weap_info: [CObjInfo; MAXWEAPONS + 1];
 
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn dropcheck(obj: *mut CThing) -> c_uchar;
-    fn is_current(obj: *mut CThing) -> c_uchar;
-    fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
-    fn cansee(y: c_int, x: c_int) -> c_uchar;
-    fn show_floor() -> c_uchar;
-    fn step_ok(ch: c_int) -> c_int;
-    fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int;
-    fn discard(item: *mut CThing);
-    fn _attach(list: *mut *mut CThing, item: *mut CThing);
-    fn endmsg() -> c_int;
-    fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
@@ -206,16 +173,18 @@ pub unsafe extern "C" fn missile(ydelta: c_int, xdelta: c_int) {
     if obj.is_null() {
         return;
     }
-    if dropcheck(obj) == 0 || is_current(obj) != 0 {
+    if dropcheck(obj) == 0 || is_current(obj) {
         return;
     }
 
-    obj = leave_pack(obj, TRUE, FALSE);
+    obj = leave_pack(obj, true as c_uchar, false as c_uchar);
     do_motion(obj, ydelta, xdelta);
 
     let o = thing_o(obj);
-    if moat((*o).o_pos.y, (*o).o_pos.x).is_null() || hit_monster((*o).o_pos.y, (*o).o_pos.x, obj) == 0 {
-        fall(obj, TRUE);
+    if moat((*o).o_pos.y, (*o).o_pos.x).is_null()
+        || hit_monster((*o).o_pos.y, (*o).o_pos.x, obj) == 0
+    {
+        fall(obj, true as c_uchar);
     }
 }
 
@@ -227,9 +196,12 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
 
     loop {
         let h = hero();
-        if ((*o).o_pos.x != h.x || (*o).o_pos.y != h.y) && cansee((*o).o_pos.y, (*o).o_pos.x) != 0 && terse == 0 {
+        if ((*o).o_pos.x != h.x || (*o).o_pos.y != h.y)
+            && cansee((*o).o_pos.y, (*o).o_pos.x) != 0
+            && terse == 0
+        {
             let mut ch = chat((*o).o_pos.y, (*o).o_pos.x);
-            if ch == FLOOR && show_floor() == 0 {
+            if ch == FLOOR && !show_floor() {
                 ch = ' ' as c_int;
             }
             cur::mvaddch((*o).o_pos.y, (*o).o_pos.x, ch as c_uint);
@@ -266,7 +238,7 @@ pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
             }
         }
 
-        _attach(&raw mut lvl_obj, obj);
+        attach(&raw mut lvl_obj, obj);
         return;
     }
 
@@ -317,14 +289,20 @@ pub unsafe extern "C" fn init_weapon(weap: *mut CThing, which: c_int) {
 #[no_mangle]
 pub unsafe extern "C" fn hit_monster(y: c_int, x: c_int, obj: *mut CThing) -> c_int {
     let mut mp = CCoord { x, y };
-    fight(&mut mp, obj, TRUE)
+    fight(&mut mp, obj, true as c_uchar)
 }
 
 /// Formats signed enchantment numbers for armor and weapons.
 #[no_mangle]
 pub unsafe extern "C" fn num(n1: c_int, n2: c_int, obj_type: c_char) -> *mut c_char {
     if obj_type == WEAPON {
-        let _ = snprintf((&raw mut NUMBUF) as *mut c_char, 10, c"%+d,%+d".as_ptr(), n1, n2);
+        let _ = snprintf(
+            (&raw mut NUMBUF) as *mut c_char,
+            10,
+            c"%+d,%+d".as_ptr(),
+            n1,
+            n2,
+        );
     } else {
         let _ = snprintf((&raw mut NUMBUF) as *mut c_char, 10, c"%+d".as_ptr(), n1);
     }
@@ -334,12 +312,12 @@ pub unsafe extern "C" fn num(n1: c_int, n2: c_int, obj_type: c_char) -> *mut c_c
 /// Equips a selected weapon after validating curses and item type constraints.
 #[no_mangle]
 pub unsafe extern "C" fn wield() {
-    let oweapon = cur_weapon;
-    if dropcheck(cur_weapon) == 0 {
-        cur_weapon = oweapon;
+    let oweapon = EQUIPMENT.weapon();
+    if dropcheck(EQUIPMENT.weapon()) == 0 {
+        EQUIPMENT.set_weapon(oweapon);
         return;
     }
-    cur_weapon = oweapon;
+    EQUIPMENT.set_weapon(oweapon);
 
     let obj = get_item(c"wield".as_ptr(), WEAPON as c_int);
     if obj.is_null() {
@@ -352,13 +330,13 @@ pub unsafe extern "C" fn wield() {
         after = 0;
         return;
     }
-    if is_current(obj) != 0 {
+    if is_current(obj) {
         after = 0;
         return;
     }
 
-    let sp = inv_name(obj, TRUE);
-    cur_weapon = obj;
+    let sp = inv_name(obj, true as c_uchar);
+    EQUIPMENT.set_weapon(obj);
     if terse == 0 {
         addmsg_str("you are now ");
     }
@@ -389,5 +367,9 @@ pub unsafe extern "C" fn fallpos(pos: *mut CCoord, newpos: *mut CCoord) -> c_uch
             }
         }
     }
-    if cnt != 0 { TRUE } else { FALSE }
+    if cnt != 0 {
+        true as c_uchar
+    } else {
+        false as c_uchar
+    }
 }

@@ -1,10 +1,15 @@
-use crate::rnd::rnd;
 use crate::player::{CThing, CThingObject};
+use crate::potions::invis_on;
+use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
-use crate::potions::invis_on;
 
-use crate::io::{addmsg_str, msg_str};
+use crate::game::EQUIPMENT;
+use crate::io::{addmsg_str, msg_str, readchar};
+use crate::misc::{aggravate, chg_str, is_current};
+use crate::pack::get_item;
+use crate::things::{dropcheck, inv_name};
+use crate::weapons::num;
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
@@ -38,18 +43,9 @@ const USES: [c_int; 14] = [
 ];
 
 unsafe extern "C" {
-    static mut cur_ring: [*mut CThing; 2];
     static mut terse: c_uchar;
     static mut mpos: c_int;
 
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn is_current(obj: *mut CThing) -> c_uchar;
-    fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
-    fn chg_str(amt: c_int);
-    fn aggravate();
-    fn dropcheck(obj: *mut CThing) -> c_uchar;
-    fn readchar() -> c_int;
-    fn num(n1: c_int, n2: c_int, obj_type: c_char) -> *mut c_char;
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
@@ -76,20 +72,20 @@ pub unsafe extern "C" fn ring_on() {
         return;
     }
 
-    if is_current(obj) != 0 {
+    if is_current(obj) {
         return;
     }
 
-    let ring = if cur_ring[LEFT].is_null() && cur_ring[RIGHT].is_null() {
+    let left_hand = if EQUIPMENT.left_ring().is_null() && EQUIPMENT.right_ring().is_null() {
         let hand = gethand();
         if hand < 0 {
             return;
         }
-        hand as usize
-    } else if cur_ring[LEFT].is_null() {
-        LEFT
-    } else if cur_ring[RIGHT].is_null() {
-        RIGHT
+        hand as usize == LEFT
+    } else if EQUIPMENT.left_ring().is_null() {
+        true
+    } else if EQUIPMENT.right_ring().is_null() {
+        false
     } else {
         if terse == 0 {
             msg_str("you already have a ring on each hand");
@@ -99,7 +95,11 @@ pub unsafe extern "C" fn ring_on() {
         return;
     };
 
-    cur_ring[ring] = obj;
+    if left_hand {
+        EQUIPMENT.set_left_ring(obj);
+    } else {
+        EQUIPMENT.set_right_ring(obj);
+    }
 
     match (*thing_o(obj)).o_which {
         R_ADDSTR => chg_str((*thing_o(obj)).o_arm),
@@ -121,27 +121,31 @@ pub unsafe extern "C" fn ring_on() {
 /// Removes a worn ring from the chosen hand after passing drop constraints.
 #[no_mangle]
 pub unsafe extern "C" fn ring_off() {
-    let ring = if cur_ring[LEFT].is_null() && cur_ring[RIGHT].is_null() {
+    let left_hand = if EQUIPMENT.left_ring().is_null() && EQUIPMENT.right_ring().is_null() {
         if terse != 0 {
             msg_str("no rings");
         } else {
             msg_str("you aren't wearing any rings");
         }
         return;
-    } else if cur_ring[LEFT].is_null() {
-        RIGHT
-    } else if cur_ring[RIGHT].is_null() {
-        LEFT
+    } else if EQUIPMENT.left_ring().is_null() {
+        false
+    } else if EQUIPMENT.right_ring().is_null() {
+        true
     } else {
         let hand = gethand();
         if hand < 0 {
             return;
         }
-        hand as usize
+        hand as usize == LEFT
     };
 
     mpos = 0;
-    let obj = cur_ring[ring];
+    let obj = if left_hand {
+        EQUIPMENT.left_ring()
+    } else {
+        EQUIPMENT.right_ring()
+    };
     if obj.is_null() {
         msg_str("not wearing such a ring");
         return;
@@ -195,7 +199,11 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
         return 0;
     }
 
-    let ring = cur_ring[hand_idx];
+    let ring = match hand_idx {
+        LEFT => EQUIPMENT.left_ring(),
+        RIGHT => EQUIPMENT.right_ring(),
+        _ => return 0,
+    };
     if ring.is_null() {
         return 0;
     }
@@ -216,8 +224,7 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
 }
 
 /// Returns bracketed ring bonus text for known stat-modifier rings.
-#[no_mangle]
-pub unsafe extern "C" fn ring_num(obj: *mut CThing) -> *mut c_char {
+unsafe fn ring_num(obj: *mut CThing) -> *mut c_char {
     if obj.is_null() {
         return c"".as_ptr() as *mut c_char;
     }

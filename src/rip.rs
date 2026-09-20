@@ -2,8 +2,13 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_ushort};
 
 use crate::curses as cur;
-use crate::globals::{allscore, Numname, numscores};
+use crate::globals::{allscore, numscores, Numname};
+use crate::io::wait_for;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
+use crate::mdport::{md_getuid, md_raw_standend, md_raw_standout};
+use crate::score::{rd_score, wr_score};
+use crate::startup::my_exit;
+use crate::things::inv_name;
 
 const MAXSTR: usize = 1024;
 
@@ -54,19 +59,10 @@ unsafe extern "C" {
 
     fn fgets(buf: *mut c_char, n: c_int, stream: *mut std::ffi::c_void) -> *mut c_char;
     fn getuid() -> c_uint;
-    fn inv_name(obj: *mut crate::player::CThing, is_weapon: c_uchar) -> *mut c_char;
-    fn md_getuid() -> c_uint;
-    fn md_raw_standend();
-    fn md_raw_standout();
     fn printf(fmt: *const c_char, ...) -> c_int;
-    fn rd_score(top_ten: *mut Score);
     fn signal(sig: c_int, handler: usize) -> usize;
-    fn wait_for(ch: c_char);
-    fn wr_score(top_ten: *mut Score);
     static mut stdscr: *mut std::ffi::c_void;
     static mut curscr: *mut std::ffi::c_void;
-
-    fn my_exit(st: c_int) -> !;
 }
 
 #[inline]
@@ -93,7 +89,10 @@ unsafe fn next_ptr(tp: *mut crate::player::CThing) -> *mut crate::player::CThing
 unsafe fn vowelstr(s: *const c_char) -> *const c_char {
     let s = CStr::from_ptr(s);
     let first = s.to_bytes().first().copied().unwrap_or_default();
-    if matches!(first, b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U') {
+    if matches!(
+        first,
+        b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U'
+    ) {
         c"n".as_ptr()
     } else {
         c"".as_ptr()
@@ -135,7 +134,8 @@ pub unsafe extern "C" fn killname(monst: c_char, doart: bool) -> *mut c_char {
     }
 
     if doart && article {
-        let prefix = CStr::from_ptr(vowelstr(CString::new(name.as_str()).unwrap().as_ptr())).to_string_lossy();
+        let prefix = CStr::from_ptr(vowelstr(CString::new(name.as_str()).unwrap().as_ptr()))
+            .to_string_lossy();
         let mut out = String::new();
         out.push_str("a");
         out.push_str(&prefix);
@@ -156,13 +156,39 @@ pub unsafe extern "C" fn killname(monst: c_char, doart: bool) -> *mut c_char {
 #[no_mangle]
 pub unsafe extern "C" fn death_monst() -> c_char {
     static POSS: [c_char; 33] = [
-        b'A' as c_char, b'B' as c_char, b'C' as c_char, b'D' as c_char, b'E' as c_char,
-        b'F' as c_char, b'G' as c_char, b'H' as c_char, b'I' as c_char, b'J' as c_char,
-        b'K' as c_char, b'L' as c_char, b'M' as c_char, b'N' as c_char, b'O' as c_char,
-        b'P' as c_char, b'Q' as c_char, b'R' as c_char, b'S' as c_char, b'T' as c_char,
-        b'U' as c_char, b'V' as c_char, b'W' as c_char, b'X' as c_char, b'Y' as c_char,
-        b'Z' as c_char, b'a' as c_char, b'b' as c_char, b'h' as c_char, b'd' as c_char,
-        b's' as c_char, b' ' as c_char, 0,
+        b'A' as c_char,
+        b'B' as c_char,
+        b'C' as c_char,
+        b'D' as c_char,
+        b'E' as c_char,
+        b'F' as c_char,
+        b'G' as c_char,
+        b'H' as c_char,
+        b'I' as c_char,
+        b'J' as c_char,
+        b'K' as c_char,
+        b'L' as c_char,
+        b'M' as c_char,
+        b'N' as c_char,
+        b'O' as c_char,
+        b'P' as c_char,
+        b'Q' as c_char,
+        b'R' as c_char,
+        b'S' as c_char,
+        b'T' as c_char,
+        b'U' as c_char,
+        b'V' as c_char,
+        b'W' as c_char,
+        b'X' as c_char,
+        b'Y' as c_char,
+        b'Z' as c_char,
+        b'a' as c_char,
+        b'b' as c_char,
+        b'h' as c_char,
+        b'd' as c_char,
+        b's' as c_char,
+        b' ' as c_char,
+        0,
     ];
 
     let idx = (crate::rnd::rnd(33) as usize) % POSS.len();
@@ -194,7 +220,7 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
         cur::refresh();
     }
 
-    rd_score(top_ten.as_mut_ptr());
+    rd_score(top_ten.as_mut_ptr().cast());
 
     let mut sc2 = None;
     if noscore == 0 {
@@ -235,7 +261,9 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
                 slot -= 1;
             }
 
-            let mut name = CStr::from_ptr(whoami.as_ptr()).to_string_lossy().to_string();
+            let mut name = CStr::from_ptr(whoami.as_ptr())
+                .to_string_lossy()
+                .to_string();
             if name.len() >= MAXSTR {
                 name.truncate(MAXSTR - 1);
             }
@@ -259,7 +287,11 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
         }
     }
 
-    let mode = if allscore != 0 { c"Scores".as_ptr() } else { c"Rogueists".as_ptr() };
+    let mode = if allscore != 0 {
+        c"Scores".as_ptr()
+    } else {
+        c"Rogueists".as_ptr()
+    };
     printf(c"Top %s %s:\n".as_ptr(), Numname, mode);
     printf(c"   Score Name\n".as_ptr());
 
@@ -272,7 +304,14 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
                 3 => c"killed with Amulet".as_ptr(),
                 _ => c"killed".as_ptr(),
             };
-            printf(c"%2d %5d %s: %s on level %d".as_ptr(), idx as c_int + 1, entry.sc_score, entry.sc_name.as_ptr(), reason, entry.sc_level);
+            printf(
+                c"%2d %5d %s: %s on level %d".as_ptr(),
+                idx as c_int + 1,
+                entry.sc_score,
+                entry.sc_name.as_ptr(),
+                reason,
+                entry.sc_level,
+            );
             if entry.sc_flags == 0 || entry.sc_flags == 3 {
                 let killer = killname(entry.sc_monster as c_char, true);
                 printf(c" by %s".as_ptr(), killer);
@@ -284,14 +323,16 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
     }
 
     if sc2.is_some() && lock_sc() != 0 {
-        wr_score(top_ten.as_mut_ptr());
+        wr_score(top_ten.as_mut_ptr().cast());
         unlock_sc();
     }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn death(monst: c_char) {
-    let mut killer = CStr::from_ptr(killname(monst, false)).to_string_lossy().to_string();
+    let mut killer = CStr::from_ptr(killname(monst, false))
+        .to_string_lossy()
+        .to_string();
     purse -= purse / 10;
     cur::clear();
 
@@ -300,7 +341,19 @@ pub unsafe extern "C" fn death(monst: c_char) {
         let mut msg = CString::new("Killed by ").unwrap();
         cur::mvaddstr(23, 0, msg.as_ptr());
         if monst != b's' as c_char && monst != b'h' as c_char {
-            let article = if matches!(killer.as_bytes().first(), Some(b'a') | Some(b'A') | Some(b'e') | Some(b'E') | Some(b'i') | Some(b'I') | Some(b'o') | Some(b'O') | Some(b'u') | Some(b'U')) {
+            let article = if matches!(
+                killer.as_bytes().first(),
+                Some(b'a')
+                    | Some(b'A')
+                    | Some(b'e')
+                    | Some(b'E')
+                    | Some(b'i')
+                    | Some(b'I')
+                    | Some(b'o')
+                    | Some(b'O')
+                    | Some(b'u')
+                    | Some(b'U')
+            ) {
                 "an "
             } else {
                 "a "
@@ -331,7 +384,19 @@ pub unsafe extern "C" fn death(monst: c_char) {
             let mut space = CString::new(" ").unwrap();
             cur::mvaddstr(16, 32, space.as_ptr());
         } else {
-            let article = if matches!(killer.as_bytes().first(), Some(b'a') | Some(b'A') | Some(b'e') | Some(b'E') | Some(b'i') | Some(b'I') | Some(b'o') | Some(b'O') | Some(b'u') | Some(b'U')) {
+            let article = if matches!(
+                killer.as_bytes().first(),
+                Some(b'a')
+                    | Some(b'A')
+                    | Some(b'e')
+                    | Some(b'E')
+                    | Some(b'i')
+                    | Some(b'I')
+                    | Some(b'o')
+                    | Some(b'O')
+                    | Some(b'u')
+                    | Some(b'U')
+            ) {
                 "n"
             } else {
                 ""
@@ -344,7 +409,11 @@ pub unsafe extern "C" fn death(monst: c_char) {
         }
         let hero_name = CStr::from_ptr(whoami.as_ptr()).to_string_lossy();
         let player_name = CString::new(hero_name.as_ref()).unwrap();
-        cur::mvaddstr(14, center_string(hero_name.as_ref()) as c_int, player_name.as_ptr());
+        cur::mvaddstr(
+            14,
+            center_string(hero_name.as_ref()) as c_int,
+            player_name.as_ptr(),
+        );
         let score_text = format!("{} Au", purse);
         let score_c = CString::new(score_text).unwrap();
         cur::move_(15, center_string(score_c.to_str().unwrap()) as c_int);
@@ -391,7 +460,7 @@ pub unsafe extern "C" fn total_winner() {
     let press = CString::new("--Press space to continue--").unwrap();
     cur::mvaddstr(23, 0, press.as_ptr());
     cur::refresh();
-    wait_for(b' ' as c_char);
+    wait_for(b' ' as c_int);
     cur::clear();
     let heading = CString::new("   Worth  Item\n").unwrap();
     cur::mvaddstr(0, 0, heading.as_ptr());
@@ -447,7 +516,10 @@ mod tests {
     #[test]
     fn center_keeps_text_centered() {
         let s = b"You\0";
-        assert_eq!(unsafe { center(s.as_ptr() as *mut c_char) }, 28 - ((("You".len() as c_int) + 1) / 2));
+        assert_eq!(
+            unsafe { center(s.as_ptr() as *mut c_char) },
+            28 - ((("You".len() as c_int) + 1) / 2)
+        );
     }
 
     #[test]

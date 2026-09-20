@@ -8,18 +8,35 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-
-use crate::player::{CCoord, CPlace, CThing, CThingMonster, CThingObject};
-use crate::rnd::rnd;
+use crate::armor::{take_off, wear};
+use crate::chase::{diag_ok, see_monst};
 use crate::curses as cur;
-use crate::io::{addmsg_str, msg_str};
+use crate::daemon::{do_daemons, do_fuses};
+use crate::draw::{add_pass, look};
+use crate::game::EQUIPMENT;
+use crate::help::{help, identify};
+use crate::io::{addmsg_str, endmsg, msg_str, readchar, status};
+use crate::level::new_level;
+use crate::misc::{eat, get_dir};
+use crate::options::{get_str, option};
+use crate::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
+use crate::player::{do_move, do_run, CCoord, CPlace, CThing, CThingMonster, CThingObject};
+use crate::potions::{quaff, raise_level, turn_see};
+use crate::rings::{ring_off, ring_on};
+use crate::rip::total_winner;
+use crate::rnd::rnd;
+use crate::save::save_game;
+use crate::scrolls::read_scroll;
+use crate::startup::{quit, shell};
+use crate::sticks::do_zap;
+use crate::thing_list::new_item;
+use crate::things::{discovered, drop, inv_name};
+use crate::weapons::{init_weapon, missile, wield};
+use crate::wizard::{create_obj, show_map, teleport, whatis};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 const MAXSTR: usize = 1024;
 
@@ -68,8 +85,6 @@ const NTRAPS: c_int = 8;
 // Ring types
 const R_SEARCH: c_int = 3;
 const R_TELEPORT: c_int = 11;
-const LEFT: usize = 0;
-const RIGHT: usize = 1;
 
 // Escape
 const ESCAPE: c_int = 27;
@@ -90,26 +105,26 @@ const AFTER: c_int = 2;
 ///
 /// Precomputed constants are used in `match` patterns (Rust does not allow
 /// function calls in patterns, even for `const fn`s).
-const CTRL_A: u8 = b'A' & 0x1f;    // 0x01
-const CTRL_B: u8 = b'B' & 0x1f;    // 0x02
-const CTRL_C: u8 = b'C' & 0x1f;    // 0x03
-const CTRL_D: u8 = b'D' & 0x1f;    // 0x04
-const CTRL_E: u8 = b'E' & 0x1f;    // 0x05
-const CTRL_F: u8 = b'F' & 0x1f;    // 0x06
-const CTRL_G: u8 = b'G' & 0x1f;    // 0x07
-const CTRL_H: u8 = b'H' & 0x1f;    // 0x08
-const CTRL_I: u8 = b'I' & 0x1f;    // 0x09
-const CTRL_J: u8 = b'J' & 0x1f;    // 0x0a
-const CTRL_K: u8 = b'K' & 0x1f;    // 0x0b
-const CTRL_L: u8 = b'L' & 0x1f;    // 0x0c
-const CTRL_N: u8 = b'N' & 0x1f;    // 0x0e
-const CTRL_P: u8 = b'P' & 0x1f;    // 0x10
-const CTRL_R: u8 = b'R' & 0x1f;    // 0x12
-const CTRL_T: u8 = b'T' & 0x1f;    // 0x14
-const CTRL_U: u8 = b'U' & 0x1f;    // 0x15
-const CTRL_W: u8 = b'W' & 0x1f;    // 0x17
-const CTRL_X: u8 = b'X' & 0x1f;    // 0x18
-const CTRL_Y: u8 = b'Y' & 0x1f;    // 0x19
+const CTRL_A: u8 = b'A' & 0x1f; // 0x01
+const CTRL_B: u8 = b'B' & 0x1f; // 0x02
+const CTRL_C: u8 = b'C' & 0x1f; // 0x03
+const CTRL_D: u8 = b'D' & 0x1f; // 0x04
+const CTRL_E: u8 = b'E' & 0x1f; // 0x05
+const CTRL_F: u8 = b'F' & 0x1f; // 0x06
+const CTRL_G: u8 = b'G' & 0x1f; // 0x07
+const CTRL_H: u8 = b'H' & 0x1f; // 0x08
+const CTRL_I: u8 = b'I' & 0x1f; // 0x09
+const CTRL_J: u8 = b'J' & 0x1f; // 0x0a
+const CTRL_K: u8 = b'K' & 0x1f; // 0x0b
+const CTRL_L: u8 = b'L' & 0x1f; // 0x0c
+const CTRL_N: u8 = b'N' & 0x1f; // 0x0e
+const CTRL_P: u8 = b'P' & 0x1f; // 0x10
+const CTRL_R: u8 = b'R' & 0x1f; // 0x12
+const CTRL_T: u8 = b'T' & 0x1f; // 0x14
+const CTRL_U: u8 = b'U' & 0x1f; // 0x15
+const CTRL_W: u8 = b'W' & 0x1f; // 0x17
+const CTRL_X: u8 = b'X' & 0x1f; // 0x18
+const CTRL_Y: u8 = b'Y' & 0x1f; // 0x19
 const CTRL_TILDE: u8 = b'~' & 0x1f; // CTRL-~ (0x1e)
 
 /// Inline evaluator for CTRL(c) used in expression position.
@@ -124,15 +139,6 @@ const fn ctrl(c: u8) -> u8 {
 const MASTER: bool = true;
 
 // ─── C ABI structs ────────────────────────────────────────────────────────────
-
-/// Mirrors the C `struct h_list` used by the help table.
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CHList {
-    pub h_ch: c_char,
-    pub h_desc: *mut c_char,
-    pub h_print: c_uchar,
-}
 
 /// Mirrors the C `struct obj_info`.
 #[repr(C)]
@@ -149,35 +155,7 @@ pub struct CObjInfo {
 
 static mut COUNTCH: c_char = 0;
 static mut DIRECTION: c_char = 0;
-static mut NEWCOUNT: c_uchar = FALSE;
-
-/// Identify table (static in the C `identify()`).  Uses `&'static str` so the
-/// table can live in an immutable `static` (raw pointers are not `Sync`).
-struct IdentItem {
-    ch: u8,
-    desc: &'static str,
-}
-
-static IDENT_LIST: [IdentItem; 18] = [
-    IdentItem { ch: b'|', desc: "wall of a room" },
-    IdentItem { ch: b'-', desc: "wall of a room" },
-    IdentItem { ch: GOLD as u8, desc: "gold" },
-    IdentItem { ch: STAIRS as u8, desc: "a staircase" },
-    IdentItem { ch: DOOR as u8, desc: "door" },
-    IdentItem { ch: FLOOR as u8, desc: "room floor" },
-    IdentItem { ch: b'@', desc: "you" },
-    IdentItem { ch: PASSAGE as u8, desc: "passage" },
-    IdentItem { ch: TRAP as u8, desc: "trap" },
-    IdentItem { ch: POTION as u8, desc: "potion" },
-    IdentItem { ch: SCROLL as u8, desc: "scroll" },
-    IdentItem { ch: FOOD as u8, desc: "food" },
-    IdentItem { ch: WEAPON as u8, desc: "weapon" },
-    IdentItem { ch: b' ', desc: "solid rock" },
-    IdentItem { ch: ARMOR as u8, desc: "armor" },
-    IdentItem { ch: AMULET as u8, desc: "the Amulet of Yendor" },
-    IdentItem { ch: RING as u8, desc: "ring" },
-    IdentItem { ch: STICK as u8, desc: "wand or staff" },
-];
+static mut NEWCOUNT: c_uchar = false as c_uchar;
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
@@ -186,9 +164,6 @@ unsafe extern "C" {
     static mut again: c_uchar;
     static mut amulet: c_uchar;
     static mut count: c_int;
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
-    static mut cur_weapon: *mut CThing;
     static mut curscr: *mut c_void;
     static mut delta: CCoord;
     static mut dir_ch: c_char;
@@ -197,9 +172,7 @@ unsafe extern "C" {
     static mut firstmove: c_uchar;
     static mut food_left: c_int;
     static mut has_hit: c_uchar;
-    static mut helpstr: [CHList; 80];
     static mut huh: [c_char; MAXSTR];
-    static mut hw: *mut c_void;
     static mut inpack: c_int;
     static mut inv_describe: c_uchar;
     static mut jump: c_uchar;
@@ -212,7 +185,6 @@ unsafe extern "C" {
     static mut last_pick: *mut CThing;
     static mut lastscore: c_int;
     static mut level: c_int;
-    static mut lower_msg: c_uchar;
     static mut lvl_obj: *mut CThing;
     static mut max_hit: c_int;
     static mut move_on: c_uchar;
@@ -234,7 +206,6 @@ unsafe extern "C" {
     static mut take: c_char;
     static mut terse: c_uchar;
     static mut to_death: c_uchar;
-    static mut monsters: [crate::monsters::CMonster; 26];
     static mut tr_name: [*mut c_char; NTRAPS as usize];
     static mut r_stones: [*mut c_char; 14];
     static mut p_colors: [*mut c_char; 14];
@@ -245,64 +216,15 @@ unsafe extern "C" {
     static mut scr_info: [CObjInfo; 18];
     static mut ws_info: [CObjInfo; 14];
     static mut wizard: c_int;
-    static mut LINES: c_int;
-    static mut COLS: c_int;
 }
 
 // ─── Extern C functions called from this module ───────────────────────────────
 
 unsafe extern "C" {
-    fn add_pack(obj: *mut CThing, all: c_uchar);
-    fn add_pass();
-    fn create_obj();
-    fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
-    fn discovered();
-    fn do_daemons(flag: c_int);
-    fn do_fuses(flag: c_int);
-    fn do_move(dy: c_int, dx: c_int);
-    fn do_run(ch: c_char);
-    fn do_zap();
-    fn drop();
-    fn eat();
-    fn endmsg() -> c_int;
     fn free(ptr: *mut c_void);
-    fn get_dir() -> c_uchar;
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn get_str(s: *mut c_char, win: *mut c_void) -> c_int;
-    fn init_weapon(obj: *mut CThing, which: c_int);
-    fn inventory(list: *mut CThing, item_type: c_int) -> c_uchar;
-    fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
-    fn isupper(c: c_int) -> c_int;
-    fn look(wakeup: c_uchar);
     fn malloc(size: usize) -> *mut c_void;
-    fn missile(ydelta: c_int, xdelta: c_int);
-    fn new_item() -> *mut CThing;
-    fn new_level();
-    fn option();
-    fn pick_up(ch: c_char);
-    fn picky_inven();
-    fn quaff();
-    fn quit(sig: c_int);
-    fn raise_level();
-    fn read_scroll();
-    fn readchar() -> c_int;
-    fn save_game();
-    fn see_monst(mp: *mut CThing) -> c_uchar;
-    fn shell();
-    fn show_map();
-    fn status();
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
-    fn take_off();
-    fn teleport();
-    fn total_winner();
-    fn turn_see(turn_off: c_uchar) -> c_uchar;
-    fn wait_for(ch: c_int);
-    fn wear();
-    fn whatis(insist: c_uchar, item_type: c_int);
-    fn wield();
-    fn ring_on();
-    fn ring_off();
 }
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
@@ -343,8 +265,8 @@ unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
 }
 
 #[inline]
-unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
-    !cur_ring[hand].is_null() && (*thing_o(cur_ring[hand])).o_which == ring_type
+unsafe fn isring(ring: *mut CThing, ring_type: c_int) -> bool {
+    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
 // ─── command() ────────────────────────────────────────────────────────────────
@@ -358,8 +280,7 @@ unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
 /// last_comm / last_dir / last_pick (via reset_last/last_*), lvl_obj,
 /// terse, mlist (via moat), max_hit, mp/t_flags (via to_death),
 /// dir_ch, delta, q_comm, huh, release, amulet, level, seenstairs,
-/// tr_name, stat_msg, inpack, food_left, cur_weapon, cur_armor,
-/// cur_ring, inv_describe.
+/// tr_name, stat_msg, inpack, food_left, equipment, inv_describe.
 #[no_mangle]
 pub unsafe extern "C" fn command() {
     let mut ch: u8;
@@ -378,10 +299,10 @@ pub unsafe extern "C" fn command() {
 
     while ntimes > 0 {
         ntimes -= 1;
-        again = FALSE;
+        again = false as c_uchar;
         if has_hit != 0 {
             endmsg();
-            has_hit = FALSE;
+            has_hit = false as c_uchar;
         }
 
         /*
@@ -392,9 +313,9 @@ pub unsafe extern "C" fn command() {
             std::process::exit(1);
         }
 
-        look(TRUE);
+        look(true as c_uchar);
         if running == 0 {
-            door_stop = FALSE;
+            door_stop = false as c_uchar;
         }
         status();
         lastscore = purse;
@@ -404,7 +325,7 @@ pub unsafe extern "C" fn command() {
             cur::refresh(); // Draw screen
         }
         take = 0;
-        after = TRUE;
+        after = true as c_uchar;
 
         /*
          * Read command or continue run
@@ -420,7 +341,7 @@ pub unsafe extern "C" fn command() {
                 ch = COUNTCH as u8;
             } else {
                 ch = readchar() as u8;
-                move_on = FALSE;
+                move_on = false as c_uchar;
                 if mpos != 0 {
                     // Erase message if it's there
                     msg_str("");
@@ -441,10 +362,10 @@ pub unsafe extern "C" fn command() {
             /*
              * check for prefixes
              */
-            NEWCOUNT = FALSE;
+            NEWCOUNT = false as c_uchar;
             if ch.is_ascii_digit() {
                 count = 0;
-                NEWCOUNT = TRUE;
+                NEWCOUNT = true as c_uchar;
                 while ch.is_ascii_digit() {
                     count = count * 10 + (ch - b'0') as c_int;
                     if count > 255 {
@@ -525,7 +446,8 @@ pub unsafe extern "C" fn command() {
                         let mut obj = lvl_obj;
                         let mut found = false;
                         while !obj.is_null() {
-                            if (*thing_o(obj)).o_pos.y == hero.y && (*thing_o(obj)).o_pos.x == hero.x
+                            if (*thing_o(obj)).o_pos.y == hero.y
+                                && (*thing_o(obj)).o_pos.x == hero.x
                             {
                                 found = true;
                                 break;
@@ -567,19 +489,18 @@ pub unsafe extern "C" fn command() {
                     b'U' => do_run(b'u' as c_char),
                     b'B' => do_run(b'b' as c_char),
                     b'N' => do_run(b'n' as c_char),
-                    v
-                        if v == ctrl(b'H')
-                            || v == ctrl(b'J')
-                            || v == ctrl(b'K')
-                            || v == ctrl(b'L')
-                            || v == ctrl(b'Y')
-                            || v == ctrl(b'U')
-                            || v == ctrl(b'B')
-                            || v == ctrl(b'N') =>
+                    v if v == ctrl(b'H')
+                        || v == ctrl(b'J')
+                        || v == ctrl(b'K')
+                        || v == ctrl(b'L')
+                        || v == ctrl(b'Y')
+                        || v == ctrl(b'U')
+                        || v == ctrl(b'B')
+                        || v == ctrl(b'N') =>
                     {
                         if !player_has(ISBLIND) {
-                            door_stop = TRUE;
-                            firstmove = TRUE;
+                            door_stop = true as c_uchar;
+                            firstmove = true as c_uchar;
                         }
                         if count != 0 && NEWCOUNT == 0 {
                             ch = DIRECTION as u8;
@@ -592,10 +513,10 @@ pub unsafe extern "C" fn command() {
                     }
                     b'f' | b'F' => {
                         if ch == b'F' {
-                            kamikaze = TRUE;
+                            kamikaze = true as c_uchar;
                         }
                         if get_dir() == 0 {
-                            after = FALSE;
+                            after = false as c_uchar;
                         } else {
                             let hero = hero_pos();
                             delta.y += hero.y;
@@ -606,13 +527,13 @@ pub unsafe extern "C" fn command() {
                                     addmsg_str("I see ");
                                 }
                                 msg_str("no monster there");
-                                after = FALSE;
+                                after = false as c_uchar;
                             } else if diag_ok(hero_ptr(), &raw mut delta) != 0 {
-                                to_death = TRUE;
+                                to_death = true as c_uchar;
                                 max_hit = 0;
-                                (*thing_t(mp)).t_flags =
-                                    ((*thing_t(mp)).t_flags as c_short | ISTARGET as c_short)
-                                        as c_short;
+                                (*thing_t(mp)).t_flags = ((*thing_t(mp)).t_flags as c_short
+                                    | ISTARGET as c_short)
+                                    as c_short;
                                 runch = dir_ch;
                                 ch = dir_ch as u8;
                                 continue 'dispatch;
@@ -621,7 +542,7 @@ pub unsafe extern "C" fn command() {
                     }
                     b't' => {
                         if get_dir() == 0 {
-                            after = FALSE;
+                            after = false as c_uchar;
                         } else {
                             missile(delta.y, delta.x);
                         }
@@ -629,26 +550,26 @@ pub unsafe extern "C" fn command() {
                     b'a' => {
                         if last_comm == 0 {
                             msg_str("you haven't typed a command yet");
-                            after = FALSE;
+                            after = false as c_uchar;
                         } else {
                             ch = last_comm as u8;
-                            again = TRUE;
+                            again = true as c_uchar;
                             continue 'dispatch;
                         }
                     }
                     b'q' => quaff(),
                     b'Q' => {
-                        after = FALSE;
-                        q_comm = TRUE;
+                        after = false as c_uchar;
+                        q_comm = true as c_uchar;
                         quit(0);
-                        q_comm = FALSE;
+                        q_comm = false as c_uchar;
                     }
                     b'i' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         inventory((*thing_t(&raw mut player)).t_pack, 0);
                     }
                     b'I' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         picky_inven();
                     }
                     b'd' => drop(),
@@ -661,26 +582,26 @@ pub unsafe extern "C" fn command() {
                     b'R' => ring_off(),
                     b'o' => {
                         option();
-                        after = FALSE;
+                        after = false as c_uchar;
                     }
                     b'c' => {
                         call();
-                        after = FALSE;
+                        after = false as c_uchar;
                     }
                     b'>' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         d_level();
                     }
                     b'<' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         u_level();
                     }
                     b'?' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         help();
                     }
                     b'/' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         identify();
                     }
                     b's' => search(),
@@ -688,41 +609,41 @@ pub unsafe extern "C" fn command() {
                         if get_dir() != 0 {
                             do_zap();
                         } else {
-                            after = FALSE;
+                            after = false as c_uchar;
                         }
                     }
                     b'D' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         discovered();
                     }
                     CTRL_P => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         msg_str(&CStr::from_ptr(huh.as_ptr()).to_string_lossy());
                     }
                     CTRL_R => {
-                        after = FALSE;
-                        cur::clearok(curscr, TRUE);
+                        after = false as c_uchar;
+                        cur::clearok(curscr, true as c_uchar);
                         cur::wrefresh(curscr);
                     }
                     b'v' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         msg_str(&format!(
                             "version {}. (mctesq was here)",
                             CStr::from_ptr(release).to_string_lossy()
                         ));
                     }
                     b'S' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         save_game();
                     }
                     b'.' => {
                         // Rest command
                     }
                     b' ' => {
-                        after = FALSE; // "Legal" illegal command
+                        after = false as c_uchar; // "Legal" illegal command
                     }
                     b'^' => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         if get_dir() != 0 {
                             let hero = hero_pos();
                             delta.y += hero.y;
@@ -733,27 +654,34 @@ pub unsafe extern "C" fn command() {
                             if !crate::draw::is_trap_cell(delta.y, delta.x) {
                                 msg_str("no trap there");
                             } else if player_has(ISHALU) {
-                                msg_str(&CStr::from_ptr(tr_name[rnd(NTRAPS) as usize]).to_string_lossy());
+                                msg_str(
+                                    &CStr::from_ptr(tr_name[rnd(NTRAPS) as usize])
+                                        .to_string_lossy(),
+                                );
                             } else {
-                                msg_str(&CStr::from_ptr(
-                                    tr_name[crate::draw::trap_kind_at(delta.y, delta.x) as usize],
-                                ).to_string_lossy());
+                                msg_str(
+                                    &CStr::from_ptr(
+                                        tr_name
+                                            [crate::draw::trap_kind_at(delta.y, delta.x) as usize],
+                                    )
+                                    .to_string_lossy(),
+                                );
                                 crate::draw::set_seen_at(delta.y, delta.x);
                             }
                         }
                     }
                     b'+' => {
                         // Wizard toggle (was the `when '+'` arm under `#ifdef MASTER`)
-                        after = FALSE;
+                        after = false as c_uchar;
                         if MASTER {
                             if wizard != 0 {
                                 wizard = 0;
-                                turn_see(TRUE);
+                                turn_see(true as c_uchar);
                                 msg_str("not wizard any more");
                             } else {
                                 wizard = 1;
                                 noscore = 1;
-                                turn_see(FALSE);
+                                turn_see(false as c_uchar);
                                 msg_str(&format!(
                                     "you are suddenly as smart as Ken Arnold in dungeon #{}",
                                     dnum
@@ -762,15 +690,15 @@ pub unsafe extern "C" fn command() {
                         }
                     }
                     v if v == ESCAPE as u8 => {
-                        door_stop = FALSE;
+                        door_stop = false as c_uchar;
                         count = 0;
-                        after = FALSE;
-                        again = FALSE;
+                        after = false as c_uchar;
+                        again = false as c_uchar;
                     }
                     b'm' => {
-                        move_on = TRUE;
+                        move_on = true as c_uchar;
                         if get_dir() == 0 {
-                            after = FALSE;
+                            after = false as c_uchar;
                         } else {
                             ch = dir_ch as u8;
                             COUNTCH = dir_ch;
@@ -778,14 +706,18 @@ pub unsafe extern "C" fn command() {
                         }
                     }
                     b')' => {
-                        current(cur_weapon, c"wielding".as_ptr(), std::ptr::null_mut());
+                        current(
+                            EQUIPMENT.weapon(),
+                            c"wielding".as_ptr(),
+                            std::ptr::null_mut(),
+                        );
                     }
                     b']' => {
-                        current(cur_armor, c"wearing".as_ptr(), std::ptr::null_mut());
+                        current(EQUIPMENT.armor(), c"wearing".as_ptr(), std::ptr::null_mut());
                     }
                     b'=' => {
                         current(
-                            cur_ring[LEFT],
+                            EQUIPMENT.left_ring(),
                             c"wearing".as_ptr(),
                             if terse != 0 {
                                 c"(L)".as_ptr()
@@ -794,7 +726,7 @@ pub unsafe extern "C" fn command() {
                             },
                         );
                         current(
-                            cur_ring[RIGHT],
+                            EQUIPMENT.right_ring(),
                             c"wearing".as_ptr(),
                             if terse != 0 {
                                 c"(R)".as_ptr()
@@ -804,13 +736,13 @@ pub unsafe extern "C" fn command() {
                         );
                     }
                     b'@' => {
-                        stat_msg = TRUE;
+                        stat_msg = true as c_uchar;
                         status();
-                        stat_msg = FALSE;
-                        after = FALSE;
+                        stat_msg = false as c_uchar;
+                        after = false as c_uchar;
                     }
                     _ => {
-                        after = FALSE;
+                        after = false as c_uchar;
                         if MASTER && wizard != 0 {
                             match ch {
                                 b'|' => {
@@ -824,7 +756,7 @@ pub unsafe extern "C" fn command() {
                                 CTRL_G => {
                                     let _ = inventory(lvl_obj, 0);
                                 }
-                                CTRL_W => whatis(FALSE, 0),
+                                CTRL_W => whatis(false as c_uchar, 0),
                                 CTRL_D => {
                                     level += 1;
                                     new_level();
@@ -840,7 +772,11 @@ pub unsafe extern "C" fn command() {
                                 }
                                 CTRL_C => add_pass(),
                                 CTRL_X => {
-                                    turn_see(if player_has(SEEMONST) { TRUE } else { FALSE });
+                                    turn_see(if player_has(SEEMONST) {
+                                        true as c_uchar
+                                    } else {
+                                        false as c_uchar
+                                    });
                                 }
                                 CTRL_TILDE => {
                                     let item = get_item(c"charge".as_ptr(), STICK as c_int);
@@ -861,8 +797,8 @@ pub unsafe extern "C" fn command() {
                                     init_weapon(obj, TWOSWORD);
                                     (*thing_o(obj)).o_hplus = 1;
                                     (*thing_o(obj)).o_dplus = 1;
-                                    add_pack(obj, TRUE);
-                                    cur_weapon = obj;
+                                    add_pack(obj, true as c_uchar);
+                                    EQUIPMENT.set_weapon(obj);
                                     /*
                                      * And his suit of armor
                                      */
@@ -873,8 +809,8 @@ pub unsafe extern "C" fn command() {
                                     (*thing_o(obj)).o_flags = (*thing_o(obj)).o_flags | ISKNOW;
                                     (*thing_o(obj)).o_count = 1;
                                     (*thing_o(obj)).o_group = 0;
-                                    cur_armor = obj;
-                                    add_pack(obj, TRUE);
+                                    EQUIPMENT.set_armor(obj);
+                                    add_pack(obj, true as c_uchar);
                                 }
                                 b'*' => pr_list(),
                                 _ => illcom(ch as c_int),
@@ -895,7 +831,7 @@ pub unsafe extern "C" fn command() {
             pick_up(take);
         }
         if running == 0 {
-            door_stop = FALSE;
+            door_stop = false as c_uchar;
         }
         if after == 0 {
             ntimes += 1;
@@ -904,14 +840,14 @@ pub unsafe extern "C" fn command() {
 
     do_daemons(AFTER);
     do_fuses(AFTER);
-    if isring(LEFT, R_SEARCH) {
+    if isring(EQUIPMENT.left_ring(), R_SEARCH) {
         search();
-    } else if isring(LEFT, R_TELEPORT) && rnd(50) == 0 {
+    } else if isring(EQUIPMENT.left_ring(), R_TELEPORT) && rnd(50) == 0 {
         teleport();
     }
-    if isring(RIGHT, R_SEARCH) {
+    if isring(EQUIPMENT.right_ring(), R_SEARCH) {
         search();
-    } else if isring(RIGHT, R_TELEPORT) && rnd(50) == 0 {
+    } else if isring(EQUIPMENT.right_ring(), R_TELEPORT) && rnd(50) == 0 {
         teleport();
     }
 }
@@ -924,13 +860,13 @@ pub unsafe extern "C" fn command() {
 /// Uses globals: save_msg, count.
 #[no_mangle]
 pub unsafe extern "C" fn illcom(ch: c_int) {
-    save_msg = FALSE;
+    save_msg = false as c_uchar;
     count = 0;
     msg_str(&format!(
         "illegal command '{}'",
         CStr::from_ptr(cur::unctrl(ch)).to_string_lossy()
     ));
-    save_msg = TRUE;
+    save_msg = true as c_uchar;
 }
 
 // ─── search() ─────────────────────────────────────────────────────────────────
@@ -971,34 +907,40 @@ pub unsafe extern "C" fn search() {
                             crate::draw::reveal_secret_at(y, x);
                             msg_str("a secret door");
                             found = true;
-                            count = FALSE as c_int;
-                            running = FALSE;
+                            count = false as c_uchar as c_int;
+                            running = false as c_uchar;
                         }
                     }
                     b'.' => {
                         if rnd(2 + probinc) == 0 {
-                            crate::draw::reveal_trap_at(y, x);
+                            crate::level::current_level_mut().reveal_trap(y as usize, x as usize);
                             if terse == 0 {
                                 addmsg_str("you found ");
                             }
                             if player_has(ISHALU) {
-                                msg_str(&CStr::from_ptr(tr_name[rnd(NTRAPS) as usize]).to_string_lossy());
+                                msg_str(
+                                    &CStr::from_ptr(tr_name[rnd(NTRAPS) as usize])
+                                        .to_string_lossy(),
+                                );
                             } else {
-                                msg_str(&CStr::from_ptr(
-                                    tr_name[crate::draw::trap_kind_at(y, x) as usize],
-                                ).to_string_lossy());
+                                msg_str(
+                                    &CStr::from_ptr(
+                                        tr_name[crate::draw::trap_kind_at(y, x) as usize],
+                                    )
+                                    .to_string_lossy(),
+                                );
                             }
                             found = true;
-                            count = FALSE as c_int;
-                            running = FALSE;
+                            count = false as c_uchar as c_int;
+                            running = false as c_uchar;
                         }
                     }
                     b' ' => {
                         if rnd(3 + probinc) == 0 {
                             crate::draw::reveal_secret_at(y, x);
                             found = true;
-                            count = FALSE as c_int;
-                            running = FALSE;
+                            count = false as c_uchar as c_int;
+                            running = false as c_uchar;
                         }
                     }
                     _ => {}
@@ -1010,132 +952,8 @@ pub unsafe extern "C" fn search() {
     }
 
     if found {
-        look(FALSE);
+        look(false as c_uchar);
     }
-}
-
-// ─── help() ───────────────────────────────────────────────────────────────────
-
-/// help:
-/// Give single character help, or the whole mess if he wants it.
-///
-/// Uses globals: mpos, helpstr, lower_msg, hw.
-#[no_mangle]
-pub unsafe extern "C" fn help() {
-    let mut helpch: c_char;
-    let mut numprint: c_int;
-    let mut cnt: c_int;
-
-    msg_str("character you want help for (* for all): ");
-    helpch = readchar() as c_char;
-    mpos = 0;
-
-    /*
-     * If it's not a *, print the right help string
-     * or an error if he typed a funny character.
-     */
-    if helpch != b'*' as c_char {
-        cur::move_(0, 0);
-        let mut i = 0;
-        while i < helpstr.len() && !helpstr[i].h_desc.is_null() {
-            if helpstr[i].h_ch == helpch {
-                lower_msg = TRUE;
-                msg_str(&format!(
-                    "{}{}",
-                    CStr::from_ptr(cur::unctrl(helpstr[i].h_ch as c_int)).to_string_lossy(),
-                    CStr::from_ptr(helpstr[i].h_desc).to_string_lossy()
-                ));
-                lower_msg = FALSE;
-                return;
-            }
-            i += 1;
-        }
-        msg_str(&format!(
-            "unknown character '{}'",
-            CStr::from_ptr(cur::unctrl(helpch as c_int)).to_string_lossy()
-        ));
-        return;
-    }
-
-    /*
-     * Here we print help for everything.
-     * Then wait before we return to command mode
-     */
-    numprint = 0;
-    let mut i = 0;
-    while i < helpstr.len() && !helpstr[i].h_desc.is_null() {
-        if helpstr[i].h_print != 0 {
-            numprint += 1;
-        }
-        i += 1;
-    }
-    if numprint & 01 != 0 {
-        numprint += 1;
-    }
-    numprint /= 2;
-    if numprint > LINES - 1 {
-        numprint = LINES - 1;
-    }
-
-    cur::wclear(hw);
-    cnt = 0;
-    let mut i = 0;
-    while i < helpstr.len() && !helpstr[i].h_desc.is_null() && cnt < numprint * 2 {
-        if helpstr[i].h_print != 0 {
-            cur::wmove(hw, cnt % numprint, if cnt >= numprint { COLS / 2 } else { 0 });
-            if helpstr[i].h_ch != 0 {
-                cur::waddstr(hw, cur::unctrl(helpstr[i].h_ch as c_int));
-            }
-            cur::waddstr(hw, helpstr[i].h_desc);
-            cnt += 1;
-        }
-        i += 1;
-    }
-    cur::wmove(hw, LINES - 1, 0);
-    cur::waddstr(hw, c"--Press space to continue--".as_ptr());
-    cur::wrefresh(hw);
-    wait_for(b' ' as c_int);
-    cur::clearok(stdscr, TRUE);
-    msg_str("");
-    cur::touchwin(stdscr);
-    cur::wrefresh(stdscr);
-}
-
-// ─── identify() ───────────────────────────────────────────────────────────────
-
-/// identify:
-/// Tell the player what a certain thing is.
-///
-/// Uses globals: mpos, monsters.
-#[no_mangle]
-pub unsafe extern "C" fn identify() {
-    let mut ch: c_int;
-    let mut str_: *const c_char;
-
-    msg_str("what do you want identified? ");
-    ch = readchar();
-    mpos = 0;
-    if ch == ESCAPE {
-        msg_str("");
-        return;
-    }
-
-    if isupper(ch) != 0 {
-        str_ = monsters[(ch - b'A' as c_int) as usize].m_name;
-    } else {
-        str_ = c"unknown character".as_ptr();
-        for hp in IDENT_LIST.iter() {
-            if hp.ch as c_int == ch {
-                str_ = hp.desc.as_ptr() as *const c_char;
-                break;
-            }
-        }
-    }
-    msg_str(&format!(
-        "'{}': {}",
-        CStr::from_ptr(cur::unctrl(ch)).to_string_lossy(),
-        CStr::from_ptr(str_).to_string_lossy()
-    ));
 }
 
 // ─── d_level() / u_level() / levit_check() ────────────────────────────────────
@@ -1154,7 +972,7 @@ pub unsafe extern "C" fn d_level() {
         msg_str("I see no way down");
     } else {
         level += 1;
-        seenstairs = FALSE;
+        seenstairs = false as c_uchar;
         new_level();
     }
 }
@@ -1193,10 +1011,10 @@ pub unsafe extern "C" fn u_level() {
 #[no_mangle]
 pub unsafe extern "C" fn levit_check() -> c_uchar {
     if !player_has(ISLEVIT) {
-        return FALSE;
+        return false as c_uchar;
     }
     msg_str("You can't.  You're floating off the ground!");
-    TRUE
+    true as c_uchar
 }
 
 // ─── call() ───────────────────────────────────────────────────────────────────
@@ -1293,7 +1111,7 @@ pub unsafe extern "C" fn call() {
     } else {
         strcpy(prbuf.as_mut_ptr(), elsewise);
     }
-    if get_str(prbuf.as_mut_ptr(), stdscr) == NORM {
+    if get_str(prbuf.as_mut_ptr().cast(), stdscr) == NORM {
         if !(*guess).is_null() {
             free(*guess as *mut c_void);
         }
@@ -1314,18 +1132,21 @@ pub unsafe extern "C" fn call() {
 /// Uses globals: after, terse, inv_describe.
 #[no_mangle]
 pub unsafe extern "C" fn current(cur: *mut CThing, how: *const c_char, where_: *const c_char) {
-    after = FALSE;
+    after = false as c_uchar;
     if !cur.is_null() {
         if terse == 0 {
-            addmsg_str(&format!("you are {} (", CStr::from_ptr(how).to_string_lossy()));
+            addmsg_str(&format!(
+                "you are {} (",
+                CStr::from_ptr(how).to_string_lossy()
+            ));
         }
-        inv_describe = FALSE;
+        inv_describe = false as c_uchar;
         addmsg_str(&format!(
             "{}) {}",
             (*thing_o(cur)).o_packch as u8 as char,
-            CStr::from_ptr(inv_name(cur, TRUE)).to_string_lossy()
+            CStr::from_ptr(inv_name(cur, true as c_uchar)).to_string_lossy()
         ));
-        inv_describe = TRUE;
+        inv_describe = true as c_uchar;
         if !where_.is_null() {
             addmsg_str(&format!(" {}", CStr::from_ptr(where_).to_string_lossy()));
         }
@@ -1334,7 +1155,10 @@ pub unsafe extern "C" fn current(cur: *mut CThing, how: *const c_char, where_: *
         if terse == 0 {
             addmsg_str("you are ");
         }
-        addmsg_str(&format!("{} nothing", CStr::from_ptr(how).to_string_lossy()));
+        addmsg_str(&format!(
+            "{} nothing",
+            CStr::from_ptr(how).to_string_lossy()
+        ));
         if !where_.is_null() {
             addmsg_str(&format!(" {}", CStr::from_ptr(where_).to_string_lossy()));
         }
@@ -1355,7 +1179,7 @@ pub unsafe extern "C" fn pr_list() {
         msg_str(&format!(
             "{}) {}",
             (*thing_o(obj)).o_type as u8 as char,
-            CStr::from_ptr(inv_name(obj, FALSE)).to_string_lossy()
+            CStr::from_ptr(inv_name(obj, false as c_uchar)).to_string_lossy()
         ));
         obj = (*thing_t(obj)).l_next;
     }

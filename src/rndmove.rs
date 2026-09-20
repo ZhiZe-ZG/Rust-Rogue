@@ -1,16 +1,15 @@
 use std::os::raw::{c_char, c_int, c_uchar};
 
+use crate::chase::diag_ok;
+use crate::io::step_ok;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
+use crate::scrolls::ScrollType;
 
 const SCROLL: c_char = b'?' as c_char;
-const S_SCARE: c_int = 10;
 
 unsafe extern "C" {
     static mut lvl_obj: *mut CThing;
-
-    fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar;
-    fn step_ok(ch: c_int) -> c_int;
 }
 
 #[inline]
@@ -21,11 +20,6 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
     tp as *mut CThingObject
-}
-
-#[inline]
-unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    crate::draw::chat_at(y, x)
 }
 
 #[inline]
@@ -70,7 +64,7 @@ pub unsafe extern "C" fn rndmove(who: *mut CThing) -> *mut CCoord {
             }
             obj = (*thing_o(obj)).l_next;
         }
-        if !obj.is_null() && (*thing_o(obj)).o_which == S_SCARE {
+        if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
             RET = pos;
             return &raw mut RET;
         }

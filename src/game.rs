@@ -10,6 +10,8 @@
 //!   `static mut places: [CPlace; 32*80]` declaration binds to this symbol;
 //! * the **monster map** — a dedicated [`MONSTERS`] per-cell monster
 //!   occupancy array that backs the `p_monst` column of `places`.
+//! * the **current equipment** — non-owning pointers to the armor, rings, and
+//!   weapon selected from the player's pack.
 //!
 //! Cell display glyphs and flat flags are no longer cached in `places` (the
 //! `p_ch`/`p_flags` members were removed); every access goes through
@@ -17,9 +19,71 @@
 //! grids on the fly.
 
 use std::os::raw::c_int;
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 use crate::level::{Level, LEVEL_HEIGHT, LEVEL_WIDTH};
 use crate::player::{CPlace, CThing};
+
+/// Non-owning pointers to the objects currently equipped by the player.
+pub struct Equipment {
+    armor: AtomicPtr<CThing>,
+    rings: [AtomicPtr<CThing>; 2],
+    weapon: AtomicPtr<CThing>,
+}
+
+impl Equipment {
+    const EMPTY: Self = Self {
+        armor: AtomicPtr::new(std::ptr::null_mut()),
+        rings: [
+            AtomicPtr::new(std::ptr::null_mut()),
+            AtomicPtr::new(std::ptr::null_mut()),
+        ],
+        weapon: AtomicPtr::new(std::ptr::null_mut()),
+    };
+
+    #[inline]
+    pub fn armor(&self) -> *mut CThing {
+        self.armor.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn set_armor(&self, armor: *mut CThing) {
+        self.armor.store(armor, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn left_ring(&self) -> *mut CThing {
+        self.rings[0].load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn right_ring(&self) -> *mut CThing {
+        self.rings[1].load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn set_left_ring(&self, ring: *mut CThing) {
+        self.rings[0].store(ring, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn set_right_ring(&self, ring: *mut CThing) {
+        self.rings[1].store(ring, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn weapon(&self) -> *mut CThing {
+        self.weapon.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn set_weapon(&self, weapon: *mut CThing) {
+        self.weapon.store(weapon, Ordering::Relaxed);
+    }
+}
+
+/// Current player equipment. Items remain owned by the player's pack.
+pub static EQUIPMENT: Equipment = Equipment::EMPTY;
 
 /// Index of a grid cell, matching the legacy C layout `&places[(x<<5)+y]`.
 #[inline]
@@ -36,10 +100,9 @@ fn cell_index(y: c_int, x: c_int) -> usize {
 /// existing `extern "C" { static mut places: [CPlace; 32 * 80] }`
 /// declaration links against this storage unchanged.
 #[no_mangle]
-pub static mut places: [CPlace; LEVEL_HEIGHT * LEVEL_WIDTH] =
-    [CPlace {
-        p_monst: std::ptr::null_mut(),
-    }; LEVEL_HEIGHT * LEVEL_WIDTH];
+pub static mut places: [CPlace; LEVEL_HEIGHT * LEVEL_WIDTH] = [CPlace {
+    p_monst: std::ptr::null_mut(),
+}; LEVEL_HEIGHT * LEVEL_WIDTH];
 
 /// Dense per-cell monster occupancy map.
 ///
@@ -79,8 +142,21 @@ pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
 /// Reset the places grid's monster pointers and the monster map for a fresh
 /// level. (The `Level` reset — tiles/flags — is handled by `Level::reset`.)
 pub unsafe fn clear_level() {
-    places.iter_mut().for_each(|cell| cell.p_monst = std::ptr::null_mut());
-    MONSTERS.fill(std::ptr::null_mut());
+    let place_cells = std::slice::from_raw_parts_mut(
+        (&raw mut places).cast::<CPlace>(),
+        LEVEL_HEIGHT * LEVEL_WIDTH,
+    );
+    for cell in place_cells {
+        cell.p_monst = std::ptr::null_mut();
+    }
+
+    let monsters = std::slice::from_raw_parts_mut(
+        (&raw mut MONSTERS).cast::<*mut CThing>(),
+        LEVEL_HEIGHT * LEVEL_WIDTH,
+    );
+    for monster in monsters {
+        *monster = std::ptr::null_mut();
+    }
 }
 
 /// Process-wide singleton for the live dungeon level.
@@ -93,10 +169,11 @@ pub static mut CURRENT_LEVEL: Option<Level> = None;
 /// The live level owner. Initializes the singleton on first use.
 #[inline]
 pub unsafe fn current_level_mut() -> &'static mut Level {
-    if CURRENT_LEVEL.is_none() {
-        CURRENT_LEVEL = Some(Level::new());
+    let current_level = &raw mut CURRENT_LEVEL;
+    if (*current_level).is_none() {
+        (*current_level) = Some(Level::new());
     }
-    CURRENT_LEVEL.as_mut().unwrap()
+    (*current_level).as_mut().unwrap()
 }
 
 /// Immutable access to the live level.
@@ -107,3 +184,23 @@ pub unsafe fn current_level() -> &'static Level {
 
 /// Convenience alias for the crate-wide level size constants.
 pub use crate::level::{LEVEL_HEIGHT as GAME_HEIGHT, LEVEL_WIDTH as GAME_WIDTH};
+
+#[cfg(test)]
+mod tests {
+    use super::Equipment;
+    use crate::player::CThing;
+    use std::mem::MaybeUninit;
+
+    #[test]
+    fn ring_accessors_keep_hands_independent() {
+        let equipment = Equipment::EMPTY;
+        let mut left = MaybeUninit::<CThing>::uninit();
+        let mut right = MaybeUninit::<CThing>::uninit();
+
+        equipment.set_left_ring(left.as_mut_ptr());
+        equipment.set_right_ring(right.as_mut_ptr());
+
+        assert_eq!(equipment.left_ring(), left.as_mut_ptr());
+        assert_eq!(equipment.right_ring(), right.as_mut_ptr());
+    }
+}

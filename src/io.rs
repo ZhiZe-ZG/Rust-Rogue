@@ -2,10 +2,12 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::curses as cur;
+use crate::draw::look;
+use crate::game::EQUIPMENT;
+use crate::mdport::md_readchar;
 use crate::player::{CStats, CThing, CThingMonster};
+use crate::startup::quit;
 
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 const ESCAPE: c_int = 27;
 const NUMCOLS: c_int = 80;
 const MAXSTR: usize = 1024;
@@ -16,7 +18,6 @@ static mut msgbuf: [c_char; 2 * MAXMSG + 1] = [0; 2 * MAXMSG + 1];
 static mut newpos: c_int = 0;
 
 unsafe extern "C" {
-    static mut cur_armor: *mut CThing;
     static mut hungry_state: c_int;
     static mut huh: [c_char; MAXSTR];
     static mut level: c_int;
@@ -33,9 +34,6 @@ unsafe extern "C" {
 
     fn isalpha(c: c_int) -> c_int;
     fn islower(c: c_int) -> c_int;
-    fn look(wakeup: c_uchar);
-    fn md_readchar() -> c_int;
-    fn quit(status: c_int) -> c_int;
     fn strcat(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
@@ -123,16 +121,16 @@ pub unsafe fn addmsg_str(text: &str) {
 #[cfg(not(test))]
 #[no_mangle]
 pub unsafe extern "C" fn endmsg() -> c_int {
-    if save_msg != FALSE {
+    if save_msg != false as c_uchar {
         strcpy(huh.as_mut_ptr(), msgbuf.as_ptr());
     }
 
     if mpos != 0 {
-        look(FALSE);
+        look(false as c_uchar);
         cur::mvaddstr(0, mpos, c"--More--".as_ptr());
         cur::refresh();
 
-        if msg_esc == FALSE {
+        if msg_esc == false as c_uchar {
             wait_for(' ' as c_int);
         } else {
             loop {
@@ -150,7 +148,7 @@ pub unsafe extern "C" fn endmsg() -> c_int {
         }
     }
 
-    if islower(msgbuf[0] as c_int) != 0 && lower_msg == FALSE && msgbuf[1] != 0 {
+    if islower(msgbuf[0] as c_int) != 0 && lower_msg == false as c_uchar && msgbuf[1] != 0 {
         msgbuf[0] = toupper(msgbuf[0] as c_int) as c_char;
     }
 
@@ -167,8 +165,14 @@ pub unsafe extern "C" fn endmsg() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn step_ok(ch: c_int) -> c_int {
     match ch as u8 {
-        b' ' | b'|' | b'-' => FALSE as c_int,
-        _ => if isalpha(ch) != 0 { 0 } else { 1 },
+        b' ' | b'|' | b'-' => false as c_uchar as c_int,
+        _ => {
+            if isalpha(ch) != 0 {
+                0
+            } else {
+                1
+            }
+        }
     }
 }
 
@@ -190,8 +194,8 @@ pub unsafe extern "C" fn status() {
     let mut ox = 0;
     let pstats = &mut (*thing_t(&raw mut player)).t_stats;
     let max_hp = pstats.s_maxhp;
-    let mut temp = if !cur_armor.is_null() {
-        (*cur_armor).o.o_arm
+    let mut temp = if !EQUIPMENT.armor().is_null() {
+        (*EQUIPMENT.armor()).o.o_arm
     } else {
         pstats.s_arm
     };
@@ -219,7 +223,7 @@ pub unsafe extern "C" fn status() {
         && s_str == pstats.s_str
         && s_lvl == level
         && s_hungry == hungry_state
-        && stat_msg == FALSE
+        && stat_msg == false as c_uchar
     {
         return;
     }
@@ -243,7 +247,7 @@ pub unsafe extern "C" fn status() {
     s_exp = pstats.s_exp;
     s_hungry = hungry_state;
 
-    if stat_msg != FALSE {
+    if stat_msg != false as c_uchar {
         cur::move_(0, 0);
         msg_str(&format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
@@ -315,6 +319,30 @@ pub unsafe extern "C" fn show_win(message: *const c_char) {
     cur::wmove(win, hero.y, hero.x);
     cur::wrefresh(win);
     wait_for(' ' as c_int);
-    cur::clearok(stdscr, TRUE);
+    cur::clearok(stdscr, true as c_uchar);
     cur::touchwin(stdscr);
 }
+
+#[cfg(test)]
+pub unsafe fn endmsg() -> c_int {
+    !ESCAPE
+}
+
+#[cfg(test)]
+pub unsafe fn step_ok(ch: c_int) -> c_int {
+    (!matches!(ch as u8, b' ' | b'|' | b'-') && !(ch as u8).is_ascii_alphabetic()) as c_int
+}
+
+#[cfg(test)]
+pub unsafe fn readchar() -> c_int {
+    ESCAPE
+}
+
+#[cfg(test)]
+pub unsafe fn status() {}
+
+#[cfg(test)]
+pub unsafe fn wait_for(_ch: c_int) {}
+
+#[cfg(test)]
+pub unsafe fn show_win(_message: *const c_char) {}

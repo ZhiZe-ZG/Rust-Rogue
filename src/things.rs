@@ -1,9 +1,18 @@
-use crate::rnd::rnd;
+use crate::armor::waste_time;
+use crate::daemon::extinguish;
+use crate::daemons::unsee;
+use crate::game::EQUIPMENT;
 use crate::io::msg_str;
+use crate::misc::chg_str;
+use crate::pack::{get_item, leave_pack};
+use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::player::{CThing, CThingObject};
+use crate::sticks::fix_stick;
+use crate::thing_list::new_item;
+use crate::weapons::init_weapon;
 
 const MAXSTR: usize = 1024;
 const NUMTHINGS: usize = 7;
@@ -13,8 +22,6 @@ const MAXRINGS: usize = 13;
 const MAXSCROLLS: usize = 18;
 const MAXWEAPONS: usize = 9;
 const MAXSTICKS: usize = 14;
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 const POTION: c_int = b'!' as c_int;
 const SCROLL: c_int = b'?' as c_int;
@@ -26,8 +33,6 @@ const STICK: c_int = b'/' as c_int;
 const GOLD: c_int = b'*' as c_int;
 const AMULET: c_int = b',' as c_int;
 
-const LEFT: c_int = 0;
-const RIGHT: c_int = 1;
 const ISCURSED: c_int = 0o000001;
 const ISKNOW: c_int = 0o000200;
 
@@ -46,9 +51,6 @@ unsafe extern "C" {
     static mut a_class: [c_int; 26];
     static mut amulet: c_uchar;
     static mut arm_info: [CObjInfo; MAXARMORS];
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
-    static mut cur_weapon: *mut CThing;
     static mut fruit: [c_char; MAXSTR];
     static mut inv_describe: c_uchar;
     static mut lvl_obj: *mut CThing;
@@ -63,21 +65,12 @@ unsafe extern "C" {
     static mut weap_info: [CObjInfo; MAXWEAPONS + 1];
     static mut ws_info: [CObjInfo; MAXSTICKS];
 
-    fn chg_str(amt: c_int);
-    fn extinguish(func: *const c_void);
-    fn fix_stick(obj: *mut CThing);
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn init_weapon(obj: *mut CThing, which: c_int);
     fn isupper(ch: c_int) -> c_int;
-    fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
-    fn new_item() -> *mut CThing;
     fn sprintf(buf: *mut c_char, fmt: *const c_char, ...) -> c_int;
     fn strcat(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
     fn tolower(ch: c_int) -> c_int;
-    fn unsee();
-    fn waste_time();
 }
 
 #[inline]
@@ -87,7 +80,10 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 #[inline]
 unsafe fn is_vowel(ch: c_char) -> bool {
-    matches!(ch as u8, b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U')
+    matches!(
+        ch as u8,
+        b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U'
+    )
 }
 
 #[inline]
@@ -146,28 +142,56 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
             if count == 1 {
                 sprintf(empty, c"A %s".as_ptr(), pot_info[which as usize].oi_name);
             } else {
-                sprintf(empty, c"%d %ss".as_ptr(), count, pot_info[which as usize].oi_name);
+                sprintf(
+                    empty,
+                    c"%d %ss".as_ptr(),
+                    count,
+                    pot_info[which as usize].oi_name,
+                );
             }
         }
         RING => {
             if count == 1 {
-                sprintf(empty, c"A %s ring".as_ptr(), ring_info[which as usize].oi_name);
+                sprintf(
+                    empty,
+                    c"A %s ring".as_ptr(),
+                    ring_info[which as usize].oi_name,
+                );
             } else {
-                sprintf(empty, c"%d %s rings".as_ptr(), count, ring_info[which as usize].oi_name);
+                sprintf(
+                    empty,
+                    c"%d %s rings".as_ptr(),
+                    count,
+                    ring_info[which as usize].oi_name,
+                );
             }
         }
         STICK => {
             if count == 1 {
                 sprintf(empty, c"A %s".as_ptr(), ws_info[which as usize].oi_name);
             } else {
-                sprintf(empty, c"%d %ss".as_ptr(), count, ws_info[which as usize].oi_name);
+                sprintf(
+                    empty,
+                    c"%d %ss".as_ptr(),
+                    count,
+                    ws_info[which as usize].oi_name,
+                );
             }
         }
         SCROLL => {
             if count == 1 {
-                sprintf(empty, c"A scroll of %s".as_ptr(), scr_info[which as usize].oi_name);
+                sprintf(
+                    empty,
+                    c"A scroll of %s".as_ptr(),
+                    scr_info[which as usize].oi_name,
+                );
             } else {
-                sprintf(empty, c"%d scrolls of %s".as_ptr(), count, scr_info[which as usize].oi_name);
+                sprintf(
+                    empty,
+                    c"%d scrolls of %s".as_ptr(),
+                    count,
+                    scr_info[which as usize].oi_name,
+                );
             }
         }
         FOOD => {
@@ -212,15 +236,15 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
     }
 
     if inv_describe != 0 {
-        if obj == cur_armor {
+        if obj == EQUIPMENT.armor() {
             strcat(empty, c" (being worn)".as_ptr());
         }
-        if obj == cur_weapon {
+        if obj == EQUIPMENT.weapon() {
             strcat(empty, c" (weapon in hand)".as_ptr());
         }
-        if obj == cur_ring[LEFT as usize] {
+        if obj == EQUIPMENT.left_ring() {
             strcat(empty, c" (on left hand)".as_ptr());
-        } else if obj == cur_ring[RIGHT as usize] {
+        } else if obj == EQUIPMENT.right_ring() {
             strcat(empty, c" (on right hand)".as_ptr());
         }
     }
@@ -240,29 +264,36 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
 #[no_mangle]
 pub unsafe extern "C" fn dropcheck(obj: *mut CThing) -> c_uchar {
     if obj.is_null() {
-        return TRUE;
+        return true as c_uchar;
     }
-    if obj != cur_armor && obj != cur_weapon && obj != cur_ring[LEFT as usize] && obj != cur_ring[RIGHT as usize] {
-        return TRUE;
+    if obj != EQUIPMENT.armor()
+        && obj != EQUIPMENT.weapon()
+        && obj != EQUIPMENT.left_ring()
+        && obj != EQUIPMENT.right_ring()
+    {
+        return true as c_uchar;
     }
     if ((*thing_o(obj)).o_flags & ISCURSED) != 0 {
         msg_str("you can't.  It appears to be cursed");
-        return FALSE;
+        return false as c_uchar;
     }
-    if obj == cur_weapon {
-        cur_weapon = std::ptr::null_mut();
-    } else if obj == cur_armor {
+    if obj == EQUIPMENT.weapon() {
+        EQUIPMENT.set_weapon(std::ptr::null_mut());
+    } else if obj == EQUIPMENT.armor() {
         waste_time();
-        cur_armor = std::ptr::null_mut();
+        EQUIPMENT.set_armor(std::ptr::null_mut());
     } else {
-        let idx = if obj == cur_ring[LEFT as usize] { LEFT } else { RIGHT };
-        cur_ring[idx as usize] = std::ptr::null_mut();
+        if obj == EQUIPMENT.left_ring() {
+            EQUIPMENT.set_left_ring(std::ptr::null_mut());
+        } else {
+            EQUIPMENT.set_right_ring(std::ptr::null_mut());
+        }
         match (*thing_o(obj)).o_which {
             0 => chg_str(-(*thing_o(obj)).o_arm),
             _ => {}
         }
     }
-    TRUE
+    true as c_uchar
 }
 
 #[no_mangle]
@@ -277,15 +308,21 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
     (*thing_o(cur)).o_group = 0;
     (*thing_o(cur)).o_flags = 0;
 
-    let choice = if no_food > 3 { 2 } else { pick_one(things.as_ptr() as *mut CObjInfo, NUMTHINGS as c_int) as c_int };
+    let choice = if no_food > 3 {
+        2
+    } else {
+        pick_one(things.as_ptr() as *mut CObjInfo, NUMTHINGS as c_int) as c_int
+    };
     match choice {
         0 => {
             (*thing_o(cur)).o_type = POTION;
-            (*thing_o(cur)).o_which = pick_one(pot_info.as_ptr() as *mut CObjInfo, MAXPOTIONS as c_int);
+            (*thing_o(cur)).o_which =
+                pick_one(pot_info.as_ptr() as *mut CObjInfo, MAXPOTIONS as c_int);
         }
         1 => {
             (*thing_o(cur)).o_type = SCROLL;
-            (*thing_o(cur)).o_which = pick_one(scr_info.as_ptr() as *mut CObjInfo, MAXSCROLLS as c_int);
+            (*thing_o(cur)).o_which =
+                pick_one(scr_info.as_ptr() as *mut CObjInfo, MAXSCROLLS as c_int);
         }
         2 => {
             (*thing_o(cur)).o_type = FOOD;
@@ -298,7 +335,10 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
         }
         3 => {
             (*thing_o(cur)).o_type = WEAPON;
-            init_weapon(cur, pick_one(weap_info.as_ptr() as *mut CObjInfo, MAXWEAPONS as c_int));
+            init_weapon(
+                cur,
+                pick_one(weap_info.as_ptr() as *mut CObjInfo, MAXWEAPONS as c_int),
+            );
             let r = rnd(100);
             if r < 10 {
                 (*thing_o(cur)).o_flags |= ISCURSED;
@@ -309,7 +349,8 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
         }
         4 => {
             (*thing_o(cur)).o_type = ARMOR;
-            (*thing_o(cur)).o_which = pick_one(arm_info.as_ptr() as *mut CObjInfo, MAXARMORS as c_int);
+            (*thing_o(cur)).o_which =
+                pick_one(arm_info.as_ptr() as *mut CObjInfo, MAXARMORS as c_int);
             (*thing_o(cur)).o_arm = a_class[(*thing_o(cur)).o_which as usize];
             let r = rnd(100);
             if r < 20 {
@@ -321,7 +362,8 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
         }
         5 => {
             (*thing_o(cur)).o_type = RING;
-            (*thing_o(cur)).o_which = pick_one(ring_info.as_ptr() as *mut CObjInfo, MAXRINGS as c_int);
+            (*thing_o(cur)).o_which =
+                pick_one(ring_info.as_ptr() as *mut CObjInfo, MAXRINGS as c_int);
             match (*thing_o(cur)).o_which {
                 0 | 2 | 7 | 8 => {
                     let mut arm = rnd(3);
@@ -339,7 +381,8 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
         }
         6 => {
             (*thing_o(cur)).o_type = STICK;
-            (*thing_o(cur)).o_which = pick_one(ws_info.as_ptr() as *mut CObjInfo, MAXSTICKS as c_int);
+            (*thing_o(cur)).o_which =
+                pick_one(ws_info.as_ptr() as *mut CObjInfo, MAXSTICKS as c_int);
             fix_stick(cur);
         }
         _ => {}
@@ -357,15 +400,18 @@ pub unsafe extern "C" fn drop() {
     if dropcheck(obj) == 0 {
         return;
     }
-    let all = if ((*thing_o(obj)).o_type & 0x1) == 0 { TRUE } else { FALSE };
-    let _ = leave_pack(obj, TRUE, all);
+    let all = if ((*thing_o(obj)).o_type & 0x1) == 0 {
+        true as c_uchar
+    } else {
+        false as c_uchar
+    };
+    let _ = leave_pack(obj, true as c_uchar, all);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn discovered() {}
 
-#[no_mangle]
-pub unsafe extern "C" fn print_disc(_type: c_char) {}
+unsafe fn print_disc(_type: c_char) {}
 
 #[no_mangle]
 pub unsafe extern "C" fn add_line(fmt: *mut c_char, arg: *mut c_char) -> c_char {
@@ -390,17 +436,21 @@ pub unsafe extern "C" fn add_line(fmt: *mut c_char, arg: *mut c_char) -> c_char 
     0
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn end_line() {}
+unsafe fn end_line() {}
 
-#[no_mangle]
-pub unsafe extern "C" fn nothing(_type: c_char) -> *mut c_char {
+unsafe fn nothing(_type: c_char) -> *mut c_char {
     strcpy(prbuf.as_mut_ptr(), c"Nothing found".as_ptr());
     prbuf.as_mut_ptr()
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn nameit(obj: *mut CThing, typ: *mut c_char, which: *mut c_char, op: *mut CObjInfo, prfunc: unsafe extern "C" fn(*mut CThing) -> *mut c_char) {
+pub unsafe extern "C" fn nameit(
+    obj: *mut CThing,
+    typ: *mut c_char,
+    which: *mut c_char,
+    op: *mut CObjInfo,
+    prfunc: unsafe extern "C" fn(*mut CThing) -> *mut c_char,
+) {
     if op.is_null() || obj.is_null() {
         return;
     }
@@ -413,29 +463,44 @@ pub unsafe extern "C" fn nameit(obj: *mut CThing, typ: *mut c_char, which: *mut 
         }
         let tail = buf.add(strlen(buf));
         if (*op).oi_know != 0 {
-            sprintf(tail, c"of %s%s(%s)".as_ptr(), (*op).oi_name, prfunc(obj), which);
+            sprintf(
+                tail,
+                c"of %s%s(%s)".as_ptr(),
+                (*op).oi_name,
+                prfunc(obj),
+                which,
+            );
         } else if !(*op).oi_guess.is_null() {
-            sprintf(tail, c"called %s%s(%s)".as_ptr(), (*op).oi_guess, prfunc(obj), which);
+            sprintf(
+                tail,
+                c"called %s%s(%s)".as_ptr(),
+                (*op).oi_guess,
+                prfunc(obj),
+                which,
+            );
         }
     } else if (*thing_o(obj)).o_count == 1 {
         sprintf(prbuf.as_mut_ptr(), c"A%s %s %s".as_ptr(), which, which, typ);
     } else {
-        sprintf(prbuf.as_mut_ptr(), c"%d %s %ss".as_ptr(), (*thing_o(obj)).o_count, which, typ);
+        sprintf(
+            prbuf.as_mut_ptr(),
+            c"%d %s %ss".as_ptr(),
+            (*thing_o(obj)).o_count,
+            which,
+            typ,
+        );
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn nullstr(_: *mut CThing) -> *mut c_char {
+unsafe fn nullstr(_: *mut CThing) -> *mut c_char {
     c"".as_ptr() as *mut c_char
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn pick_one_ex(info: *mut CObjInfo, nitems: c_int) -> c_int {
+unsafe fn pick_one_ex(info: *mut CObjInfo, nitems: c_int) -> c_int {
     pick_one(info, nitems)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn set_order(order: *mut c_int, numthings: c_int) {
+unsafe fn set_order(order: *mut c_int, numthings: c_int) {
     for i in 0..numthings {
         *order.add(i as usize) = i;
     }

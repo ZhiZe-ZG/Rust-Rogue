@@ -11,31 +11,38 @@ use crate::rnd::rnd;
  * See the file LICENSE.TXT for full copyright and licensing information.
  */
 
-use crate::io::{addmsg_str, msg_str};
+use crate::armor::rust_armor;
+use crate::chase::{runto, see_monst};
+use crate::game::EQUIPMENT;
+use crate::init::pick_color;
+use crate::io::{addmsg_str, endmsg, msg_str, status};
+use crate::misc::{check_level, chg_str, choose_str, spread};
+use crate::monsters::save;
+use crate::pack::leave_pack;
+use crate::potions::is_magic;
+use crate::rip::death;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::curses as cur;
 use crate::machdep::flush_type;
 use crate::player::{CCoord, CStats, CThing, CThingMonster, CThingObject};
+use crate::startup::roll;
+use crate::thing_list::{attach, detach, discard, new_item};
+use crate::things::inv_name;
+use crate::weapons::{fall, fallpos};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TRUE:  c_uchar = 1;
-const FALSE: c_uchar = 0;
-const MAXSTR: usize  = 1024;
+const MAXSTR: usize = 1024;
 
 // Item types
 const WEAPON: c_int = b')' as c_int;
-const GOLD:   c_int = b'*' as c_int;
-
-// Ring-slot indices
-const LEFT:  usize = 0;
-const RIGHT: usize = 1;
+const GOLD: c_int = b'*' as c_int;
 
 // Ring types
-const R_ADDDAM:  c_int = 8;
-const R_ADDHIT:  c_int = 7;
+const R_ADDDAM: c_int = 8;
+const R_ADDHIT: c_int = 7;
 const R_PROTECT: c_int = 0;
 const R_SUSTSTR: c_int = 2;
 
@@ -43,14 +50,14 @@ const R_SUSTSTR: c_int = 2;
 const ISMISL: c_int = 0o000004;
 
 // Monster/player flags
-const CANHUH:   c_short = 0o000001;
-const ISBLIND:  c_short = 0o000004;
-const ISCANC:   c_short = 0o000010;
+const CANHUH: c_short = 0o000001;
+const ISBLIND: c_short = 0o000004;
+const ISCANC: c_short = 0o000010;
 const ISTARGET: c_short = 0o000200;
-const ISHELD:   c_short = 0o000400;
-const ISHUH:    c_short = 0o001000;
-const ISHALU:   c_short = 0o004000;
-const ISRUN:    c_short = 0o020000;
+const ISHELD: c_short = 0o000400;
+const ISHUH: c_short = 0o001000;
+const ISHALU: c_short = 0o004000;
+const ISRUN: c_short = 0o020000;
 const SEEMONST: c_short = 0o040000;
 
 // Misc constants
@@ -58,18 +65,18 @@ const BORE_LEVEL: c_int = 50;
 
 // Save-vs constants
 const VS_POISON: c_int = 0;
-const VS_MAGIC:  c_int = 0o03;
+const VS_MAGIC: c_int = 0o03;
 
 // ─── Adjustments due to strength ─────────────────────────────────────────────
 
 static STR_PLUS: [c_int; 32] = [
-    -7, -6, -5, -4, -3, -2, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1,
-    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3,
+    -7, -6, -5, -4, -3, -2, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 3,
 ];
 
 static ADD_DAM: [c_int; 32] = [
-    -7, -6, -5, -4, -3, -2, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3,
-    3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6,
+    -7, -6, -5, -4, -3, -2, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3, 3, 4, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 6,
 ];
 
 // ─── Hit/miss message tables ──────────────────────────────────────────────────
@@ -100,7 +107,7 @@ pub static mut m_names: [*const c_char; 8] = [
 
 // ─── Static name buffer for set_mname ────────────────────────────────────────
 
-static mut MNAME_BUF:  [c_char; MAXSTR] = [0; MAXSTR];
+static mut MNAME_BUF: [c_char; MAXSTR] = [0; MAXSTR];
 static mut MNAME_INIT: bool = false;
 
 // Static name buffer for prname
@@ -109,36 +116,31 @@ static mut PRNAME_BUF: [c_char; MAXSTR] = [0; MAXSTR];
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
 unsafe extern "C" {
-    static mut player:      CThing;
-    static mut mlist:       *mut CThing;
-    static mut monsters:    [CMonster; 26];
-    static mut cur_armor:   *mut CThing;
-    static mut cur_ring:    [*mut CThing; 2];
-    static mut cur_weapon:  *mut CThing;
-    static mut weap_info:   [CObjInfo; 10]; // MAXWEAPONS + 1
-    static mut e_levels:    [c_int; 21];
+    static mut player: CThing;
+    static mut mlist: *mut CThing;
+    static mut monsters: [CMonster; 26];
+    static mut weap_info: [CObjInfo; 10]; // MAXWEAPONS + 1
+    static mut e_levels: [c_int; 21];
 
-    static mut count:       c_int;
-    static mut quiet:       c_int;
-    static mut running:     c_uchar;
-    static mut to_death:    c_uchar;
-    static mut kamikaze:    c_uchar;
-    static mut has_hit:     c_uchar;
-    static mut terse:       c_uchar;
+    static mut count: c_int;
+    static mut quiet: c_int;
+    static mut running: c_uchar;
+    static mut to_death: c_uchar;
+    static mut kamikaze: c_uchar;
+    static mut has_hit: c_uchar;
+    static mut terse: c_uchar;
     static mut fight_flush: c_uchar;
-    static mut no_command:  c_int;
-    static mut vf_hit:      c_int;
-    static mut max_hit:     c_int;
-    static mut purse:       c_int;
-    static mut level:       c_int;
-    static mut max_level:   c_int;
+    static mut no_command: c_int;
+    static mut vf_hit: c_int;
+    static mut max_hit: c_int;
+    static mut purse: c_int;
+    static mut level: c_int;
+    static mut max_level: c_int;
 }
 
 // ─── Extern C functions ───────────────────────────────────────────────────────
 
 unsafe extern "C" {
-    fn roll(n: c_int, sides: c_int) -> c_int;
-    fn endmsg() -> c_int;
     fn isupper(c: c_int) -> c_int;
     fn toupper(c: c_int) -> c_int;
     fn toascii(c: c_int) -> c_int;
@@ -147,32 +149,13 @@ unsafe extern "C" {
     fn atoi(s: *const c_char) -> c_int;
     fn sprintf(s: *mut c_char, fmt: *const c_char, ...) -> c_int;
 
-    fn runto(cp: *mut CCoord);
-    fn choose_str(ts: *const c_char, ns: *const c_char) -> *const c_char;
-    fn pick_color(col: *const c_char) -> *const c_char;
-    fn see_monst(mp: *mut CThing) -> c_uchar;
-    fn death(monst: c_char) -> !;
-    fn check_level();
-    fn chg_str(amt: c_int);
-    fn rust_armor(arm: *mut CThing);
-    fn save(which: c_int) -> c_int;
-    fn new_item() -> *mut CThing;
-    fn fallpos(pos: *mut CCoord, newpos: *mut CCoord) -> c_uchar;
-    fn fall(obj: *mut CThing, pr: c_uchar);
-    fn discard(item: *mut CThing);
-    fn inv_name(obj: *mut CThing, drop_it: c_uchar) -> *mut c_char;
-    fn leave_pack(obj: *mut CThing, newobj: c_uchar, all: c_uchar) -> *mut CThing;
-    fn status();
-    fn _detach(list: *mut *mut CThing, item: *mut CThing);
-    fn _attach(list: *mut *mut CThing, item: *mut CThing);
-    fn spread(nm: c_int) -> c_int;
 }
 
 // ─── Local structs (repr(C)) ──────────────────────────────────────────────────
 
 #[repr(C)]
 pub struct CMonster {
-    pub m_name:  *mut c_char,
+    pub m_name: *mut c_char,
     pub m_carry: c_int,
     pub m_flags: c_short,
     pub m_stats: CStats,
@@ -180,11 +163,11 @@ pub struct CMonster {
 
 #[repr(C)]
 pub struct CObjInfo {
-    pub oi_name:  *mut c_char,
-    pub oi_prob:  c_int,
+    pub oi_name: *mut c_char,
+    pub oi_prob: c_int,
     pub oi_worth: c_int,
     pub oi_guess: *mut c_char,
-    pub oi_know:  c_uchar,
+    pub oi_know: c_uchar,
 }
 
 // ─── Inline helpers ───────────────────────────────────────────────────────────
@@ -210,13 +193,13 @@ unsafe fn chat(y: c_int, x: c_int) -> c_char {
 }
 
 #[inline]
-unsafe fn isring(hand: usize, ring_type: c_int) -> bool {
-    !cur_ring[hand].is_null() && (*thing_o(cur_ring[hand])).o_which == ring_type
+unsafe fn isring(ring: *mut CThing, ring_type: c_int) -> bool {
+    !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
 #[inline]
 unsafe fn iswearing(ring_type: c_int) -> bool {
-    isring(LEFT, ring_type) || isring(RIGHT, ring_type)
+    isring(EQUIPMENT.left_ring(), ring_type) || isring(EQUIPMENT.right_ring(), ring_type)
 }
 
 #[inline]
@@ -253,43 +236,53 @@ pub unsafe extern "C" fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uch
             ch = (rnd(26) + b'A' as c_int) as c_char;
             cur::mvaddch((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x, ch as c_uint);
         }
-        msg_str(&CStr::from_ptr(choose_str(
-            c"heavy!  That's a nasty critter!".as_ptr(),
-            c"wait!  That's a xeroc!".as_ptr(),
-        )).to_string_lossy());
+        msg_str(
+            &CStr::from_ptr(choose_str(
+                c"heavy!  That's a nasty critter!".as_ptr(),
+                c"wait!  That's a xeroc!".as_ptr(),
+            ))
+            .to_string_lossy(),
+        );
         if thrown == 0 {
-            return FALSE as c_int;
+            return false as c_uchar as c_int;
         }
     }
 
     let mname = set_mname(tp);
-    let mut did_hit = FALSE;
-    has_hit = if terse != 0 && to_death == 0 { TRUE } else { FALSE };
+    let mut did_hit = false as c_uchar;
+    has_hit = if terse != 0 && to_death == 0 {
+        true as c_uchar
+    } else {
+        false as c_uchar
+    };
 
     if roll_em(&raw mut player, tp, weap, thrown) != 0 {
-        did_hit = FALSE;
+        did_hit = false as c_uchar;
         if thrown != 0 {
             thunk(weap, mname, terse);
         } else {
             hit(std::ptr::null_mut(), mname, terse);
         }
         if on_p(&raw mut player, CANHUH) {
-            did_hit = TRUE;
+            did_hit = true as c_uchar;
             (*thing_t(tp)).t_flags |= ISHUH;
             (*thing_t(&raw mut player)).t_flags &= !CANHUH;
             endmsg();
-            has_hit = FALSE;
+            has_hit = false as c_uchar;
             msg_str(&format!(
                 "your hands stop glowing {}",
-                CStr::from_ptr(pick_color(c"red".as_ptr())).to_string_lossy()
+                CStr::from_ptr(pick_color(c"red".as_ptr().cast_mut())).to_string_lossy()
             ));
         }
         if (*thing_t(tp)).t_stats.s_hpt <= 0 {
-            killed(tp, TRUE);
+            killed(tp, true as c_uchar);
         } else if did_hit != 0 && !on_p(&raw mut player, ISBLIND) {
-            msg_str(&format!("{} appears confused", CStr::from_ptr(mname).to_string_lossy()));
+            msg_str(&format!(
+                "{} appears confused",
+                CStr::from_ptr(mname).to_string_lossy()
+            ));
         }
-        did_hit = TRUE;
+        did_hit = true as c_uchar;
     } else if thrown != 0 {
         bounce(weap, mname, terse);
     } else {
@@ -303,13 +296,13 @@ pub unsafe extern "C" fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uch
 #[no_mangle]
 pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
     // Stop running / healing.
-    running = FALSE;
+    running = false as c_uchar;
     count = 0;
     quiet = 0;
 
     if to_death != 0 && !on_p(mp, ISTARGET) {
-        to_death = FALSE;
-        kamikaze = FALSE;
+        to_death = false as c_uchar;
+        kamikaze = false as c_uchar;
     }
 
     if (*thing_t(mp)).t_type == b'X' as c_char
@@ -329,16 +322,16 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
     let mname = set_mname(mp);
     let oldhp = (*thing_t(&raw mut player)).t_stats.s_hpt;
 
-    if roll_em(mp, &raw mut player, std::ptr::null_mut(), FALSE) != 0 {
+    if roll_em(mp, &raw mut player, std::ptr::null_mut(), false as c_uchar) != 0 {
         if (*thing_t(mp)).t_type != b'I' as c_char {
             if has_hit != 0 {
                 addmsg_str(".  ");
             }
-            hit(mname, std::ptr::null_mut(), FALSE);
+            hit(mname, std::ptr::null_mut(), false as c_uchar);
         } else if has_hit != 0 {
             endmsg();
         }
-        has_hit = FALSE;
+        has_hit = false as c_uchar;
 
         if (*thing_t(&raw mut player)).t_stats.s_hpt <= 0 {
             death((*thing_t(mp)).t_type);
@@ -348,7 +341,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 max_hit = damage_dealt;
             }
             if (*thing_t(&raw mut player)).t_stats.s_hpt <= max_hit {
-                to_death = FALSE;
+                to_death = false as c_uchar;
             }
         }
 
@@ -356,14 +349,17 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
             let mtype = (*thing_t(mp)).t_type;
             if mtype == b'A' as c_char {
                 // Aquator: corrode armor
-                rust_armor(cur_armor);
+                rust_armor(EQUIPMENT.armor());
             } else if mtype == b'I' as c_char {
                 // Ice monster: freeze player
                 (*thing_t(&raw mut player)).t_flags &= !ISRUN;
                 if no_command == 0 {
                     addmsg_str("you are frozen");
                     if terse == 0 {
-                        addmsg_str(&format!(" by the {}", CStr::from_ptr(mname).to_string_lossy()));
+                        addmsg_str(&format!(
+                            " by the {}",
+                            CStr::from_ptr(mname).to_string_lossy()
+                        ));
                     }
                     endmsg();
                 }
@@ -428,7 +424,10 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 (*thing_t(&raw mut player)).t_flags |= ISHELD;
                 vf_hit += 1;
                 sprintf(
-                    monsters[(b'F' as usize) - (b'A' as usize)].m_stats.s_dmg.as_mut_ptr(),
+                    monsters[(b'F' as usize) - (b'A' as usize)]
+                        .m_stats
+                        .s_dmg
+                        .as_mut_ptr(),
                     c"%dx1".as_ptr(),
                     vf_hit,
                 );
@@ -448,7 +447,11 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                     purse = 0;
                 }
                 let mp_pos = (*thing_t(mp)).t_pos;
-                remove_mon(&(*thing_t(mp)).t_pos as *const CCoord as *mut CCoord, mp, FALSE);
+                remove_mon(
+                    &(*thing_t(mp)).t_pos as *const CCoord as *mut CCoord,
+                    mp,
+                    false as c_uchar,
+                );
                 if purse != lastpurse {
                     msg_str("your purse feels lighter");
                 }
@@ -463,10 +466,10 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 let mut obj = (*thing_t(&raw mut player)).t_pack;
                 while !obj.is_null() {
                     let obj_next = (*thing_t(obj)).l_next;
-                    if obj != cur_armor
-                        && obj != cur_weapon
-                        && obj != cur_ring[LEFT]
-                        && obj != cur_ring[RIGHT]
+                    if obj != EQUIPMENT.armor()
+                        && obj != EQUIPMENT.weapon()
+                        && obj != EQUIPMENT.left_ring()
+                        && obj != EQUIPMENT.right_ring()
                         && is_magic_item(obj) != 0
                     {
                         nobj += 1;
@@ -480,12 +483,12 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                     remove_mon(
                         &(*thing_t(mp)).t_pos as *const CCoord as *mut CCoord,
                         moat((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x),
-                        FALSE,
+                        false as c_uchar,
                     );
-                    leave_pack(steal, FALSE, FALSE);
+                    leave_pack(steal, false as c_uchar, false as c_uchar);
                     msg_str(&format!(
                         "she stole {}!",
-                        CStr::from_ptr(inv_name(steal, TRUE)).to_string_lossy()
+                        CStr::from_ptr(inv_name(steal, true as c_uchar)).to_string_lossy()
                     ));
                     discard(steal);
                     count = 0;
@@ -498,7 +501,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
         // Miss branch
         if has_hit != 0 {
             addmsg_str(".  ");
-            has_hit = FALSE;
+            has_hit = false as c_uchar;
         }
         if (*thing_t(mp)).t_type == b'F' as c_char {
             (*thing_t(&raw mut player)).t_stats.s_hpt -= vf_hit;
@@ -506,7 +509,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 death((*thing_t(mp)).t_type);
             }
         }
-        miss(mname, std::ptr::null_mut(), FALSE);
+        miss(mname, std::ptr::null_mut(), false as c_uchar);
     }
 
     if fight_flush != 0 && to_death == 0 {
@@ -519,9 +522,6 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
 
 /// Helper: forward to is_magic C function (from potions.rs).
 unsafe fn is_magic_item(obj: *mut CThing) -> c_uchar {
-    extern "C" {
-        fn is_magic(obj: *mut CThing) -> c_uchar;
-    }
     is_magic(obj)
 }
 
@@ -570,7 +570,7 @@ pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
 /// Returns true (1) if the swing hits.
 #[no_mangle]
 pub unsafe extern "C" fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_int {
-    let res  = rnd(20);
+    let res = rnd(20);
     let need = (20 - at_lvl) - op_arm;
     (res + wplus >= need) as c_int
 }
@@ -581,47 +581,51 @@ pub unsafe extern "C" fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_
 pub unsafe extern "C" fn roll_em(
     thatt: *mut CThing,
     thdef: *mut CThing,
-    weap:  *mut CThing,
-    hurl:  c_uchar,
+    weap: *mut CThing,
+    hurl: c_uchar,
 ) -> c_int {
     let cp: *mut c_char;
     let hplus: c_int;
     let dplus: c_int;
 
     if weap.is_null() {
-        cp    = (*thing_t(thatt)).t_stats.s_dmg.as_mut_ptr();
+        cp = (*thing_t(thatt)).t_stats.s_dmg.as_mut_ptr();
         dplus = 0;
         hplus = 0;
     } else {
         let mut hp = (*thing_o(weap)).o_hplus;
         let mut dp = (*thing_o(weap)).o_dplus;
-        if weap == cur_weapon {
-            if isring(LEFT, R_ADDDAM) {
-                dp += (*thing_o(cur_ring[LEFT])).o_arm;
-            } else if isring(LEFT, R_ADDHIT) {
-                hp += (*thing_o(cur_ring[LEFT])).o_arm;
+        if weap == EQUIPMENT.weapon() {
+            if isring(EQUIPMENT.left_ring(), R_ADDDAM) {
+                dp += (*thing_o(EQUIPMENT.left_ring())).o_arm;
+            } else if isring(EQUIPMENT.left_ring(), R_ADDHIT) {
+                hp += (*thing_o(EQUIPMENT.left_ring())).o_arm;
             }
-            if isring(RIGHT, R_ADDDAM) {
-                dp += (*thing_o(cur_ring[RIGHT])).o_arm;
-            } else if isring(RIGHT, R_ADDHIT) {
-                hp += (*thing_o(cur_ring[RIGHT])).o_arm;
+            if isring(EQUIPMENT.right_ring(), R_ADDDAM) {
+                dp += (*thing_o(EQUIPMENT.right_ring())).o_arm;
+            } else if isring(EQUIPMENT.right_ring(), R_ADDHIT) {
+                hp += (*thing_o(EQUIPMENT.right_ring())).o_arm;
             }
         }
         if hurl != 0 {
             if ((*thing_o(weap)).o_flags & ISMISL) != 0
-                && !cur_weapon.is_null()
-                && (*thing_o(cur_weapon)).o_which == (*thing_o(weap)).o_launch
+                && !EQUIPMENT.weapon().is_null()
+                && (*thing_o(EQUIPMENT.weapon())).o_which == (*thing_o(weap)).o_launch
             {
                 let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr();
-                return roll_em_inner(thatt, thdef, hurldmg_ptr,
-                    hp + (*thing_o(cur_weapon)).o_hplus,
-                    dp + (*thing_o(cur_weapon)).o_dplus);
+                return roll_em_inner(
+                    thatt,
+                    thdef,
+                    hurldmg_ptr,
+                    hp + (*thing_o(EQUIPMENT.weapon())).o_hplus,
+                    dp + (*thing_o(EQUIPMENT.weapon())).o_dplus,
+                );
             } else if (*thing_o(weap)).o_launch < 0 {
                 let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr();
                 return roll_em_inner(thatt, thdef, hurldmg_ptr, hp, dp);
             }
         }
-        cp    = (*thing_o(weap)).o_damage.as_mut_ptr();
+        cp = (*thing_o(weap)).o_damage.as_mut_ptr();
         hplus = hp;
         dplus = dp;
     }
@@ -633,7 +637,7 @@ pub unsafe extern "C" fn roll_em(
 unsafe fn roll_em_inner(
     thatt: *mut CThing,
     thdef: *mut CThing,
-    mut cp:   *mut c_char,
+    mut cp: *mut c_char,
     hplus: c_int,
     dplus: c_int,
 ) -> c_int {
@@ -645,14 +649,14 @@ unsafe fn roll_em_inner(
     let player_is_def = thdef as *const u8 == (&raw const player) as *const u8;
     let mut def_arm = def_arm_base;
     if player_is_def {
-        if !cur_armor.is_null() {
-            def_arm = (*thing_o(cur_armor)).o_arm;
+        if !EQUIPMENT.armor().is_null() {
+            def_arm = (*thing_o(EQUIPMENT.armor())).o_arm;
         }
-        if isring(LEFT, R_PROTECT) {
-            def_arm -= (*thing_o(cur_ring[LEFT])).o_arm;
+        if isring(EQUIPMENT.left_ring(), R_PROTECT) {
+            def_arm -= (*thing_o(EQUIPMENT.left_ring())).o_arm;
         }
-        if isring(RIGHT, R_PROTECT) {
-            def_arm -= (*thing_o(cur_ring[RIGHT])).o_arm;
+        if isring(EQUIPMENT.right_ring(), R_PROTECT) {
+            def_arm -= (*thing_o(EQUIPMENT.right_ring())).o_arm;
         }
     }
 
@@ -673,7 +677,7 @@ unsafe fn roll_em_inner(
         cp = cp.add(1);
         let nsides = atoi(cp);
         if swing(att_lvl, def_arm, hplus + STR_PLUS[str_idx]) != 0 {
-            let proll  = roll(ndice, nsides);
+            let proll = roll(ndice, nsides);
             let damage = dplus + proll + ADD_DAM[str_idx];
             (*thing_t(thdef)).t_stats.s_hpt -= if damage > 0 { damage } else { 0 };
             did_hit = 1;
@@ -731,7 +735,7 @@ pub unsafe extern "C" fn hit(er: *const c_char, ee: *const c_char, noend: c_ucha
     if to_death != 0 {
         return;
     }
-    addmsg_str(&CStr::from_ptr(prname(er, TRUE)).to_string_lossy());
+    addmsg_str(&CStr::from_ptr(prname(er, true as c_uchar)).to_string_lossy());
     let s: *const c_char = if terse != 0 {
         c" hit".as_ptr()
     } else {
@@ -743,7 +747,7 @@ pub unsafe extern "C" fn hit(er: *const c_char, ee: *const c_char, noend: c_ucha
     };
     addmsg_str(&CStr::from_ptr(s).to_string_lossy());
     if terse == 0 {
-        addmsg_str(&CStr::from_ptr(prname(ee, FALSE)).to_string_lossy());
+        addmsg_str(&CStr::from_ptr(prname(ee, false as c_uchar)).to_string_lossy());
     }
     if noend == 0 {
         endmsg();
@@ -757,16 +761,27 @@ pub unsafe extern "C" fn miss(er: *const c_char, ee: *const c_char, noend: c_uch
     if to_death != 0 {
         return;
     }
-    addmsg_str(&CStr::from_ptr(prname(er, TRUE)).to_string_lossy());
+    addmsg_str(&CStr::from_ptr(prname(er, true as c_uchar)).to_string_lossy());
     let i: usize = if terse != 0 {
-        if !er.is_null() { 4 } else { 0 }
+        if !er.is_null() {
+            4
+        } else {
+            0
+        }
     } else {
         let base = rnd(4) as usize;
-        if !er.is_null() { base + 4 } else { base }
+        if !er.is_null() {
+            base + 4
+        } else {
+            base
+        }
     };
     addmsg_str(&CStr::from_ptr(m_names[i]).to_string_lossy());
     if terse == 0 {
-        addmsg_str(&format!(" {}", CStr::from_ptr(prname(ee, FALSE)).to_string_lossy()));
+        addmsg_str(&format!(
+            " {}",
+            CStr::from_ptr(prname(ee, false as c_uchar)).to_string_lossy()
+        ));
     }
     if noend == 0 {
         endmsg();
@@ -802,12 +817,9 @@ pub unsafe extern "C" fn remove_mon(mp: *mut CCoord, tp: *mut CThing, waskill: c
     while !obj.is_null() {
         let nexti = (*thing_t(obj)).l_next;
         (*thing_o(obj)).o_pos = (*thing_t(tp)).t_pos;
-        _detach(
-            &mut (*thing_t(tp)).t_pack as *mut *mut CThing,
-            obj,
-        );
+        detach(&mut (*thing_t(tp)).t_pack as *mut *mut CThing, obj);
         if waskill != 0 {
-            fall(obj, FALSE);
+            fall(obj, false as c_uchar);
         } else {
             discard(obj);
         }
@@ -818,11 +830,11 @@ pub unsafe extern "C" fn remove_mon(mp: *mut CCoord, tp: *mut CThing, waskill: c
     let oldch = (*thing_t(tp)).t_oldch;
     cur::mvaddch((*mp).y, (*mp).x, oldch as c_uchar as c_uint);
 
-    _detach(&raw mut mlist as *mut *mut CThing, tp);
+    detach(&raw mut mlist as *mut *mut CThing, tp);
 
     if on_p(tp, ISTARGET) {
-        kamikaze = FALSE;
-        to_death = FALSE;
+        kamikaze = false as c_uchar;
+        to_death = false as c_uchar;
         if fight_flush != 0 {
             flush_type();
         }
@@ -842,12 +854,16 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
         (*thing_t(&raw mut player)).t_flags &= !ISHELD;
         vf_hit = 0;
         // Reset damage string to "000x0"
-        let dmg = monsters[(b'F' as usize) - (b'A' as usize)].m_stats.s_dmg.as_mut_ptr();
+        let dmg = monsters[(b'F' as usize) - (b'A' as usize)]
+            .m_stats
+            .s_dmg
+            .as_mut_ptr();
         strcpy(dmg, c"000x0".as_ptr());
     } else if mtype == b'L' as c_char {
         let mut gold_pos = CCoord { x: 0, y: 0 };
         let tp_room = (*thing_t(tp)).t_room;
-        if !tp_room.is_null() && fallpos(&mut (*thing_t(tp)).t_pos, &mut (*tp_room).r_gold) != 0
+        if !tp_room.is_null()
+            && fallpos(&mut (*thing_t(tp)).t_pos, &mut (*tp_room).r_gold) != 0
             && level >= max_level
         {
             let gold = new_item();
@@ -858,17 +874,17 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
                 let extra = rnd(50 + 10 * level) + 2;
                 (*thing_o(gold)).o_arm += extra + extra + extra + extra;
             }
-            _attach(&mut (*thing_t(tp)).t_pack as *mut *mut CThing, gold);
+            attach(&mut (*thing_t(tp)).t_pack as *mut *mut CThing, gold);
         }
     }
 
     let mname = set_mname(tp);
-    remove_mon(&mut (*thing_t(tp)).t_pos, tp, TRUE);
+    remove_mon(&mut (*thing_t(tp)).t_pos, tp, true as c_uchar);
 
     if pr != 0 {
         if has_hit != 0 {
             addmsg_str(".  Defeated ");
-            has_hit = FALSE;
+            has_hit = false as c_uchar;
         } else {
             if terse == 0 {
                 addmsg_str("you have ");

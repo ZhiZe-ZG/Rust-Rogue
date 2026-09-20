@@ -19,10 +19,11 @@ mod trap;
 
 pub use ffi::{door_open, new_level};
 pub use level::{current_level, current_level_mut, Level, LevelFlags, LEVEL_HEIGHT, LEVEL_WIDTH};
+pub(crate) use presence::find_floor;
 
 pub use passages::Passage;
 pub use roomgraph::{RoomGraph, MAX_ROOMS};
 pub use rooms::{Door, DoorKind, Room};
 pub use structure::Structure;
 pub use tile::Tile;
-pub use trap::{be_trapped, T_ARROW, T_BEAR, T_DART, T_DOOR, T_MYST, T_RUST, T_SLEEP, T_TELEP};
+pub use trap::{be_trapped, Trap};

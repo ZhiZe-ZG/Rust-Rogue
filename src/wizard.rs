@@ -3,14 +3,18 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
 
+use crate::chase::roomin;
 use crate::curses as cur;
-use crate::draw;
-use crate::io::msg_str;
+use crate::draw::{self, enter_room, leave_room, look};
+use crate::io::{msg_str, readchar, show_win};
+use crate::level::find_floor;
 use crate::machdep::flush_type;
+use crate::pack::{add_pack, floor_at, get_item};
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
-
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
+use crate::sticks::fix_stick;
+use crate::thing_list::new_item;
+use crate::things::inv_name;
+use crate::weapons::init_weapon;
 
 const POTION: c_int = b'!' as c_int;
 const SCROLL: c_int = b'?' as c_int;
@@ -108,22 +112,8 @@ unsafe extern "C" {
     static mut ws_info: [CObjInfo; 14];
     static mut ring_info: [CObjInfo; 16];
 
-    fn inv_name(obj: *mut CThing, is_weapon: c_uchar) -> *mut c_char;
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn new_item() -> *mut CThing;
-    fn add_pack(obj: *mut CThing, all: c_uchar);
-    fn init_weapon(obj: *mut CThing, which: c_int);
-    fn fix_stick(obj: *mut CThing);
-    fn readchar() -> c_int;
     fn isdigit(ch: c_int) -> c_int;
     fn free(ptr: *mut std::ffi::c_void);
-    fn floor_at() -> c_char;
-    fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_uchar, monst: c_uchar);
-    fn roomin(cp: *mut CCoord) -> *mut CRoom;
-    fn leave_room(cp: *mut CCoord);
-    fn enter_room(cp: *mut CCoord);
-    fn look(wakeup: c_uchar);
-    fn show_win(message: *const c_char);
 }
 
 #[no_mangle]
@@ -142,8 +132,10 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
                 return;
             } else if obj.is_null() {
                 msg_str("you must identify something");
-            } else if item_type != 0 && (*thing_o(obj)).o_type != item_type
-                && !(item_type == R_OR_S && ((*thing_o(obj)).o_type == RING || (*thing_o(obj)).o_type == STICK))
+            } else if item_type != 0
+                && (*thing_o(obj)).o_type != item_type
+                && !(item_type == R_OR_S
+                    && ((*thing_o(obj)).o_type == RING || (*thing_o(obj)).o_type == STICK))
             {
                 msg_str(&format!(
                     "you must identify a {}",
@@ -170,7 +162,7 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
         _ => {}
     }
 
-    msg_str(&CStr::from_ptr(inv_name(obj, FALSE)).to_string_lossy());
+    msg_str(&CStr::from_ptr(inv_name(obj, false as c_uchar)).to_string_lossy());
 }
 
 #[no_mangle]
@@ -181,7 +173,7 @@ pub unsafe extern "C" fn set_know(obj: *mut CThing, info: *mut CObjInfo) {
 
     let idx = (*thing_o(obj)).o_which as usize;
     let item = &mut *info.add(idx);
-    item.oi_know = TRUE;
+    item.oi_know = true as c_uchar;
     (*thing_o(obj)).o_flags |= ISKNOW;
     let guess = &mut item.oi_guess;
     if !guess.is_null() {
@@ -265,7 +257,11 @@ pub unsafe extern "C" fn create_obj() {
                 if bless == ('-' as c_char) {
                     (*thing_o(obj)).o_flags |= ISCURSED;
                 }
-                (*thing_o(obj)).o_arm = if bless == ('-' as c_char) { -1 } else { rnd(2) + 1 };
+                (*thing_o(obj)).o_arm = if bless == ('-' as c_char) {
+                    -1
+                } else {
+                    rnd(2) + 1
+                };
             }
             _ => {
                 (*thing_o(obj)).o_flags |= ISCURSED;
@@ -279,7 +275,7 @@ pub unsafe extern "C" fn create_obj() {
         get_num(&mut amount, stdscr);
     }
 
-    add_pack(obj, FALSE);
+    add_pack(obj, false as c_uchar);
 }
 
 #[no_mangle]
@@ -288,14 +284,14 @@ pub unsafe extern "C" fn teleport() {
     let mut hero = hero();
 
     cur::mvaddch(hero.y, hero.x, floor_at() as c_uint);
-    find_floor(ptr::null_mut(), &mut c, FALSE, TRUE);
+    find_floor(ptr::null_mut(), &mut c, 0, true);
     if roomin(&mut c) != proom() {
         leave_room(&mut hero);
         hero = c;
         enter_room(&mut hero);
     } else {
         hero = c;
-        look(TRUE);
+        look(true as c_uchar);
     }
     (*thing_t(&raw mut player)).t_pos = hero;
     cur::mvaddch(hero.y, hero.x, b'@' as c_uint);
@@ -304,11 +300,15 @@ pub unsafe extern "C" fn teleport() {
         (*thing_t(&raw mut player)).t_flags &= !ISHELD;
         vf_hit = 0;
         let dmg = b"000x0\0";
-        std::ptr::copy_nonoverlapping(dmg.as_ptr() as *const c_char, (&mut monsters[('F' as u8 - 'A' as u8) as usize].m_stats.s_dmg[0]) as *mut c_char, dmg.len());
+        std::ptr::copy_nonoverlapping(
+            dmg.as_ptr() as *const c_char,
+            (&mut monsters[('F' as u8 - 'A' as u8) as usize].m_stats.s_dmg[0]) as *mut c_char,
+            dmg.len(),
+        );
     }
     no_move = 0;
     count = 0;
-    running = FALSE;
+    running = false as c_uchar;
     flush_type();
 }
 
@@ -342,9 +342,15 @@ mod tests {
     #[test]
     fn type_name_matches_expected_strings() {
         unsafe {
-            let potion = CStr::from_ptr(type_name(POTION)).to_string_lossy().into_owned();
-            let scroll = CStr::from_ptr(type_name(SCROLL)).to_string_lossy().into_owned();
-            let armor = CStr::from_ptr(type_name(ARMOR)).to_string_lossy().into_owned();
+            let potion = CStr::from_ptr(type_name(POTION))
+                .to_string_lossy()
+                .into_owned();
+            let scroll = CStr::from_ptr(type_name(SCROLL))
+                .to_string_lossy()
+                .into_owned();
+            let armor = CStr::from_ptr(type_name(ARMOR))
+                .to_string_lossy()
+                .into_owned();
 
             assert_eq!(potion, "potion");
             assert_eq!(scroll, "scroll");
@@ -382,11 +388,11 @@ mod tests {
                 oi_prob: 0,
                 oi_worth: 0,
                 oi_guess: ptr::null_mut(),
-                oi_know: FALSE,
+                oi_know: false as c_uchar,
             }];
 
             set_know(&mut obj, info.as_mut_ptr());
-            assert_eq!(info[0].oi_know, TRUE);
+            assert_eq!(info[0].oi_know, true as c_uchar);
             assert!(((*thing_o(&mut obj)).o_flags & ISKNOW) != 0);
         }
     }

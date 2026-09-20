@@ -9,22 +9,23 @@
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::curses as cur;
 use crate::globals::{fruit, got_ltc, orig_dsusp, prbuf, scoreboard, whoami};
+use crate::mdport::{
+    md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
+};
 
 const MAXSTR: usize = 1024;
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 // Build-time feature flags mirroring config.h for the standard build.
 const SCOREFILE_ENABLED: bool = true; // config.h: #define SCOREFILE "rogue.scr"
-const LOCKFILE_ENABLED: bool = true;  // config.h: #define LOCKFILE "rogue.lck"
-const CHECKTIME: bool = false;        // config.h: /* #undef CHECKTIME */
-const DUMP: bool = false;             // not set in the standard build
+const LOCKFILE_ENABLED: bool = true; // config.h: #define LOCKFILE "rogue.lck"
+const CHECKTIME: bool = false; // config.h: /* #undef CHECKTIME */
+const DUMP: bool = false; // not set in the standard build
 
 const SCOREFILE: &[u8] = b"rogue.scr";
 const LOCKFILE: &[u8] = b"rogue.lck";
@@ -81,15 +82,6 @@ unsafe extern "C" {
     fn rewind(stream: *mut crate::score::CFile);
     fn strerror(errnum: c_int) -> *const c_char;
 
-    // Machine-dependent helpers now implemented in src/rust/src/mdport.rs.
-    fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int;
-    fn md_dsuspchar() -> c_int;
-    fn md_getuid() -> c_uint;
-    fn md_onsignal_default();
-    fn md_setdsuspchar(c: c_int) -> c_int;
-    fn md_sleep(s: c_int);
-    fn md_suspchar() -> c_int;
-    fn md_unlink(file: *mut c_char) -> c_int;
 }
 
 #[cfg(target_os = "macos")]
@@ -199,10 +191,10 @@ pub unsafe extern "C" fn setup() {
         // md_start_checkout_timer(CHECKTIME * 60);
     }
 
-    cur::raw();                                /* Raw mode */
-    cur::noecho();                             /* Echo off */
-    cur::keypad(stdscr, TRUE);
-    getltchars();                              /* get the local tty chars */
+    cur::raw(); /* Raw mode */
+    cur::noecho(); /* Echo off */
+    cur::keypad(stdscr, true as c_uchar);
+    getltchars(); /* get the local tty chars */
 }
 
 /// getltchars:
@@ -211,7 +203,7 @@ pub unsafe extern "C" fn setup() {
 /// Uses globals: got_ltc, orig_dsusp.
 #[no_mangle]
 pub unsafe extern "C" fn getltchars() {
-    got_ltc = TRUE;
+    got_ltc = true;
     orig_dsusp = md_dsuspchar();
     md_setdsuspchar(md_suspchar());
 }
@@ -222,7 +214,7 @@ pub unsafe extern "C" fn getltchars() {
 /// Uses globals: got_ltc, orig_dsusp.
 #[no_mangle]
 pub unsafe extern "C" fn resetltchars() {
-    if got_ltc != 0 {
+    if got_ltc {
         md_setdsuspchar(orig_dsusp);
     }
 }
@@ -233,7 +225,7 @@ pub unsafe extern "C" fn resetltchars() {
 /// Uses globals: got_ltc.
 #[no_mangle]
 pub unsafe extern "C" fn playltchars() {
-    if got_ltc != 0 {
+    if got_ltc {
         md_setdsuspchar(md_suspchar());
     }
 }
@@ -251,30 +243,33 @@ pub unsafe extern "C" fn start_score() {
 /// is_symlink:
 /// See if the file is not a regular file (i.e. a symbolic link or
 /// special file).
-#[no_mangle]
-pub unsafe extern "C" fn is_symlink(sp: *mut c_char) -> c_uchar {
+unsafe fn is_symlink(sp: *mut c_char) -> c_uchar {
     if sp.is_null() {
-        return FALSE;
+        return false as c_uchar;
     }
     let path = CStr::from_ptr(sp).to_string_lossy();
     match std::fs::symlink_metadata(path.as_ref()) {
         Ok(md) => {
             // Original C: ((sbuf2.st_mode & S_IFMT) != S_IFREG)
-            if md.file_type().is_file() { FALSE } else { TRUE }
+            if md.file_type().is_file() {
+                false as c_uchar
+            } else {
+                true as c_uchar
+            }
         }
-        Err(_) => FALSE,
+        Err(_) => false as c_uchar,
     }
 }
 
 /// lock_sc:
 /// Lock the score file.  If it takes too long, ask the user if they
-/// care to wait.  Return TRUE if the lock is successful.
+/// care to wait.  Return true as c_uchar if the lock is successful.
 ///
 /// Uses globals: lfd (static), prbuf.
 #[no_mangle]
 pub unsafe extern "C" fn lock_sc() -> c_int {
     if !SCOREFILE_ENABLED || !LOCKFILE_ENABLED {
-        return TRUE as c_int;
+        return true as c_uchar as c_int;
     }
 
     let lockfile = CString::new(LOCKFILE).unwrap();
@@ -283,14 +278,14 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
     'over: loop {
         LFD = fopen(lockfile_ptr, c"w+".as_ptr());
         if !LFD.is_null() {
-            return TRUE as c_int;
+            return true as c_uchar as c_int;
         }
 
         for _ in 0..5 {
             md_sleep(1);
             LFD = fopen(lockfile_ptr, c"w+".as_ptr());
             if !LFD.is_null() {
-                return TRUE as c_int;
+                return true as c_uchar as c_int;
             }
         }
 
@@ -298,12 +293,12 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
             None => {
                 // stat() failed -- the lock file is gone; try again.
                 LFD = fopen(lockfile_ptr, c"w+".as_ptr());
-                return TRUE as c_int;
+                return true as c_uchar as c_int;
             }
             Some(mtime) => {
                 if now_secs() - mtime > 10 {
                     if md_unlink(lockfile_ptr) < 0 {
-                        return FALSE as c_int;
+                        return false as c_uchar as c_int;
                     }
                     continue 'over;
                 }
@@ -316,22 +311,22 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
                     loop {
                         LFD = fopen(lockfile_ptr, c"w+".as_ptr());
                         if !LFD.is_null() {
-                            return TRUE as c_int;
+                            return true as c_uchar as c_int;
                         }
                         if let Some(mtime2) = lockfile_mtime(lockfile_ptr) {
                             if now_secs() - mtime2 > 10 {
                                 if md_unlink(lockfile_ptr) < 0 {
-                                    return FALSE as c_int;
+                                    return false as c_uchar as c_int;
                                 }
                             }
                         } else {
                             LFD = fopen(lockfile_ptr, c"w+".as_ptr());
-                            return TRUE as c_int;
+                            return true as c_uchar as c_int;
                         }
                         md_sleep(1);
                     }
                 }
-                return FALSE as c_int;
+                return false as c_uchar as c_int;
             }
         }
     }

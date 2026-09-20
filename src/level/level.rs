@@ -17,6 +17,7 @@ use super::roomgraph::{RoomGraph, MAX_ROOMS};
 use super::rooms::{build_generated_rooms, Room};
 use super::structure::Structure;
 use super::tile::Tile;
+use super::trap::Trap;
 
 /// Map height in cells. Matches the C `places` grid (32 rows), the largest
 /// on-screen area a dungeon level can occupy.
@@ -32,16 +33,19 @@ pub const LEVEL_WIDTH: usize = 80;
 /// nibble (0-7, the legacy `F_TMASK` bits) set by `place_traps`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LevelFlags {
-    /// `false` marks a non-real (secret) wall or door cell.
+    /// Whether each cell is real and visible as solid terrain; `false` marks
+    /// a secret wall or door that has not been revealed.
     pub real: Vec<bool>,
-    /// `true` marks a passage (`#`) cell.
+    /// Whether each cell belongs to a passage corridor rendered as `#`.
     pub passage: Vec<bool>,
-    /// `true` marks a cell already drawn by `add_pass`.
+    /// Whether each cell has already been seen or drawn by the player.
     pub seen: Vec<bool>,
-    /// Passage component number (0-15) assigned by `number_passages`.
+    /// Passage component number for each cell, assigned by
+    /// [`number_passages`]; zero means that no component is assigned.
     pub passnum: Vec<u8>,
-    /// Trap kind (0-7) of a hidden trap cell; 0 elsewhere.
-    pub trap: Vec<u8>,
+    /// Trap kind for each cell; cells without a trap use [`Trap::Door`], the
+    /// zero-valued legacy representation.
+    pub trap: Vec<Trap>,
 }
 
 impl LevelFlags {
@@ -52,7 +56,7 @@ impl LevelFlags {
             passage: vec![false; cells],
             seen: vec![false; cells],
             passnum: vec![0; cells],
-            trap: vec![0; cells],
+            trap: vec![Trap::Door; cells],
         }
     }
 
@@ -96,6 +100,17 @@ impl Level {
         self.flags = LevelFlags::cleared();
     }
 
+    /// Reveal the trap at `(y, x)` by making the cell real and seen.
+    pub fn reveal_trap(&mut self, y: usize, x: usize) {
+        let idx = LevelFlags::flag_idx(y, x);
+        if let Some(real) = self.flags.real.get_mut(idx) {
+            *real = true;
+        }
+        if let Some(seen) = self.flags.seen.get_mut(idx) {
+            *seen = true;
+        }
+    }
+
     /// Dig a single corridor between two adjacent rooms `r1` and `r2`.
     ///
     /// Works in three phases: first the corridor geometry is generated purely
@@ -110,8 +125,20 @@ impl Level {
         // the level map or room records.
         let mut tiles = Vec::new();
         let mut entry_points = Vec::new();
-        collect_corridor_end(&self.rooms, plan.base_room, plan.start, &mut tiles, &mut entry_points);
-        collect_corridor_end(&self.rooms, plan.partner_room, plan.end, &mut tiles, &mut entry_points);
+        collect_corridor_end(
+            &self.rooms,
+            plan.base_room,
+            plan.start,
+            &mut tiles,
+            &mut entry_points,
+        );
+        collect_corridor_end(
+            &self.rooms,
+            plan.partner_room,
+            plan.end,
+            &mut tiles,
+            &mut entry_points,
+        );
         tiles.extend(corridor_tiles(&plan));
 
         // Phase 2 — build the Passage model from the collected geometry.
@@ -146,7 +173,12 @@ impl Level {
         }
 
         mark_passages(&self.map, &mut self.flags, self.depth);
-        number_passages(&self.map, &mut self.flags, &self.rooms, &mut self.passage_links);
+        number_passages(
+            &self.map,
+            &mut self.flags,
+            &self.rooms,
+            &mut self.passage_links,
+        );
     }
 
     /// Pick a random room slot that has not been removed for this level.
@@ -199,7 +231,7 @@ impl Level {
 }
 
 /// The live level singleton is owned by the game-state module.
-pub use crate::game::{current_level_mut, current_level};
+pub use crate::game::{current_level, current_level_mut};
 
 #[cfg(test)]
 mod tests {
@@ -252,7 +284,10 @@ mod tests {
                     let expected = room.structure.get(local_y, local_x).unwrap();
                     let actual = level
                         .map
-                        .get(room.position.y as usize + local_y, room.position.x as usize + local_x)
+                        .get(
+                            room.position.y as usize + local_y,
+                            room.position.x as usize + local_x,
+                        )
                         .unwrap();
                     assert_eq!(
                         actual, expected,
@@ -293,7 +328,12 @@ mod tests {
     #[test]
     fn build_passage_builds_relative_passage() {
         let passage = super::build_passage(
-            vec![IVec2::new(2, 3), IVec2::new(3, 3), IVec2::new(4, 3), IVec2::new(4, 4)],
+            vec![
+                IVec2::new(2, 3),
+                IVec2::new(3, 3),
+                IVec2::new(4, 3),
+                IVec2::new(4, 4),
+            ],
             vec![IVec2::new(2, 3)],
         )
         .expect("passage should be built");
@@ -302,7 +342,12 @@ mod tests {
         assert_eq!(passage.size, IVec2::new(3, 2));
         assert_eq!(
             passage.tiles,
-            vec![IVec2::new(0, 0), IVec2::new(1, 0), IVec2::new(2, 0), IVec2::new(2, 1)]
+            vec![
+                IVec2::new(0, 0),
+                IVec2::new(1, 0),
+                IVec2::new(2, 0),
+                IVec2::new(2, 1)
+            ]
         );
         assert_eq!(passage.entry_points, vec![IVec2::new(0, 0)]);
     }
@@ -377,7 +422,12 @@ mod tests {
         // Dig the corridor first so the map/flags are populated.
         level.conn(0, 1);
         super::mark_passages(&level.map, &mut level.flags, level.depth);
-        super::number_passages(&level.map, &mut level.flags, &level.rooms, &mut level.passage_links);
+        super::number_passages(
+            &level.map,
+            &mut level.flags,
+            &level.rooms,
+            &mut level.passage_links,
+        );
 
         // One connected component exists with both facing-wall doors.
         assert_eq!(level.passage_links.len(), 1);
@@ -387,7 +437,10 @@ mod tests {
         let passage = &level.passages[0];
         assert_eq!(links.exits.len(), passage.entry_points.len());
         for exit in &links.exits {
-            assert_eq!(level.map.get(exit.y as usize, exit.x as usize), Some(Tile::Door));
+            assert_eq!(
+                level.map.get(exit.y as usize, exit.x as usize),
+                Some(Tile::Door)
+            );
         }
 
         // Every interior passage tile carries component number 1.
@@ -441,7 +494,10 @@ mod tests {
                 }
             }
         }
-        assert_eq!(count, interior, "expected {interior} interior passage tiles, found {count}");
+        assert_eq!(
+            count, interior,
+            "expected {interior} interior passage tiles, found {count}"
+        );
 
         // The two entry points lie on the two rooms' facing walls.
         for ep in &passage.entry_points {
@@ -476,8 +532,16 @@ mod tests {
         let room = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
         for _ in 0..100 {
             let pos = level.rnd_pos(&room);
-            assert!((11..15).contains(&pos.x), "x {0} outside room interior", pos.x);
-            assert!((11..13).contains(&pos.y), "y {0} outside room interior", pos.y);
+            assert!(
+                (11..15).contains(&pos.x),
+                "x {0} outside room interior",
+                pos.x
+            );
+            assert!(
+                (11..13).contains(&pos.y),
+                "y {0} outside room interior",
+                pos.y
+            );
         }
     }
 }

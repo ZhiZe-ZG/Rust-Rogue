@@ -6,37 +6,62 @@
 //! [`crate::player`]; the legacy C ABI is intentionally not retained.
 
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
-use crate::curses as cur;
+use crate::armor::rust_armor;
 use crate::draw;
+use crate::fight::swing;
+use crate::game::EQUIPMENT;
 use crate::io::msg_str;
 use crate::machdep::flush_type;
+use crate::misc::{chg_str, spread};
+use crate::monsters::save;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
+use crate::rip::death;
 use crate::rnd::rnd;
+use crate::startup::roll;
+use crate::thing_list::new_item;
+use crate::weapons::{fall, init_weapon};
+use crate::wizard::teleport;
 
-const LEFT: usize = 0;
-const RIGHT: usize = 1;
-
-const TRAP: c_char = b'^' as c_char;
+use super::ffi::new_level;
 
 const ISLEVIT: c_short = 0o0000010;
 const ISRUN: c_short = 0o020000;
 
-pub const T_DOOR: c_char = 0;
-pub const T_ARROW: c_char = 1;
-pub const T_SLEEP: c_char = 2;
-pub const T_BEAR: c_char = 3;
-pub const T_TELEP: c_char = 4;
-pub const T_DART: c_char = 5;
-pub const T_RUST: c_char = 6;
-pub const T_MYST: c_char = 7;
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Trap {
+    Door = 0,
+    Arrow = 1,
+    Sleep = 2,
+    Bear = 3,
+    Teleport = 4,
+    Dart = 5,
+    Rust = 6,
+    Mystery = 7,
+}
+
+impl Trap {
+    #[inline]
+    pub const fn from_raw(value: u8) -> Self {
+        match value {
+            0 => Self::Door,
+            1 => Self::Arrow,
+            2 => Self::Sleep,
+            3 => Self::Bear,
+            4 => Self::Teleport,
+            5 => Self::Dart,
+            6 => Self::Rust,
+            7 => Self::Mystery,
+            _ => panic!("invalid trap type"),
+        }
+    }
+}
 
 const R_SUSTSTR: c_int = 2;
 const ARROW: c_int = 3;
 const VS_POISON: c_int = 0;
-
-const FALSE: c_uchar = 0;
 
 unsafe extern "C" {
     static mut running: c_uchar;
@@ -47,21 +72,6 @@ unsafe extern "C" {
     static mut cNCOLORS: c_int;
     static mut rainbow: [*const c_char; 27];
     static mut player: CThing;
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
-
-    fn roll(num: c_int, sides: c_int) -> c_int;
-    fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_int;
-    fn save(which: c_int) -> c_int;
-    fn new_item() -> *mut CThing;
-    fn init_weapon(weap: *mut CThing, which: c_int);
-    fn fall(obj: *mut CThing, pr: c_uchar);
-    fn teleport();
-    fn chg_str(amt: c_int);
-    fn new_level();
-    fn rust_armor(arm: *mut CThing);
-    fn death(thing: c_char) -> !;
-    fn spread(nm: c_int) -> c_int;
 }
 
 #[inline]
@@ -80,8 +90,7 @@ unsafe fn hero_pos() -> CCoord {
 }
 
 #[inline]
-unsafe fn ring_is(which: usize, ring_type: c_int) -> bool {
-    let ring = cur_ring[which];
+unsafe fn ring_is(ring: *mut CThing, ring_type: c_int) -> bool {
     !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
@@ -97,29 +106,33 @@ unsafe fn rainbow_color() -> *const c_char {
 /// levitating, no trap effect applies. Uses the C engine helpers (`msg`,
 /// `roll`, `spread`, `teleport`, ...) exactly as the legacy `be_trapped` did,
 /// but is callable only from Rust.
-pub unsafe fn be_trapped(pos: CCoord) -> c_char {
+pub unsafe fn be_trapped(pos: CCoord) -> Trap {
     let trap = draw::trap_kind_at(pos.y, pos.x);
 
     if ((*thing_t(&raw mut player)).t_flags & ISLEVIT) != 0 {
-        return T_RUST;
+        return Trap::Rust;
     }
 
-    running = FALSE;
-    count = FALSE as c_int;
-    draw::reveal_trap_at(pos.y, pos.x);
+    running = false as c_uchar;
+    count = false as c_uchar as c_int;
+    crate::level::current_level_mut().reveal_trap(pos.y as usize, pos.x as usize);
 
     match trap {
-        T_DOOR => {
+        Trap::Door => {
             level += 1;
             new_level();
             msg_str("you fell into a trap!");
         }
-        T_BEAR => {
+        Trap::Bear => {
             no_move += spread(3);
             msg_str("you are caught in a bear trap");
         }
-        T_MYST => {
-            let color = || CStr::from_ptr(rainbow_color()).to_string_lossy().into_owned();
+        Trap::Mystery => {
+            let color = || {
+                CStr::from_ptr(rainbow_color())
+                    .to_string_lossy()
+                    .into_owned()
+            };
             match rnd(11) {
                 0 => {
                     msg_str("you are suddenly in a parallel dimension");
@@ -157,12 +170,12 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
                 _ => {}
             }
         }
-        T_SLEEP => {
+        Trap::Sleep => {
             no_command += spread(5);
             (*thing_t(&raw mut player)).t_flags &= !ISRUN;
             msg_str("a strange white mist envelops you and you fall asleep");
         }
-        T_ARROW => {
+        Trap::Arrow => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;
             if swing(stats.s_lvl - 1, stats.s_arm, 1) != 0 {
                 stats.s_hpt -= roll(1, 6);
@@ -177,15 +190,16 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
                 init_weapon(arrow, ARROW);
                 (*thing_o(arrow)).o_count = 1;
                 (*thing_o(arrow)).o_pos = hero_pos();
-                fall(arrow, FALSE);
+                fall(arrow, false as c_uchar);
                 msg_str("an arrow shoots past you");
             }
         }
-        T_TELEP => {
+        Trap::Teleport => {
             teleport();
-            cur::mvaddch(pos.y, pos.x, TRAP as c_uint);
+            crate::level::current_level_mut().reveal_trap(pos.y as usize, pos.x as usize);
+            draw::redraw_cell(pos.y, pos.x);
         }
-        T_DART => {
+        Trap::Dart => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;
             if swing(stats.s_lvl + 1, stats.s_arm, 1) == 0 {
                 msg_str("a small dart whizzes by your ear and vanishes");
@@ -195,17 +209,19 @@ pub unsafe fn be_trapped(pos: CCoord) -> c_char {
                     msg_str("a poisoned dart killed you");
                     death(b'd' as c_char);
                 }
-                if !ring_is(LEFT, R_SUSTSTR) && !ring_is(RIGHT, R_SUSTSTR) && save(VS_POISON) == 0 {
+                if !ring_is(EQUIPMENT.left_ring(), R_SUSTSTR)
+                    && !ring_is(EQUIPMENT.right_ring(), R_SUSTSTR)
+                    && save(VS_POISON) == 0
+                {
                     chg_str(-1);
                 }
                 msg_str("a small dart just hit you in the shoulder");
             }
         }
-        T_RUST => {
+        Trap::Rust => {
             msg_str("a gush of water hits you on the head");
-            rust_armor(cur_armor);
+            rust_armor(EQUIPMENT.armor());
         }
-        _ => {}
     }
 
     flush_type();

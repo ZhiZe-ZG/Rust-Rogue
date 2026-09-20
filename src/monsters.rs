@@ -1,7 +1,17 @@
-use crate::rnd::rnd;
+use crate::chase::{dist, roomin, runto};
 use crate::curses as cur;
+use crate::daemon::{fuse, lengthen};
+use crate::daemons::unconfuse;
+use crate::fight::set_mname;
+use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, msg_str};
-use crate::player::{CCoord, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::level::find_floor;
+use crate::misc::{rnd_thing, spread};
+use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::rnd::rnd;
+use crate::startup::roll;
+use crate::thing_list::{attach, new_item};
+use crate::things::new_thing;
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -25,13 +35,9 @@ const ISHALU: c_short = 0o004000;
 const ISRUN: c_short = 0o020000;
 const SEEMONST: c_short = 0o040000;
 
-const LEFT: usize = 0;
-const RIGHT: usize = 1;
 const R_AGGR: c_int = 6;
 const R_STEALTH: c_int = 12;
 const R_PROTECT: c_int = 0;
-
-const TRUE: c_uchar = 1;
 
 /// Layout mirror of the C `struct monster` stat table, tied to the `monsters[]`
 /// global the C engine exposes.
@@ -108,23 +114,8 @@ unsafe extern "C" {
     static mut mlist: *mut CThing;
     static mut monsters: [CMonster; 26];
     static mut player: CThing;
-    static mut cur_ring: [*mut CThing; 2];
     static mut wizard: c_int;
 
-    fn _attach(list: *mut *mut CThing, item: *mut CThing);
-    fn roomin(cp: *mut CCoord) -> *mut CRoom;
-    fn roll(number: c_int, sides: c_int) -> c_int;
-    fn runto(cp: *mut CCoord);
-    fn rnd_thing() -> c_char;
-    fn new_item() -> *mut CThing;
-    fn new_thing() -> *mut CThing;
-    fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_uchar, monst: c_uchar) -> c_uchar;
-    fn dist(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int;
-    fn lengthen(func: *const c_void, xtime: c_int);
-    fn fuse(func: *const c_void, arg: c_int, time: c_int, typ: c_int);
-    fn unconfuse();
-    fn spread(nm: c_int) -> c_int;
-    fn set_mname(tp: *mut CThing) -> *mut c_char;
     fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
     fn abort() -> !;
 }
@@ -156,14 +147,15 @@ unsafe fn player_has(flag: c_short) -> bool {
 
 #[inline]
 unsafe fn iswearing(which: c_int) -> bool {
-    (!cur_ring[LEFT].is_null() && (*thing_o(cur_ring[LEFT])).o_which == which)
-        || (!cur_ring[RIGHT].is_null() && (*thing_o(cur_ring[RIGHT])).o_which == which)
+    (!EQUIPMENT.left_ring().is_null() && (*thing_o(EQUIPMENT.left_ring())).o_which == which)
+        || (!EQUIPMENT.right_ring().is_null()
+            && (*thing_o(EQUIPMENT.right_ring())).o_which == which)
 }
 
 /// Picks an appropriate monster glyph for the current depth.
 #[no_mangle]
-pub unsafe extern "C" fn randmonster(wander: c_uchar) -> c_char {
-    let mons = if wander != 0 { &WAND_MONS } else { &LVL_MONS };
+pub unsafe fn randmonster(wander: bool) -> c_char {
+    let mons = if wander { &WAND_MONS } else { &LVL_MONS };
     loop {
         let mut d = level + (rnd(10) - 6);
         if d < 0 {
@@ -187,7 +179,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
         lev_add = 0;
     }
 
-    _attach(&raw mut mlist, tp);
+    attach(&raw mut mlist, tp);
 
     (*thing_t(tp)).t_type = monster_type;
     (*thing_t(tp)).t_disguise = monster_type;
@@ -195,7 +187,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
 
     (*thing_t(tp)).t_oldch = crate::draw::chat_at((*cp).y, (*cp).x);
     (*thing_t(tp)).t_room = roomin(cp);
-    // Keep both occupancy structures in sync (`MONSTERS` and `places`).
+    // Keep the authoritative Rust occupancy map and legacy places mirror in sync.
     crate::game::set_monster((*cp).y, (*cp).x, tp);
 
     let mp = &monsters[(monster_type as i32 - 'A' as i32) as usize];
@@ -210,7 +202,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
     if level > 29 {
         (*thing_t(tp)).t_flags |= ISHASTE;
     }
-    (*thing_t(tp)).t_turn = TRUE;
+    (*thing_t(tp)).t_turn = true as c_uchar;
     (*thing_t(tp)).t_pack = std::ptr::null_mut();
 
     if iswearing(R_AGGR) {
@@ -245,13 +237,13 @@ pub unsafe extern "C" fn wanderer() {
     let mut cp = CCoord { x: 0, y: 0 };
 
     loop {
-        let _ = find_floor(std::ptr::null_mut(), &mut cp, 0, 1);
+        let _ = find_floor(std::ptr::null_mut(), &mut cp, 0, true);
         if roomin(&mut cp) != (*player_t()).t_room {
             break;
         }
     }
 
-    new_monster(tp, randmonster(1), &mut cp);
+    new_monster(tp, randmonster(true), &mut cp);
 
     if player_has(SEEMONST) {
         cur::standout();
@@ -268,7 +260,8 @@ pub unsafe extern "C" fn wanderer() {
     if wizard != 0 {
         msg_str(&format!(
             "started a wandering {}",
-            CStr::from_ptr(monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_name).to_string_lossy()
+            CStr::from_ptr(monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_name)
+                .to_string_lossy()
         ));
     }
 }
@@ -340,8 +333,10 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
 #[no_mangle]
 pub unsafe extern "C" fn give_pack(tp: *mut CThing) {
-    if level >= max_level && rnd(100) < monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry {
-        _attach(&mut (*thing_t(tp)).t_pack, new_thing());
+    if level >= max_level
+        && rnd(100) < monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry
+    {
+        attach(&mut (*thing_t(tp)).t_pack, new_thing());
     }
 }
 
@@ -361,11 +356,15 @@ pub unsafe extern "C" fn save_throw(which: c_int, tp: *mut CThing) -> c_int {
 pub unsafe extern "C" fn save(which: c_int) -> c_int {
     let mut adj = which;
     if which == VS_MAGIC {
-        if !cur_ring[LEFT].is_null() && (*thing_o(cur_ring[LEFT])).o_which == R_PROTECT {
-            adj -= (*thing_o(cur_ring[LEFT])).o_arm;
+        if !EQUIPMENT.left_ring().is_null()
+            && (*thing_o(EQUIPMENT.left_ring())).o_which == R_PROTECT
+        {
+            adj -= (*thing_o(EQUIPMENT.left_ring())).o_arm;
         }
-        if !cur_ring[RIGHT].is_null() && (*thing_o(cur_ring[RIGHT])).o_which == R_PROTECT {
-            adj -= (*thing_o(cur_ring[RIGHT])).o_arm;
+        if !EQUIPMENT.right_ring().is_null()
+            && (*thing_o(EQUIPMENT.right_ring())).o_which == R_PROTECT
+        {
+            adj -= (*thing_o(EQUIPMENT.right_ring())).o_arm;
         }
     }
     save_throw(adj, &raw mut player)

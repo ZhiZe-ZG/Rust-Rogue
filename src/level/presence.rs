@@ -18,13 +18,14 @@ use crate::rnd::rnd;
 use super::ffitools::{FLOOR, PASSAGE, STAIRS};
 use super::level::{current_level_mut, LevelFlags, LEVEL_WIDTH};
 use super::symbols::{
-    AMULET, AMULETLEVEL, FALSE, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN, MAXOBJ,
-    MAXROOMS, MAXTRAPS, MAXTRIES, MAXTREAS, MINTREAS, NTRAPS, PLAYER, SEEMONST, TREAS_ROOM, TRUE,
-    _attach, amulet, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch,
-    new_item, new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs,
-    stairs, step_ok, thing_o, thing_t, turn_see, visuals,
+    amulet, attach, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch, new_item,
+    new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, stairs,
+    step_ok, thing_o, thing_t, turn_see, visuals, AMULET, AMULETLEVEL, GOLD, GOLDGRP, ISGONE,
+    ISHALU, ISMANY, ISMEAN, MAXOBJ, MAXROOMS, MAXTRAPS, MAXTREAS, MAXTRIES, MINTREAS, NTRAPS,
+    PLAYER, SEEMONST, TREAS_ROOM,
 };
 use super::tile::Tile;
+use super::trap::Trap;
 
 /// Map a pointer into the C `rooms` array back to its Rust room-slot index.
 ///
@@ -47,12 +48,12 @@ unsafe fn room_slot_of(rp: *mut CRoom) -> Option<usize> {
 /// `Level::rnd_room`; otherwise `rp` is mapped back to the matching `Level`
 /// room slot. Room selection and geometry come from the Rust `Level` model
 /// (`Level::rnd_pos`), while the candidate cell is validated against the C
-/// `places` grid. Returns `TRUE` and stores the chosen cell into `cp` on
-/// success; `FALSE` when `limit` (if nonzero) attempts are exhausted.
+/// `places` grid. Returns `true as c_uchar` and stores the chosen cell into `cp` on
+/// success; `false as c_uchar` when `limit` (if nonzero) attempts are exhausted.
 #[no_mangle]
-pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: c_uchar) -> c_uchar {
+pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: bool) -> bool {
     if cp.is_null() {
-        return FALSE;
+        return false;
     }
 
     let current = current_level_mut();
@@ -63,7 +64,7 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
     loop {
         if limit != 0 {
             if cnt == 0 {
-                return FALSE;
+                return false;
             }
             cnt -= 1;
         }
@@ -71,7 +72,7 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
         // hang level generation on a packed level.
         guard += 1;
         if guard > 1_000_000 {
-            return FALSE;
+            return false;
         }
 
         let idx = match room_idx {
@@ -90,12 +91,12 @@ pub unsafe extern "C" fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_in
         // where placed objects were scribbled into `places[].p_ch`.
         let ch = terrain_chat_at((*cp).y, (*cp).x);
 
-        if monst != 0 {
+        if monst {
             if game::monster_at((*cp).y, (*cp).x).is_null() && step_ok(ch as c_int) != 0 {
-                return TRUE;
+                return true;
             }
         } else if ch == compchar {
-            return TRUE;
+            return true;
         }
     }
 }
@@ -116,11 +117,11 @@ unsafe fn treas_room() {
     let mut nm = rnd(spots) + MINTREAS;
     let num_monst = nm;
     while nm > 0 {
-        find_floor(rp as *mut CRoom, &mut mp, 2 * MAXTRIES, FALSE);
+        find_floor(rp as *mut CRoom, &mut mp, 2 * MAXTRIES, false);
         let tp = new_thing();
         (*thing_o(tp)).o_pos = mp;
         // Objects render from the `lvl_obj` list; no glyph write needed.
-        _attach((&raw mut lvl_obj) as *mut *mut CThing, tp);
+        attach((&raw mut lvl_obj) as *mut *mut CThing, tp);
         nm -= 1;
     }
 
@@ -135,9 +136,9 @@ unsafe fn treas_room() {
 
     level += 1;
     while nm > 0 {
-        if find_floor(rp as *mut CRoom, &mut mp, MAXTRIES, TRUE) != 0 {
+        if find_floor(rp as *mut CRoom, &mut mp, MAXTRIES, true) {
             let tp = new_item();
-            new_monster(tp, randmonster(FALSE), &mut mp);
+            new_monster(tp, randmonster(false), &mut mp);
             (*thing_t(tp)).t_flags |= ISMEAN;
             give_pack(tp);
         }
@@ -164,7 +165,7 @@ unsafe fn place_room_contents() {
             continue;
         }
 
-        if rnd(2) == 0 && (amulet == 0 || level >= max_level) {
+        if rnd(2) == 0 && (!amulet || level >= max_level) {
             let gold = new_item();
 
             if !gold.is_null() {
@@ -172,20 +173,20 @@ unsafe fn place_room_contents() {
 
                 (*og).o_arm = rnd(50 + 10 * level) + 2;
                 (*rp).r_goldval = (*og).o_arm;
-                find_floor(rp, &mut (*rp).r_gold, FALSE as c_int, FALSE);
+                find_floor(rp, &mut (*rp).r_gold, 0, false);
                 (*og).o_pos = (*rp).r_gold;
                 (*og).o_flags = ISMANY;
                 (*og).o_group = GOLDGRP;
                 (*og).o_type = GOLD as c_int;
-                _attach((&raw mut lvl_obj) as *mut *mut CThing, gold);
+                attach((&raw mut lvl_obj) as *mut *mut CThing, gold);
             }
         }
 
         if rnd(100) < if (*rp).r_goldval > 0 { 80 } else { 25 } {
             let tp = new_item();
             if !tp.is_null() {
-                find_floor(rp, &mut mp, FALSE as c_int, TRUE);
-                new_monster(tp, randmonster(FALSE), &mut mp);
+                find_floor(rp, &mut mp, 0, true);
+                new_monster(tp, randmonster(false), &mut mp);
                 give_pack(tp);
             }
         }
@@ -200,7 +201,7 @@ unsafe fn place_room_contents() {
 unsafe fn put_things() {
     // Once you have found the amulet, the only way to get new stuff is
     // go down into the dungeon.
-    if amulet != 0 && level < max_level {
+    if amulet && level < max_level {
         return;
     }
 
@@ -214,31 +215,49 @@ unsafe fn put_things() {
         if rnd(100) < 36 {
             // Pick a new object and link it in the list.
             let obj = new_thing();
-            _attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
+            attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
             // Put it somewhere.
             let og = thing_o(obj);
             let pos = &raw mut (*og).o_pos;
-            find_floor(std::ptr::null_mut(), pos, FALSE as c_int, FALSE);
+            find_floor(std::ptr::null_mut(), pos, 0, false);
         }
     }
 
     // If he is really deep in the dungeon and he hasn't found the amulet
     // yet, put it somewhere on the ground.
-    if level >= AMULETLEVEL && amulet == 0 {
+    if level >= AMULETLEVEL && !amulet {
         let obj = new_item();
-        _attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
+        attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
         let og = thing_o(obj);
         (*og).o_hplus = 0;
         (*og).o_dplus = 0;
         // Copy "0x0" into the 8-byte damage strings (zero-padded), matching
         // C's strncpy(obj->o_damage, "0x0", sizeof(obj->o_damage)).
-        (*og).o_damage = [b'0' as c_char, b'x' as c_char, b'0' as c_char, 0, 0, 0, 0, 0];
-        (*og).o_hurldmg = [b'0' as c_char, b'x' as c_char, b'0' as c_char, 0, 0, 0, 0, 0];
+        (*og).o_damage = [
+            b'0' as c_char,
+            b'x' as c_char,
+            b'0' as c_char,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        (*og).o_hurldmg = [
+            b'0' as c_char,
+            b'x' as c_char,
+            b'0' as c_char,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
         (*og).o_arm = 11;
         (*og).o_type = AMULET as c_int;
         // Put it somewhere.
         let pos = &raw mut (*og).o_pos;
-        find_floor(std::ptr::null_mut(), pos, FALSE as c_int, FALSE);
+        find_floor(std::ptr::null_mut(), pos, 0, false);
     }
 }
 
@@ -260,7 +279,7 @@ unsafe fn place_traps() {
     let mut i = ntraps;
     while i > 0 {
         loop {
-            find_floor(std::ptr::null_mut(), &raw mut stairs, FALSE as c_int, FALSE);
+            find_floor(std::ptr::null_mut(), &raw mut stairs, 0, false);
             if terrain_chat_at(stairs.y, stairs.x) == FLOOR {
                 break;
             }
@@ -269,10 +288,12 @@ unsafe fn place_traps() {
         // Record the trap in the level model: a floor cell becomes a hidden
         // trap (non-real, with its kind in the trap grid).
         let current = current_level_mut();
-        current.map.set(stairs.y as usize, stairs.x as usize, Tile::Trap);
+        current
+            .map
+            .set(stairs.y as usize, stairs.x as usize, Tile::Trap);
         let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
         current.flags.real[idx] = false;
-        current.flags.trap[idx] = rnd(NTRAPS) as u8;
+        current.flags.trap[idx] = Trap::from_raw(rnd(NTRAPS) as u8);
         i -= 1;
     }
 }
@@ -283,12 +304,12 @@ unsafe fn place_traps() {
 /// Uses globals: stairs, places, seenstairs.
 /// ```
 unsafe fn place_stairs() {
-    find_floor(std::ptr::null_mut(), &raw mut stairs, FALSE as c_int, FALSE);
+    find_floor(std::ptr::null_mut(), &raw mut stairs, 0, false);
     // The staircase is a tile in the level map; it renders `%` via draw.
     current_level_mut()
         .map
         .set(stairs.y as usize, stairs.x as usize, Tile::Stairs);
-    seenstairs = FALSE;
+    seenstairs = false;
 }
 
 /// Link every monster on the level to the room its position falls in.
@@ -314,7 +335,12 @@ pub(crate) unsafe fn link_monsters_to_rooms() {
 /// Uses globals: player, places (via find_floor).
 /// ```
 unsafe fn place_hero() {
-    find_floor(std::ptr::null_mut(), &raw mut (*thing_t(&raw mut player)).t_pos, FALSE as c_int, TRUE);
+    find_floor(
+        std::ptr::null_mut(),
+        &raw mut (*thing_t(&raw mut player)).t_pos,
+        0,
+        true,
+    );
     enter_room(&raw mut (*thing_t(&raw mut player)).t_pos);
     mvaddch(
         (*thing_t(&raw mut player)).t_pos.y,
@@ -322,7 +348,7 @@ unsafe fn place_hero() {
         PLAYER as c_uint,
     );
     if ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0 {
-        turn_see(FALSE);
+        turn_see(false as c_uchar);
     }
     if ((*thing_t(&raw mut player)).t_flags & ISHALU) != 0 {
         visuals();

@@ -18,14 +18,9 @@ const DAEMON: c_int = -1;
 const MAXDAEMONS: usize = 20;
 
 /// Function pointer type stored in the delayed-action table.
-/// `Option<fn>` with `#[repr(transparent)]` semantics: None is null,
-/// which is safe to share with C as a nullable function pointer.
-type DFunc = Option<unsafe extern "C" fn(c_int)>;
+type DFunc = Option<unsafe extern "C" fn()>;
 
-/// Transmute a raw C function pointer (passed as void*) into our DFunc type.
-/// The void* convention is used on both the Rust caller side (potions.rs,
-/// misc.rs, etc.) and the C caller side to avoid strict-aliasing issues
-/// with mismatched fn-pointer types.
+/// Convert the erased callback pointer used by registration call sites.
 #[inline]
 unsafe fn as_dfunc(func: *const c_void) -> DFunc {
     std::mem::transmute::<*const c_void, DFunc>(func)
@@ -39,25 +34,24 @@ unsafe fn as_dfunc(func: *const c_void) -> DFunc {
 pub struct CDelayedAction {
     pub d_type: c_int,
     pub d_func: DFunc,
-    pub d_arg:  c_int,
+    pub d_arg: c_int,
     pub d_time: c_int,
 }
 
 const EMPTY_SLOT: CDelayedAction = CDelayedAction {
     d_type: EMPTY,
     d_func: None,
-    d_arg:  0,
+    d_arg: 0,
     d_time: 0,
 };
 
 /// Global daemon/fuse table.  Exported as `d_list` so C code that
-/// declares `extern struct delayed_action d_list[]` resolves against us.
+/// declared for the original C implementation.
 #[no_mangle]
 pub static mut d_list: [CDelayedAction; MAXDAEMONS] = [
-    EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT,
-    EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT,
-    EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT,
-    EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT,
+    EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT,
+    EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT,
+    EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT,
 ];
 
 /// Find an empty slot in the daemon/fuse list.
@@ -93,7 +87,7 @@ pub unsafe extern "C" fn start_daemon(func: *const c_void, arg: c_int, typ: c_in
     }
     (*dev).d_type = typ;
     (*dev).d_func = as_dfunc(func);
-    (*dev).d_arg  = arg;
+    (*dev).d_arg = arg;
     (*dev).d_time = DAEMON;
 }
 
@@ -114,10 +108,9 @@ pub unsafe extern "C" fn do_daemons(flag: c_int) {
     for i in 0..MAXDAEMONS {
         if d_list[i].d_type == flag && d_list[i].d_time == DAEMON {
             // Capture func and arg before the call, which may modify d_list.
-            let f   = d_list[i].d_func;
-            let arg = d_list[i].d_arg;
+            let f = d_list[i].d_func;
             if let Some(f) = f {
-                f(arg);
+                f();
             }
         }
     }
@@ -132,7 +125,7 @@ pub unsafe extern "C" fn fuse(func: *const c_void, arg: c_int, time: c_int, typ:
     }
     (*wire).d_type = typ;
     (*wire).d_func = as_dfunc(func);
-    (*wire).d_arg  = arg;
+    (*wire).d_arg = arg;
     (*wire).d_time = time;
 }
 
@@ -166,10 +159,9 @@ pub unsafe extern "C" fn do_fuses(flag: c_int) {
             if d_list[i].d_time == 0 {
                 d_list[i].d_type = EMPTY;
                 // Capture func and arg before the call.
-                let f   = d_list[i].d_func;
-                let arg = d_list[i].d_arg;
+                let f = d_list[i].d_func;
                 if let Some(f) = f {
-                    f(arg);
+                    f();
                 }
             }
         }

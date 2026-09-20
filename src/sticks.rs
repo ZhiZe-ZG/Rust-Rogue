@@ -1,6 +1,15 @@
-use crate::rnd::rnd;
+use crate::chase::{cansee, runto};
 use crate::curses as cur;
-use crate::io::msg_str;
+use crate::fight::set_mname;
+use crate::game::EQUIPMENT;
+use crate::io::{endmsg, msg_str, step_ok};
+use crate::monsters::{save, save_throw};
+use crate::pack::get_item;
+use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::rip::death;
+use crate::rnd::rnd;
+use crate::startup::roll;
+use crate::weapons::{do_motion, hit_monster};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 const STICK: c_int = '/' as c_int;
@@ -9,8 +18,6 @@ const FLAME: c_int = 9;
 const ISKNOW: c_int = 0o000002;
 const ISMISL: c_int = 0o000004;
 const VS_MAGIC: c_int = 3;
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -63,71 +70,6 @@ const MAXSTICKS: usize = StickType::COUNT;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct CCoord {
-    pub x: c_int,
-    pub y: c_int,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CStats {
-    pub s_str: u32,
-    pub s_exp: c_int,
-    pub s_lvl: c_int,
-    pub s_arm: c_int,
-    pub s_hpt: c_int,
-    pub s_dmg: [c_char; 13],
-    pub s_maxhp: c_int,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CThingObject {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
-    pub o_type: c_int,
-    pub o_pos: CCoord,
-    pub o_text: *mut c_char,
-    pub o_launch: c_int,
-    pub o_packch: c_char,
-    pub o_damage: [c_char; 8],
-    pub o_hurldmg: [c_char; 8],
-    pub o_count: c_int,
-    pub o_which: c_int,
-    pub o_hplus: c_int,
-    pub o_dplus: c_int,
-    pub o_arm: c_int,
-    pub o_flags: c_int,
-    pub o_group: c_int,
-    pub o_label: *mut c_char,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CThingMonster {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
-    pub t_pos: CCoord,
-    pub t_turn: c_uchar,
-    pub t_type: c_char,
-    pub t_disguise: c_char,
-    pub t_oldch: c_char,
-    pub t_dest: *mut CCoord,
-    pub t_flags: c_int,
-    pub t_stats: CStats,
-    pub t_room: *mut c_void,
-    pub t_pack: *mut CThing,
-    pub t_reserved: c_int,
-}
-
-#[repr(C)]
-pub union CThing {
-    pub t: CThingMonster,
-    pub o: CThingObject,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
 pub struct CObjInfo {
     pub oi_name: *mut c_char,
     pub oi_prob: c_int,
@@ -140,32 +82,11 @@ unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
     static mut delta: CCoord;
-    static mut cur_weapon: *mut CThing;
     static mut ws_info: [CObjInfo; MAXSTICKS];
     static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
     static mut weap_info: [CObjInfo; 10];
 
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn endmsg() -> c_int;
-    fn save_throw(kind: c_int, tp: *mut CThing) -> c_uchar;
-    fn save(kind: c_int) -> c_uchar;
-    fn hit_monster(y: c_int, x: c_int, obj: *mut CThing);
-    fn do_motion(obj: *mut CThing, y: c_int, x: c_int);
-    fn roll(num: c_int, sides: c_int) -> c_int;
-    fn death(thing: c_char) -> !;
-    fn runto(pos: *mut CCoord);
-    fn set_mname(tp: *mut CThing) -> *mut c_char;
-    fn cansee(y: c_int, x: c_int) -> c_uchar;
-    fn step_ok(ch: c_char) -> c_uchar;
-    fn new_monster(tp: *mut CThing, kind: c_char, delta: *const CCoord);
-    fn relocate(tp: *mut CThing, new_pos: *const CCoord);
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CPlace {
-    pub p_monst: *mut CThing,
 }
 
 #[inline]
@@ -205,7 +126,11 @@ unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
 
 #[inline]
 unsafe fn ce_coord(a: CCoord, b: CCoord) -> c_uchar {
-    if a.x == b.x && a.y == b.y { 1 } else { 0 }
+    if a.x == b.x && a.y == b.y {
+        1
+    } else {
+        0
+    }
 }
 
 #[inline]
@@ -256,7 +181,7 @@ pub unsafe extern "C" fn do_zap() {
         return;
     }
     if (*thing_o(obj)).o_type != STICK {
-        after = FALSE;
+        after = false as c_uchar;
         msg_str("you can't zap with that!");
         return;
     }
@@ -269,7 +194,7 @@ pub unsafe extern "C" fn do_zap() {
 
     match kind {
         Some(StickType::Light) => {
-            ws_info[StickType::Light.index()].oi_know = TRUE;
+            ws_info[StickType::Light.index()].oi_know = true as c_uchar;
             msg_str("the corridor glows and then fades");
         }
         Some(StickType::Drain) => {
@@ -287,7 +212,7 @@ pub unsafe extern "C" fn do_zap() {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
-            while step_ok(winat(y, x)) != 0 {
+            while step_ok(winat(y, x) as c_int) != 0 {
                 y += delta.y;
                 x += delta.x;
             }
@@ -296,7 +221,7 @@ pub unsafe extern "C" fn do_zap() {
             }
         }
         Some(StickType::Missile) => {
-            ws_info[StickType::Missile.index()].oi_know = TRUE;
+            ws_info[StickType::Missile.index()].oi_know = true as c_uchar;
             let mut bolt = std::mem::zeroed::<CThing>();
             (*thing_o(&mut bolt)).o_type = WEAPON;
             (*thing_o(&mut bolt)).o_which = FLAME;
@@ -304,8 +229,8 @@ pub unsafe extern "C" fn do_zap() {
             (*thing_o(&mut bolt)).o_hplus = 100;
             (*thing_o(&mut bolt)).o_dplus = 1;
             (*thing_o(&mut bolt)).o_flags = ISMISL;
-            if !cur_weapon.is_null() {
-                (*thing_o(&mut bolt)).o_launch = (*thing_o(cur_weapon)).o_which;
+            if !EQUIPMENT.weapon().is_null() {
+                (*thing_o(&mut bolt)).o_launch = (*thing_o(EQUIPMENT.weapon())).o_which;
             }
             do_motion(&mut bolt, delta.y, delta.x);
             let bolt_pos = (*thing_o(&mut bolt)).o_pos;
@@ -323,7 +248,7 @@ pub unsafe extern "C" fn do_zap() {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
-            while step_ok(winat(y, x)) != 0 {
+            while step_ok(winat(y, x) as c_int) != 0 {
                 y += delta.y;
                 x += delta.x;
             }
@@ -340,7 +265,7 @@ pub unsafe extern "C" fn do_zap() {
             let mut hero = hero_pos();
             fire_bolt(&mut hero, &raw mut delta, name.as_ptr() as *mut c_char);
             if let Some(kind) = kind {
-                ws_info[kind.index()].oi_know = TRUE;
+                ws_info[kind.index()].oi_know = true as c_uchar;
             }
         }
         Some(StickType::Nop) => {}
@@ -403,8 +328,7 @@ pub unsafe extern "C" fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *
 
 /// charge_str:
 /// Return an appropriate string for a wand charge display.
-#[no_mangle]
-pub unsafe extern "C" fn charge_str(obj: *mut CThing) -> *mut c_char {
+unsafe fn charge_str(obj: *mut CThing) -> *mut c_char {
     static mut BUF: [c_char; 20] = [0; 20];
     if (*thing_o(obj)).o_flags & ISKNOW == 0 {
         BUF[0] = 0;

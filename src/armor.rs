@@ -1,31 +1,24 @@
+use crate::daemon::{do_daemons, do_fuses};
+use crate::game::EQUIPMENT;
+use crate::io::endmsg;
 use crate::io::{addmsg_str, msg_str};
+use crate::misc::spread;
+use crate::pack::get_item;
 use crate::player::{CThing, CThingObject};
+use crate::things::{dropcheck, inv_name};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 const ARMOR: c_int = ']' as c_int;
 const ISKNOW: c_int = 0o000002;
 const ISPROT: c_int = 0o000040;
-const LEFT: usize = 0;
-const RIGHT: usize = 1;
 const R_SUSTARM: c_int = 13;
-const TRUE: c_uchar = 1;
-const FALSE: c_uchar = 0;
 
 unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
-    static mut cur_armor: *mut CThing;
-    static mut cur_ring: [*mut CThing; 2];
     static mut to_death: c_uchar;
 
-    fn get_item(purpose: *const c_char, item_type: c_int) -> *mut CThing;
-    fn endmsg() -> c_int;
-    fn dropcheck(obj: *mut CThing) -> c_uchar;
-    fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char;
-    fn do_daemons(flag: c_int);
-    fn do_fuses(flag: c_int);
-    fn spread(nm: c_int) -> c_int;
 }
 
 #[inline]
@@ -34,8 +27,7 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn ring_is(which: usize, ring_type: c_int) -> bool {
-    let ring = cur_ring[which];
+unsafe fn ring_is(ring: *mut CThing, ring_type: c_int) -> bool {
     !ring.is_null() && (*thing_o(ring)).o_which == ring_type
 }
 
@@ -47,13 +39,13 @@ pub unsafe extern "C" fn wear() {
         return;
     }
 
-    if !cur_armor.is_null() {
+    if !EQUIPMENT.armor().is_null() {
         addmsg_str("you are already wearing some");
         if terse == 0 {
             addmsg_str(".  You'll have to take it off first");
         }
         endmsg();
-        after = FALSE;
+        after = false as c_uchar;
         return;
     }
 
@@ -64,8 +56,8 @@ pub unsafe extern "C" fn wear() {
 
     waste_time();
     (*thing_o(obj)).o_flags |= ISKNOW;
-    let sp = inv_name(obj, TRUE);
-    cur_armor = obj;
+    let sp = inv_name(obj, true as c_uchar);
+    EQUIPMENT.set_armor(obj);
     if terse == 0 {
         addmsg_str("you are now ");
     }
@@ -75,9 +67,9 @@ pub unsafe extern "C" fn wear() {
 /// Removes currently worn armor after curse/drop checks.
 #[no_mangle]
 pub unsafe extern "C" fn take_off() {
-    let obj = cur_armor;
+    let obj = EQUIPMENT.armor();
     if obj.is_null() {
-        after = FALSE;
+        after = false as c_uchar;
         if terse != 0 {
             msg_str("not wearing armor");
         } else {
@@ -86,11 +78,11 @@ pub unsafe extern "C" fn take_off() {
         return;
     }
 
-    if dropcheck(cur_armor) == 0 {
+    if dropcheck(EQUIPMENT.armor()) == 0 {
         return;
     }
 
-    cur_armor = std::ptr::null_mut();
+    EQUIPMENT.set_armor(std::ptr::null_mut());
     if terse != 0 {
         addmsg_str("was");
     } else {
@@ -99,7 +91,7 @@ pub unsafe extern "C" fn take_off() {
     msg_str(&format!(
         " wearing {}) {}",
         (*thing_o(obj)).o_packch as u8 as char,
-        CStr::from_ptr(inv_name(obj, TRUE)).to_string_lossy()
+        CStr::from_ptr(inv_name(obj, true as c_uchar)).to_string_lossy()
     ));
 }
 
@@ -116,11 +108,18 @@ pub unsafe extern "C" fn waste_time() {
 /// Rust the given armor if it is a legal kind to rust.
 #[no_mangle]
 pub unsafe extern "C" fn rust_armor(arm: *mut CThing) {
-    if arm.is_null() || (*thing_o(arm)).o_type != ARMOR || (*thing_o(arm)).o_which == 0 || (*thing_o(arm)).o_arm >= 9 {
+    if arm.is_null()
+        || (*thing_o(arm)).o_type != ARMOR
+        || (*thing_o(arm)).o_which == 0
+        || (*thing_o(arm)).o_arm >= 9
+    {
         return;
     }
 
-    if ((*thing_o(arm)).o_flags & ISPROT) != 0 || ring_is(LEFT, R_SUSTARM) || ring_is(RIGHT, R_SUSTARM) {
+    if ((*thing_o(arm)).o_flags & ISPROT) != 0
+        || ring_is(EQUIPMENT.left_ring(), R_SUSTARM)
+        || ring_is(EQUIPMENT.right_ring(), R_SUSTARM)
+    {
         if to_death == 0 {
             msg_str("the rust vanishes instantly");
         }
