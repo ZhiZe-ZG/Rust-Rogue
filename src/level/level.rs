@@ -17,6 +17,7 @@ use super::roomgraph::{RoomGraph, MAX_ROOMS};
 use super::rooms::{build_generated_rooms, Room};
 use super::structure::Structure;
 use super::tile::Tile;
+use super::trap::Trap;
 
 /// Map height in cells. Matches the C `places` grid (32 rows), the largest
 /// on-screen area a dungeon level can occupy.
@@ -42,9 +43,9 @@ pub struct LevelFlags {
     /// Passage component number for each cell, assigned by
     /// [`number_passages`]; zero means that no component is assigned.
     pub passnum: Vec<u8>,
-    /// Encoded trap kind for each cell, using values `0..=7`; non-trap cells
-    /// contain zero.
-    pub trap: Vec<u8>,
+    /// Trap kind for each cell; cells without a trap use [`Trap::Door`], the
+    /// zero-valued legacy representation.
+    pub trap: Vec<Trap>,
 }
 
 impl LevelFlags {
@@ -55,7 +56,7 @@ impl LevelFlags {
             passage: vec![false; cells],
             seen: vec![false; cells],
             passnum: vec![0; cells],
-            trap: vec![0; cells],
+            trap: vec![Trap::Door; cells],
         }
     }
 

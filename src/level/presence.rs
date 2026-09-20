@@ -17,6 +17,7 @@ use crate::rnd::rnd;
 
 use super::ffitools::{FLOOR, PASSAGE, STAIRS};
 use super::level::{current_level_mut, LevelFlags, LEVEL_WIDTH};
+use super::trap::Trap;
 use super::symbols::{
     AMULET, AMULETLEVEL, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN, MAXOBJ,
     MAXROOMS, MAXTRAPS, MAXTRIES, MAXTREAS, MINTREAS, NTRAPS, PLAYER, SEEMONST, TREAS_ROOM,
@@ -272,7 +273,7 @@ unsafe fn place_traps() {
         current.map.set(stairs.y as usize, stairs.x as usize, Tile::Trap);
         let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
         current.flags.real[idx] = false;
-        current.flags.trap[idx] = rnd(NTRAPS) as u8;
+        current.flags.trap[idx] = Trap::from_raw(rnd(NTRAPS) as u8);
         i -= 1;
     }
 }

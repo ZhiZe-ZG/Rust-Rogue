@@ -220,7 +220,7 @@ pub(crate) unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
     if lvl.flags.real[idx] {
         f |= F_REAL as u8;
     }
-    f |= lvl.flags.trap[idx] & (F_TMASK as u8);
+    f |= (lvl.flags.trap[idx] as u8) & (F_TMASK as u8);
     f as c_char
 }
 
@@ -228,17 +228,7 @@ pub(crate) unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
 pub(crate) unsafe fn trap_kind_at(y: c_int, x: c_int) -> Trap {
     let lvl = current_level();
     let idx = cell_index(y as usize, x as usize);
-    match lvl.flags.trap[idx] {
-        0 => Trap::Door,
-        1 => Trap::Arrow,
-        2 => Trap::Sleep,
-        3 => Trap::Bear,
-        4 => Trap::Teleport,
-        5 => Trap::Dart,
-        6 => Trap::Rust,
-        7 => Trap::Mystery,
-        _ => unreachable!("trap kind must fit in the trap flag nibble"),
-    }
+    lvl.flags.trap[idx]
 }
 
 /// Whether the tile at `(y, x)` is a hidden trap.

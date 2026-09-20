@@ -24,7 +24,7 @@ const ISLEVIT: c_short = 0o0000010;
 const ISRUN: c_short = 0o020000;
 
 #[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Trap {
     Door = 0,
     Arrow = 1,
@@ -34,6 +34,23 @@ pub enum Trap {
     Dart = 5,
     Rust = 6,
     Mystery = 7,
+}
+
+impl Trap {
+    #[inline]
+    pub const fn from_raw(value: u8) -> Self {
+        match value {
+            0 => Self::Door,
+            1 => Self::Arrow,
+            2 => Self::Sleep,
+            3 => Self::Bear,
+            4 => Self::Teleport,
+            5 => Self::Dart,
+            6 => Self::Rust,
+            7 => Self::Mystery,
+            _ => panic!("invalid trap type"),
+        }
+    }
 }
 
 const R_SUSTSTR: c_int = 2;

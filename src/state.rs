@@ -2119,7 +2119,7 @@ unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
         let _ = rs_write_boolean(savef, lvl.flags.passage[idx] as c_int);
         let _ = rs_write_boolean(savef, lvl.flags.seen[idx] as c_int);
         let _ = rs_write_char(savef, lvl.flags.passnum[idx] as c_char);
-        let _ = rs_write_char(savef, lvl.flags.trap[idx] as c_char);
+        let _ = rs_write_char(savef, lvl.flags.trap[idx] as u8 as c_char);
         // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
         let place_idx = ((x as usize) << 5) + (y as usize);
         let _ = rs_write_thing_reference(savef, mlist, crate::game::places[place_idx].p_monst);
@@ -2168,7 +2168,7 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
         lvl.flags.passage[idx] = passage != 0;
         lvl.flags.seen[idx] = seen != 0;
         lvl.flags.passnum[idx] = passnum as u8;
-        lvl.flags.trap[idx] = trap_kind as u8;
+        lvl.flags.trap[idx] = crate::level::Trap::from_raw(trap_kind as u8);
 
         // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
         let place_idx = ((x as usize) << 5) + (y as usize);
