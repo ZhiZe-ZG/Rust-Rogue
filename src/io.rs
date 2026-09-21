@@ -1,10 +1,10 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
+use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::draw::look;
 use crate::game::EQUIPMENT;
-use crate::level::GameConfig;
 use crate::mdport::md_readchar;
 use crate::player::{CStats, CThing, CThingMonster};
 use crate::startup::quit;

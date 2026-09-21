@@ -11,8 +11,8 @@ use std::os::raw::c_int;
 use crate::rnd::rnd;
 use glam::IVec2;
 
-use super::config::GameConfig;
 use super::rooms::Room;
+use crate::config::GameConfig;
 
 type AdjacentArray = [[u8; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
 

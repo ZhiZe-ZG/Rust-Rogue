@@ -20,10 +20,10 @@ use crate::chase::{cansee, see_monst};
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon};
 use crate::draw::enter_room;
 use crate::game::EQUIPMENT;
+use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
 use crate::monsters::wanderer;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
-use crate::rings::{ring_eat, RingType};
 use crate::rip::death;
 use crate::startup::roll;
 

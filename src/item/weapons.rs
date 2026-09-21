@@ -3,16 +3,16 @@ use crate::curses as cur;
 use crate::fight::fight;
 use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, endmsg, msg_str, step_ok};
+use crate::item::pack::{get_item, leave_pack};
 use crate::misc::{is_current, show_floor};
-use crate::pack::{get_item, leave_pack};
 use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::draw::{self, chat_at, place_at, winat as draw_winat};
+use crate::item::thing_list::{attach, discard};
+use crate::item::things::{dropcheck, inv_name};
 use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
-use crate::thing_list::{attach, discard};
-use crate::things::{dropcheck, inv_name};
 
 const NO_WEAPON: c_int = -1;
 

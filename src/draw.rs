@@ -17,11 +17,12 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::chase::{roomin, see_monst};
+use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::game;
 use crate::io::step_ok;
 use crate::level::Trap;
-use crate::level::{door_open, with_current_level, with_current_level_mut, GameConfig, Tile};
+use crate::level::{door_open, with_current_level, with_current_level_mut, Tile};
 use crate::misc::find_obj;
 use crate::monsters::wake_monster;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};

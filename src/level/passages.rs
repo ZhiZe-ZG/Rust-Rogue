@@ -11,9 +11,9 @@
 
 use glam::IVec2;
 
+use crate::config::GameConfig;
 use crate::rnd::rnd;
 
-use super::config::GameConfig;
 use super::level::LevelFlags;
 use super::rooms::{DoorKind, Room};
 use super::structure::Structure;

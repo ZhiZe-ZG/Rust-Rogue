@@ -1,11 +1,11 @@
 use crate::chase::runto;
+use crate::config::GameConfig;
 use crate::daemon::{extinguish, fuse};
 use crate::daemons::nohaste;
 use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, msg_str, readchar};
-use crate::level::GameConfig;
+use crate::item::pack::{get_item, leave_pack, reset_last};
 use crate::options::get_str;
-use crate::pack::{get_item, leave_pack, reset_last};
 use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};

@@ -10,12 +10,12 @@ use crate::draw::look;
 use crate::draw::place_at;
 use crate::game::EQUIPMENT;
 use crate::io::{endmsg, msg_str, show_win, status};
+use crate::item::pack::{get_item, leave_pack};
+use crate::item::rings::RingType;
+use crate::item::thing_list::discard;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
-use crate::pack::{get_item, leave_pack};
 use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
-use crate::rings::RingType;
 use crate::startup::roll;
-use crate::thing_list::discard;
 use std::ffi::CStr;
 
 /// Potion and status-effect handling for the Rust FFI bridge.

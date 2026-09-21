@@ -1,4 +1,4 @@
-use crate::level::GameConfig;
+use crate::config::GameConfig;
 use crate::player::{
     CCoord as PlayerCCoord, CPlace as PlayerCPlace, CRoom as PlayerCRoom, CStats as PlayerCStats,
     CThing as PlayerCThing,

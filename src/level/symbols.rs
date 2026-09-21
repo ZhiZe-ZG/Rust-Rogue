@@ -12,13 +12,13 @@ use crate::curses as cur;
 pub(crate) use crate::daemons::visuals;
 pub(crate) use crate::draw::enter_room;
 pub(crate) use crate::io::step_ok;
+pub(crate) use crate::item::potions::turn_see;
+pub(crate) use crate::item::thing_list::{attach, free_list, new_item};
+pub(crate) use crate::item::things::new_thing;
 pub(crate) use crate::monsters::{give_pack, new_monster, randmonster, wake_monster};
 use crate::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
-pub(crate) use crate::potions::turn_see;
-pub(crate) use crate::thing_list::{attach, free_list, new_item};
-pub(crate) use crate::things::new_thing;
 
-use super::config::GameConfig;
+use crate::config::GameConfig;
 
 // -- Room flags (`r_flags`) --
 pub(crate) const ISDARK: c_short = 0o000001;

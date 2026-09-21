@@ -1,15 +1,15 @@
+use crate::item::potions::invis_on;
 use crate::player::{CThing, CThingObject};
-use crate::potions::invis_on;
 use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, msg_str, readchar};
+use crate::item::pack::get_item;
+use crate::item::things::{dropcheck, inv_name};
+use crate::item::weapons::num;
 use crate::misc::{aggravate, chg_str, is_current};
-use crate::pack::get_item;
-use crate::things::{dropcheck, inv_name};
-use crate::weapons::num;
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;

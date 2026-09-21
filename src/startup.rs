@@ -6,12 +6,13 @@ use std::os::raw::{c_char, c_int, c_long, c_uchar, c_void};
 
 use crate::chase::{roomin, runners};
 use crate::command::command;
+use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::daemon::{fuse, start_daemon};
 use crate::daemons::{doctor, stomach, swander};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::io::{msg_str, readchar, status, wait_for};
-use crate::level::{new_level, GameConfig};
+use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
 use crate::mdport::{
     md_gethomedir, md_getpid, md_getusername, md_hasclreol, md_init, md_normaluser, md_shellescape,

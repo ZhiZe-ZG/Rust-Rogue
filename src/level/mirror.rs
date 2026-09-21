@@ -10,9 +10,9 @@ use std::os::raw::{c_int, c_short};
 
 use glam::IVec2;
 
+use crate::config::GameConfig;
 use crate::player::{CCoord, CRoom};
 
-use super::config::GameConfig;
 use super::level::Level;
 use super::rooms::Room;
 use super::symbols::{passages, rooms, ISDARK, ISGONE, ISMAZE};

@@ -2,18 +2,18 @@ use crate::rnd::rnd;
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::draw::{chat_at as draw_chat, look, map_cell_reveal, winat as draw_winat};
 use crate::game;
 use crate::game::EQUIPMENT;
 use crate::init::pick_color;
 use crate::io::{addmsg_str, endmsg, msg_str, show_win, status, step_ok};
-use crate::level::GameConfig;
+use crate::item::pack::{get_item, leave_pack};
+use crate::item::thing_list::{discard, new_item};
 use crate::misc::{aggravate, call_it, choose_str, find_obj};
 use crate::monsters::{new_monster, randmonster};
-use crate::pack::{get_item, leave_pack};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
-use crate::thing_list::{discard, new_item};
 use crate::wizard::{teleport, whatis};
 
 const SLEEPTIME: c_int = 5;

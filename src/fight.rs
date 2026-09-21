@@ -11,27 +11,27 @@ use crate::rnd::rnd;
  * See the file LICENSE.TXT for full copyright and licensing information.
  */
 
-use crate::armor::rust_armor;
 use crate::chase::{runto, see_monst};
 use crate::game::EQUIPMENT;
 use crate::init::pick_color;
 use crate::io::{addmsg_str, endmsg, msg_str, status};
+use crate::item::armor::rust_armor;
+use crate::item::pack::leave_pack;
+use crate::item::potions::is_magic;
 use crate::misc::{check_level, chg_str, choose_str, spread};
 use crate::monsters::save;
-use crate::pack::leave_pack;
-use crate::potions::is_magic;
 use crate::rip::death;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::curses as cur;
+use crate::item::rings::RingType;
+use crate::item::thing_list::{attach, detach, discard, new_item};
+use crate::item::things::inv_name;
+use crate::item::weapons::{fall, fallpos};
 use crate::machdep::flush_type;
 use crate::player::{CCoord, CStats, CThing, CThingMonster, CThingObject};
-use crate::rings::RingType;
 use crate::startup::roll;
-use crate::thing_list::{attach, detach, discard, new_item};
-use crate::things::inv_name;
-use crate::weapons::{fall, fallpos};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

@@ -8,20 +8,20 @@
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
-use crate::armor::rust_armor;
 use crate::fight::swing;
 use crate::game::EQUIPMENT;
 use crate::io::msg_str;
+use crate::item::armor::rust_armor;
+use crate::item::rings::RingType;
+use crate::item::thing_list::new_item;
+use crate::item::weapons::{fall, init_weapon};
 use crate::machdep::flush_type;
 use crate::misc::{chg_str, spread};
 use crate::monsters::save;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
-use crate::rings::RingType;
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
-use crate::thing_list::new_item;
-use crate::weapons::{fall, init_weapon};
 use crate::wizard::teleport;
 
 use super::generation::new_level;

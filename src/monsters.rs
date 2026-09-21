@@ -1,18 +1,19 @@
 use crate::chase::{dist, roomin, runto};
+use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::daemon::{fuse, lengthen};
 use crate::daemons::unconfuse;
 use crate::fight::set_mname;
 use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, msg_str};
-use crate::level::{find_floor, GameConfig};
+use crate::item::rings::RingType;
+use crate::item::thing_list::{attach, new_item};
+use crate::item::things::new_thing;
+use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
-use crate::rings::RingType;
 use crate::rnd::rnd;
 use crate::startup::roll;
-use crate::thing_list::{attach, new_item};
-use crate::things::new_thing;
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 

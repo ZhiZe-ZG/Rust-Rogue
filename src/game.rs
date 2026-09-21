@@ -22,7 +22,8 @@ use std::os::raw::c_int;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Mutex;
 
-use crate::level::{GameConfig, Level};
+use crate::config::GameConfig;
+use crate::level::Level;
 use crate::player::{CPlace, CThing};
 
 /// Non-owning pointers to the objects currently equipped by the player.

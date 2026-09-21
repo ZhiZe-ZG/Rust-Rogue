@@ -4,17 +4,18 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
 
 use crate::chase::roomin;
+use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::io::{msg_str, readchar, show_win};
-use crate::level::{find_floor, GameConfig};
+use crate::item::pack::{add_pack, floor_at, get_item};
+use crate::item::sticks::fix_stick;
+use crate::item::thing_list::new_item;
+use crate::item::things::inv_name;
+use crate::item::weapons::init_weapon;
+use crate::level::find_floor;
 use crate::machdep::flush_type;
-use crate::pack::{add_pack, floor_at, get_item};
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
-use crate::sticks::fix_stick;
-use crate::thing_list::new_item;
-use crate::things::inv_name;
-use crate::weapons::init_weapon;
 
 const POTION: c_int = b'!' as c_int;
 const SCROLL: c_int = b'?' as c_int;

@@ -8,17 +8,17 @@
 
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
+use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::fight::attack;
 use crate::io::{endmsg, msg_str, step_ok};
-use crate::level::GameConfig;
+use crate::item::scrolls::ScrollType;
+use crate::item::sticks::fire_bolt;
+use crate::item::thing_list::{attach, detach};
 use crate::misc::sign;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 use crate::rndmove::rndmove;
-use crate::scrolls::ScrollType;
-use crate::sticks::fire_bolt;
-use crate::thing_list::{attach, detach};
 
 const DRAGONSHOT: c_int = 5; // one chance in DRAGONSHOT that a dragon will flame
 

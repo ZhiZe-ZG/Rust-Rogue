@@ -1,9 +1,9 @@
 use crate::rnd::rnd;
 use glam::IVec2;
 
-use super::config::GameConfig;
 use super::structure::Structure;
 use super::tile::Tile;
+use crate::config::GameConfig;
 
 /// How a door placed on a room boundary is rendered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

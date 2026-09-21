@@ -1,19 +1,19 @@
-use crate::armor::waste_time;
 use crate::daemon::extinguish;
 use crate::daemons::unsee;
 use crate::game::EQUIPMENT;
 use crate::io::msg_str;
+use crate::item::armor::waste_time;
+use crate::item::pack::{get_item, leave_pack};
 use crate::misc::chg_str;
-use crate::pack::{get_item, leave_pack};
 use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
+use crate::item::rings::RingType;
+use crate::item::sticks::fix_stick;
+use crate::item::thing_list::new_item;
+use crate::item::weapons::init_weapon;
 use crate::player::{CThing, CThingObject};
-use crate::rings::RingType;
-use crate::sticks::fix_stick;
-use crate::thing_list::new_item;
-use crate::weapons::init_weapon;
 
 const MAXSTR: usize = 1024;
 const NUMTHINGS: usize = 7;

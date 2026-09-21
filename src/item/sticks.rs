@@ -3,13 +3,13 @@ use crate::curses as cur;
 use crate::fight::set_mname;
 use crate::game::EQUIPMENT;
 use crate::io::{endmsg, msg_str, step_ok};
+use crate::item::pack::get_item;
+use crate::item::weapons::{do_motion, hit_monster};
 use crate::monsters::{save, save_throw};
-use crate::pack::get_item;
 use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
-use crate::weapons::{do_motion, hit_monster};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 const STICK: c_int = '/' as c_int;

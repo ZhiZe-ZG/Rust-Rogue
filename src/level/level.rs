@@ -9,7 +9,6 @@ use std::os::raw::c_int;
 use crate::rnd::rnd;
 use glam::IVec2;
 
-use super::config::GameConfig;
 use super::passages::{
     apply_passage, build_passage, collect_corridor_end, corridor_tiles, mark_passages,
     number_passages, plan_corridor, stamp_door, stamp_passage, Passage, PassageLinks,
@@ -19,6 +18,7 @@ use super::rooms::{build_generated_rooms, Room};
 use super::structure::Structure;
 use super::tile::Tile;
 use super::trap::Trap;
+use crate::config::GameConfig;
 
 /// Per-cell flat-flag data for the level.
 ///

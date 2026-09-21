@@ -37,9 +37,9 @@ use crate::chase::runners;
 use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
 use crate::game::EQUIPMENT;
+use crate::item::thing_list::{allocated_count, new_item};
+use crate::item::things::CObjInfo;
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
-use crate::thing_list::{allocated_count, new_item};
-use crate::things::CObjInfo;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -236,8 +236,8 @@ unsafe extern "C" {
     static mut places: [CPlace; 32 * 80];
     static mut max_stats: CStats;
     static mut oldrp: *mut CRoom;
-    static mut rooms: [CRoom; crate::level::GameConfig::MAX_ROOMS];
-    static mut passages: [CRoom; crate::level::GameConfig::MAX_PASSAGES];
+    static mut rooms: [CRoom; crate::config::GameConfig::MAX_ROOMS];
+    static mut passages: [CRoom; crate::config::GameConfig::MAX_PASSAGES];
 
     // monster / object info tables
     static mut monsters: [CMonsterState; MAXMONSTERS];
@@ -1550,7 +1550,7 @@ unsafe fn rs_write_room_reference(savef: *mut CFile, rp: *mut CRoom) -> c_int {
     }
 
     let mut i = 0;
-    while i < crate::level::GameConfig::MAX_ROOMS {
+    while i < crate::config::GameConfig::MAX_ROOMS {
         if (&raw mut rooms[i]) as *mut CRoom == rp {
             room = i as c_int;
         }
@@ -1574,7 +1574,7 @@ unsafe fn rs_read_room_reference(inf: *mut CFile, rp: *mut *mut CRoom) -> c_int 
 
     let _ = rs_read_int(inf, &mut i);
 
-    if (i as usize) < crate::level::GameConfig::MAX_ROOMS {
+    if (i as usize) < crate::config::GameConfig::MAX_ROOMS {
         *rp = (&raw mut rooms[i as usize]) as *mut CRoom;
     } else {
         *rp = std::ptr::null_mut();
@@ -1874,7 +1874,7 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
                 i = find_room_coord(
                     (&raw mut rooms) as *mut CRoom,
                     t_dest,
-                    crate::level::GameConfig::MAX_ROOMS as c_int,
+                    crate::config::GameConfig::MAX_ROOMS as c_int,
                 );
 
                 if i >= 0 {
@@ -1960,7 +1960,7 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
         }
     } else if listid == 3 {
         /* gold */
-        if (index as usize) < crate::level::GameConfig::MAX_ROOMS {
+        if (index as usize) < crate::config::GameConfig::MAX_ROOMS {
             (*thing_t(t)).t_dest = (&raw mut rooms[index as usize].r_gold) as *mut CCoord;
         } else {
             (*thing_t(t)).t_dest = std::ptr::null_mut();
@@ -2162,9 +2162,9 @@ unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
     crate::game::with_current_level(|lvl| {
         let mut i: c_int = 0;
         while i < count {
-            let y = i / crate::level::GameConfig::SCREEN_COLS;
-            let x = i % crate::level::GameConfig::SCREEN_COLS;
-            let idx = (y as usize) * crate::level::GameConfig::LEVEL_WIDTH + (x as usize);
+            let y = i / crate::config::GameConfig::SCREEN_COLS;
+            let x = i % crate::config::GameConfig::SCREEN_COLS;
+            let idx = (y as usize) * crate::config::GameConfig::LEVEL_WIDTH + (x as usize);
             let tile = lvl
                 .map
                 .get(y as usize, x as usize)
@@ -2198,9 +2198,9 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
     crate::game::with_current_level_mut(|lvl| {
         let mut i: c_int = 0;
         while i < count {
-            let y = i / crate::level::GameConfig::SCREEN_COLS;
-            let x = i % crate::level::GameConfig::SCREEN_COLS;
-            let idx = (y as usize) * crate::level::GameConfig::LEVEL_WIDTH + (x as usize);
+            let y = i / crate::config::GameConfig::SCREEN_COLS;
+            let x = i % crate::config::GameConfig::SCREEN_COLS;
+            let idx = (y as usize) * crate::config::GameConfig::LEVEL_WIDTH + (x as usize);
 
             let mut tile_disc: c_char = 0;
             let mut real: c_uchar = 0;
@@ -2373,20 +2373,20 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 
     let _ = rs_write_places(
         savef,
-        crate::level::GameConfig::SCREEN_LINES * crate::level::GameConfig::SCREEN_COLS,
+        crate::config::GameConfig::SCREEN_LINES * crate::config::GameConfig::SCREEN_COLS,
     );
 
     let _ = rs_write_stats(savef, &raw mut max_stats);
     let _ = rs_write_rooms(
         savef,
         (&raw mut rooms) as *mut CRoom,
-        crate::level::GameConfig::MAX_ROOMS as c_int,
+        crate::config::GameConfig::MAX_ROOMS as c_int,
     );
     let _ = rs_write_room_reference(savef, oldrp);
     let _ = rs_write_rooms(
         savef,
         (&raw mut passages) as *mut CRoom,
-        crate::level::GameConfig::MAX_PASSAGES as c_int,
+        crate::config::GameConfig::MAX_PASSAGES as c_int,
     );
 
     let _ = rs_write_monsters(
@@ -2596,20 +2596,20 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
 
     let _ = rs_read_places(
         inf,
-        crate::level::GameConfig::SCREEN_LINES * crate::level::GameConfig::SCREEN_COLS,
+        crate::config::GameConfig::SCREEN_LINES * crate::config::GameConfig::SCREEN_COLS,
     );
 
     let _ = rs_read_stats(inf, &raw mut max_stats);
     let _ = rs_read_rooms(
         inf,
         (&raw mut rooms) as *mut CRoom,
-        crate::level::GameConfig::MAX_ROOMS as c_int,
+        crate::config::GameConfig::MAX_ROOMS as c_int,
     );
     let _ = rs_read_room_reference(inf, &raw mut oldrp);
     let _ = rs_read_rooms(
         inf,
         (&raw mut passages) as *mut CRoom,
-        crate::level::GameConfig::MAX_PASSAGES as c_int,
+        crate::config::GameConfig::MAX_PASSAGES as c_int,
     );
 
     let _ = rs_read_monsters(

@@ -2,11 +2,11 @@ use crate::daemon::{do_daemons, do_fuses};
 use crate::game::EQUIPMENT;
 use crate::io::endmsg;
 use crate::io::{addmsg_str, msg_str};
+use crate::item::pack::get_item;
+use crate::item::rings::RingType;
+use crate::item::things::{dropcheck, inv_name};
 use crate::misc::spread;
-use crate::pack::get_item;
 use crate::player::{CThing, CThingObject};
-use crate::rings::RingType;
-use crate::things::{dropcheck, inv_name};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 

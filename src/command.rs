@@ -8,30 +8,31 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-use crate::armor::{take_off, wear};
 use crate::chase::{diag_ok, see_monst};
+use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
 use crate::game::EQUIPMENT;
 use crate::help::{help, identify};
 use crate::io::{addmsg_str, endmsg, msg_str, readchar, status};
-use crate::level::{new_level, GameConfig};
+use crate::item::armor::{take_off, wear};
+use crate::item::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
+use crate::item::potions::{quaff, raise_level, turn_see};
+use crate::item::rings::{ring_off, ring_on, RingType};
+use crate::item::scrolls::read_scroll;
+use crate::item::sticks::do_zap;
+use crate::item::thing_list::new_item;
+use crate::item::things::{discovered, drop, inv_name};
+use crate::item::weapons::{init_weapon, missile, wield};
+use crate::level::new_level;
 use crate::misc::{eat, get_dir};
 use crate::options::{get_str, option};
-use crate::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
 use crate::player::{do_move, do_run, CCoord, CPlace, CThing, CThingMonster, CThingObject};
-use crate::potions::{quaff, raise_level, turn_see};
-use crate::rings::{ring_off, ring_on, RingType};
 use crate::rip::total_winner;
 use crate::rnd::rnd;
 use crate::save::save_game;
-use crate::scrolls::read_scroll;
 use crate::startup::{quit, shell};
-use crate::sticks::do_zap;
-use crate::thing_list::new_item;
-use crate::things::{discovered, drop, inv_name};
-use crate::weapons::{init_weapon, missile, wield};
 use crate::wizard::{create_obj, show_map, teleport, whatis};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
