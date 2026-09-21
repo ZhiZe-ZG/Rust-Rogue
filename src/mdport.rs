@@ -19,42 +19,42 @@ use crate::startup::{endit, quit, tstp};
 use crate::ui::input;
 use crate::ui::output;
 
-/// Ncurses key codes used by the keypad/arrow-key reader.  The `ncurses`
-/// crate's `raw_constants.rs` exposes these as `i32`; we re-export the ones
-/// `md_readchar` needs.
-const KEY_DOWN: c_int = ncurses::KEY_DOWN;
-const KEY_UP: c_int = ncurses::KEY_UP;
-const KEY_LEFT: c_int = ncurses::KEY_LEFT;
-const KEY_RIGHT: c_int = ncurses::KEY_RIGHT;
-const KEY_HOME: c_int = ncurses::KEY_HOME;
-const KEY_BACKSPACE: c_int = ncurses::KEY_BACKSPACE;
-const KEY_NPAGE: c_int = ncurses::KEY_NPAGE;
-const KEY_PPAGE: c_int = ncurses::KEY_PPAGE;
-const KEY_LL: c_int = ncurses::KEY_LL;
-const KEY_A1: c_int = ncurses::KEY_A1;
-const KEY_A3: c_int = ncurses::KEY_A3;
-const KEY_B2: c_int = ncurses::KEY_B2;
-const KEY_C1: c_int = ncurses::KEY_C1;
-const KEY_C3: c_int = ncurses::KEY_C3;
-const KEY_END: c_int = ncurses::KEY_END;
+/// Curses key codes used by the keypad/arrow-key reader. These mirror the
+/// ncurses public header (`keys.h`) values so behaviour is identical to the
+/// original C `mdport.c` key translation. The arrow keys reuse the derived
+/// integer codes; the remaining numeric literals are the ncurses keypad
+/// constants for this game's arrow/keypad mapping.
+const KEY_DOWN: c_int = 0o402; // 258
+const KEY_UP: c_int = 0o403; // 259
+const KEY_LEFT: c_int = 0o404; // 260
+const KEY_RIGHT: c_int = 0o405; // 261
+const KEY_HOME: c_int = 0o406; // 262
+const KEY_BACKSPACE: c_int = 0o407; // 263
+const KEY_NPAGE: c_int = 0o522; // 338
+const KEY_PPAGE: c_int = 0o523; // 339
+const KEY_LL: c_int = 0o545; // 357
+const KEY_A1: c_int = 0o534; // 348
+const KEY_A3: c_int = 0o536; // 350
+const KEY_B2: c_int = 0o541; // 353
+const KEY_C1: c_int = 0o542; // 354
+const KEY_C3: c_int = 0o544; // 356
+const KEY_END: c_int = 0o550; // 360
 
-// The ncurses crate does not expose these legacy/extended keypad codes.
-// Values match the ncurses public header (keys.h) so behaviour is identical
-// to the original C mdport.c.
+// Extended keypad codes not covered above; values match ncurses `keys.h`.
 const KEY_B1: c_int = 353; // keypad lower-left
 const KEY_B3: c_int = 354; // keypad lower-right
 const KEY_A2: c_int = 355; // keypad up
 const KEY_C2: c_int = 356; // keypad down
 const KEY_SUP: c_int = 337; // shift up
 const KEY_SDOWN: c_int = 336; // shift down
-const KEY_SEND: c_int = ncurses::KEY_SEND;
-const KEY_SHOME: c_int = ncurses::KEY_SHOME;
-const KEY_SLEFT: c_int = ncurses::KEY_SLEFT;
-const KEY_SNEXT: c_int = ncurses::KEY_SNEXT;
-const KEY_SPREVIOUS: c_int = ncurses::KEY_SPREVIOUS;
-const KEY_SRIGHT: c_int = ncurses::KEY_SRIGHT;
-const KEY_EOL: c_int = ncurses::KEY_EOL;
-const ERR: c_int = ncurses::ERR;
+const KEY_SEND: c_int = 0o551; // 361
+const KEY_SHOME: c_int = 0o552; // 362
+const KEY_SLEFT: c_int = 0o553; // 363
+const KEY_SNEXT: c_int = 0o556; // 366
+const KEY_SPREVIOUS: c_int = 0o557; // 367
+const KEY_SRIGHT: c_int = 0o560; // 368
+const KEY_EOL: c_int = 0o600; // 384
+const ERR: c_int = -1;
 
 // -------------------------------------------------------------------------
 // Signal handling
