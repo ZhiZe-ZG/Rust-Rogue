@@ -4,7 +4,6 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::config::GameConfig;
-use crate::draw::look;
 use crate::entity::player::{CStats, CThing, CThingMonster};
 use crate::game::EQUIPMENT;
 use crate::ui::input::{readchar, wait_for};
@@ -116,6 +115,10 @@ pub unsafe fn addmsg_str(text: &str) {
     }
 }
 
+/// Flush the pending message and handle pagination.
+///
+/// Callers that need current game graphics must render them before calling
+/// this function; output policy does not invoke the game renderer.
 #[cfg(not(test))]
 pub unsafe fn endmsg() -> c_int {
     if save_msg != false as c_uchar {
@@ -123,7 +126,6 @@ pub unsafe fn endmsg() -> c_int {
     }
 
     if mpos != 0 {
-        look(false as c_uchar);
         cur::mvaddstr(0, mpos, c"--More--".as_ptr());
         cur::refresh();
 

@@ -296,6 +296,7 @@ pub unsafe extern "C" fn command() {
         ntimes -= 1;
         again = false as c_uchar;
         if has_hit != 0 {
+            look(false as c_uchar);
             endmsg();
             has_hit = false as c_uchar;
         }
