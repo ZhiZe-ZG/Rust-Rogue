@@ -4,9 +4,9 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::draw::look;
+use crate::entity::player::{CStats, CThing, CThingMonster};
 use crate::game::EQUIPMENT;
 use crate::mdport::md_readchar;
-use crate::player::{CStats, CThing, CThingMonster};
 use crate::startup::quit;
 
 const ESCAPE: c_int = 27;

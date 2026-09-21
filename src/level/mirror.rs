@@ -11,7 +11,7 @@ use std::os::raw::{c_int, c_short};
 use glam::IVec2;
 
 use crate::config::GameConfig;
-use crate::player::{CCoord, CRoom};
+use crate::entity::player::{CCoord, CRoom};
 
 use super::level::Level;
 use super::rooms::Room;

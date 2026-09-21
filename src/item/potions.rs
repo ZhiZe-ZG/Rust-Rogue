@@ -2,19 +2,19 @@ use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 use std::ptr;
 
-use crate::chase::see_monst;
 use crate::curses as cur;
 use crate::daemon::{fuse, lengthen, start_daemon};
 use crate::daemons::{come_down, land, sight, unconfuse, unsee, visuals};
 use crate::draw::look;
 use crate::draw::place_at;
+use crate::entity::chase::see_monst;
+use crate::entity::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::io::{endmsg, msg_str, show_win, status};
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
 use crate::item::thing_list::discard;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
-use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::startup::roll;
 use std::ffi::CStr;
 

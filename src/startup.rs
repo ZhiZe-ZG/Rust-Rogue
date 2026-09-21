@@ -4,12 +4,13 @@ use std::ffi::{CStr, CString};
 use std::io::Write;
 use std::os::raw::{c_char, c_int, c_long, c_uchar, c_void};
 
-use crate::chase::{roomin, runners};
 use crate::command::command;
 use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::daemon::{fuse, start_daemon};
 use crate::daemons::{doctor, stomach, swander};
+use crate::entity::chase::{roomin, runners};
+use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::io::{msg_str, readchar, status, wait_for};
 use crate::level::new_level;
@@ -19,7 +20,6 @@ use crate::mdport::{
     md_tstpresume, md_tstpsignal,
 };
 use crate::options::{parse_opts, strucpy};
-use crate::player::{CCoord, CRoom, CThing, CThingMonster};
 use crate::rip::{death, death_monst, score};
 use crate::rnd::{rnd, set_seed};
 use crate::save::restore;

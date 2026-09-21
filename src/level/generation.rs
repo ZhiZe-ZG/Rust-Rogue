@@ -9,8 +9,8 @@ use glam::IVec2;
 use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::draw::winat;
+use crate::entity::player::{CRoom, CThing};
 use crate::game::{clear_level, with_current_level_mut};
-use crate::player::{CRoom, CThing};
 
 use super::mirror::{apply_room_to_c, read_c_room_data, sync_passages_to_c, sync_rooms_to_c};
 use super::presence::populate_level;

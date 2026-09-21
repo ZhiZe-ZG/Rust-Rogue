@@ -16,16 +16,16 @@
 
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-use crate::chase::{roomin, see_monst};
 use crate::config::GameConfig;
 use crate::curses as cur;
+use crate::entity::chase::{roomin, see_monst};
+use crate::entity::monsters::wake_monster;
+use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::game;
 use crate::io::step_ok;
 use crate::level::Trap;
 use crate::level::{door_open, with_current_level, with_current_level_mut, Tile};
 use crate::misc::find_obj;
-use crate::monsters::wake_monster;
-use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
 
 // ─── Glyphs ───────────────────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ unsafe extern "C" {
     static mut see_floor: c_uchar;
     static mut seenstairs: c_uchar;
     static mut stairs: CCoord;
-    static mut stdscr: *mut crate::player::CWindow;
+    static mut stdscr: *mut crate::entity::player::CWindow;
     static mut lvl_obj: *mut CThing;
 
 }
@@ -724,12 +724,12 @@ pub unsafe extern "C" fn turnref() {
     if (flat_at(hero.y, hero.x) as u8 & F_SEEN as u8) == 0 {
         if jump != 0 {
             cur::leaveok(
-                stdscr as *mut crate::player::CWindow,
+                stdscr as *mut crate::entity::player::CWindow,
                 true as c_uchar as c_int,
             );
             cur::refresh();
             cur::leaveok(
-                stdscr as *mut crate::player::CWindow,
+                stdscr as *mut crate::entity::player::CWindow,
                 false as c_uchar as c_int,
             );
         }

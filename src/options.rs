@@ -3,8 +3,8 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::curses as cur;
 use crate::draw::{erase_lamp, look};
+use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster};
 use crate::io::{readchar, wait_for};
-use crate::player::{CCoord, CRoom, CThing, CThingMonster};
 
 const ESCAPE: c_int = 27;
 const NORM: c_int = 0;

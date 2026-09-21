@@ -23,8 +23,8 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Mutex;
 
 use crate::config::GameConfig;
+use crate::entity::player::{CPlace, CThing};
 use crate::level::Level;
-use crate::player::{CPlace, CThing};
 
 /// Non-owning pointers to the objects currently equipped by the player.
 pub struct Equipment {
@@ -222,7 +222,7 @@ pub const GAME_WIDTH: usize = GameConfig::LEVEL_WIDTH;
 #[cfg(test)]
 mod tests {
     use super::{CurrentLevel, Equipment, Level};
-    use crate::player::CThing;
+    use crate::entity::player::CThing;
     use std::mem::MaybeUninit;
 
     #[test]

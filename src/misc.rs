@@ -1,7 +1,7 @@
-use crate::chase::runto;
 use crate::config::GameConfig;
 use crate::daemon::{extinguish, fuse};
 use crate::daemons::nohaste;
+use crate::entity::chase::runto;
 use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, msg_str, readchar};
 use crate::item::pack::{get_item, leave_pack, reset_last};
@@ -10,7 +10,7 @@ use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
-use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::startup::roll;
 
 const PASSAGE: c_char = b'#' as c_char;
@@ -72,7 +72,7 @@ unsafe extern "C" {
     static mut jump: c_uchar;
     static mut last_dir: c_char;
     static mut level: c_int;
-    static mut max_stats: crate::player::CStats;
+    static mut max_stats: crate::entity::player::CStats;
     static mut mpos: c_int;
     static mut no_command: c_int;
     static mut no_move: c_int;

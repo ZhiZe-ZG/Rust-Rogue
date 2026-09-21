@@ -4,7 +4,7 @@
 //! in map cells and equipment slots. The allocations themselves are owned by
 //! this vector, so list operations no longer depend on a C allocator or ABI.
 
-use crate::player::{CThing, CThingMonster};
+use crate::entity::player::{CThing, CThingMonster};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Mutex, OnceLock};
 

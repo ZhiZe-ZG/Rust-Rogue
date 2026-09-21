@@ -1,5 +1,5 @@
+use crate::entity::player::{CThing, CThingObject};
 use crate::item::potions::invis_on;
-use crate::player::{CThing, CThingObject};
 use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};

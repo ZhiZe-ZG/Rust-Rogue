@@ -3,12 +3,12 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::curses as cur;
 use crate::draw::chat_at as draw_chat;
+use crate::entity::player::{CRoom, CThing};
 use crate::io::{addmsg_str, endmsg, msg_str, readchar};
 use crate::item::scrolls::ScrollType;
 use crate::item::thing_list::{detach, discard, new_item};
 use crate::item::things::{add_line, inv_name};
 use crate::misc::{find_obj, show_floor};
-use crate::player::{CRoom, CThing};
 
 const MAXPACK: c_int = 23;
 const MAXSTR: usize = 1024;
@@ -55,12 +55,12 @@ unsafe extern "C" {
 
 }
 
-unsafe fn thing_t(tp: *mut CThing) -> *mut crate::player::CThingMonster {
-    tp as *mut crate::player::CThingMonster
+unsafe fn thing_t(tp: *mut CThing) -> *mut crate::entity::player::CThingMonster {
+    tp as *mut crate::entity::player::CThingMonster
 }
 
-unsafe fn thing_o(tp: *mut CThing) -> *mut crate::player::CThingObject {
-    tp as *mut crate::player::CThingObject
+unsafe fn thing_o(tp: *mut CThing) -> *mut crate::entity::player::CThingObject {
+    tp as *mut crate::entity::player::CThingObject
 }
 
 unsafe fn next_item(item: *mut CThing) -> *mut CThing {
@@ -99,7 +99,7 @@ unsafe fn set_pack_head(value: *mut CThing) {
     (*thing_t(&raw mut player)).t_pack = value;
 }
 
-unsafe fn hero_coord() -> crate::player::CCoord {
+unsafe fn hero_coord() -> crate::entity::player::CCoord {
     (*thing_t(&raw mut player)).t_pos
 }
 

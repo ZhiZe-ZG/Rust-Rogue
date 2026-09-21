@@ -16,14 +16,14 @@ use crate::io::{addmsg_str, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
-use crate::chase::{cansee, see_monst};
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon};
 use crate::draw::enter_room;
+use crate::entity::chase::{cansee, see_monst};
+use crate::entity::monsters::wanderer;
+use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
-use crate::monsters::wanderer;
-use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rip::death;
 use crate::startup::roll;
 

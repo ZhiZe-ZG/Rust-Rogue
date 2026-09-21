@@ -1,4 +1,5 @@
 use crate::curses as cur;
+use crate::entity::player::{CThing, CThingMonster};
 use crate::io::{msg_str, readchar};
 use crate::machdep::{resetltchars, setup};
 use crate::mdport::{
@@ -6,7 +7,6 @@ use crate::mdport::{
     md_unlink_open_file,
 };
 use crate::options::get_str;
-use crate::player::{CThing, CThingMonster};
 use crate::rnd::set_seed;
 use crate::startup::playit;
 use crate::state::{rs_restore_file, rs_save_file};

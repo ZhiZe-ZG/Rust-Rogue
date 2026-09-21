@@ -8,7 +8,9 @@
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
-use crate::fight::swing;
+use crate::entity::fight::swing;
+use crate::entity::monsters::save;
+use crate::entity::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::io::msg_str;
 use crate::item::armor::rust_armor;
@@ -17,8 +19,6 @@ use crate::item::thing_list::new_item;
 use crate::item::weapons::{fall, init_weapon};
 use crate::machdep::flush_type;
 use crate::misc::{chg_str, spread};
-use crate::monsters::save;
-use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;

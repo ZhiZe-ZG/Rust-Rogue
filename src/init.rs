@@ -14,10 +14,10 @@ use crate::rnd::rnd;
 
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 
+use crate::entity::player::{CStats, CThing, CThingMonster, CThingObject};
 use crate::item::pack::add_pack;
 use crate::item::thing_list::new_item;
 use crate::item::weapons::init_weapon;
-use crate::player::{CStats, CThing, CThingMonster, CThingObject};
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

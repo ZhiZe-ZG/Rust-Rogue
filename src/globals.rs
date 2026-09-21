@@ -1,5 +1,5 @@
 use crate::config::GameConfig;
-use crate::player::{
+use crate::entity::player::{
     CCoord as PlayerCCoord, CPlace as PlayerCPlace, CRoom as PlayerCRoom, CStats as PlayerCStats,
     CThing as PlayerCThing,
 };
@@ -54,8 +54,8 @@ pub type CCoord = PlayerCCoord;
 pub type CStats = PlayerCStats;
 pub type CRoom = PlayerCRoom;
 pub type CThing = PlayerCThing;
-pub type CThingMonster = crate::player::CThingMonster;
-pub type CThingObject = crate::player::CThingObject;
+pub type CThingMonster = crate::entity::player::CThingMonster;
+pub type CThingObject = crate::entity::player::CThingObject;
 pub type CPlace = PlayerCPlace;
 
 #[no_mangle]
@@ -245,7 +245,7 @@ pub static mut lvl_obj: *mut CThing = std::ptr::null_mut();
 pub static mut mlist: *mut CThing = std::ptr::null_mut();
 #[no_mangle]
 pub static mut player: CThing = CThing {
-    t: crate::player::CThingMonster {
+    t: crate::entity::player::CThingMonster {
         l_next: std::ptr::null_mut(),
         l_prev: std::ptr::null_mut(),
         t_pos: CCoord { x: 0, y: 0 },

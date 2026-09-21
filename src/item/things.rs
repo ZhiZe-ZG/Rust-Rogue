@@ -9,11 +9,11 @@ use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
+use crate::entity::player::{CThing, CThingObject};
 use crate::item::rings::RingType;
 use crate::item::sticks::fix_stick;
 use crate::item::thing_list::new_item;
 use crate::item::weapons::init_weapon;
-use crate::player::{CThing, CThingObject};
 
 const MAXSTR: usize = 1024;
 const NUMTHINGS: usize = 7;

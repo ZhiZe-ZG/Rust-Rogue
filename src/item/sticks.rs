@@ -1,12 +1,12 @@
-use crate::chase::{cansee, runto};
 use crate::curses as cur;
-use crate::fight::set_mname;
+use crate::entity::chase::{cansee, runto};
+use crate::entity::fight::set_mname;
+use crate::entity::monsters::{save, save_throw};
+use crate::entity::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::io::{endmsg, msg_str, step_ok};
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
-use crate::monsters::{save, save_throw};
-use crate::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;

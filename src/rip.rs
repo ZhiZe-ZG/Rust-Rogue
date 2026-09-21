@@ -47,14 +47,14 @@ unsafe extern "C" {
     static mut level: c_int;
     static mut max_level: c_int;
     static mut noscore: c_int;
-    static mut pack: *mut crate::player::CThing;
-    static mut player: crate::player::CThing;
+    static mut pack: *mut crate::entity::player::CThing;
+    static mut player: crate::entity::player::CThing;
     static mut purse: c_int;
     static mut prbuf: [c_char; MAXSTR];
     static mut tombstone: c_uchar;
     static mut whoami: [c_char; MAXSTR];
     static mut wizard: c_int;
-    static mut monsters: [crate::monsters::CMonster; 26];
+    static mut monsters: [crate::entity::monsters::CMonster; 26];
     static mut scoreboard: *mut crate::score::CFile;
 
     fn fgets(buf: *mut c_char, n: c_int, stream: *mut std::ffi::c_void) -> *mut c_char;
@@ -66,22 +66,26 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn thing_t(tp: *mut crate::player::CThing) -> *mut crate::player::CThingMonster {
-    tp as *mut crate::player::CThingMonster
+unsafe fn thing_t(
+    tp: *mut crate::entity::player::CThing,
+) -> *mut crate::entity::player::CThingMonster {
+    tp as *mut crate::entity::player::CThingMonster
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut crate::player::CThing) -> *mut crate::player::CThingObject {
-    tp as *mut crate::player::CThingObject
+unsafe fn thing_o(
+    tp: *mut crate::entity::player::CThing,
+) -> *mut crate::entity::player::CThingObject {
+    tp as *mut crate::entity::player::CThingObject
 }
 
 #[inline]
-unsafe fn pack_ptr() -> *mut crate::player::CThing {
+unsafe fn pack_ptr() -> *mut crate::entity::player::CThing {
     (*thing_t(&raw mut player)).t_pack
 }
 
 #[inline]
-unsafe fn next_ptr(tp: *mut crate::player::CThing) -> *mut crate::player::CThing {
+unsafe fn next_ptr(tp: *mut crate::entity::player::CThing) -> *mut crate::entity::player::CThing {
     (*thing_t(tp)).l_next
 }
 

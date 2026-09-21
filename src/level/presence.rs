@@ -12,8 +12,8 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use crate::config::GameConfig;
 use crate::draw::{terrain_chat_at, FLOOR, PASSAGE};
+use crate::entity::player::{CCoord, CRoom, CThing};
 use crate::game;
-use crate::player::{CCoord, CRoom, CThing};
 use crate::rnd::rnd;
 
 use super::level::{with_current_level_mut, LevelFlags};

@@ -33,13 +33,13 @@
 
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 
-use crate::chase::runners;
 use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
+use crate::entity::chase::runners;
+use crate::entity::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::thing_list::{allocated_count, new_item};
 use crate::item::things::CObjInfo;
-use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

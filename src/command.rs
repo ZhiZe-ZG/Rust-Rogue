@@ -8,11 +8,12 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-use crate::chase::{diag_ok, see_monst};
 use crate::config::GameConfig;
 use crate::curses as cur;
 use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
+use crate::entity::chase::{diag_ok, see_monst};
+use crate::entity::player::{do_move, do_run, CCoord, CPlace, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::help::{help, identify};
 use crate::io::{addmsg_str, endmsg, msg_str, readchar, status};
@@ -28,7 +29,6 @@ use crate::item::weapons::{init_weapon, missile, wield};
 use crate::level::new_level;
 use crate::misc::{eat, get_dir};
 use crate::options::{get_str, option};
-use crate::player::{do_move, do_run, CCoord, CPlace, CThing, CThingMonster, CThingObject};
 use crate::rip::total_winner;
 use crate::rnd::rnd;
 use crate::save::save_game;
