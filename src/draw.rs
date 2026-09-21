@@ -272,48 +272,48 @@ pub(crate) unsafe fn map_cell_reveal(y: c_int, x: c_int) -> c_int {
     with_current_level_mut(|lvl| {
         let idx = cell_index(y as usize, x as usize);
         match ch as u8 {
-        b'+' | b'%' => ch as c_int,
-        b'-' | b'|' => {
-            if !lvl.flags.real[idx] {
-                lvl.flags.real[idx] = true;
-                DOOR as c_int
-            } else {
-                ch as c_int
+            b'+' | b'%' => ch as c_int,
+            b'-' | b'|' => {
+                if !lvl.flags.real[idx] {
+                    lvl.flags.real[idx] = true;
+                    DOOR as c_int
+                } else {
+                    ch as c_int
+                }
             }
-        }
-        b' ' => {
-            if lvl.flags.real[idx] {
+            b' ' => {
+                if lvl.flags.real[idx] {
+                    if lvl.flags.passage[idx] {
+                        PASSAGE as c_int
+                    } else {
+                        SPACE as c_int
+                    }
+                } else {
+                    lvl.flags.real[idx] = true;
+                    PASSAGE as c_int
+                }
+            }
+            b'#' => {
+                lvl.flags.real[idx] = true;
+                PASSAGE as c_int
+            }
+            b'.' => {
+                if lvl.flags.real[idx] {
+                    SPACE as c_int
+                } else {
+                    lvl.flags.seen[idx] = true;
+                    lvl.flags.real[idx] = true;
+                    TRAP as c_int
+                }
+            }
+            _ => {
                 if lvl.flags.passage[idx] {
+                    lvl.flags.real[idx] = true;
                     PASSAGE as c_int
                 } else {
                     SPACE as c_int
                 }
-            } else {
-                lvl.flags.real[idx] = true;
-                PASSAGE as c_int
             }
-        }
-        b'#' => {
-            lvl.flags.real[idx] = true;
-            PASSAGE as c_int
-        }
-        b'.' => {
-            if lvl.flags.real[idx] {
-                SPACE as c_int
-            } else {
-                lvl.flags.seen[idx] = true;
-                lvl.flags.real[idx] = true;
-                TRAP as c_int
-            }
-        }
-        _ => {
-            if lvl.flags.passage[idx] {
-                lvl.flags.real[idx] = true;
-                PASSAGE as c_int
-            } else {
-                SPACE as c_int
-            }
-        }
         }
     })
 }

@@ -3,10 +3,10 @@
 //! Bridges the Rust-side level structures (`Level`, `Room`, tile map, flag
 //! grids) and the C `rooms`/`passages`/`places` globals, and draws the merged
 //! Rust tile map to the C `places` grid in one pass. Nothing here is a
-//! `#[no_mangle]` export; [`super::ffi`] orchestrates these helpers around
+//! public export; [`super::generation`] orchestrates these helpers around
 //! the legacy engine lifecycle.
 
-use std::os::raw::{c_char, c_int, c_short};
+use std::os::raw::{c_int, c_short};
 
 use glam::IVec2;
 
@@ -16,7 +16,6 @@ use super::level::Level;
 use super::passages::{MAX_EXITS, MAX_PASSAGES};
 use super::rooms::Room;
 use super::symbols::{passages, rooms, ISDARK, ISGONE, ISMAZE};
-use super::tile::Tile;
 
 /// Convert one C `CRoom` into a Rust [`Room`].
 pub(crate) unsafe fn room_from_c(rp: *const CRoom) -> Room {

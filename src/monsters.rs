@@ -8,8 +8,8 @@ use crate::io::{addmsg_str, msg_str};
 use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
-use crate::rnd::rnd;
 use crate::rings::RingType;
+use crate::rnd::rnd;
 use crate::startup::roll;
 use crate::thing_list::{attach, new_item};
 use crate::things::new_thing;
@@ -35,7 +35,6 @@ const ISMEAN: c_short = 0o004000;
 const ISHALU: c_short = 0o004000;
 const ISRUN: c_short = 0o020000;
 const SEEMONST: c_short = 0o040000;
-
 
 /// Layout mirror of the C `struct monster` stat table, tied to the `monsters[]`
 /// global the C engine exposes.

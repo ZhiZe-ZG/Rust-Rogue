@@ -1,11 +1,9 @@
 //! Level generation.
 //!
 //! Digs and populates a new dungeon level: room layout, maze corridors,
-//! passages, objects, traps, and the down staircase. Exposed to the C game
-//! through the legacy FFI symbols (see [`ffi`]).
+//! passages, objects, traps, and the down staircase.
 
-mod ffi;
-mod ffitools;
+mod generation;
 mod level;
 mod mirror;
 mod passages;
@@ -17,8 +15,10 @@ mod symbols;
 mod tile;
 mod trap;
 
-pub use ffi::{door_open, new_level};
-pub use level::{with_current_level, with_current_level_mut, Level, LevelFlags, LEVEL_HEIGHT, LEVEL_WIDTH};
+pub use generation::{door_open, new_level};
+pub use level::{
+    with_current_level, with_current_level_mut, Level, LevelFlags, LEVEL_HEIGHT, LEVEL_WIDTH,
+};
 pub(crate) use presence::find_floor;
 
 pub use passages::Passage;

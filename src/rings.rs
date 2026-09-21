@@ -274,7 +274,9 @@ unsafe fn ring_num(obj: *mut CThing) -> *mut c_char {
     }
 
     match RingType::from_raw((*thing_o(obj)).o_which) {
-        Some(RingType::Protection | RingType::AddStrength | RingType::AddDamage | RingType::AddHit) => {
+        Some(
+            RingType::Protection | RingType::AddStrength | RingType::AddDamage | RingType::AddHit,
+        ) => {
             let _ = snprintf(
                 (&raw mut RING_NUM_BUF) as *mut c_char,
                 10,

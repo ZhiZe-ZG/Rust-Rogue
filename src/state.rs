@@ -2218,8 +2218,8 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
             let _ = rs_read_char(inf, &mut trap_kind);
             let _ = rs_read_thing_reference(inf, mlist, &mut monst);
 
-            let tile = crate::level::Tile::from_u8(tile_disc as u8)
-                .unwrap_or(crate::level::Tile::Empty);
+            let tile =
+                crate::level::Tile::from_u8(tile_disc as u8).unwrap_or(crate::level::Tile::Empty);
             let _ = lvl.map.set(y as usize, x as usize, tile);
             lvl.flags.real[idx] = real != 0;
             lvl.flags.passage[idx] = passage != 0;

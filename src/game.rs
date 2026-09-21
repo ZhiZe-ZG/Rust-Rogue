@@ -98,7 +98,10 @@ impl CurrentLevel {
 
     #[inline]
     pub fn with<R>(&self, operation: impl FnOnce(&Level) -> R) -> R {
-        let mut level = self.level.lock().unwrap_or_else(|poison| poison.into_inner());
+        let mut level = self
+            .level
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         if level.is_none() {
             *level = Some(Level::new());
         }
@@ -107,7 +110,10 @@ impl CurrentLevel {
 
     #[inline]
     pub fn with_mut<R>(&self, operation: impl FnOnce(&mut Level) -> R) -> R {
-        let mut level = self.level.lock().unwrap_or_else(|poison| poison.into_inner());
+        let mut level = self
+            .level
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         if level.is_none() {
             *level = Some(Level::new());
         }

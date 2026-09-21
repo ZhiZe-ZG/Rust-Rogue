@@ -4,19 +4,18 @@
 //! Room selection and geometry go through the Rust `Level` model
 //! (`Level::rnd_room`/`Level::rnd_pos` through scoped level access); the
 //! remaining C `places`/`player` globals are touched via the raw symbols in
-//! [`super::symbols`]. [`super::ffi::new_level`] calls these after the
+//! [`super::symbols`]. [`super::generation::new_level`] calls these after the
 //! rooms/passages have been dug and mirrored.
 
 use std::mem::size_of;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
-use crate::draw::terrain_chat_at;
+use crate::draw::{terrain_chat_at, FLOOR, PASSAGE};
 use crate::game;
 use crate::player::{CCoord, CRoom, CThing};
 use crate::rnd::rnd;
 
-use super::ffitools::{FLOOR, PASSAGE, STAIRS};
-use super::level::{with_current_level_mut, LevelFlags, LEVEL_WIDTH};
+use super::level::{with_current_level_mut, LevelFlags};
 use super::symbols::{
     amulet, attach, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch, new_item,
     new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, stairs,
@@ -50,7 +49,6 @@ unsafe fn room_slot_of(rp: *mut CRoom) -> Option<usize> {
 /// (`Level::rnd_pos`), while the candidate cell is validated against the C
 /// `places` grid. Returns `true as c_uchar` and stores the chosen cell into `cp` on
 /// success; `false as c_uchar` when `limit` (if nonzero) attempts are exhausted.
-#[no_mangle]
 pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: bool) -> bool {
     if cp.is_null() {
         return false;
@@ -367,7 +365,7 @@ unsafe fn place_hero() {
 /// Run the full population pass: gold/monsters, objects, traps, stairs, and
 /// the hero.
 ///
-/// Called by [`super::ffi::new_level`] after the map is drawn and mirrored.
+/// Called by [`super::generation::new_level`] after the map is generated and mirrored.
 pub(crate) unsafe fn populate_level() {
     place_room_contents();
     put_things(); /* Place objects (if any) */

@@ -1,0 +1,102 @@
+//! Dungeon-level lifecycle orchestration.
+//!
+//! [`new_level`] resets the current level, generates its rooms and passages,
+//! populates it, and prepares the screen. [`door_open`] wakes monsters in a
+//! room when it becomes visible.
+
+use glam::IVec2;
+
+use crate::curses as cur;
+use crate::draw::winat;
+use crate::game::{clear_level, with_current_level_mut};
+use crate::player::{CRoom, CThing};
+
+use super::mirror::{apply_room_to_c, read_c_room_data, sync_passages_to_c, sync_rooms_to_c};
+use super::passages::SCREEN_COLS;
+use super::presence::populate_level;
+use super::rooms::Room;
+use super::structure::Structure;
+use super::symbols::{
+    free_list, level, lvl_obj, max_level, mlist, no_food, player, thing_t, wake_monster, ISGONE,
+    ISHELD, MAXROOMS,
+};
+use super::tile::Tile;
+
+unsafe fn generate_rooms_and_connections() -> [Room; MAXROOMS] {
+    let rooms = read_c_room_data();
+    let room_size = IVec2::new(SCREEN_COLS / 3, 24 / 3);
+    with_current_level_mut(|current| current.generate_rooms_and_connections(rooms, room_size))
+}
+
+unsafe fn sync_generated_rooms(generated: &[Room; MAXROOMS]) {
+    use super::symbols::rooms;
+
+    for index in 0..MAXROOMS {
+        let room = (&raw mut rooms[index]) as *mut CRoom;
+        apply_room_to_c(&generated[index], room);
+    }
+
+    with_current_level_mut(|current| sync_rooms_to_c(current));
+    with_current_level_mut(|current| sync_passages_to_c(current));
+}
+
+unsafe fn reset_level() {
+    with_current_level_mut(|current| {
+        current.depth = level;
+        current.map = Structure::new(24, SCREEN_COLS as usize, Tile::Empty);
+        current.rooms.clear();
+        current.room_graph.reset();
+        current.passages.clear();
+        current.passage_links.clear();
+        current.reset_flags();
+    });
+
+    (*thing_t(&raw mut player)).t_flags &= !ISHELD;
+    if level > max_level {
+        max_level = level;
+    }
+
+    clear_level();
+    cur::clear();
+}
+
+unsafe fn clear_previous_level_items() {
+    let mut monster = mlist;
+    while !monster.is_null() {
+        let next = (*thing_t(monster)).l_next;
+        free_list((&raw mut (*thing_t(monster)).t_pack) as *mut *mut CThing);
+        monster = next;
+    }
+    free_list((&raw mut mlist) as *mut *mut CThing);
+    free_list((&raw mut lvl_obj) as *mut *mut CThing);
+}
+
+/// Wake monsters in a room when it becomes visible.
+pub unsafe fn door_open(room: *mut CRoom) {
+    if ((*room).r_flags & ISGONE) != 0 {
+        return;
+    }
+
+    let y_end = (*room).r_pos.y + (*room).r_max.y;
+    let x_end = (*room).r_pos.x + (*room).r_max.x;
+    for y in (*room).r_pos.y..y_end {
+        for x in (*room).r_pos.x..x_end {
+            if (winat(y, x) as u8).is_ascii_uppercase() {
+                wake_monster(y, x);
+            }
+        }
+    }
+}
+
+/// Build and populate a fresh dungeon level at the current depth.
+pub unsafe fn new_level() {
+    reset_level();
+    clear_previous_level_items();
+
+    let generated = generate_rooms_and_connections();
+    with_current_level_mut(|current| current.do_passages());
+    sync_generated_rooms(&generated);
+
+    no_food += 1;
+    populate_level();
+}

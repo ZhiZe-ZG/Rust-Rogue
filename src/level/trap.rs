@@ -12,11 +12,11 @@ use crate::armor::rust_armor;
 use crate::fight::swing;
 use crate::game::EQUIPMENT;
 use crate::io::msg_str;
-use crate::rings::RingType;
 use crate::machdep::flush_type;
 use crate::misc::{chg_str, spread};
 use crate::monsters::save;
 use crate::player::{CCoord, CThing, CThingMonster, CThingObject};
+use crate::rings::RingType;
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
@@ -24,7 +24,7 @@ use crate::thing_list::new_item;
 use crate::weapons::{fall, init_weapon};
 use crate::wizard::teleport;
 
-use super::ffi::new_level;
+use super::generation::new_level;
 
 const ISLEVIT: c_short = 0o0000010;
 const ISRUN: c_short = 0o020000;
@@ -106,9 +106,8 @@ unsafe fn rainbow_color() -> *const c_char {
 /// `roll`, `spread`, `teleport`, ...) exactly as the legacy `be_trapped` did,
 /// but is callable only from Rust.
 pub unsafe fn be_trapped(pos: CCoord) -> Trap {
-    let trap = crate::level::with_current_level(|current| {
-        current.trap_at(pos.y as usize, pos.x as usize)
-    });
+    let trap =
+        crate::level::with_current_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
 
     if ((*thing_t(&raw mut player)).t_flags & ISLEVIT) != 0 {
         return Trap::Rust;

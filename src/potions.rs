@@ -52,7 +52,6 @@ const SEEMONST: c_short = 0o040000;
 const ISCURSED: c_int = 0o000001;
 const ISPROT: c_int = 0o000040;
 
-
 const MAXPOTIONS: usize = 14;
 
 #[repr(u8)]
