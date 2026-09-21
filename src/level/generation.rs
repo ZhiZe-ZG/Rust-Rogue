@@ -11,27 +11,27 @@ use crate::draw::winat;
 use crate::game::{clear_level, with_current_level_mut};
 use crate::player::{CRoom, CThing};
 
+use super::config::GameConfig;
 use super::mirror::{apply_room_to_c, read_c_room_data, sync_passages_to_c, sync_rooms_to_c};
-use super::passages::SCREEN_COLS;
 use super::presence::populate_level;
 use super::rooms::Room;
 use super::structure::Structure;
 use super::symbols::{
     free_list, level, lvl_obj, max_level, mlist, no_food, player, thing_t, wake_monster, ISGONE,
-    ISHELD, MAXROOMS,
+    ISHELD,
 };
 use super::tile::Tile;
 
-unsafe fn generate_rooms_and_connections() -> [Room; MAXROOMS] {
+unsafe fn generate_rooms_and_connections() -> [Room; GameConfig::MAX_ROOMS] {
     let rooms = read_c_room_data();
-    let room_size = IVec2::new(SCREEN_COLS / 3, 24 / 3);
+    let room_size = IVec2::new(GameConfig::SCREEN_COLS / 3, GameConfig::SCREEN_LINES / 3);
     with_current_level_mut(|current| current.generate_rooms_and_connections(rooms, room_size))
 }
 
-unsafe fn sync_generated_rooms(generated: &[Room; MAXROOMS]) {
+unsafe fn sync_generated_rooms(generated: &[Room; GameConfig::MAX_ROOMS]) {
     use super::symbols::rooms;
 
-    for index in 0..MAXROOMS {
+    for index in 0..GameConfig::MAX_ROOMS {
         let room = (&raw mut rooms[index]) as *mut CRoom;
         apply_room_to_c(&generated[index], room);
     }
@@ -43,7 +43,11 @@ unsafe fn sync_generated_rooms(generated: &[Room; MAXROOMS]) {
 unsafe fn reset_level() {
     with_current_level_mut(|current| {
         current.depth = level;
-        current.map = Structure::new(24, SCREEN_COLS as usize, Tile::Empty);
+        current.map = Structure::new(
+            GameConfig::SCREEN_LINES as usize,
+            GameConfig::SCREEN_COLS as usize,
+            Tile::Empty,
+        );
         current.rooms.clear();
         current.room_graph.reset();
         current.passages.clear();

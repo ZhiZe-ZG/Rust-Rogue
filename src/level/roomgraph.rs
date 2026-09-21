@@ -11,24 +11,18 @@ use std::os::raw::c_int;
 use crate::rnd::rnd;
 use glam::IVec2;
 
+use super::config::GameConfig;
 use super::rooms::Room;
 
-/// Maximum number of rooms on a level.
-pub const MAX_ROOMS: usize = 9;
-
-const NUMCOLS: i32 = 80;
-const NUMLINES: i32 = 24;
-const MAX_ROOM_TRIES: usize = 100;
-
-type AdjacentArray = [[u8; MAX_ROOMS]; MAX_ROOMS];
+type AdjacentArray = [[u8; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
 
 /// Room grid plus adjacency and connection state for one generation pass.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomGraph {
-    rooms: [Room; MAX_ROOMS],
+    rooms: [Room; GameConfig::MAX_ROOMS],
     adjacent: AdjacentArray,
     isconn: AdjacentArray,
-    ingraph: [u8; MAX_ROOMS],
+    ingraph: [u8; GameConfig::MAX_ROOMS],
     connections: Vec<(usize, usize)>,
 }
 
@@ -45,13 +39,13 @@ impl RoomGraph {
     }
 
     /// Build and populate room layout/flags for one level generation pass.
-    pub(crate) fn for_level(rooms: [Room; MAX_ROOMS], bsze: IVec2, depth: i32) -> Self {
+    pub(crate) fn for_level(rooms: [Room; GameConfig::MAX_ROOMS], bsze: IVec2, depth: i32) -> Self {
         let mut graph = Self::with_rooms_and_adjacency(rooms, build_base_adjacency());
         graph.determine_room_layouts(bsze, depth);
         graph
     }
 
-    pub(crate) fn into_rooms(self) -> [Room; MAX_ROOMS] {
+    pub(crate) fn into_rooms(self) -> [Room; GameConfig::MAX_ROOMS] {
         self.rooms
     }
 
@@ -65,18 +59,21 @@ impl RoomGraph {
 
     /// Reset per-level connection state, keeping the fixed adjacency.
     pub fn reset(&mut self) {
-        self.isconn = [[0; MAX_ROOMS]; MAX_ROOMS];
-        self.ingraph = [0; MAX_ROOMS];
+        self.isconn = [[0; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
+        self.ingraph = [0; GameConfig::MAX_ROOMS];
         self.connections.clear();
     }
 
     /// Create a graph around pre-existing room slots and adjacency.
-    fn with_rooms_and_adjacency(rooms: [Room; MAX_ROOMS], adjacent: AdjacentArray) -> Self {
+    fn with_rooms_and_adjacency(
+        rooms: [Room; GameConfig::MAX_ROOMS],
+        adjacent: AdjacentArray,
+    ) -> Self {
         Self {
             rooms,
             adjacent,
-            isconn: [[0; MAX_ROOMS]; MAX_ROOMS],
-            ingraph: [0; MAX_ROOMS],
+            isconn: [[0; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS],
+            ingraph: [0; GameConfig::MAX_ROOMS],
             connections: Vec::new(),
         }
     }
@@ -95,7 +92,7 @@ impl RoomGraph {
         }
 
         // Compute geometry, sizes, and flags for every room slot.
-        for i in 0..MAX_ROOMS {
+        for i in 0..GameConfig::MAX_ROOMS {
             let top = grid_top_left(i, bsze);
             let room = &mut self.rooms[i];
 
@@ -199,7 +196,7 @@ impl RoomGraph {
     }
 }
 
-fn empty_rooms() -> [Room; MAX_ROOMS] {
+fn empty_rooms() -> [Room; GameConfig::MAX_ROOMS] {
     std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
 }
 
@@ -209,9 +206,9 @@ fn grid_top_left(i: usize, bsze: IVec2) -> IVec2 {
 }
 
 fn build_base_adjacency() -> AdjacentArray {
-    let mut adjacent = [[0; MAX_ROOMS]; MAX_ROOMS];
+    let mut adjacent = [[0; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
 
-    for idx in 0..MAX_ROOMS {
+    for idx in 0..GameConfig::MAX_ROOMS {
         let row = idx / 3;
         let col = idx % 3;
 
@@ -238,8 +235,8 @@ fn place_off_map_room(room: &mut Room, top: IVec2, bsze: IVec2) {
     loop {
         room.position.x = top.x + rnd(bsze.x - 2) + 1;
         room.position.y = top.y + rnd(bsze.y - 2) + 1;
-        room.size = IVec2::new(-NUMCOLS, -NUMLINES);
-        if room.position.y > 0 && room.position.y < NUMLINES - 1 {
+        room.size = IVec2::new(-GameConfig::SCREEN_COLS, -GameConfig::SCREEN_LINES);
+        if room.position.y > 0 && room.position.y < GameConfig::SCREEN_LINES - 1 {
             break;
         }
     }
@@ -263,7 +260,7 @@ fn place_maze_room(room: &mut Room, top: IVec2, bsze: IVec2) {
 /// Try to fit a plain room in its grid cell, marking it `gone` if it never
 /// lands on a valid (non-top-row) position.
 fn place_regular_room(room: &mut Room, top: IVec2, bsze: IVec2) {
-    for _ in 0..MAX_ROOM_TRIES {
+    for _ in 0..GameConfig::MAX_ROOM_PLACEMENT_ATTEMPTS {
         room.size.x = rnd(bsze.x - 4) + 4;
         room.size.y = rnd(bsze.y - 4) + 4;
         room.position.x = top.x + rnd(bsze.x - room.size.x);
@@ -276,7 +273,7 @@ fn place_regular_room(room: &mut Room, top: IVec2, bsze: IVec2) {
 }
 
 fn random_room_index() -> usize {
-    rnd(MAX_ROOMS as c_int) as usize
+    rnd(GameConfig::MAX_ROOMS as c_int) as usize
 }
 
 fn non_gone_count(room_states: &[Room]) -> usize {
@@ -295,12 +292,12 @@ fn pick_non_gone(room_states: &[Room]) -> usize {
 /// Pick a uniformly random index where `available` is nonzero and `blocked`
 /// is zero, or `None` when no such index exists.
 fn pick_unconnected_adjacent(
-    available: &[u8; MAX_ROOMS],
-    blocked: &[u8; MAX_ROOMS],
+    available: &[u8; GameConfig::MAX_ROOMS],
+    blocked: &[u8; GameConfig::MAX_ROOMS],
 ) -> Option<usize> {
     let mut count = 0;
     let mut pick = None;
-    for i in 0..MAX_ROOMS {
+    for i in 0..GameConfig::MAX_ROOMS {
         if available[i] != 0 && blocked[i] == 0 {
             count += 1;
             if rnd(count as c_int) == 0 {

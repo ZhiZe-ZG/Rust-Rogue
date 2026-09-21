@@ -1,7 +1,7 @@
 use crate::rnd::rnd;
 use glam::IVec2;
 
-use super::roomgraph::MAX_ROOMS;
+use super::config::GameConfig;
 use super::structure::Structure;
 use super::tile::Tile;
 
@@ -168,7 +168,9 @@ impl Room {
 }
 
 /// Fill each active room's tile structure from its geometry/flags.
-pub fn build_generated_rooms(mut rooms: [Room; MAX_ROOMS]) -> [Room; MAX_ROOMS] {
+pub fn build_generated_rooms(
+    mut rooms: [Room; GameConfig::MAX_ROOMS],
+) -> [Room; GameConfig::MAX_ROOMS] {
     for room in &mut rooms {
         if room.is_gone() {
             continue;

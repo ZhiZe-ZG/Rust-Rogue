@@ -3,6 +3,7 @@ use crate::daemon::{extinguish, fuse};
 use crate::daemons::nohaste;
 use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, msg_str, readchar};
+use crate::level::GameConfig;
 use crate::options::get_str;
 use crate::pack::{get_item, leave_pack, reset_last};
 use crate::rnd::rnd;
@@ -40,9 +41,6 @@ const ISRUN: c_short = 0o020000;
 const SEEMONST: c_short = 0o040000;
 const F_PASS: c_char = 0x80u8 as c_char;
 const MAXSTR: usize = 1024;
-const MAXLINES: c_int = 24;
-const MAXCOLS: c_int = 80;
-const AMULETLEVEL: c_int = 26;
 const HUNGERTIME: c_int = 1300;
 const STOMACHSIZE: c_int = 2000;
 const AFTER: c_int = 2;
@@ -449,7 +447,7 @@ pub unsafe extern "C" fn rnd_thing() -> c_char {
     let thing_list = [
         POTION, SCROLL, RING, STICK, FOOD, WEAPON, ARMOR, STAIRS, GOLD, AMULET,
     ];
-    let idx = if level >= AMULETLEVEL {
+    let idx = if level >= GameConfig::AMULET_LEVEL {
         rnd(thing_list.len() as c_int)
     } else {
         rnd((thing_list.len() - 1) as c_int)

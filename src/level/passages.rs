@@ -9,25 +9,15 @@
 //! `crate::level::mirror::sync_rooms_to_c` / `crate::level::mirror::sync_passages_to_c`
 //! translate those Rust structures into the C arrays the engine consumes.
 
-use std::os::raw::c_int;
-
 use glam::IVec2;
 
 use crate::rnd::rnd;
 
-use super::level::{LevelFlags, LEVEL_HEIGHT, LEVEL_WIDTH};
+use super::config::GameConfig;
+use super::level::LevelFlags;
 use super::rooms::{DoorKind, Room};
 use super::structure::Structure;
 use super::tile::Tile;
-
-/// Size of the C `passages` room array (also the cap on numbered components).
-pub(crate) const MAX_PASSAGES: usize = 13;
-/// Max exits writeable into one C `r_exit` array.
-pub(crate) const MAX_EXITS: usize = 12;
-/// Width of the playable C `places` screen.
-pub(crate) const SCREEN_COLS: c_int = 80;
-/// Height of the playable C `places` screen.
-pub(crate) const SCREEN_LINES: c_int = 24;
 
 /// A corridor connecting two rooms.
 ///
@@ -92,8 +82,8 @@ fn cell_index(y: i32, x: i32) -> Option<usize> {
         return None;
     }
     let (y, x) = (y as usize, x as usize);
-    if y < LEVEL_HEIGHT && x < LEVEL_WIDTH {
-        Some(y * LEVEL_WIDTH + x)
+    if y < GameConfig::LEVEL_HEIGHT && x < GameConfig::LEVEL_WIDTH {
+        Some(y * GameConfig::LEVEL_WIDTH + x)
     } else {
         None
     }
@@ -434,7 +424,7 @@ pub(crate) fn mark_passages(map: &Structure, flags: &mut LevelFlags, depth: i32)
             if !matches!(map.get(y, x), Some(Tile::Passage)) {
                 continue;
             }
-            let idx = y * LEVEL_WIDTH + x;
+            let idx = y * GameConfig::LEVEL_WIDTH + x;
             flags.passage[idx] = true;
             if rnd(10) + 1 < depth && rnd(40) == 0 {
                 flags.real[idx] = false;
@@ -509,11 +499,11 @@ fn number_passage(
     y: i32,
     x: i32,
 ) {
-    if x >= SCREEN_COLS || x < 0 || y >= SCREEN_LINES || y <= 0 {
+    if x >= GameConfig::SCREEN_COLS || x < 0 || y >= GameConfig::SCREEN_LINES || y <= 0 {
         return;
     }
 
-    let idx = (y as usize) * LEVEL_WIDTH + (x as usize);
+    let idx = (y as usize) * GameConfig::LEVEL_WIDTH + (x as usize);
     if flags.passnum[idx] != 0 {
         return;
     }
@@ -521,7 +511,7 @@ fn number_passage(
     if scan.pending_start {
         scan.num += 1;
         scan.pending_start = false;
-        if scan.num <= MAX_PASSAGES {
+        if scan.num <= GameConfig::MAX_PASSAGES {
             links.resize(scan.num, PassageLinks::default());
         }
     }
@@ -531,7 +521,7 @@ fn number_passage(
     if is_door {
         if let Some(links) = links.get_mut(scan.num - 1) {
             // Capped at the size of the C `r_exit` table.
-            if links.exits.len() < MAX_EXITS {
+            if links.exits.len() < GameConfig::MAX_EXITS {
                 links.exits.push(IVec2::new(x, y));
             }
         }

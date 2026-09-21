@@ -7,7 +7,7 @@ use crate::chase::roomin;
 use crate::curses as cur;
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::io::{msg_str, readchar, show_win};
-use crate::level::find_floor;
+use crate::level::{find_floor, GameConfig};
 use crate::machdep::flush_type;
 use crate::pack::{add_pack, floor_at, get_item};
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
@@ -30,8 +30,6 @@ const ISCURSED: c_int = 0o000001;
 const ISKNOW: c_int = 0o000200;
 const ISHELD: c_short = 0o000400;
 const F_REAL: c_char = 0x10u8 as c_char;
-const NUMCOLS: c_int = 80;
-const NUMLINES: c_int = 24;
 
 static mut master_mode_enabled: c_uchar = 1;
 static mut wizard: c_int = 0;
@@ -319,8 +317,8 @@ pub unsafe extern "C" fn show_map() {
     }
 
     cur::wclear(hw);
-    for y in 1..(NUMLINES - 1) {
-        for x in 0..NUMCOLS {
+    for y in 1..(GameConfig::SCREEN_LINES - 1) {
+        for x in 0..GameConfig::SCREEN_COLS {
             let real = flat(y, x);
             if ((real as u8) & (F_REAL as u8)) == 0 {
                 cur::wstandout(hw);

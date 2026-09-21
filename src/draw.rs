@@ -21,7 +21,7 @@ use crate::curses as cur;
 use crate::game;
 use crate::io::step_ok;
 use crate::level::Trap;
-use crate::level::{door_open, with_current_level, with_current_level_mut, Tile, LEVEL_WIDTH};
+use crate::level::{door_open, with_current_level, with_current_level_mut, GameConfig, Tile};
 use crate::misc::find_obj;
 use crate::monsters::wake_monster;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
@@ -63,9 +63,6 @@ const SEEMONST: c_short = 0o040000;
 
 // ─── Screen geometry ───────────────────────────────────────────────────────────
 
-const NUMLINES: c_int = 24;
-const NUMCOLS: c_int = 80;
-const MAXPASS: usize = 13;
 const LAMPDIST: c_int = 3;
 
 // ─── Legacy C ABI surface ─────────────────────────────────────────────────────
@@ -78,7 +75,7 @@ unsafe extern "C" {
     static mut oldpos: CCoord;
     static mut oldrp: *mut CRoom;
     static mut player: CThing;
-    static mut passages: [CRoom; MAXPASS];
+    static mut passages: [CRoom; GameConfig::MAX_PASSAGES];
     static mut runch: c_char;
     static mut running: c_uchar;
     static mut see_floor: c_uchar;
@@ -120,7 +117,7 @@ unsafe fn player_has(flag: c_short) -> bool {
 
 #[inline]
 fn cell_index(y: usize, x: usize) -> usize {
-    y * LEVEL_WIDTH + x
+    y * GameConfig::LEVEL_WIDTH + x
 }
 
 /// Whether `tile` is a solid boundary cell (wall, hidden door, or open door).
@@ -334,8 +331,8 @@ fn is_door_or_hidden(ch: c_char, flags: c_char) -> bool {
 /// `CURRENT_LEVEL` directly.
 #[no_mangle]
 pub unsafe extern "C" fn add_pass() {
-    for y in 1..NUMLINES - 1 {
-        for x in 0..NUMCOLS {
+    for y in 1..GameConfig::SCREEN_LINES - 1 {
+        for x in 0..GameConfig::SCREEN_COLS {
             let flags = flat_at(y, x);
             let ch = chat_at(y, x);
             if (flags as u8 & F_PASS as u8) != 0 || is_door_or_hidden(ch, flags) {
@@ -401,11 +398,11 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
     pfl = flat_at(hero.y, hero.x);
 
     for y in sy..=ey {
-        if y <= 0 || y >= NUMLINES - 1 {
+        if y <= 0 || y >= GameConfig::SCREEN_LINES - 1 {
             continue;
         }
         for x in sx..=ex {
-            if x < 0 || x >= NUMCOLS {
+            if x < 0 || x >= GameConfig::SCREEN_COLS {
                 continue;
             }
             if !player_has(ISBLIND) && y == hero.y && x == hero.x {
@@ -682,7 +679,7 @@ pub unsafe extern "C" fn leave_room(cp: *mut CCoord) {
     };
 
     let pnum = (flat_at((*cp).y, (*cp).x) as u8 & F_PNUM as u8) as usize;
-    if pnum < MAXPASS {
+    if pnum < GameConfig::MAX_PASSAGES {
         (*thing_t(&raw mut player)).t_room = (&raw mut passages[pnum]) as *mut CRoom;
     }
 

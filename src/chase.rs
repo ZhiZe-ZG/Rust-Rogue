@@ -11,6 +11,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::curses as cur;
 use crate::fight::attack;
 use crate::io::{endmsg, msg_str, step_ok};
+use crate::level::GameConfig;
 use crate::misc::sign;
 use crate::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::rnd::rnd;
@@ -18,11 +19,6 @@ use crate::rndmove::rndmove;
 use crate::scrolls::ScrollType;
 use crate::sticks::fire_bolt;
 use crate::thing_list::{attach, detach};
-
-const NUMLINES: c_int = 24;
-const NUMCOLS: c_int = 80;
-const MAXROOMS: usize = 9;
-const MAXPASS: usize = 13;
 
 const DRAGONSHOT: c_int = 5; // one chance in DRAGONSHOT that a dragon will flame
 
@@ -71,8 +67,8 @@ unsafe extern "C" {
     static mut mlist: *mut CThing;
     static mut lvl_obj: *mut CThing;
     static mut player: CThing;
-    static mut passages: [CRoom; MAXPASS];
-    static mut rooms: [CRoom; MAXROOMS];
+    static mut passages: [CRoom; GameConfig::MAX_PASSAGES];
+    static mut rooms: [CRoom; GameConfig::MAX_ROOMS];
 
     static mut has_hit: c_uchar;
     static mut to_death: c_uchar;
@@ -487,12 +483,12 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut CCoord) -> c_uchar {
         CH_RET = *er;
 
         let mut ey = (*er).y + 1;
-        if ey >= NUMLINES - 1 {
-            ey = NUMLINES - 2;
+        if ey >= GameConfig::SCREEN_LINES - 1 {
+            ey = GameConfig::SCREEN_LINES - 2;
         }
         let mut ex = (*er).x + 1;
-        if ex >= NUMCOLS {
-            ex = NUMCOLS - 1;
+        if ex >= GameConfig::SCREEN_COLS {
+            ex = GameConfig::SCREEN_COLS - 1;
         }
 
         let mut x = (*er).x - 1;
@@ -596,7 +592,11 @@ pub unsafe extern "C" fn roomin(cp: *mut CCoord) -> *mut CRoom {
 /// Uses globals: places (via chat).
 #[no_mangle]
 pub unsafe extern "C" fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar {
-    if (*ep).x < 0 || (*ep).x >= NUMCOLS || (*ep).y <= 0 || (*ep).y >= NUMLINES - 1 {
+    if (*ep).x < 0
+        || (*ep).x >= GameConfig::SCREEN_COLS
+        || (*ep).y <= 0
+        || (*ep).y >= GameConfig::SCREEN_LINES - 1
+    {
         return false as c_uchar;
     }
     if (*ep).x == (*sp).x || (*ep).y == (*sp).y {

@@ -21,9 +21,6 @@ use std::ffi::CStr;
 /// Potion and status-effect handling for the Rust FFI bridge.
 /// These helpers implement the C-side potion logic so the game can call
 /// them through exported C entry points.
-const NUMCOLS: c_int = 80;
-const NUMLINES: c_int = 24;
-
 const POTION: c_int = '!' as c_int;
 const SCROLL: c_int = '?' as c_int;
 const WEAPON: c_int = ')' as c_int;

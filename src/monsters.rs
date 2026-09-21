@@ -5,7 +5,7 @@ use crate::daemons::unconfuse;
 use crate::fight::set_mname;
 use crate::game::EQUIPMENT;
 use crate::io::{addmsg_str, msg_str};
-use crate::level::find_floor;
+use crate::level::{find_floor, GameConfig};
 use crate::misc::{rnd_thing, spread};
 use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::rings::RingType;
@@ -16,7 +16,6 @@ use crate::things::new_thing;
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-const AMULETLEVEL: c_int = 26;
 const LAMPDIST: c_int = 3;
 const HUHDURATION: c_int = 20;
 const AFTER: c_int = 2;
@@ -172,7 +171,7 @@ pub unsafe fn randmonster(wander: bool) -> c_char {
 /// Initializes a freshly allocated monster thing and places it on the map.
 #[no_mangle]
 pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: *mut CCoord) {
-    let mut lev_add = level - AMULETLEVEL;
+    let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
         lev_add = 0;
     }

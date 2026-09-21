@@ -8,6 +8,7 @@ use crate::game;
 use crate::game::EQUIPMENT;
 use crate::init::pick_color;
 use crate::io::{addmsg_str, endmsg, msg_str, show_win, status, step_ok};
+use crate::level::GameConfig;
 use crate::misc::{aggravate, call_it, choose_str, find_obj};
 use crate::monsters::{new_monster, randmonster};
 use crate::pack::{get_item, leave_pack};
@@ -15,8 +16,6 @@ use crate::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThing
 use crate::thing_list::{discard, new_item};
 use crate::wizard::{teleport, whatis};
 
-const NUMCOLS: c_int = 80;
-const NUMLINES: c_int = 24;
 const SLEEPTIME: c_int = 5;
 
 const DOOR: c_int = '+' as c_int;
@@ -222,11 +221,11 @@ pub unsafe extern "C" fn read_scroll() {
             let mut ch: c_char = 0;
             let h = hero();
             for x in (h.x - 2)..=(h.x + 2) {
-                if !(0..NUMCOLS).contains(&x) {
+                if !(0..GameConfig::SCREEN_COLS).contains(&x) {
                     continue;
                 }
                 for y in (h.y - 2)..=(h.y + 2) {
-                    if y < 0 || y > (NUMLINES - 1) {
+                    if y < 0 || y > (GameConfig::SCREEN_LINES - 1) {
                         continue;
                     }
                     let tp = moat(y, x);
@@ -314,8 +313,8 @@ pub unsafe extern "C" fn read_scroll() {
             scr_info[ScrollType::Map.index()].oi_know = true as c_uchar;
             msg_str("oh, now this scroll has a map on it");
 
-            for y in 1..(NUMLINES - 1) {
-                for x in 0..NUMCOLS {
+            for y in 1..(GameConfig::SCREEN_LINES - 1) {
+                for x in 0..GameConfig::SCREEN_COLS {
                     let ch = map_cell_reveal(y, x);
                     if ch != SPACE {
                         let tp = moat(y, x);

@@ -15,13 +15,13 @@ use crate::game;
 use crate::player::{CCoord, CRoom, CThing};
 use crate::rnd::rnd;
 
+use super::config::GameConfig;
 use super::level::{with_current_level_mut, LevelFlags};
 use super::symbols::{
     amulet, attach, enter_room, give_pack, level, lvl_obj, max_level, mlist, mvaddch, new_item,
     new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, stairs,
-    step_ok, thing_o, thing_t, turn_see, visuals, AMULET, AMULETLEVEL, GOLD, GOLDGRP, ISGONE,
-    ISHALU, ISMANY, ISMEAN, MAXOBJ, MAXROOMS, MAXTRAPS, MAXTREAS, MAXTRIES, MINTREAS, NTRAPS,
-    PLAYER, SEEMONST, TREAS_ROOM,
+    step_ok, thing_o, thing_t, turn_see, visuals, AMULET, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY,
+    ISMEAN, PLAYER, SEEMONST,
 };
 use super::tile::Tile;
 use super::trap::Trap;
@@ -38,7 +38,7 @@ unsafe fn room_slot_of(rp: *mut CRoom) -> Option<usize> {
     }
     let base = rooms.as_ptr() as usize;
     let idx = (rp as usize).wrapping_sub(base) / size_of::<CRoom>();
-    (idx < MAXROOMS).then_some(idx)
+    (idx < GameConfig::MAX_ROOMS).then_some(idx)
 }
 
 /// Find a floor cell to place something, optionally avoiding monsters.
@@ -106,19 +106,24 @@ unsafe fn treas_room() {
     let (idx, mut spots) = with_current_level_mut(|current| {
         let idx = current.rnd_room();
         let room = &current.rooms[idx];
-        let spots = (room.size.y - 2) * (room.size.x - 2) - MINTREAS;
+        let spots = (room.size.y - 2) * (room.size.x - 2) - GameConfig::MIN_TREASURES;
         (idx, spots)
     });
     let rp = &mut rooms[idx];
 
-    if spots > (MAXTREAS - MINTREAS) {
-        spots = MAXTREAS - MINTREAS;
+    if spots > (GameConfig::MAX_TREASURES - GameConfig::MIN_TREASURES) {
+        spots = GameConfig::MAX_TREASURES - GameConfig::MIN_TREASURES;
     }
 
-    let mut nm = rnd(spots) + MINTREAS;
+    let mut nm = rnd(spots) + GameConfig::MIN_TREASURES;
     let num_monst = nm;
     while nm > 0 {
-        find_floor(rp as *mut CRoom, &mut mp, 2 * MAXTRIES, false);
+        find_floor(
+            rp as *mut CRoom,
+            &mut mp,
+            2 * GameConfig::MAX_PLACEMENT_ATTEMPTS,
+            false,
+        );
         let tp = new_thing();
         (*thing_o(tp)).o_pos = mp;
         // Objects render from the `lvl_obj` list; no glyph write needed.
@@ -126,7 +131,7 @@ unsafe fn treas_room() {
         nm -= 1;
     }
 
-    nm = rnd(spots) + MINTREAS;
+    nm = rnd(spots) + GameConfig::MIN_TREASURES;
     if nm < num_monst + 2 {
         nm = num_monst + 2;
     }
@@ -140,7 +145,12 @@ unsafe fn treas_room() {
 
     level += 1;
     while nm > 0 {
-        if find_floor(rp as *mut CRoom, &mut mp, MAXTRIES, true) {
+        if find_floor(
+            rp as *mut CRoom,
+            &mut mp,
+            GameConfig::MAX_PLACEMENT_ATTEMPTS,
+            true,
+        ) {
             let tp = new_item();
             new_monster(tp, randmonster(false), &mut mp);
             (*thing_t(tp)).t_flags |= ISMEAN;
@@ -162,7 +172,7 @@ unsafe fn treas_room() {
 unsafe fn place_room_contents() {
     let mut mp = CCoord { x: 0, y: 0 };
 
-    for i in 0..MAXROOMS {
+    for i in 0..GameConfig::MAX_ROOMS {
         let rp = (&raw mut rooms[i]) as *mut CRoom;
 
         if (rooms[i].r_flags & ISGONE) != 0 {
@@ -210,12 +220,12 @@ unsafe fn put_things() {
     }
 
     // Check for treasure rooms, and if so, put it in.
-    if rnd(TREAS_ROOM as c_int) == 0 {
+    if rnd(GameConfig::TREASURE_ROOM_CHANCE) == 0 {
         treas_room();
     }
 
     // Do MAXOBJ attempts to put things on a level.
-    for _ in 0..MAXOBJ {
+    for _ in 0..GameConfig::MAX_OBJECTS {
         if rnd(100) < 36 {
             // Pick a new object and link it in the list.
             let obj = new_thing();
@@ -229,7 +239,7 @@ unsafe fn put_things() {
 
     // If he is really deep in the dungeon and he hasn't found the amulet
     // yet, put it somewhere on the ground.
-    if level >= AMULETLEVEL && !amulet {
+    if level >= GameConfig::AMULET_LEVEL && !amulet {
         let obj = new_item();
         attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
         let og = thing_o(obj);
@@ -276,8 +286,8 @@ unsafe fn place_traps() {
     }
 
     ntraps = rnd(level / 4) + 1;
-    if ntraps > MAXTRAPS {
-        ntraps = MAXTRAPS;
+    if ntraps > GameConfig::MAX_TRAPS {
+        ntraps = GameConfig::MAX_TRAPS;
     }
 
     let mut i = ntraps;
@@ -297,7 +307,7 @@ unsafe fn place_traps() {
                 .set(stairs.y as usize, stairs.x as usize, Tile::Trap);
             let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
             current.flags.real[idx] = false;
-            current.flags.trap[idx] = Trap::from_raw(rnd(NTRAPS) as u8);
+            current.flags.trap[idx] = Trap::from_raw(rnd(GameConfig::TRAP_KIND_COUNT) as u8);
         });
         i -= 1;
     }

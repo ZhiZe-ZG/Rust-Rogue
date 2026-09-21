@@ -12,8 +12,8 @@ use glam::IVec2;
 
 use crate::player::{CCoord, CRoom};
 
+use super::config::GameConfig;
 use super::level::Level;
-use super::passages::{MAX_EXITS, MAX_PASSAGES};
 use super::rooms::Room;
 use super::symbols::{passages, rooms, ISDARK, ISGONE, ISMAZE};
 
@@ -62,7 +62,7 @@ pub(crate) unsafe fn apply_room_to_c(state: &Room, rp: *mut CRoom) {
 }
 
 /// Read every C room slot into a Rust [`Room`] array.
-pub(crate) unsafe fn read_c_room_data() -> [Room; super::symbols::MAXROOMS] {
+pub(crate) unsafe fn read_c_room_data() -> [Room; GameConfig::MAX_ROOMS] {
     std::array::from_fn(|i| {
         let rp = (&raw mut rooms[i]) as *const CRoom;
         room_from_c(rp)
@@ -81,8 +81,13 @@ pub(crate) unsafe fn read_c_room_data() -> [Room; super::symbols::MAXROOMS] {
 pub(crate) unsafe fn sync_rooms_to_c(lvl: &Level) {
     for (i, room) in lvl.rooms.iter().enumerate() {
         let rp = &raw mut rooms[i];
-        (*rp).r_nexits = room.entry_point_count.min(MAX_EXITS as i32);
-        for (j, ep) in room.entry_points.iter().take(MAX_EXITS).enumerate() {
+        (*rp).r_nexits = room.entry_point_count.min(GameConfig::MAX_EXITS as i32);
+        for (j, ep) in room
+            .entry_points
+            .iter()
+            .take(GameConfig::MAX_EXITS)
+            .enumerate()
+        {
             let abs = *ep + room.position;
             (*rp).r_exit[j] = CCoord { x: abs.x, y: abs.y };
         }
@@ -96,13 +101,18 @@ pub(crate) unsafe fn sync_rooms_to_c(lvl: &Level) {
 /// coordinates of its doorways.
 /// Uses globals: `passages`.
 pub(crate) unsafe fn sync_passages_to_c(lvl: &Level) {
-    for rp in &mut passages[..MAX_PASSAGES] {
+    for rp in &mut passages[..GameConfig::MAX_PASSAGES] {
         rp.r_nexits = 0;
     }
-    for (i, links) in lvl.passage_links.iter().enumerate().take(MAX_PASSAGES) {
+    for (i, links) in lvl
+        .passage_links
+        .iter()
+        .enumerate()
+        .take(GameConfig::MAX_PASSAGES)
+    {
         let rp = &mut passages[i];
-        rp.r_nexits = links.exits.len().min(MAX_EXITS) as c_int;
-        for (j, exit) in links.exits.iter().take(MAX_EXITS).enumerate() {
+        rp.r_nexits = links.exits.len().min(GameConfig::MAX_EXITS) as c_int;
+        for (j, exit) in links.exits.iter().take(GameConfig::MAX_EXITS).enumerate() {
             rp.r_exit[j] = CCoord {
                 x: exit.x,
                 y: exit.y,

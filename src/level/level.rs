@@ -9,21 +9,16 @@ use std::os::raw::c_int;
 use crate::rnd::rnd;
 use glam::IVec2;
 
+use super::config::GameConfig;
 use super::passages::{
     apply_passage, build_passage, collect_corridor_end, corridor_tiles, mark_passages,
     number_passages, plan_corridor, stamp_door, stamp_passage, Passage, PassageLinks,
 };
-use super::roomgraph::{RoomGraph, MAX_ROOMS};
+use super::roomgraph::RoomGraph;
 use super::rooms::{build_generated_rooms, Room};
 use super::structure::Structure;
 use super::tile::Tile;
 use super::trap::Trap;
-
-/// Map height in cells. Matches the C `places` grid (32 rows), the largest
-/// on-screen area a dungeon level can occupy.
-pub const LEVEL_HEIGHT: usize = 32;
-/// Map width in cells. Matches the C `places` grid (80 columns).
-pub const LEVEL_WIDTH: usize = 80;
 
 /// Per-cell flat-flag data for the level.
 ///
@@ -50,7 +45,7 @@ pub struct LevelFlags {
 
 impl LevelFlags {
     fn cleared() -> Self {
-        let cells = LEVEL_HEIGHT * LEVEL_WIDTH;
+        let cells = GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH;
         Self {
             real: vec![true; cells],
             passage: vec![false; cells],
@@ -63,7 +58,7 @@ impl LevelFlags {
     /// Cell index for `(y, x)` in the flat grids.
     #[inline]
     pub fn flag_idx(y: usize, x: usize) -> usize {
-        y * LEVEL_WIDTH + x
+        y * GameConfig::LEVEL_WIDTH + x
     }
 }
 
@@ -84,12 +79,16 @@ impl Level {
     pub fn new() -> Self {
         Self {
             depth: 0,
-            rooms: (0..MAX_ROOMS)
+            rooms: (0..GameConfig::MAX_ROOMS)
                 .map(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
                 .collect(),
             room_graph: RoomGraph::new(),
             passages: Vec::new(),
-            map: Structure::new(LEVEL_HEIGHT, LEVEL_WIDTH, Tile::Empty),
+            map: Structure::new(
+                GameConfig::LEVEL_HEIGHT,
+                GameConfig::LEVEL_WIDTH,
+                Tile::Empty,
+            ),
             flags: LevelFlags::cleared(),
             passage_links: Vec::new(),
         }
@@ -193,7 +192,7 @@ impl Level {
     /// found. Returns the room's index into [`Level::rooms`].
     pub fn rnd_room(&self) -> usize {
         loop {
-            let rm = rnd(MAX_ROOMS as c_int) as usize;
+            let rm = rnd(GameConfig::MAX_ROOMS as c_int) as usize;
             if !self.rooms[rm].is_gone() {
                 return rm;
             }
@@ -214,9 +213,9 @@ impl Level {
 
     pub fn generate_rooms_and_connections(
         &mut self,
-        rooms: [Room; MAX_ROOMS],
+        rooms: [Room; GameConfig::MAX_ROOMS],
         bsze: IVec2,
-    ) -> [Room; MAX_ROOMS] {
+    ) -> [Room; GameConfig::MAX_ROOMS] {
         self.room_graph = RoomGraph::for_level(rooms, bsze, self.depth);
         self.room_graph.generate_connections_for_rooms();
 
@@ -311,9 +310,9 @@ mod tests {
         super::stamp_passage(&mut level.map, &mut level.flags, IVec2::new(5, 7));
 
         assert_eq!(level.map.get(7, 5), Some(Tile::Passage));
-        assert!(level.flags.passage[7 * LEVEL_WIDTH + 5]);
+        assert!(level.flags.passage[7 * GameConfig::LEVEL_WIDTH + 5]);
         // Passage placement clears no real-wall flag.
-        assert!(level.flags.real[7 * LEVEL_WIDTH + 5]);
+        assert!(level.flags.real[7 * GameConfig::LEVEL_WIDTH + 5]);
     }
 
     /// Out-of-bounds passage placement is ignored without panicking.
@@ -449,10 +448,10 @@ mod tests {
         }
 
         // Every interior passage tile carries component number 1.
-        for y in 0..LEVEL_HEIGHT {
-            for x in 0..LEVEL_WIDTH {
-                if level.flags.passage[y * LEVEL_WIDTH + x] {
-                    assert_eq!(level.flags.passnum[y * LEVEL_WIDTH + x], 1);
+        for y in 0..GameConfig::LEVEL_HEIGHT {
+            for x in 0..GameConfig::LEVEL_WIDTH {
+                if level.flags.passage[y * GameConfig::LEVEL_WIDTH + x] {
+                    assert_eq!(level.flags.passnum[y * GameConfig::LEVEL_WIDTH + x], 1);
                 }
             }
         }
@@ -485,12 +484,12 @@ mod tests {
         // Rust flag grids as passages (the door cells are `Tile::Door`).
         let interior = passage.tiles.len() - passage.entry_points.len();
         let mut count = 0;
-        for y in 0..LEVEL_HEIGHT {
-            for x in 0..LEVEL_WIDTH {
+        for y in 0..GameConfig::LEVEL_HEIGHT {
+            for x in 0..GameConfig::LEVEL_WIDTH {
                 if matches!(level.map.get(y, x), Some(Tile::Passage)) {
                     count += 1;
                 }
-                if level.flags.passage[y * LEVEL_WIDTH + x] {
+                if level.flags.passage[y * GameConfig::LEVEL_WIDTH + x] {
                     assert_eq!(
                         level.map.get(y, x),
                         Some(Tile::Passage),

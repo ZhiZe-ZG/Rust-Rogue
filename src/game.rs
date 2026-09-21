@@ -22,7 +22,7 @@ use std::os::raw::c_int;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Mutex;
 
-use crate::level::{Level, LEVEL_HEIGHT, LEVEL_WIDTH};
+use crate::level::{GameConfig, Level};
 use crate::player::{CPlace, CThing};
 
 /// Non-owning pointers to the objects currently equipped by the player.
@@ -136,9 +136,10 @@ fn cell_index(y: c_int, x: c_int) -> usize {
 /// existing `extern "C" { static mut places: [CPlace; 32 * 80] }`
 /// declaration links against this storage unchanged.
 #[no_mangle]
-pub static mut places: [CPlace; LEVEL_HEIGHT * LEVEL_WIDTH] = [CPlace {
+pub static mut places: [CPlace; GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH] = [CPlace {
     p_monst: std::ptr::null_mut(),
-}; LEVEL_HEIGHT * LEVEL_WIDTH];
+};
+    GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH];
 
 /// Dense per-cell monster occupancy map.
 ///
@@ -146,8 +147,8 @@ pub static mut places: [CPlace; LEVEL_HEIGHT * LEVEL_WIDTH] = [CPlace {
 /// an explicit map. Uses the same `(x<<5)+y` indexing as the grid. `set_monster`
 /// keeps the `p_monst` field of [`places`] in sync, preserving the legacy save
 /// format.
-pub static mut MONSTERS: [*mut CThing; LEVEL_HEIGHT * LEVEL_WIDTH] =
-    [std::ptr::null_mut(); LEVEL_HEIGHT * LEVEL_WIDTH];
+pub static mut MONSTERS: [*mut CThing; GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH] =
+    [std::ptr::null_mut(); GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH];
 
 /// Read the monster at `(y, x)`, or null.
 #[inline]
@@ -180,7 +181,7 @@ pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
 pub unsafe fn clear_level() {
     let place_cells = std::slice::from_raw_parts_mut(
         (&raw mut places).cast::<CPlace>(),
-        LEVEL_HEIGHT * LEVEL_WIDTH,
+        GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH,
     );
     for cell in place_cells {
         cell.p_monst = std::ptr::null_mut();
@@ -188,7 +189,7 @@ pub unsafe fn clear_level() {
 
     let monsters = std::slice::from_raw_parts_mut(
         (&raw mut MONSTERS).cast::<*mut CThing>(),
-        LEVEL_HEIGHT * LEVEL_WIDTH,
+        GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH,
     );
     for monster in monsters {
         *monster = std::ptr::null_mut();
@@ -214,7 +215,8 @@ pub fn with_current_level_mut<R>(operation: impl FnOnce(&mut Level) -> R) -> R {
 }
 
 /// Convenience alias for the crate-wide level size constants.
-pub use crate::level::{LEVEL_HEIGHT as GAME_HEIGHT, LEVEL_WIDTH as GAME_WIDTH};
+pub const GAME_HEIGHT: usize = GameConfig::LEVEL_HEIGHT;
+pub const GAME_WIDTH: usize = GameConfig::LEVEL_WIDTH;
 
 #[cfg(test)]
 mod tests {

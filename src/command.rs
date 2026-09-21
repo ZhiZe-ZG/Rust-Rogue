@@ -16,7 +16,7 @@ use crate::draw::{add_pass, look};
 use crate::game::EQUIPMENT;
 use crate::help::{help, identify};
 use crate::io::{addmsg_str, endmsg, msg_str, readchar, status};
-use crate::level::new_level;
+use crate::level::{new_level, GameConfig};
 use crate::misc::{eat, get_dir};
 use crate::options::{get_str, option};
 use crate::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
@@ -78,9 +78,6 @@ const SEEMONST: c_short = 0o040000;
 const F_REAL: c_char = 0x10u8 as c_char;
 const F_SEEN: c_char = 0x40u8 as c_char;
 const F_TMASK: c_char = 0x07u8 as c_char;
-
-// Trap count
-const NTRAPS: c_int = 8;
 
 // Escape
 const ESCAPE: c_int = 27;
@@ -202,7 +199,7 @@ unsafe extern "C" {
     static mut take: c_char;
     static mut terse: c_uchar;
     static mut to_death: c_uchar;
-    static mut tr_name: [*mut c_char; NTRAPS as usize];
+    static mut tr_name: [*mut c_char; GameConfig::TRAP_KIND_COUNT as usize];
     static mut r_stones: [*mut c_char; 14];
     static mut p_colors: [*mut c_char; 14];
     static mut s_names: [*mut c_char; 18];
@@ -651,8 +648,10 @@ pub unsafe extern "C" fn command() {
                                 msg_str("no trap there");
                             } else if player_has(ISHALU) {
                                 msg_str(
-                                    &CStr::from_ptr(tr_name[rnd(NTRAPS) as usize])
-                                        .to_string_lossy(),
+                                    &CStr::from_ptr(
+                                        tr_name[rnd(GameConfig::TRAP_KIND_COUNT) as usize],
+                                    )
+                                    .to_string_lossy(),
                                 );
                             } else {
                                 msg_str(
@@ -917,8 +916,10 @@ pub unsafe extern "C" fn search() {
                             }
                             if player_has(ISHALU) {
                                 msg_str(
-                                    &CStr::from_ptr(tr_name[rnd(NTRAPS) as usize])
-                                        .to_string_lossy(),
+                                    &CStr::from_ptr(
+                                        tr_name[rnd(GameConfig::TRAP_KIND_COUNT) as usize],
+                                    )
+                                    .to_string_lossy(),
                                 );
                             } else {
                                 msg_str(

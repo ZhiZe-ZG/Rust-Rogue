@@ -3,6 +3,7 @@
 //! Digs and populates a new dungeon level: room layout, maze corridors,
 //! passages, objects, traps, and the down staircase.
 
+mod config;
 mod generation;
 mod level;
 mod mirror;
@@ -15,14 +16,13 @@ mod symbols;
 mod tile;
 mod trap;
 
+pub use config::GameConfig;
 pub use generation::{door_open, new_level};
-pub use level::{
-    with_current_level, with_current_level_mut, Level, LevelFlags, LEVEL_HEIGHT, LEVEL_WIDTH,
-};
+pub use level::{with_current_level, with_current_level_mut, Level, LevelFlags};
 pub(crate) use presence::find_floor;
 
 pub use passages::Passage;
-pub use roomgraph::{RoomGraph, MAX_ROOMS};
+pub use roomgraph::RoomGraph;
 pub use rooms::{Door, DoorKind, Room};
 pub use structure::Structure;
 pub use tile::Tile;

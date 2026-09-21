@@ -7,14 +7,12 @@ use crate::draw::{
 use crate::fight::fight;
 use crate::game;
 use crate::io::msg_str;
+use crate::level::GameConfig;
 use crate::level::{be_trapped, Trap};
 use crate::pack::floor_at;
 use crate::rnd::rnd;
 use crate::rndmove::rndmove;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
-
-const NUMCOLS: c_int = 80;
-const NUMLINES: c_int = 24;
 
 const DOOR: c_char = b'+' as c_char;
 const FLOOR: c_char = b'.' as c_char;
@@ -219,7 +217,7 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
     let hero = hero_pos();
     if runch == b'h' as c_char || runch == b'l' as c_char {
         let b1 = hero.y != 1 && turn_ok(hero.y - 1, hero.x) != 0;
-        let b2 = hero.y != NUMLINES - 2 && turn_ok(hero.y + 1, hero.x) != 0;
+        let b2 = hero.y != GameConfig::SCREEN_LINES - 2 && turn_ok(hero.y + 1, hero.x) != 0;
         if !(b1 ^ b2) {
             return false;
         }
@@ -235,7 +233,7 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
         true
     } else if runch == b'j' as c_char || runch == b'k' as c_char {
         let b1 = hero.x != 0 && turn_ok(hero.y, hero.x - 1) != 0;
-        let b2 = hero.x != NUMCOLS - 1 && turn_ok(hero.y, hero.x + 1) != 0;
+        let b2 = hero.x != GameConfig::SCREEN_COLS - 1 && turn_ok(hero.y, hero.x + 1) != 0;
         if !(b1 ^ b2) {
             return false;
         }
@@ -299,7 +297,10 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     }
 
     loop {
-        if next_pos.x < 0 || next_pos.x >= NUMCOLS || next_pos.y <= 0 || next_pos.y >= NUMLINES - 1
+        if next_pos.x < 0
+            || next_pos.x >= GameConfig::SCREEN_COLS
+            || next_pos.y <= 0
+            || next_pos.y >= GameConfig::SCREEN_LINES - 1
         {
             if try_passgo_turn(&mut current_dy, &mut current_dx) {
                 next_pos.y = hero.y + current_dy;

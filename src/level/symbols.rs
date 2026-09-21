@@ -18,11 +18,7 @@ pub(crate) use crate::potions::turn_see;
 pub(crate) use crate::thing_list::{attach, free_list, new_item};
 pub(crate) use crate::things::new_thing;
 
-use super::passages::MAX_PASSAGES;
-use super::roomgraph::MAX_ROOMS;
-
-/// Number of room slots on a level (mirrors C `MAXROOMS`).
-pub(crate) const MAXROOMS: usize = MAX_ROOMS;
+use super::config::GameConfig;
 
 // -- Room flags (`r_flags`) --
 pub(crate) const ISDARK: c_short = 0o000001;
@@ -41,18 +37,7 @@ pub(crate) const AMULET: c_char = b',' as c_char;
 pub(crate) const GOLD: c_char = b'*' as c_char;
 pub(crate) const PLAYER: c_char = b'@' as c_char;
 
-// -- Treasure/object tuning --
-pub(crate) const MAXTREAS: c_int = 10;
-pub(crate) const MINTREAS: c_int = 2;
-pub(crate) const MAXTRIES: c_int = 10;
-pub(crate) const MAXOBJ: c_int = 9;
-pub(crate) const TREAS_ROOM: c_int = 20;
-pub(crate) const AMULETLEVEL: c_int = 26;
 pub(crate) const GOLDGRP: c_int = 1;
-
-// -- Traps --
-pub(crate) const MAXTRAPS: c_int = 10;
-pub(crate) const NTRAPS: c_int = 8;
 
 // -- C booleans (flow through `c_uchar`) --
 
@@ -60,8 +45,8 @@ unsafe extern "C" {
     pub(crate) static mut level: c_int;
     pub(crate) static mut max_level: c_int;
     pub(crate) static mut amulet: bool;
-    pub(crate) static mut rooms: [CRoom; MAXROOMS];
-    pub(crate) static mut passages: [CRoom; MAX_PASSAGES];
+    pub(crate) static mut rooms: [CRoom; GameConfig::MAX_ROOMS];
+    pub(crate) static mut passages: [CRoom; GameConfig::MAX_PASSAGES];
     pub(crate) static mut lvl_obj: *mut CThing;
     pub(crate) static mut player: CThing;
     pub(crate) static mut mlist: *mut CThing;

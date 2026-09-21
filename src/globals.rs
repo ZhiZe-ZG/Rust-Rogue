@@ -1,3 +1,4 @@
+use crate::level::GameConfig;
 use crate::player::{
     CCoord as PlayerCCoord, CPlace as PlayerCPlace, CRoom as PlayerCRoom, CStats as PlayerCStats,
     CThing as PlayerCThing,
@@ -28,10 +29,7 @@ const MAXSTICKS: usize = 14;
 const MAXARMORS: usize = 8;
 const MAXWEAPONS: usize = 9;
 const NUMTHINGS: usize = 7;
-const MAXROOMS: usize = 9;
-const MAXPASS: usize = 13;
 const MAXMONSTERS: usize = 26;
-const MAXTRAPS: usize = 8;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -168,7 +166,7 @@ pub static mut last_comm: c_char = 0;
 #[no_mangle]
 pub static mut last_dir: c_char = 0;
 #[no_mangle]
-pub static mut tr_name: [*mut c_char; MAXTRAPS] = [
+pub static mut tr_name: [*mut c_char; GameConfig::TRAP_KIND_COUNT as usize] = [
     b"a trapdoor\0".as_ptr() as *mut c_char,
     b"an arrow trap\0".as_ptr() as *mut c_char,
     b"a sleeping gas trap\0".as_ptr() as *mut c_char,
@@ -287,7 +285,7 @@ pub static mut max_stats: CStats = CStats {
 #[no_mangle]
 pub static mut oldrp: *mut CRoom = std::ptr::null_mut();
 #[no_mangle]
-pub static mut rooms: [CRoom; MAXROOMS] = [CRoom {
+pub static mut rooms: [CRoom; GameConfig::MAX_ROOMS] = [CRoom {
     r_pos: CCoord { x: 0, y: 0 },
     r_max: CCoord { x: 0, y: 0 },
     r_gold: CCoord { x: 0, y: 0 },
@@ -295,9 +293,9 @@ pub static mut rooms: [CRoom; MAXROOMS] = [CRoom {
     r_flags: 0,
     r_nexits: 0,
     r_exit: [CCoord { x: 0, y: 0 }; 12],
-}; MAXROOMS];
+}; GameConfig::MAX_ROOMS];
 #[no_mangle]
-pub static mut passages: [CRoom; MAXPASS] = [CRoom {
+pub static mut passages: [CRoom; GameConfig::MAX_PASSAGES] = [CRoom {
     r_pos: CCoord { x: 0, y: 0 },
     r_max: CCoord { x: 0, y: 0 },
     r_gold: CCoord { x: 0, y: 0 },
@@ -305,7 +303,7 @@ pub static mut passages: [CRoom; MAXPASS] = [CRoom {
     r_flags: 0,
     r_nexits: 0,
     r_exit: [CCoord { x: 0, y: 0 }; 12],
-}; MAXPASS];
+}; GameConfig::MAX_PASSAGES];
 #[no_mangle]
 pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
     CMonsterState {

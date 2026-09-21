@@ -4,14 +4,14 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 use crate::curses as cur;
 use crate::draw::look;
 use crate::game::EQUIPMENT;
+use crate::level::GameConfig;
 use crate::mdport::md_readchar;
 use crate::player::{CStats, CThing, CThingMonster};
 use crate::startup::quit;
 
 const ESCAPE: c_int = 27;
-const NUMCOLS: c_int = 80;
 const MAXSTR: usize = 1024;
-const MAXMSG: usize = (NUMCOLS as usize) - 9;
+const MAXMSG: usize = GameConfig::SCREEN_COLS as usize - 9;
 const STATLINE: c_int = 23;
 
 static mut msgbuf: [c_char; 2 * MAXMSG + 1] = [0; 2 * MAXMSG + 1];

@@ -11,7 +11,7 @@ use crate::daemon::{fuse, start_daemon};
 use crate::daemons::{doctor, stomach, swander};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::io::{msg_str, readchar, status, wait_for};
-use crate::level::new_level;
+use crate::level::{new_level, GameConfig};
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
 use crate::mdport::{
     md_gethomedir, md_getpid, md_getusername, md_hasclreol, md_init, md_normaluser, md_shellescape,
@@ -24,8 +24,6 @@ use crate::rnd::{rnd, set_seed};
 use crate::save::restore;
 
 const MAXSTR: usize = 1024;
-const NUMLINES: c_int = 24;
-const NUMCOLS: c_int = 80;
 const AFTER: c_int = 2;
 const WANDERTIME: c_int = 70;
 const SEEMONST: i16 = 0o040000;
@@ -448,11 +446,12 @@ pub unsafe extern "C" fn rogue_main(
         .flush()
         .expect("failed to flush startup message");
     cur::initscr();
-    if LINES < NUMLINES || COLS < NUMCOLS {
+    if LINES < GameConfig::SCREEN_LINES || COLS < GameConfig::SCREEN_COLS {
         cur::endwin();
         eprintln!(
             "Sorry, the screen must be at least {}x{}",
-            NUMLINES, NUMCOLS
+            GameConfig::SCREEN_LINES,
+            GameConfig::SCREEN_COLS
         );
         eprintln!("Current terminal size: {}x{}", COLS, LINES);
         my_exit(1);
