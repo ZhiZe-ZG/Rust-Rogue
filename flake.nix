@@ -65,10 +65,11 @@
               # cargo-audit # security audit of dependencies
 
               # ---- Libraries ----
-              pkg-config # library compiler flags discovery
-              ncurses # rust ncurses bindings still need the ncurses library
+              # pkg-config # library compiler flags discovery
+              # ncurses # rust ncurses bindings still need the ncurses library
             ])
-            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.gdb ];
+            # ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.gdb ]
+            ;
 
           shellHook = ''
             # ---- Rust ----
