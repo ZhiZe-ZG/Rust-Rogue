@@ -9,16 +9,17 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::config::GameConfig;
-use crate::curses as cur;
 use crate::entity::fight::attack;
 use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::entity::rndmove::rndmove;
-use crate::io::{endmsg, msg_str, step_ok};
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
 use crate::item::thing_list::{attach, detach};
+use crate::level::glyph_is_walkable;
 use crate::misc::sign;
 use crate::rnd::rnd;
+use crate::ui::output::{endmsg, msg_str};
+use crate::ui::terminal as cur;
 
 const DRAGONSHOT: c_int = 5; // one chance in DRAGONSHOT that a dragon will flame
 
@@ -404,8 +405,8 @@ pub unsafe extern "C" fn see_monst(mp: *mut CThing) -> c_uchar {
     if dist(y, x, hero_pos().y, hero_pos().x) < LAMPDIST {
         if y != hero_pos().y
             && x != hero_pos().x
-            && step_ok(chat_at(y, hero_pos().x) as c_int) == 0
-            && step_ok(chat_at(hero_pos().y, x) as c_int) == 0
+            && !glyph_is_walkable(chat_at(y, hero_pos().x) as u8)
+            && !glyph_is_walkable(chat_at(hero_pos().y, x) as u8)
         {
             return false as c_uchar;
         }
@@ -503,7 +504,7 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut CCoord) -> c_uchar {
                         continue;
                     }
                     let ch = winat(y, x);
-                    if step_ok(ch as c_int) != 0 {
+                    if glyph_is_walkable(ch as u8) {
                         // If it is a scroll, it might be a scare monster scroll
                         // so we need to look it up to see what type it is.
                         if ch == SCROLL {
@@ -602,8 +603,8 @@ pub unsafe extern "C" fn diag_ok(sp: *mut CCoord, ep: *mut CCoord) -> c_uchar {
     if (*ep).x == (*sp).x || (*ep).y == (*sp).y {
         return true as c_uchar;
     }
-    if step_ok(chat_at((*ep).y, (*sp).x) as c_int) != 0
-        && step_ok(chat_at((*sp).y, (*ep).x) as c_int) != 0
+    if glyph_is_walkable(chat_at((*ep).y, (*sp).x) as u8)
+        && glyph_is_walkable(chat_at((*sp).y, (*ep).x) as u8)
     {
         true as c_uchar
     } else {
@@ -624,8 +625,8 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
         if (flat_at(y, x) & F_PASS) != 0 {
             if y != hero_pos().y
                 && x != hero_pos().x
-                && step_ok(chat_at(y, hero_pos().x) as c_int) == 0
-                && step_ok(chat_at(hero_pos().y, x) as c_int) == 0
+                && !glyph_is_walkable(chat_at(y, hero_pos().x) as u8)
+                && !glyph_is_walkable(chat_at(hero_pos().y, x) as u8)
             {
                 return false as c_uchar;
             }

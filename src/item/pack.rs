@@ -1,14 +1,15 @@
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-use crate::curses as cur;
 use crate::draw::chat_at as draw_chat;
 use crate::entity::player::{CRoom, CThing};
-use crate::io::{addmsg_str, endmsg, msg_str, readchar};
 use crate::item::scrolls::ScrollType;
 use crate::item::thing_list::{detach, discard, new_item};
 use crate::item::things::{add_line, inv_name};
 use crate::misc::{find_obj, show_floor};
+use crate::ui::input::readchar;
+use crate::ui::output::{addmsg_str, endmsg, msg_str};
+use crate::ui::terminal as cur;
 
 const MAXPACK: c_int = 23;
 const MAXSTR: usize = 1024;

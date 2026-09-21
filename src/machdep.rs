@@ -13,11 +13,11 @@ use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::curses as cur;
 use crate::globals::{fruit, got_ltc, orig_dsusp, prbuf, scoreboard, whoami};
 use crate::mdport::{
     md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
 };
+use crate::ui::terminal as cur;
 
 const MAXSTR: usize = 1024;
 

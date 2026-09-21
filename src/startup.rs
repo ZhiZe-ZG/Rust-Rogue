@@ -6,13 +6,11 @@ use std::os::raw::{c_char, c_int, c_long, c_uchar, c_void};
 
 use crate::command::command;
 use crate::config::GameConfig;
-use crate::curses as cur;
 use crate::daemon::{fuse, start_daemon};
 use crate::daemons::{doctor, stomach, swander};
 use crate::entity::chase::{roomin, runners};
 use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
-use crate::io::{msg_str, readchar, status, wait_for};
 use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
 use crate::mdport::{
@@ -23,6 +21,9 @@ use crate::options::{parse_opts, strucpy};
 use crate::rip::{death, death_monst, score};
 use crate::rnd::{rnd, set_seed};
 use crate::save::restore;
+use crate::ui::input::{readchar, wait_for};
+use crate::ui::output::{msg_str, status};
+use crate::ui::terminal as cur;
 
 const MAXSTR: usize = 1024;
 const AFTER: c_int = 2;

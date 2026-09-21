@@ -17,16 +17,17 @@
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::config::GameConfig;
-use crate::curses as cur;
 use crate::entity::chase::{roomin, see_monst};
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::game;
-use crate::io::step_ok;
 use crate::level::Trap;
-use crate::level::{door_open, with_current_level, with_current_level_mut, Tile};
+use crate::level::{
+    door_open, glyph_is_walkable, with_current_level, with_current_level_mut, Tile,
+};
 use crate::misc::find_obj;
 use crate::rnd::rnd;
+use crate::ui::terminal as cur;
 
 // ─── Glyphs ───────────────────────────────────────────────────────────────────
 
@@ -427,8 +428,8 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             {
                 if hero.x != x
                     && hero.y != y
-                    && step_ok(chat_at(y, hero.x) as c_int) == 0
-                    && step_ok(chat_at(hero.y, x) as c_int) == 0
+                    && !glyph_is_walkable(chat_at(y, hero.x) as u8)
+                    && !glyph_is_walkable(chat_at(hero.y, x) as u8)
                 {
                     continue;
                 }

@@ -1,5 +1,5 @@
-use crate::curses as cur;
 use crate::rnd::rnd;
+use crate::ui::terminal as cur;
 /*
  * All the daemon and fuse callback functions.
  *
@@ -12,7 +12,7 @@ use crate::rnd::rnd;
  * See the file LICENSE.TXT for full copyright and licensing information.
  */
 
-use crate::io::{addmsg_str, msg_str};
+use crate::ui::output::{addmsg_str, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 

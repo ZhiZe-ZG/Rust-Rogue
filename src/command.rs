@@ -9,14 +9,12 @@
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
 use crate::config::GameConfig;
-use crate::curses as cur;
 use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
 use crate::entity::player::{do_move, do_run, CCoord, CPlace, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::help::{help, identify};
-use crate::io::{addmsg_str, endmsg, msg_str, readchar, status};
 use crate::item::armor::{take_off, wear};
 use crate::item::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
 use crate::item::potions::{quaff, raise_level, turn_see};
@@ -33,6 +31,9 @@ use crate::rip::total_winner;
 use crate::rnd::rnd;
 use crate::save::save_game;
 use crate::startup::{quit, shell};
+use crate::ui::input::readchar;
+use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
+use crate::ui::terminal as cur;
 use crate::wizard::{create_obj, show_map, teleport, whatis};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};

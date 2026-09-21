@@ -1,5 +1,4 @@
 use crate::config::GameConfig;
-use crate::curses as cur;
 use crate::draw::{
     chat_at, enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room,
     turnref as draw_turnref, winat,
@@ -8,10 +7,11 @@ use crate::entity::chase::{diag_ok, roomin};
 use crate::entity::fight::fight;
 use crate::entity::rndmove::rndmove;
 use crate::game;
-use crate::io::msg_str;
 use crate::item::pack::floor_at;
 use crate::level::{be_trapped, Trap};
 use crate::rnd::rnd;
+use crate::ui::output::msg_str;
+use crate::ui::terminal as cur;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 const DOOR: c_char = b'+' as c_char;

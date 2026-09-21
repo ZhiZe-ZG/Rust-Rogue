@@ -1,11 +1,11 @@
 use crate::daemon::extinguish;
 use crate::daemons::unsee;
 use crate::game::EQUIPMENT;
-use crate::io::msg_str;
 use crate::item::armor::waste_time;
 use crate::item::pack::{get_item, leave_pack};
 use crate::misc::chg_str;
 use crate::rnd::rnd;
+use crate::ui::output::msg_str;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 

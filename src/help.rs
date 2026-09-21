@@ -3,9 +3,10 @@
 use std::ffi::CStr;
 use std::os::raw::{c_int, c_uchar, c_void};
 
-use crate::curses as cur;
 use crate::globals::{hw, lower_msg, monsters, mpos};
-use crate::io::{msg_str, readchar, wait_for};
+use crate::ui::input::{readchar, wait_for};
+use crate::ui::output::msg_str;
+use crate::ui::terminal as cur;
 
 const ESCAPE: c_int = 27;
 

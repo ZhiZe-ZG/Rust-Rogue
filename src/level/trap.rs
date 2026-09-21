@@ -12,7 +12,6 @@ use crate::entity::fight::swing;
 use crate::entity::monsters::save;
 use crate::entity::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
-use crate::io::msg_str;
 use crate::item::armor::rust_armor;
 use crate::item::rings::RingType;
 use crate::item::thing_list::new_item;
@@ -22,6 +21,7 @@ use crate::misc::{chg_str, spread};
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
+use crate::ui::output::msg_str;
 use crate::wizard::teleport;
 
 use super::generation::new_level;

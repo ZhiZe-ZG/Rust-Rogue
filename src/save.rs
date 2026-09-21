@@ -1,6 +1,4 @@
-use crate::curses as cur;
 use crate::entity::player::{CThing, CThingMonster};
-use crate::io::{msg_str, readchar};
 use crate::machdep::{resetltchars, setup};
 use crate::mdport::{
     md_chmod, md_getpid, md_ignoreallsignals, md_tstphold, md_tstpresume, md_unlink,
@@ -10,6 +8,9 @@ use crate::options::get_str;
 use crate::rnd::set_seed;
 use crate::startup::playit;
 use crate::state::{rs_restore_file, rs_save_file};
+use crate::ui::input::readchar;
+use crate::ui::output::msg_str;
+use crate::ui::terminal as cur;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr;

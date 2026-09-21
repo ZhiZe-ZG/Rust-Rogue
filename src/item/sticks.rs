@@ -1,15 +1,16 @@
-use crate::curses as cur;
 use crate::entity::chase::{cansee, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};
 use crate::entity::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
-use crate::io::{endmsg, msg_str, step_ok};
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
+use crate::level::glyph_is_walkable;
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
+use crate::ui::output::{endmsg, msg_str};
+use crate::ui::terminal as cur;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 const STICK: c_int = '/' as c_int;
@@ -212,7 +213,7 @@ pub unsafe extern "C" fn do_zap() {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
-            while step_ok(winat(y, x) as c_int) != 0 {
+            while glyph_is_walkable(winat(y, x) as u8) {
                 y += delta.y;
                 x += delta.x;
             }
@@ -248,7 +249,7 @@ pub unsafe extern "C" fn do_zap() {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
-            while step_ok(winat(y, x) as c_int) != 0 {
+            while glyph_is_walkable(winat(y, x) as u8) {
                 y += delta.y;
                 x += delta.x;
             }

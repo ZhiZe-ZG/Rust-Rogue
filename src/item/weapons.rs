@@ -1,11 +1,11 @@
-use crate::curses as cur;
 use crate::entity::chase::cansee;
 use crate::entity::fight::fight;
 use crate::game::EQUIPMENT;
-use crate::io::{addmsg_str, endmsg, msg_str, step_ok};
 use crate::item::pack::{get_item, leave_pack};
 use crate::misc::{is_current, show_floor};
 use crate::rnd::rnd;
+use crate::ui::output::{addmsg_str, endmsg, msg_str};
+use crate::ui::terminal as cur;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
@@ -13,6 +13,7 @@ use crate::draw::{self, chat_at, place_at, winat as draw_winat};
 use crate::entity::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::item::thing_list::{attach, discard};
 use crate::item::things::{dropcheck, inv_name};
+use crate::level::glyph_is_walkable;
 
 const NO_WEAPON: c_int = -1;
 
@@ -211,7 +212,7 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
         (*o).o_pos.x += xdelta;
 
         let ch = winat((*o).o_pos.y, (*o).o_pos.x);
-        if step_ok(ch) != 0 && ch != DOOR {
+        if glyph_is_walkable(ch as u8) && ch != DOOR {
             if cansee((*o).o_pos.y, (*o).o_pos.x) != 0 && terse == 0 {
                 cur::mvaddch((*o).o_pos.y, (*o).o_pos.x, (*o).o_type as c_uint);
                 cur::refresh();

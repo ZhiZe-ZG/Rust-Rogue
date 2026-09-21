@@ -3,10 +3,11 @@ use crate::daemon::{extinguish, fuse};
 use crate::daemons::nohaste;
 use crate::entity::chase::runto;
 use crate::game::EQUIPMENT;
-use crate::io::{addmsg_str, msg_str, readchar};
 use crate::item::pack::{get_item, leave_pack, reset_last};
 use crate::options::get_str;
 use crate::rnd::rnd;
+use crate::ui::input::readchar;
+use crate::ui::output::{addmsg_str, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 

@@ -1,13 +1,14 @@
+//! Message, status, and overlay output policy for the terminal UI.
+
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::config::GameConfig;
-use crate::ui::terminal as cur;
 use crate::draw::look;
 use crate::entity::player::{CStats, CThing, CThingMonster};
 use crate::game::EQUIPMENT;
-use crate::mdport::md_readchar;
-use crate::startup::quit;
+use crate::ui::input::{readchar, wait_for};
+use crate::ui::terminal as cur;
 
 const ESCAPE: c_int = 27;
 const MAXSTR: usize = 1024;
@@ -64,8 +65,7 @@ unsafe fn append_message(text: *const c_char) {
 }
 
 #[cfg(not(test))]
-#[no_mangle]
-pub unsafe extern "C" fn rogue_msg_str(text: *const c_char) -> c_int {
+unsafe fn display_message(text: *const c_char) -> c_int {
     if text.is_null() || *text == 0 {
         cur::move_(0, 0);
         cur::clrtoeol();
@@ -78,14 +78,13 @@ pub unsafe extern "C" fn rogue_msg_str(text: *const c_char) -> c_int {
 }
 
 #[cfg(not(test))]
-#[no_mangle]
-pub unsafe extern "C" fn rogue_addmsg_str(text: *const c_char) {
+unsafe fn append_message_str(text: *const c_char) {
     append_message(text);
 }
 
 /// Display a Rust-formatted message, bypassing the legacy C variadic
 /// `msg()` shim. The caller is expected to build the text with `format!`.
-/// Returns the same value as `rogue_msg_str` (useful for `--More--`
+/// Returns the message result (useful for `--More--`
 /// escape detection when listing long inventories).
 #[inline]
 pub unsafe fn msg_str(text: &str) -> c_int {
@@ -93,7 +92,7 @@ pub unsafe fn msg_str(text: &str) -> c_int {
     #[cfg(not(test))]
     {
         let ctext = CString::new(text).unwrap();
-        result = rogue_msg_str(ctext.as_ptr());
+        result = display_message(ctext.as_ptr());
     }
     #[cfg(test)]
     {
@@ -109,7 +108,7 @@ pub unsafe fn addmsg_str(text: &str) {
     #[cfg(not(test))]
     {
         let ctext = CString::new(text).unwrap();
-        rogue_addmsg_str(ctext.as_ptr());
+        append_message_str(ctext.as_ptr());
     }
     #[cfg(test)]
     {
@@ -118,8 +117,7 @@ pub unsafe fn addmsg_str(text: &str) {
 }
 
 #[cfg(not(test))]
-#[no_mangle]
-pub unsafe extern "C" fn endmsg() -> c_int {
+pub unsafe fn endmsg() -> c_int {
     if save_msg != false as c_uchar {
         strcpy(huh.as_mut_ptr(), msgbuf.as_ptr());
     }
@@ -161,19 +159,7 @@ pub unsafe extern "C" fn endmsg() -> c_int {
 }
 
 #[cfg(not(test))]
-#[no_mangle]
-pub unsafe extern "C" fn readchar() -> c_int {
-    let ch = md_readchar();
-    if ch == 3 {
-        quit(0);
-        return ESCAPE;
-    }
-    ch
-}
-
-#[cfg(not(test))]
-#[no_mangle]
-pub unsafe extern "C" fn status() {
+pub unsafe fn status() {
     let mut oy = 0;
     let mut ox = 0;
     let pstats = &mut (*thing_t(&raw mut player)).t_stats;
@@ -276,25 +262,7 @@ pub unsafe extern "C" fn status() {
 }
 
 #[cfg(not(test))]
-#[no_mangle]
-pub unsafe extern "C" fn wait_for(ch: c_int) {
-    if ch == b'\n' as c_int {
-        loop {
-            let c = readchar();
-            if c == b'\n' as c_int || c == b'\r' as c_int {
-                break;
-            }
-        }
-    } else {
-        while readchar() != ch {
-            // spin until the expected character arrives
-        }
-    }
-}
-
-#[cfg(not(test))]
-#[no_mangle]
-pub unsafe extern "C" fn show_win(message: *const c_char) {
+pub unsafe fn show_win(message: *const c_char) {
     let win = hw;
     cur::wmove(win, 0, 0);
     cur::waddstr(win, message);
@@ -313,15 +281,7 @@ pub unsafe fn endmsg() -> c_int {
 }
 
 #[cfg(test)]
-pub unsafe fn readchar() -> c_int {
-    ESCAPE
-}
-
-#[cfg(test)]
 pub unsafe fn status() {}
-
-#[cfg(test)]
-pub unsafe fn wait_for(_ch: c_int) {}
 
 #[cfg(test)]
 pub unsafe fn show_win(_message: *const c_char) {}

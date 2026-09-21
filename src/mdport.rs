@@ -14,9 +14,9 @@
 
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 
-use crate::curses as cur;
 use crate::save::auto_save;
 use crate::startup::{endit, quit, tstp};
+use crate::ui::terminal as cur;
 
 /// Ncurses key codes used by the keypad/arrow-key reader.  The `ncurses`
 /// crate's `raw_constants.rs` exposes these as `i32`; we re-export the ones
