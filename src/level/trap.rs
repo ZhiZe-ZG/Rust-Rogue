@@ -9,7 +9,6 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 use crate::armor::rust_armor;
-use crate::draw;
 use crate::fight::swing;
 use crate::game::EQUIPMENT;
 use crate::io::msg_str;
@@ -107,7 +106,9 @@ unsafe fn rainbow_color() -> *const c_char {
 /// `roll`, `spread`, `teleport`, ...) exactly as the legacy `be_trapped` did,
 /// but is callable only from Rust.
 pub unsafe fn be_trapped(pos: CCoord) -> Trap {
-    let trap = draw::trap_kind_at(pos.y, pos.x);
+    let trap = crate::level::with_current_level(|current| {
+        current.trap_at(pos.y as usize, pos.x as usize)
+    });
 
     if ((*thing_t(&raw mut player)).t_flags & ISLEVIT) != 0 {
         return Trap::Rust;
@@ -198,10 +199,6 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
         }
         Trap::Teleport => {
             teleport();
-            crate::level::with_current_level_mut(|current| {
-                current.reveal_trap(pos.y as usize, pos.x as usize);
-            });
-            draw::redraw_cell(pos.y, pos.x);
         }
         Trap::Dart => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;

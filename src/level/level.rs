@@ -111,6 +111,11 @@ impl Level {
         }
     }
 
+    /// Return the trap kind stored at `(y, x)`.
+    pub fn trap_at(&self, y: usize, x: usize) -> Trap {
+        self.flags.trap[LevelFlags::flag_idx(y, x)]
+    }
+
     /// Dig a single corridor between two adjacent rooms `r1` and `r2`.
     ///
     /// Works in three phases: first the corridor geometry is generated purely
