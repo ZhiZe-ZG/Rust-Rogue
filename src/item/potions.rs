@@ -14,8 +14,8 @@ use crate::item::rings::RingType;
 use crate::item::thing_list::discard;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
 use crate::startup::roll;
-use crate::ui::output::{endmsg, msg_str, show_win, status};
-use crate::ui::terminal as cur;
+use crate::ui::output::{self, endmsg, msg_str, show_win, status};
+use crate::ui::{Position, Window};
 use std::ffi::CStr;
 
 /// Potion and status-effect handling for the Rust FFI bridge.
@@ -345,13 +345,17 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::TrapFind => {
             if !lvl_obj.is_null() {
-                cur::wclear(hw);
+                let window = Window::from_raw(hw);
+                output::clear_window(window);
                 tp = lvl_obj;
                 while !tp.is_null() {
                     if is_magic_local(tp) {
                         show = true;
-                        cur::wmove(hw, (*thing_o(tp)).o_pos.y, (*thing_o(tp)).o_pos.x);
-                        cur::waddch(hw, MAGIC as c_uint);
+                        output::move_window_cursor(
+                            window,
+                            Position::new((*thing_o(tp)).o_pos.y, (*thing_o(tp)).o_pos.x),
+                        );
+                        output::write_window_glyph(window, (MAGIC as u8) as char);
                         (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know =
                             true as c_uchar;
                     }
@@ -363,8 +367,11 @@ pub unsafe extern "C" fn quaff() {
                     while !tp.is_null() {
                         if is_magic_local(tp) {
                             show = true;
-                            cur::wmove(hw, (*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x);
-                            cur::waddch(hw, MAGIC as c_uint);
+                            output::move_window_cursor(
+                                window,
+                                Position::new((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x),
+                            );
+                            output::write_window_glyph(window, (MAGIC as u8) as char);
                         }
                         tp = next_thing(tp);
                     }
@@ -374,7 +381,7 @@ pub unsafe extern "C" fn quaff() {
             if show {
                 (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know =
                     true as c_uchar;
-                show_win(c"You sense the presence of magic on this level.--More--".as_ptr());
+                show_win("You sense the presence of magic on this level.--More--");
             } else {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
@@ -503,10 +510,9 @@ pub unsafe extern "C" fn invis_on() {
     (*thing_t(&raw mut player)).t_flags |= CANSEE;
     while !mp.is_null() {
         if thing_has(mp, ISINVIS) && see_monst(mp) != 0 && !player_has(ISHALU) {
-            cur::mvaddch(
-                (*thing_t(mp)).t_pos.y,
-                (*thing_t(mp)).t_pos.x,
-                (*thing_t(mp)).t_disguise as c_uint,
+            output::write_glyph_at(
+                Position::new((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x),
+                ((*thing_t(mp)).t_disguise as u8) as char,
             );
         }
         mp = next_thing(mp);
@@ -521,23 +527,26 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
     let mut add_new = 0;
 
     while !mp.is_null() {
-        cur::r#move((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x);
+        output::move_cursor(Position::new(
+            (*thing_t(mp)).t_pos.y,
+            (*thing_t(mp)).t_pos.x,
+        ));
         let can_see = see_monst(mp) != 0;
         if turn_off != 0 {
             if !can_see {
-                cur::addch((*thing_t(mp)).t_oldch as c_uint);
+                output::write_glyph(((*thing_t(mp)).t_oldch as u8) as char);
             }
         } else {
             if !can_see {
-                cur::standout();
+                output::set_standout(true);
             }
             if !player_has(ISHALU) {
-                cur::addch((*thing_t(mp)).t_type as c_uint);
+                output::write_glyph(((*thing_t(mp)).t_type as u8) as char);
             } else {
-                cur::addch((rnd(26) + 'A' as c_int) as c_uint);
+                output::write_glyph((rnd(26) as u8 + b'A') as char);
             }
             if !can_see {
-                cur::standend();
+                output::set_standout(false);
                 add_new += 1;
             }
         }
@@ -563,8 +572,8 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
 pub unsafe extern "C" fn seen_stairs() -> c_uchar {
     let tp: *mut CThing;
 
-    cur::r#move(stairs.y, stairs.x);
-    if cur::inch() == STAIRS {
+    output::move_cursor(Position::new(stairs.y, stairs.x));
+    if output::glyph_at_cursor() as c_int == STAIRS {
         return 1;
     }
     if hero().x == stairs.x && hero().y == stairs.y {

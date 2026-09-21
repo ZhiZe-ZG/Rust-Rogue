@@ -16,7 +16,7 @@ use crate::level::find_floor;
 use crate::machdep::flush_type;
 use crate::ui::input::readchar;
 use crate::ui::output::{msg_str, show_win};
-use crate::ui::terminal as cur;
+use crate::ui::{output, Position, Window};
 
 const POTION: c_int = b'!' as c_int;
 const SCROLL: c_int = b'?' as c_int;
@@ -283,7 +283,7 @@ pub unsafe extern "C" fn teleport() {
     let mut c = CCoord { x: 0, y: 0 };
     let mut hero = hero();
 
-    cur::mvaddch(hero.y, hero.x, floor_at() as c_uint);
+    output::write_glyph_at(Position::new(hero.y, hero.x), (floor_at() as u8) as char);
     find_floor(ptr::null_mut(), &mut c, 0, true);
     if roomin(&mut c) != proom() {
         leave_room(&mut hero);
@@ -294,7 +294,7 @@ pub unsafe extern "C" fn teleport() {
         look(true as c_uchar);
     }
     (*thing_t(&raw mut player)).t_pos = hero;
-    cur::mvaddch(hero.y, hero.x, b'@' as c_uint);
+    output::write_glyph_at(Position::new(hero.y, hero.x), '@');
 
     if ((*thing_t(&raw mut player)).t_flags & ISHELD) != 0 {
         (*thing_t(&raw mut player)).t_flags &= !ISHELD;
@@ -318,21 +318,22 @@ pub unsafe extern "C" fn show_map() {
         return;
     }
 
-    cur::wclear(hw);
+    let window = Window::from_raw(hw);
+    output::clear_window(window);
     for y in 1..(GameConfig::SCREEN_LINES - 1) {
         for x in 0..GameConfig::SCREEN_COLS {
             let real = flat(y, x);
             if ((real as u8) & (F_REAL as u8)) == 0 {
-                cur::wstandout(hw);
+                output::set_window_standout(window, true);
             }
-            cur::wmove(hw, y, x);
-            cur::waddch(hw, chat(y, x) as c_uint);
+            output::move_window_cursor(window, Position::new(y, x));
+            output::write_window_glyph(window, (chat(y, x) as u8) as char);
             if real == 0 {
-                cur::wstandend(hw);
+                output::set_window_standout(window, false);
             }
         }
     }
-    show_win(c"---More (level map)---".as_ptr());
+    show_win("---More (level map)---");
 }
 
 #[cfg(test)]

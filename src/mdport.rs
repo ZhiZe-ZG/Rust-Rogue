@@ -16,7 +16,8 @@ use std::os::raw::{c_char, c_int, c_uint, c_void};
 
 use crate::save::auto_save;
 use crate::startup::{endit, quit, tstp};
-use crate::ui::terminal as cur;
+use crate::ui::input;
+use crate::ui::output;
 
 /// Ncurses key codes used by the keypad/arrow-key reader.  The `ncurses`
 /// crate's `raw_constants.rs` exposes these as `i32`; we re-export the ones
@@ -138,7 +139,7 @@ pub unsafe extern "C" fn md_init() {
     #[cfg(unix)]
     {
         // ESCDELAY is a curses global; the ncurses crate exposes set_escdelay().
-        cur::set_escdelay(64);
+        input::set_escape_delay(64);
     }
     md_onsignal_exit();
 }
@@ -166,14 +167,14 @@ unsafe fn md_putchar(c: c_int) {
 /// Turn on standout (reverse-video) output.
 #[no_mangle]
 pub unsafe extern "C" fn md_raw_standout() {
-    cur::standout();
+    output::set_standout(true);
 }
 
 /// md_raw_standend:
 /// Turn off standout (reverse-video) output.
 #[no_mangle]
 pub unsafe extern "C" fn md_raw_standend() {
-    cur::standend();
+    output::set_standout(false);
 }
 
 // -------------------------------------------------------------------------
@@ -508,13 +509,13 @@ unsafe fn md_getrealname(uid: c_int) -> *mut c_char {
 /// md_erasechar:
 /// Return the terminal erase character.
 unsafe fn md_erasechar() -> c_int {
-    cur::erasechar()
+    input::erase_key() as c_int
 }
 
 /// md_killchar:
 /// Return the terminal kill character.
 unsafe fn md_killchar() -> c_int {
-    cur::killchar()
+    input::kill_key() as c_int
 }
 
 /// md_dsuspchar:
@@ -578,13 +579,13 @@ pub unsafe extern "C" fn md_readchar() -> c_int {
     let mut mode2 = M_NORMAL;
 
     loop {
-        ch = cur::getch();
+        ch = input::read_raw_key();
 
         if ch == ERR {
             // Timed out waiting for a valid sequence: flush and treat as ESC.
             mode = M_NORMAL;
-            cur::nocbreak();
-            cur::raw();
+            input::set_raw_mode(false);
+            input::set_raw_mode(true);
             ch = 27;
             break;
         }
@@ -697,7 +698,7 @@ pub unsafe extern "C" fn md_readchar() -> c_int {
         }
 
         if ch == 27 {
-            cur::halfdelay(1);
+            input::set_input_timeout(1);
             mode = M_ESC;
             continue;
         }
@@ -740,8 +741,8 @@ pub unsafe extern "C" fn md_readchar() -> c_int {
         break;
     }
 
-    cur::nocbreak();
-    cur::raw();
+    input::set_raw_mode(false);
+    input::set_raw_mode(true);
 
     ch & 0x7F
 }

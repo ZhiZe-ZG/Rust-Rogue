@@ -14,7 +14,7 @@ use crate::item::thing_list::{discard, new_item};
 use crate::level::glyph_is_walkable;
 use crate::misc::{aggravate, call_it, choose_str, find_obj};
 use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win, status};
-use crate::ui::terminal as cur;
+use crate::ui::{output, Position, Window};
 use crate::wizard::{teleport, whatis};
 
 const SLEEPTIME: c_int = 5;
@@ -323,7 +323,7 @@ pub unsafe extern "C" fn read_scroll() {
                             (*thing_t(tp)).t_oldch = ch as c_char;
                         }
                         if tp.is_null() || !player_has(SEEMONST) {
-                            cur::mvaddch(y, x, ch as c_uint);
+                            output::write_glyph_at(Position::new(y, x), (ch as u8) as char);
                         }
                     }
                 }
@@ -331,19 +331,23 @@ pub unsafe extern "C" fn read_scroll() {
         }
         ScrollType::FindFood => {
             let mut found = false as c_uchar;
-            cur::wclear(hw);
+            let window = Window::from_raw(hw);
+            output::clear_window(window);
             let mut it = lvl_obj;
             while !it.is_null() {
                 if (*thing_o(it)).o_type == FOOD {
                     found = true as c_uchar;
-                    cur::wmove(hw, (*thing_o(it)).o_pos.y, (*thing_o(it)).o_pos.x);
-                    cur::waddch(hw, FOOD as c_uint);
+                    output::move_window_cursor(
+                        window,
+                        Position::new((*thing_o(it)).o_pos.y, (*thing_o(it)).o_pos.x),
+                    );
+                    output::write_window_glyph(window, (FOOD as u8) as char);
                 }
                 it = (*thing_o(it)).l_next;
             }
             if found != 0 {
                 scr_info[ScrollType::FindFood.index()].oi_know = true as c_uchar;
-                show_win(c"Your nose tingles and you smell food.--More--".as_ptr());
+                show_win("Your nose tingles and you smell food.--More--");
             } else {
                 msg_str("your nose tingles");
             }

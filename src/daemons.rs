@@ -1,5 +1,5 @@
 use crate::rnd::rnd;
-use crate::ui::terminal as cur;
+use crate::ui::{output, Position};
 /*
  * All the daemon and fuse callback functions.
  *
@@ -171,10 +171,9 @@ pub unsafe extern "C" fn unsee() {
     let mut th = mlist;
     while !th.is_null() {
         if ((*thing_t(th)).t_flags & ISINVIS) != 0 && see_monst(th) != 0 {
-            cur::mvaddch(
-                (*thing_t(th)).t_pos.y,
-                (*thing_t(th)).t_pos.x,
-                (*thing_t(th)).t_oldch as c_uchar as c_uint,
+            output::write_glyph_at(
+                Position::new((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x),
+                ((*thing_t(th)).t_oldch as u8) as char,
             );
         }
         th = (*thing_t(th)).l_next;
@@ -306,7 +305,10 @@ pub unsafe extern "C" fn come_down() {
     while !tp.is_null() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
-            cur::mvaddch((*op).o_pos.y, (*op).o_pos.x, (*op).o_type as c_uint);
+            output::write_glyph_at(
+                Position::new((*op).o_pos.y, (*op).o_pos.x),
+                ((*op).o_type as u8) as char,
+            );
         }
         tp = (*thing_t(tp)).l_next;
     }
@@ -315,20 +317,23 @@ pub unsafe extern "C" fn come_down() {
     let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
     let mut tp = mlist;
     while !tp.is_null() {
-        cur::move_((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x);
+        output::move_cursor(Position::new(
+            (*thing_t(tp)).t_pos.y,
+            (*thing_t(tp)).t_pos.x,
+        ));
         if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
             if ((*thing_t(tp)).t_flags & ISINVIS) == 0
                 || ((*thing_t(&raw mut player)).t_flags & CANSEE) != 0
             {
-                cur::addch((*thing_t(tp)).t_disguise as c_uchar as c_uint);
+                output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
             }
             // If invisible and player can't see invisible, skip (original code
             // falls through to the else-if, but cansee returned true here,
             // so seemonst branch is not reached — matching C behavior).
         } else if seemonst {
-            cur::standout();
-            cur::addch((*thing_t(tp)).t_type as c_uchar as c_uint);
-            cur::standend();
+            output::set_standout(true);
+            output::write_glyph(((*thing_t(tp)).t_type as u8) as char);
+            output::set_standout(false);
         }
         tp = (*thing_t(tp)).l_next;
     }
@@ -349,10 +354,9 @@ pub unsafe extern "C" fn visuals() {
     while !tp.is_null() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
-            cur::mvaddch(
-                (*op).o_pos.y,
-                (*op).o_pos.x,
-                rnd_thing() as c_uchar as c_uint,
+            output::write_glyph_at(
+                Position::new((*op).o_pos.y, (*op).o_pos.x),
+                (rnd_thing() as u8) as char,
             );
         }
         tp = (*thing_t(tp)).l_next;
@@ -360,26 +364,32 @@ pub unsafe extern "C" fn visuals() {
 
     // Change the stairs.
     if seenstairs == 0 && cansee(stairs.y, stairs.x) != 0 {
-        cur::mvaddch(stairs.y, stairs.x, rnd_thing() as c_uchar as c_uint);
+        output::write_glyph_at(
+            Position::new(stairs.y, stairs.x),
+            (rnd_thing() as u8) as char,
+        );
     }
 
     // Change the monsters.
     let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
     let mut tp = mlist;
     while !tp.is_null() {
-        cur::move_((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x);
+        output::move_cursor(Position::new(
+            (*thing_t(tp)).t_pos.y,
+            (*thing_t(tp)).t_pos.x,
+        ));
         if see_monst(tp) != 0 {
             if (*thing_t(tp)).t_type == b'X' as c_char
                 && (*thing_t(tp)).t_disguise != b'X' as c_char
             {
-                cur::addch(rnd_thing() as c_uchar as c_uint);
+                output::write_glyph((rnd_thing() as u8) as char);
             } else {
-                cur::addch((rnd(26) + b'A' as c_int) as c_uint);
+                output::write_glyph((rnd(26) as u8 + b'A') as char);
             }
         } else if seemonst {
-            cur::standout();
-            cur::addch((rnd(26) + b'A' as c_int) as c_uint);
-            cur::standend();
+            output::set_standout(true);
+            output::write_glyph((rnd(26) as u8 + b'A') as char);
+            output::set_standout(false);
         }
         tp = (*thing_t(tp)).l_next;
     }

@@ -8,7 +8,7 @@ use crate::mdport::{md_getuid, md_raw_standend, md_raw_standout};
 use crate::score::{rd_score, wr_score};
 use crate::startup::my_exit;
 use crate::ui::input::wait_for;
-use crate::ui::terminal as cur;
+use crate::ui::{output, Position};
 
 const MAXSTR: usize = 1024;
 
@@ -219,9 +219,8 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
     if flags >= 0 || wizard != 0 {
         // Keep the legacy interactive flow behavior close to the C version without
         // requiring the full curses backend to be reimplemented in Rust here.
-        let mut prompt = CString::new("[Press return to continue]").unwrap();
-        cur::mvaddstr(23, 0, prompt.as_ptr());
-        cur::refresh();
+        output::write_text_at(Position::new(23, 0), "[Press return to continue]");
+        output::refresh();
     }
 
     rd_score(top_ten.as_mut_ptr().cast());
@@ -338,12 +337,11 @@ pub unsafe extern "C" fn death(monst: c_char) {
         .to_string_lossy()
         .to_string();
     purse -= purse / 10;
-    cur::clear();
+    output::clear_screen();
 
     if tombstone == 0 {
         // Legacy C path: print a compact death message when tombstones are disabled.
-        let mut msg = CString::new("Killed by ").unwrap();
-        cur::mvaddstr(23, 0, msg.as_ptr());
+        output::write_text_at(Position::new(23, 0), "Killed by ");
         if monst != b's' as c_char && monst != b'h' as c_char {
             let article = if matches!(
                 killer.as_bytes().first(),
@@ -362,13 +360,11 @@ pub unsafe extern "C" fn death(monst: c_char) {
             } else {
                 "a "
             };
-            let mut line = format!("{}{} with {} gold", article, killer, purse);
-            let cstr = CString::new(line).unwrap();
-            cur::addstr(cstr.as_ptr());
+            let line = format!("{}{} with {} gold", article, killer, purse);
+            output::write_text(&line);
         } else {
-            let mut line = format!("{} with {} gold", killer, purse);
-            let cstr = CString::new(line).unwrap();
-            cur::addstr(cstr.as_ptr());
+            let line = format!("{} with {} gold", killer, purse);
+            output::write_text(&line);
         }
     } else {
         let mut date = 0_i64;
@@ -379,14 +375,12 @@ pub unsafe extern "C" fn death(monst: c_char) {
         let v = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(date as u64);
         let _ = v;
         for i in 0..rogue_rip_count() {
-            cur::addstr(rogue_rip_line(i));
+            output::write_text(&CStr::from_ptr(rogue_rip_line(i)).to_string_lossy());
         }
-        let killer_c = CString::new(killer.clone()).unwrap();
         let killer_x = center_string(&killer) as c_int;
-        cur::mvaddstr(17, killer_x, killer_c.as_ptr());
+        output::write_text_at(Position::new(17, killer_x), &killer);
         if monst == b's' as c_char || monst == b'h' as c_char {
-            let mut space = CString::new(" ").unwrap();
-            cur::mvaddstr(16, 32, space.as_ptr());
+            output::write_text_at(Position::new(16, 32), " ");
         } else {
             let article = if matches!(
                 killer.as_bytes().first(),
@@ -405,30 +399,25 @@ pub unsafe extern "C" fn death(monst: c_char) {
             } else {
                 ""
             };
-            let mut phrase = format!("{}{}", article, killer);
-            if phrase.as_bytes().len() > 0 {
-                let cstr = CString::new(phrase).unwrap();
-                cur::mvaddstr(16, 33, cstr.as_ptr());
+            let phrase = format!("{}{}", article, killer);
+            if !phrase.is_empty() {
+                output::write_text_at(Position::new(16, 33), &phrase);
             }
         }
         let hero_name = CStr::from_ptr(whoami.as_ptr()).to_string_lossy();
-        let player_name = CString::new(hero_name.as_ref()).unwrap();
-        cur::mvaddstr(
-            14,
-            center_string(hero_name.as_ref()) as c_int,
-            player_name.as_ptr(),
+        output::write_text_at(
+            Position::new(14, center_string(hero_name.as_ref()) as c_int),
+            hero_name.as_ref(),
         );
         let score_text = format!("{} Au", purse);
-        let score_c = CString::new(score_text).unwrap();
-        cur::move_(15, center_string(score_c.to_str().unwrap()) as c_int);
-        cur::addstr(score_c.as_ptr());
+        output::move_cursor(Position::new(15, center_string(&score_text) as c_int));
+        output::write_text(&score_text);
         let year = 1900 + 0;
         let year_text = format!("{:4}", year);
-        let year_c = CString::new(year_text).unwrap();
-        cur::mvaddstr(18, 26, year_c.as_ptr());
+        output::write_text_at(Position::new(18, 26), &year_text);
     }
 
-    cur::refresh();
+    output::refresh();
     score(purse, if amulet != 0 { 3 } else { 0 }, monst);
     let msg = CString::new("[Press return to continue]").unwrap();
     printf(c"%s".as_ptr(), msg.as_ptr());
@@ -452,22 +441,18 @@ pub unsafe extern "C" fn total_winner() {
         "     Congratulations, you have made it to the light of day!    \n",
     ];
 
-    cur::clear();
-    cur::standout();
+    output::clear_screen();
+    output::set_standout(true);
     for line in lines {
-        let cstr = CString::new(line).unwrap();
-        cur::addstr(cstr.as_ptr());
+        output::write_text(line);
     }
-    cur::standend();
-    let msg = CString::new("\nYou have joined the elite ranks of those who have escaped the\nDungeons of Doom alive.  You journey home and sell all your loot at\na great profit and are admitted to the Fighters' Guild.\n").unwrap();
-    cur::addstr(msg.as_ptr());
-    let press = CString::new("--Press space to continue--").unwrap();
-    cur::mvaddstr(23, 0, press.as_ptr());
-    cur::refresh();
+    output::set_standout(false);
+    output::write_text("\nYou have joined the elite ranks of those who have escaped the\nDungeons of Doom alive.  You journey home and sell all your loot at\na great profit and are admitted to the Fighters' Guild.\n");
+    output::write_text_at(Position::new(23, 0), "--Press space to continue--");
+    output::refresh();
     wait_for(b' ' as c_int);
-    cur::clear();
-    let heading = CString::new("   Worth  Item\n").unwrap();
-    cur::mvaddstr(0, 0, heading.as_ptr());
+    output::clear_screen();
+    output::write_text_at(Position::new(0, 0), "   Worth  Item\n");
     let oldpurse = purse;
     let mut obj = pack_ptr();
     while !obj.is_null() {
@@ -483,15 +468,13 @@ pub unsafe extern "C" fn total_winner() {
         let packch = (*thing_o(obj)).o_packch as u8 as c_char;
         let item_name = CStr::from_ptr(inv_name(obj, 0)).to_string_lossy();
         let line = format!("{} ) {:5}  {}\n", packch, worth, item_name);
-        let cstr = CString::new(line).unwrap();
-        cur::addstr(cstr.as_ptr());
+        output::write_text(&line);
         purse += worth;
         obj = next_ptr(obj);
     }
     let summary = format!("   {:5}  Gold Pieces          ", oldpurse);
-    let cstr = CString::new(summary).unwrap();
-    cur::addstr(cstr.as_ptr());
-    cur::refresh();
+    output::write_text(&summary);
+    output::refresh();
     score(purse, 2, b' ' as c_char);
     my_exit(0);
 }

@@ -15,13 +15,14 @@ use crate::draw::{terrain_chat_at, FLOOR, PASSAGE};
 use crate::entity::player::{CCoord, CRoom, CThing};
 use crate::game;
 use crate::rnd::rnd;
+use crate::ui::{output, Position};
 
 use super::level::{with_current_level_mut, LevelFlags};
 use super::symbols::{
     amulet, attach, enter_room, give_pack, glyph_is_walkable, level, lvl_obj, max_level, mlist,
-    mvaddch, new_item, new_monster, new_thing, ntraps, player, randmonster, roomin, rooms,
-    seenstairs, stairs, thing_o, thing_t, turn_see, visuals, AMULET, GOLD, GOLDGRP, ISGONE, ISHALU,
-    ISMANY, ISMEAN, PLAYER, SEEMONST,
+    new_item, new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs,
+    stairs, thing_o, thing_t, turn_see, visuals, AMULET, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY,
+    ISMEAN, PLAYER, SEEMONST,
 };
 use super::tile::Tile;
 use super::trap::Trap;
@@ -359,10 +360,12 @@ unsafe fn place_hero() {
         true,
     );
     enter_room(&raw mut (*thing_t(&raw mut player)).t_pos);
-    mvaddch(
-        (*thing_t(&raw mut player)).t_pos.y,
-        (*thing_t(&raw mut player)).t_pos.x,
-        PLAYER as c_uint,
+    output::write_glyph_at(
+        Position::new(
+            (*thing_t(&raw mut player)).t_pos.y,
+            (*thing_t(&raw mut player)).t_pos.x,
+        ),
+        (PLAYER as u8) as char,
     );
     if ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0 {
         turn_see(false as c_uchar);

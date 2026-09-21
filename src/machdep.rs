@@ -17,7 +17,8 @@ use crate::globals::{fruit, got_ltc, orig_dsusp, prbuf, scoreboard, whoami};
 use crate::mdport::{
     md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
 };
-use crate::ui::terminal as cur;
+use crate::ui::input;
+use crate::ui::Window;
 
 const MAXSTR: usize = 1024;
 
@@ -191,9 +192,9 @@ pub unsafe extern "C" fn setup() {
         // md_start_checkout_timer(CHECKTIME * 60);
     }
 
-    cur::raw(); /* Raw mode */
-    cur::noecho(); /* Echo off */
-    cur::keypad(stdscr, true as c_uchar);
+    input::set_raw_mode(true);
+    input::set_echo(false);
+    input::set_keypad(Window::from_raw(stdscr), true);
     getltchars(); /* get the local tty chars */
 }
 
@@ -353,5 +354,5 @@ pub unsafe extern "C" fn unlock_sc() {
 /// Flush typeahead for traps, etc.
 #[no_mangle]
 pub unsafe extern "C" fn flush_type() {
-    cur::flushinp();
+    input::flush_pending();
 }

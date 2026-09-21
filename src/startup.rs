@@ -21,9 +21,10 @@ use crate::options::{parse_opts, strucpy};
 use crate::rip::{death, death_monst, score};
 use crate::rnd::{rnd, set_seed};
 use crate::save::restore;
-use crate::ui::input::{readchar, wait_for};
-use crate::ui::output::{msg_str, status};
-use crate::ui::terminal as cur;
+use crate::ui::input::{self, readchar, wait_for};
+use crate::ui::output::{self, msg_str, status};
+use crate::ui::runtime;
+use crate::ui::{Position, Window};
 
 const MAXSTR: usize = 1024;
 const AFTER: c_int = 2;
@@ -146,9 +147,12 @@ pub unsafe extern "C" fn endit(sig: c_int) {
 /// No globals used directly.
 #[no_mangle]
 pub unsafe extern "C" fn fatal(s: *mut c_char) {
-    cur::mvaddstr(LINES - 2, 0, s);
-    cur::refresh();
-    cur::endwin();
+    output::write_text_at(
+        Position::new(LINES - 2, 0),
+        &CStr::from_ptr(s).to_string_lossy(),
+    );
+    output::refresh();
+    runtime::shutdown();
     my_exit(0);
 }
 
@@ -176,10 +180,9 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
     /*
      * leave nicely
      */
-    let oy = cur::getcury(curscr);
-    let ox = cur::getcurx(curscr);
-    cur::mvcur(0, COLS - 1, LINES - 1, 0);
-    cur::endwin();
+    let old_cursor = output::window_cursor(Window::from_raw(curscr));
+    runtime::move_physical_cursor(Position::new(0, COLS - 1), Position::new(LINES - 1, 0));
+    runtime::shutdown();
     resetltchars();
     fflush(c_stdout());
     md_tstpsignal();
@@ -188,16 +191,15 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
      * start back up again
      */
     md_tstpresume();
-    cur::raw();
-    cur::noecho();
-    cur::keypad(stdscr, true as c_uchar);
+    input::set_raw_mode(true);
+    input::set_echo(false);
+    input::set_keypad(Window::from_raw(stdscr), true);
     playltchars();
-    cur::clearok(curscr, true as c_uchar);
-    cur::wrefresh(curscr);
-    let y = cur::getcury(curscr);
-    let x = cur::getcurx(curscr);
-    cur::mvcur(y, x, oy, ox);
-    cur::move_(oy, ox);
+    let current_screen = Window::from_raw(curscr);
+    output::set_clear_on_refresh(current_screen, true);
+    output::refresh_window(current_screen);
+    runtime::move_physical_cursor(output::window_cursor(current_screen), old_cursor);
+    output::move_cursor(old_cursor);
     fflush(c_stdout());
 }
 
@@ -212,7 +214,7 @@ pub unsafe extern "C" fn playit() {
     /*
      * set up defaults for slow terminals
      */
-    if cur::baudrate() <= 1200 {
+    if runtime::baud_rate() <= 1200 {
         terse = true as c_uchar;
         jump = true as c_uchar;
         see_floor = false as c_uchar;
@@ -253,25 +255,23 @@ pub unsafe extern "C" fn quit(sig: c_int) {
     if q_comm == false as c_uchar {
         mpos = 0;
     }
-    let oy = cur::getcury(curscr);
-    let ox = cur::getcurx(curscr);
+    let old_cursor = output::window_cursor(Window::from_raw(curscr));
     msg_str("really quit?");
     if readchar() == b'y' as c_int {
         signal(SIGINT, leave as usize);
-        cur::clear();
+        output::clear_screen();
         let line = format!("You quit with {} gold pieces", purse);
-        let c_line = CString::new(line).unwrap();
-        cur::mvaddstr(LINES - 2, 0, c_line.as_ptr());
-        cur::move_(LINES - 1, 0);
-        cur::refresh();
+        output::write_text_at(Position::new(LINES - 2, 0), &line);
+        output::move_cursor(Position::new(LINES - 1, 0));
+        output::refresh();
         score(purse, 1, 0);
         my_exit(0);
     } else {
-        cur::move_(0, 0);
-        cur::clrtoeol();
+        output::move_cursor(Position::new(0, 0));
+        output::clear_to_end_of_line();
         status();
-        cur::move_(oy, ox);
-        cur::refresh();
+        output::move_cursor(old_cursor);
+        output::refresh();
         mpos = 0;
         count = 0;
         to_death = false as c_uchar;
@@ -286,9 +286,9 @@ pub unsafe extern "C" fn leave(sig: c_int) {
 
     setbuf(c_stdout(), LEAVE_BUF.as_mut_ptr()); /* throw away pending output */
 
-    if cur::isendwin() == 0 {
-        cur::mvcur(0, COLS - 1, LINES - 1, 0);
-        cur::endwin();
+    if !runtime::is_shutdown() {
+        runtime::move_physical_cursor(Position::new(0, COLS - 1), Position::new(LINES - 1, 0));
+        runtime::shutdown();
     }
 
     putchar(b'\n' as c_int);
@@ -304,9 +304,9 @@ pub unsafe extern "C" fn shell() {
     /*
      * Set the terminal back to original mode
      */
-    cur::move_(LINES - 1, 0);
-    cur::refresh();
-    cur::endwin();
+    output::move_cursor(Position::new(LINES - 1, 0));
+    output::refresh();
+    runtime::shutdown();
     resetltchars();
     putchar(b'\n' as c_int);
     in_shell = true as c_uchar;
@@ -319,13 +319,13 @@ pub unsafe extern "C" fn shell() {
 
     printf(c"\n[Press return to continue]".as_ptr());
     fflush(c_stdout());
-    cur::noecho();
-    cur::raw();
-    cur::keypad(stdscr, true as c_uchar);
+    input::set_echo(false);
+    input::set_raw_mode(true);
+    input::set_keypad(Window::from_raw(stdscr), true);
     playltchars();
     in_shell = false as c_uchar;
     wait_for(b'\n' as c_int);
-    cur::clearok(stdscr, true as c_uchar);
+    output::set_clear_on_refresh(Window::from_raw(stdscr), true);
 }
 
 /// my_exit:
@@ -336,8 +336,8 @@ pub unsafe extern "C" fn shell() {
 pub unsafe extern "C" fn my_exit(st: c_int) -> ! {
     resetltchars();
     if !stdscr.is_null() {
-        cur::echo();
-        cur::endwin();
+        input::set_echo(true);
+        runtime::shutdown();
     }
     fflush(c_stdout());
     fflush(c_stderr());
@@ -420,7 +420,7 @@ pub unsafe extern "C" fn rogue_main(
             }
             purse = rnd(100) + 1;
             level = rnd(100) + 1;
-            cur::initscr();
+            runtime::initialize();
             getltchars();
             death(death_monst());
             return 0;
@@ -447,9 +447,9 @@ pub unsafe extern "C" fn rogue_main(
     std::io::stdout()
         .flush()
         .expect("failed to flush startup message");
-    cur::initscr();
+    runtime::initialize();
     if LINES < GameConfig::SCREEN_LINES || COLS < GameConfig::SCREEN_COLS {
-        cur::endwin();
+        runtime::shutdown();
         eprintln!(
             "Sorry, the screen must be at least {}x{}",
             GameConfig::SCREEN_LINES,
@@ -466,9 +466,9 @@ pub unsafe extern "C" fn rogue_main(
     init_stones();
     init_materials();
     setup();
-    hw = cur::newwin(LINES, COLS, 0, 0);
-    cur::idlok(stdscr, 1);
-    cur::idlok(hw, 1);
+    hw = runtime::create_window(Position::new(LINES, COLS), Position::new(0, 0)).into_raw();
+    output::set_line_optimization(Window::from_raw(stdscr), true);
+    output::set_line_optimization(Window::from_raw(hw), true);
     if master_mode_enabled != 0 {
         noscore = wizard;
     }

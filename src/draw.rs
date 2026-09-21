@@ -14,7 +14,7 @@
 //! C ABI symbols the C engine has always called, now driven entirely by
 //! `CURRENT_LEVEL`.
 
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 use crate::config::GameConfig;
 use crate::entity::chase::{roomin, see_monst};
@@ -27,7 +27,7 @@ use crate::level::{
 };
 use crate::misc::find_obj;
 use crate::rnd::rnd;
-use crate::ui::terminal as cur;
+use crate::ui::{output, Position, Window};
 
 // ─── Glyphs ───────────────────────────────────────────────────────────────────
 
@@ -196,7 +196,7 @@ pub(crate) unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
 
 /// Redraw one cell from the current game model.
 pub(crate) unsafe fn redraw_cell(y: c_int, x: c_int) {
-    cur::mvaddch(y, x, chat_at(y, x) as c_uint);
+    output::write_glyph_at(Position::new(y, x), (chat_at(y, x) as u8) as char);
 }
 
 /// Visible glyph at `(y, x)`: a monster's disguise if one stands here,
@@ -343,20 +343,20 @@ pub unsafe extern "C" fn add_pass() {
                     out_ch = PASSAGE;
                 }
                 set_seen_at(y, x);
-                cur::r#move(y, x);
+                output::move_cursor(Position::new(y, x));
                 let monst = game::monster_at(y, x);
                 if !monst.is_null() {
                     (*thing_t(monst)).t_oldch = ch;
                 } else if (flags as u8 & F_REAL as u8) != 0 {
-                    cur::addch(out_ch as c_uint);
+                    output::write_glyph((out_ch as u8) as char);
                 } else {
-                    cur::standout();
-                    cur::addch(if (flags as u8 & F_PASS as u8) != 0 {
-                        PASSAGE as c_uint
+                    output::set_standout(true);
+                    output::write_glyph(if (flags as u8 & F_PASS as u8) != 0 {
+                        (PASSAGE as u8) as char
                     } else {
-                        DOOR as c_uint
+                        (DOOR as u8) as char
                     });
-                    cur::standend();
+                    output::set_standout(false);
                 }
             }
         }
@@ -463,7 +463,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
                 continue;
             }
 
-            cur::r#move(y, x);
+            output::move_cursor(Position::new(y, x));
             let player_room = (*thing_t(&raw mut player)).t_room;
             if !player_room.is_null()
                 && ((*player_room).r_flags & (ISGONE as c_short | ISDARK as c_short)) == ISDARK
@@ -473,9 +473,9 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
                 ch = b' ' as c_int;
             }
 
-            let screen_ch = cur::inch() as c_int & 0xFF;
+            let screen_ch = output::glyph_at_cursor() as c_int;
             if tp.is_null() || ch != screen_ch {
-                cur::addch(ch as c_uint);
+                output::write_glyph((ch as u8) as char);
             }
 
             if door_stop != 0 && firstmove == 0 && running != 0 {
@@ -528,7 +528,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
         running = false as c_uchar;
     }
     if running == 0 || jump == 0 {
-        cur::mvaddch(hero.y, hero.x, b'@' as c_uint);
+        output::write_glyph_at(Position::new(hero.y, hero.x), '@');
     }
 }
 
@@ -577,9 +577,9 @@ pub unsafe extern "C" fn erase_lamp(pos: *mut CCoord, rp: *mut CRoom) {
             if y == hero.y && x == hero.x {
                 continue;
             }
-            cur::r#move(y, x);
-            if cur::inch() as c_char == FLOOR {
-                cur::addch(b' ' as c_uint);
+            output::move_cursor(Position::new(y, x));
+            if output::glyph_at_cursor() as u8 as c_char == FLOOR {
+                output::write_glyph(' ');
             }
         }
     }
@@ -594,7 +594,7 @@ unsafe fn is_upper(ch: c_char) -> bool {
 
 #[inline]
 unsafe fn cchar_at_cursor() -> c_char {
-    cur::inch() as u8 as c_char
+    output::glyph_at_cursor() as u8 as c_char
 }
 
 /// enter_room:
@@ -623,7 +623,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut CCoord) {
     let x_end = x0 + (*rp).r_max.x;
     let mut y = y0;
     while y < y_end {
-        cur::r#move(y, x0);
+        output::move_cursor(Position::new(y, x0));
         let mut x = x0;
         while x < x_end {
             let tp = game::monster_at(y, x);
@@ -631,22 +631,22 @@ pub unsafe extern "C" fn enter_room(cp: *mut CCoord) {
 
             if tp.is_null() {
                 if cchar_at_cursor() != ch {
-                    cur::addch(ch as c_uint);
+                    output::write_glyph((ch as u8) as char);
                 } else {
-                    cur::r#move(y, x + 1);
+                    output::move_cursor(Position::new(y, x + 1));
                 }
             } else {
                 (*thing_t(tp)).t_oldch = ch;
                 if see_monst(tp) == 0 {
                     if player_has(SEEMONST) {
-                        cur::standout();
-                        cur::addch((*thing_t(tp)).t_disguise as c_uint);
-                        cur::standend();
+                        output::set_standout(true);
+                        output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
+                        output::set_standout(false);
                     } else {
-                        cur::addch(ch as c_uint);
+                        output::write_glyph((ch as u8) as char);
                     }
                 } else {
-                    cur::addch((*thing_t(tp)).t_disguise as c_uint);
+                    output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
                 }
             }
             x += 1;
@@ -693,20 +693,20 @@ pub unsafe extern "C" fn leave_room(cp: *mut CCoord) {
     while y < y_end {
         let mut x = x0;
         while x < x_end {
-            cur::r#move(y, x);
+            output::move_cursor(Position::new(y, x));
             let ch = cchar_at_cursor();
             if ch == FLOOR {
                 if floor == SPACE && ch != SPACE {
-                    cur::addch(SPACE as c_uint);
+                    output::write_glyph((SPACE as u8) as char);
                 }
             } else if is_upper(ch) {
                 if player_has(SEEMONST) {
-                    cur::standout();
-                    cur::addch(ch as c_uint);
-                    cur::standend();
+                    output::set_standout(true);
+                    output::write_glyph((ch as u8) as char);
+                    output::set_standout(false);
                 } else {
                     let out = if chat_at(y, x) == DOOR { DOOR } else { floor };
-                    cur::addch(out as c_uint);
+                    output::write_glyph((out as u8) as char);
                 }
             }
             x += 1;
@@ -724,14 +724,14 @@ pub unsafe extern "C" fn turnref() {
     let hero = hero_pos();
     if (flat_at(hero.y, hero.x) as u8 & F_SEEN as u8) == 0 {
         if jump != 0 {
-            cur::leaveok(
-                stdscr as *mut crate::entity::player::CWindow,
-                true as c_uchar as c_int,
+            output::set_leave_cursor(
+                Window::from_raw(stdscr as *mut crate::entity::player::CWindow),
+                true,
             );
-            cur::refresh();
-            cur::leaveok(
-                stdscr as *mut crate::entity::player::CWindow,
-                false as c_uchar as c_int,
+            output::refresh();
+            output::set_leave_cursor(
+                Window::from_raw(stdscr as *mut crate::entity::player::CWindow),
+                false,
             );
         }
         set_seen_at(hero.y, hero.x);

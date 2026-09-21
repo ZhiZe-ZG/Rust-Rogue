@@ -9,7 +9,7 @@ use crate::item::things::{add_line, inv_name};
 use crate::misc::{find_obj, show_floor};
 use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
-use crate::ui::terminal as cur;
+use crate::ui::{output, Position};
 
 const MAXPACK: c_int = 23;
 const MAXSTR: usize = 1024;
@@ -148,10 +148,9 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         detach_list(&raw mut lvl_obj, item);
         // The object is removed from `lvl_obj`, so the terrain glyph shows
         // automatically via draw.
-        cur::mvaddch(
-            hero_coord().y,
-            hero_coord().x,
-            floor_char_for_room() as c_uint,
+        output::write_glyph_at(
+            Position::new(hero_coord().y, hero_coord().x),
+            (floor_char_for_room() as u8) as char,
         );
         discard_item(item);
         msg_str("the scroll turns to dust as you pick it up");
@@ -292,10 +291,9 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_u
         detach_list(&raw mut lvl_obj, obj);
         // The object is removed from `lvl_obj`, so the terrain glyph shows
         // automatically via draw.
-        cur::mvaddch(
-            hero_coord().y,
-            hero_coord().x,
-            floor_char_for_room() as c_uint,
+        output::write_glyph_at(
+            Position::new(hero_coord().y, hero_coord().x),
+            (floor_char_for_room() as u8) as char,
         );
     }
 
@@ -489,7 +487,7 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
         }
         msg_str(&format!(
             "'{}' is not a valid item",
-            CStr::from_ptr(cur::unctrl(ch)).to_string_lossy()
+            output::format_key(ch as u8)
         ));
     }
 }
@@ -498,10 +496,9 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
 pub unsafe extern "C" fn money(value: c_int) {
     purse += value;
     // The gold object was discarded, so the terrain glyph shows via draw.
-    cur::mvaddch(
-        hero_coord().y,
-        hero_coord().x,
-        floor_char_for_room() as c_uint,
+    output::write_glyph_at(
+        Position::new(hero_coord().y, hero_coord().x),
+        (floor_char_for_room() as u8) as char,
     );
     if value > 0 {
         if terse == 0 {
@@ -577,10 +574,7 @@ pub unsafe extern "C" fn picky_inven() {
             }
             obj = next_item(obj);
         }
-        msg_str(&format!(
-            "'{}' not in pack",
-            CStr::from_ptr(cur::unctrl(mch as c_int)).to_string_lossy()
-        ));
+        msg_str(&format!("'{}' not in pack", output::format_key(mch as u8)));
     }
 }
 

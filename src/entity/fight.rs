@@ -31,7 +31,7 @@ use crate::item::things::inv_name;
 use crate::item::weapons::{fall, fallpos};
 use crate::machdep::flush_type;
 use crate::startup::roll;
-use crate::ui::terminal as cur;
+use crate::ui::{output, Position};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -229,7 +229,10 @@ pub unsafe extern "C" fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uch
         (*thing_t(tp)).t_disguise = b'X' as c_char;
         if on_p(&raw mut player, ISHALU) {
             ch = (rnd(26) + b'A' as c_int) as c_char;
-            cur::mvaddch((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x, ch as c_uint);
+            output::write_glyph_at(
+                Position::new((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x),
+                (ch as u8) as char,
+            );
         }
         msg_str(
             &CStr::from_ptr(choose_str(
@@ -306,10 +309,9 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
     {
         (*thing_t(mp)).t_disguise = b'X' as c_char;
         if on_p(&raw mut player, ISHALU) {
-            cur::mvaddch(
-                (*thing_t(mp)).t_pos.y,
-                (*thing_t(mp)).t_pos.x,
-                (rnd(26) + b'A' as c_int) as c_uint,
+            output::write_glyph_at(
+                Position::new((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x),
+                (rnd(26) as u8 + b'A') as char,
             );
         }
     }
@@ -543,8 +545,11 @@ pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
 
     let mname: *mut c_char;
     if on_p(&raw mut player, ISHALU) {
-        cur::move_((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x);
-        let ch = toascii(cur::inch() as c_int);
+        output::move_cursor(Position::new(
+            (*thing_t(tp)).t_pos.y,
+            (*thing_t(tp)).t_pos.x,
+        ));
+        let ch = toascii(output::glyph_at_cursor() as c_int);
         let idx = if isupper(ch) != 0 {
             (ch - b'A' as c_int) as usize
         } else {
@@ -823,7 +828,7 @@ pub unsafe extern "C" fn remove_mon(mp: *mut CCoord, tp: *mut CThing, waskill: c
     set_moat((*mp).y, (*mp).x, std::ptr::null_mut());
     // Re-draw the underlying character.
     let oldch = (*thing_t(tp)).t_oldch;
-    cur::mvaddch((*mp).y, (*mp).x, oldch as c_uchar as c_uint);
+    output::write_glyph_at(Position::new((*mp).y, (*mp).x), (oldch as u8) as char);
 
     detach(&raw mut mlist as *mut *mut CThing, tp);
 

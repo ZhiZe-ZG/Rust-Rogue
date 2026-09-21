@@ -13,11 +13,6 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 /// `WINDOW = *mut i8`, the game uses `*mut c_void`. They are the same bytes.
 type Win = *mut c_void;
 
-#[inline]
-fn to_win(w: Win) -> ncurses::WINDOW {
-    w as ncurses::WINDOW
-}
-
 // ─── stdscr (no-window) functions ────────────────────────────────────────────
 
 pub unsafe fn clear() -> c_int {
@@ -94,12 +89,6 @@ pub unsafe fn flushinp() -> c_int {
 
 // ─── Cursor movement ─────────────────────────────────────────────────────────
 
-/// The curses `move(y, x)` — exposed under both spellings the game uses.
-pub unsafe fn r#move(y: c_int, x: c_int) -> c_int {
-    ncurses::mv(y, x)
-}
-
-/// Alias of [`r#move`] for modules that declared `#[link_name = "move"]`.
 pub unsafe fn move_(y: c_int, x: c_int) -> c_int {
     ncurses::mv(y, x)
 }
@@ -213,45 +202,4 @@ pub unsafe fn initscr() -> Win {
 
 pub unsafe fn newwin(nlines: c_int, ncols: c_int, y: c_int, x: c_int) -> Win {
     ncurses::newwin(nlines, ncols, y, x) as Win
-}
-
-// ─── unctrl ──────────────────────────────────────────────────────────────────
-//
-// The `ncurses` crate does not wrap `unctrl(3)`, so implement the standard
-// behaviour locally: printable chars stay as-is, control chars render as
-// `^X`, and bytes >= 0x80 render as `M-x` (with `M-^X` for control).
-
-pub unsafe fn unctrl(ch: c_int) -> *mut c_char {
-    static mut BUF: [c_char; 8] = [0; 8];
-    let chb = (ch & 0xff) as u8;
-    let mut out = [0u8; 8];
-    let len;
-    if chb < 0x20 {
-        out[0] = b'^';
-        out[1] = chb + b'@';
-        len = 2;
-    } else if chb == 0x7f {
-        out[0] = b'^';
-        out[1] = b'?';
-        len = 2;
-    } else if chb >= 0x80 {
-        out[0] = b'M';
-        out[1] = b'-';
-        let low = chb & 0x7f;
-        if low < 0x20 {
-            out[2] = b'^';
-            out[3] = low + b'@';
-            len = 4;
-        } else {
-            out[2] = low;
-            len = 3;
-        }
-    } else {
-        out[0] = chb;
-        len = 1;
-    }
-    for (i, b) in out.iter().take(len).enumerate() {
-        BUF[i] = *b as c_char;
-    }
-    BUF.as_mut_ptr()
 }

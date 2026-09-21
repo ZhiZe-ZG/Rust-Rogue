@@ -10,7 +10,7 @@ use crate::config::GameConfig;
 use crate::draw::winat;
 use crate::entity::player::{CRoom, CThing};
 use crate::game::{clear_level, with_current_level_mut};
-use crate::ui::terminal as cur;
+use crate::ui::output;
 
 use super::mirror::{apply_room_to_c, read_c_room_data, sync_passages_to_c, sync_rooms_to_c};
 use super::presence::populate_level;
@@ -61,7 +61,7 @@ unsafe fn reset_level() {
     }
 
     clear_level();
-    cur::clear();
+    output::clear_screen();
 }
 
 unsafe fn clear_previous_level_items() {

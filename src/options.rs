@@ -3,8 +3,8 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::draw::{erase_lamp, look};
 use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster};
-use crate::ui::input::{readchar, wait_for};
-use crate::ui::terminal as cur;
+use crate::ui::input::{self, readchar, wait_for};
+use crate::ui::{output, Position, Window};
 
 const ESCAPE: c_int = 27;
 const NORM: c_int = 0;
@@ -65,9 +65,8 @@ unsafe fn proom_ptr() -> *mut CRoom {
     (*thing_t(&raw mut player)).t_room
 }
 
-unsafe fn getyx_(win: *mut c_void, y: *mut c_int, x: *mut c_int) {
-    *y = cur::getcury(win);
-    *x = cur::getcurx(win);
+unsafe fn window(win: *mut c_void) -> Window {
+    Window::from_raw(win)
 }
 
 unsafe fn option_list() -> [OPTION; 10] {
@@ -146,8 +145,7 @@ unsafe fn option_list() -> [OPTION; 10] {
 }
 
 unsafe fn paint(win: *mut c_void, s: &str) {
-    let c = CString::new(s).unwrap();
-    cur::waddstr(win, c.as_ptr());
+    output::write_window_text(window(win), s);
 }
 
 unsafe fn pr_optname_slot(op: &OPTION) {
@@ -162,14 +160,15 @@ pub unsafe extern "C" fn option() {
     let mut optlist = option_list();
     let mut retval: c_int;
 
-    cur::wclear(hw);
+    let options_window = window(hw);
+    output::clear_window(options_window);
     for item in &mut optlist {
         pr_optname_slot(item);
         (item.o_putfunc)(item.o_opt);
-        cur::waddch(hw, '\n' as c_uint);
+        output::write_window_glyph(options_window, '\n');
     }
 
-    cur::wmove(hw, 0, 0);
+    output::move_window_cursor(options_window, Position::new(0, 0));
     for index in 0..optlist.len() {
         let item = &mut optlist[index];
         pr_optname_slot(item);
@@ -178,7 +177,7 @@ pub unsafe extern "C" fn option() {
             break;
         }
         if retval == MINUS && index > 0 {
-            cur::wmove(hw, (index as c_int) - 1, 0);
+            output::move_window_cursor(options_window, Position::new((index as i32) - 1, 0));
             let prev = index as isize - 2;
             if prev >= 0 {
                 let _ = prev;
@@ -186,12 +185,13 @@ pub unsafe extern "C" fn option() {
         }
     }
 
-    cur::wmove(hw, 23, 0);
+    output::move_window_cursor(options_window, Position::new(23, 0));
     paint(hw, "--Press space to continue--");
-    cur::wrefresh(hw);
+    output::refresh_window(options_window);
     wait_for(' ' as c_int);
-    cur::clearok(stdscr, true as c_uchar);
-    cur::touchwin(stdscr);
+    let standard_screen = window(stdscr);
+    output::set_clear_on_refresh(standard_screen, true);
+    output::touch_window(standard_screen);
     after = false as c_uchar;
 }
 
@@ -205,18 +205,13 @@ unsafe fn pr_optname(op: *mut OPTION) {
 #[no_mangle]
 pub unsafe extern "C" fn put_bool(vp: *mut c_void) {
     let bp = vp as *mut c_uchar;
-    let text = if *bp != 0 {
-        c"True".as_ptr()
-    } else {
-        c"False".as_ptr()
-    };
-    cur::waddstr(hw, text);
+    output::write_window_text(window(hw), if *bp != 0 { "True" } else { "False" });
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn put_str(vp: *mut c_void) {
     let sp = vp as *mut c_char;
-    cur::waddstr(hw, sp);
+    output::write_window_text(window(hw), &CStr::from_ptr(sp).to_string_lossy());
 }
 
 #[no_mangle]
@@ -224,29 +219,24 @@ pub unsafe extern "C" fn put_inv_t(vp: *mut c_void) {
     let ip = vp as *mut c_int;
     let idx = *ip as usize;
     if idx < unsafe { inv_t_name.len() } {
-        cur::waddstr(hw, inv_t_name[idx]);
+        output::write_window_text(
+            window(hw),
+            &CStr::from_ptr(inv_t_name[idx]).to_string_lossy(),
+        );
     }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn get_bool(vp: *mut c_void, win: *mut c_void) -> c_int {
     let bp = vp as *mut c_uchar;
-    let mut oy = 0;
-    let mut ox = 0;
     let mut bad = true;
 
-    getyx_(win, &mut oy, &mut ox);
-    cur::waddstr(
-        win,
-        if *bp != 0 {
-            c"True".as_ptr()
-        } else {
-            c"False".as_ptr()
-        },
-    );
+    let window = window(win);
+    let origin = output::window_cursor(window);
+    output::write_window_text(window, if *bp != 0 { "True" } else { "False" });
     while bad {
-        cur::wmove(win, oy, ox);
-        cur::wrefresh(win);
+        output::move_window_cursor(window, origin);
+        output::refresh_window(window);
         match readchar() {
             ch if ch == 't' as c_int || ch == 'T' as c_int => {
                 *bp = true as c_uchar;
@@ -262,21 +252,14 @@ pub unsafe extern "C" fn get_bool(vp: *mut c_void, win: *mut c_void) -> c_int {
             ESCAPE => return QUIT,
             ch if ch == '-' as c_int => return MINUS,
             _ => {
-                cur::wmove(win, oy, ox + 10);
-                cur::waddstr(win, c"(T or F)".as_ptr());
+                output::move_window_cursor(window, Position::new(origin.row, origin.col + 10));
+                output::write_window_text(window, "(T or F)");
             }
         }
     }
-    cur::wmove(win, oy, ox);
-    cur::waddstr(
-        win,
-        if *bp != 0 {
-            c"True".as_ptr()
-        } else {
-            c"False".as_ptr()
-        },
-    );
-    cur::waddch(win, '\n' as c_uint);
+    output::move_window_cursor(window, origin);
+    output::write_window_text(window, if *bp != 0 { "True" } else { "False" });
+    output::write_window_glyph(window, '\n');
     NORM
 }
 
@@ -306,12 +289,11 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
     let opt = vopt as *mut c_char;
     let mut buf = [0 as c_char; MAXINP];
     let mut ptr = buf.as_mut_ptr();
-    let mut oy = 0;
-    let mut ox = 0;
     let mut c: c_int;
 
-    getyx_(win, &mut oy, &mut ox);
-    cur::wrefresh(win);
+    let window = window(win);
+    let origin = output::window_cursor(window);
+    output::refresh_window(window);
     loop {
         c = readchar();
         if c == '\n' as c_int || c == '\r' as c_int || c == ESCAPE {
@@ -320,15 +302,15 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
         if c == -1 {
             continue;
         }
-        if c == cur::erasechar() {
+        if c == input::erase_key() as c_int {
             if ptr > buf.as_mut_ptr() {
                 ptr = ptr.sub(1);
             }
             continue;
         }
-        if c == cur::killchar() {
+        if c == input::kill_key() as c_int {
             ptr = buf.as_mut_ptr();
-            cur::wmove(win, oy, ox);
+            output::move_window_cursor(window, origin);
             continue;
         }
         if ptr >= buf.as_mut_ptr().add(MAXINP) || !(isprint(c) != 0 || c == ' ' as c_int) {
@@ -336,7 +318,7 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
         }
         *ptr = c as c_char;
         ptr = ptr.add(1);
-        cur::waddstr(win, cur::unctrl(c));
+        output::write_window_text(window, &output::format_key(c as u8));
     }
 
     *ptr = 0;
@@ -356,9 +338,9 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
         CStr::from_ptr(opt).to_string_lossy().to_string()
     };
     let out = format!("{}\n", msg);
-    cur::wmove(win, oy, ox);
+    output::move_window_cursor(window, origin);
     paint(win, &out);
-    cur::wrefresh(win);
+    output::refresh_window(window);
     if win == stdscr {
         mpos += (ptr as usize - buf.as_ptr() as usize) as c_int;
     }
@@ -374,17 +356,19 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn get_inv_t(vp: *mut c_void, win: *mut c_void) -> c_int {
     let ip = vp as *mut c_int;
-    let mut oy = 0;
-    let mut ox = 0;
     let mut bad = true;
 
-    getyx_(win, &mut oy, &mut ox);
+    let window = window(win);
+    let origin = output::window_cursor(window);
     if *ip >= 0 && *ip < inv_t_name.len() as c_int {
-        cur::waddstr(win, inv_t_name[*ip as usize]);
+        output::write_window_text(
+            window,
+            &CStr::from_ptr(inv_t_name[*ip as usize]).to_string_lossy(),
+        );
     }
     while bad {
-        cur::wmove(win, oy, ox);
-        cur::wrefresh(win);
+        output::move_window_cursor(window, origin);
+        output::refresh_window(window);
         match readchar() {
             ch if ch == 'o' as c_int || ch == 'O' as c_int => {
                 *ip = INV_OVER;
@@ -404,15 +388,15 @@ pub unsafe extern "C" fn get_inv_t(vp: *mut c_void, win: *mut c_void) -> c_int {
             ESCAPE => return QUIT,
             ch if ch == '-' as c_int => return MINUS,
             _ => {
-                cur::wmove(win, oy, ox + 15);
-                cur::waddstr(win, c"(O, S, or C)".as_ptr());
+                output::move_window_cursor(window, Position::new(origin.row, origin.col + 15));
+                output::write_window_text(window, "(O, S, or C)");
             }
         }
     }
     if *ip >= 0 && *ip < inv_t_name.len() as c_int {
         let name = CStr::from_ptr(inv_t_name[*ip as usize]).to_string_lossy();
         let out = format!("{}\n", name);
-        cur::wmove(win, oy, ox);
+        output::move_window_cursor(window, origin);
         paint(win, &out);
     }
     NORM

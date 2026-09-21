@@ -5,7 +5,7 @@
 //! that mirror `rogue.h` (room/thing flags, treasure tuning, glyphs). Sibling
 //! modules import from here instead of redeclaring or re-hardcoding them.
 
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 pub(crate) use crate::daemons::visuals;
 pub(crate) use crate::draw::enter_room;
@@ -16,7 +16,6 @@ pub(crate) use crate::item::potions::turn_see;
 pub(crate) use crate::item::thing_list::{attach, free_list, new_item};
 pub(crate) use crate::item::things::new_thing;
 pub(crate) use crate::level::glyph_is_walkable;
-use crate::ui::terminal as cur;
 
 use crate::config::GameConfig;
 
@@ -56,11 +55,6 @@ unsafe extern "C" {
     pub(crate) static mut seenstairs: bool;
 
 }
-
-/// ncurses wrapper re-exports so the rest of the `level` module can keep using
-/// the same names but go through the `crate::ui::terminal` shim (which calls the
-/// `ncurses` crate) instead of raw C ABI.
-pub(crate) use cur::{addch, clear, mvaddch, r#move, standend, standout};
 
 /// Interpret `tp` as an object (`CThingObject`).
 #[inline]

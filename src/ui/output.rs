@@ -2,20 +2,37 @@
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
+use std::sync::Mutex;
 
 use crate::config::GameConfig;
 use crate::entity::player::{CStats, CThing, CThingMonster};
 use crate::game::EQUIPMENT;
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::terminal as cur;
+use crate::ui::{Position, Window};
 
 const ESCAPE: c_int = 27;
 const MAXSTR: usize = 1024;
 const MAXMSG: usize = GameConfig::SCREEN_COLS as usize - 9;
 const STATLINE: c_int = 23;
 
-static mut msgbuf: [c_char; 2 * MAXMSG + 1] = [0; 2 * MAXMSG + 1];
-static mut newpos: c_int = 0;
+/// Result of displaying or flushing a message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MessageResult {
+    Displayed,
+    Escaped,
+}
+
+#[derive(Default)]
+struct MessageState {
+    pending: String,
+    next_position: i32,
+}
+
+static MESSAGE_STATE: Mutex<MessageState> = Mutex::new(MessageState {
+    pending: String::new(),
+    next_position: 0,
+});
 
 unsafe extern "C" {
     static mut hungry_state: c_int;
@@ -32,53 +49,220 @@ unsafe extern "C" {
     static mut hw: *mut c_void;
     static mut stdscr: *mut c_void;
 
-    fn islower(c: c_int) -> c_int;
-    fn strcat(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-    fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-    fn strlen(s: *const c_char) -> usize;
-    fn toupper(c: c_int) -> c_int;
-}
-
-unsafe fn getyx_(win: *mut c_void, y: *mut c_int, x: *mut c_int) {
-    *y = cur::getcury(win);
-    *x = cur::getcurx(win);
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
     tp as *mut CThingMonster
 }
 
-#[cfg(not(test))]
-unsafe fn append_message(text: *const c_char) {
-    if text.is_null() {
-        return;
+/// Move the standard-screen cursor.
+pub fn move_cursor(position: Position) {
+    unsafe {
+        cur::move_(position.row, position.col);
     }
+}
 
-    let text = CStr::from_ptr(text);
-    if strlen(msgbuf.as_ptr()) + text.to_bytes().len() >= MAXMSG {
-        endmsg();
+/// Write one glyph at the current cursor position.
+pub fn write_glyph(glyph: char) {
+    unsafe {
+        cur::addch(glyph as c_uint);
     }
+}
 
-    strcat(msgbuf.as_mut_ptr(), text.as_ptr());
-    newpos = strlen(msgbuf.as_ptr()) as c_int;
+/// Move to a position and write one glyph.
+pub fn write_glyph_at(position: Position, glyph: char) {
+    unsafe {
+        cur::mvaddch(position.row, position.col, glyph as c_uint);
+    }
+}
+
+/// Read the glyph currently displayed under the standard-screen cursor.
+pub fn glyph_at_cursor() -> char {
+    unsafe { char::from_u32((cur::inch() as u32) & 0xff).unwrap_or('\0') }
+}
+
+/// Read the glyph displayed at a position on the standard screen.
+pub fn glyph_at(position: Position) -> char {
+    unsafe {
+        char::from_u32((cur::mvinch(position.row, position.col) as u32) & 0xff).unwrap_or('\0')
+    }
+}
+
+/// Enable or disable standout output on the standard screen.
+pub fn set_standout(enabled: bool) {
+    unsafe {
+        if enabled {
+            cur::standout();
+        } else {
+            cur::standend();
+        }
+    }
+}
+
+/// Flush pending standard-screen changes to the terminal.
+pub fn refresh() {
+    unsafe {
+        cur::refresh();
+    }
+}
+
+/// Clear the standard screen.
+pub fn clear_screen() {
+    unsafe {
+        cur::clear();
+    }
+}
+
+/// Clear from the cursor to the end of its line.
+pub fn clear_to_end_of_line() {
+    unsafe {
+        cur::clrtoeol();
+    }
+}
+
+/// Write UTF-8 text at the current cursor position.
+pub fn write_text(text: &str) {
+    unsafe {
+        let text = CString::new(text).expect("terminal text contains a NUL byte");
+        cur::addstr(text.as_ptr());
+    }
+}
+
+/// Move to a position and write UTF-8 text.
+pub fn write_text_at(position: Position, text: &str) {
+    unsafe {
+        let text = CString::new(text).expect("terminal text contains a NUL byte");
+        cur::mvaddstr(position.row, position.col, text.as_ptr());
+    }
+}
+
+/// Control whether ncurses may leave the physical cursor after refresh.
+pub fn set_leave_cursor(window: Window, enabled: bool) {
+    unsafe {
+        cur::leaveok(window.as_raw(), i32::from(enabled));
+    }
+}
+
+/// Return the current cursor position in a window.
+pub fn window_cursor(window: Window) -> Position {
+    unsafe { Position::new(cur::getcury(window.as_raw()), cur::getcurx(window.as_raw())) }
+}
+
+/// Clear a window.
+pub fn clear_window(window: Window) {
+    unsafe {
+        cur::wclear(window.as_raw());
+    }
+}
+
+/// Move a window's cursor.
+pub fn move_window_cursor(window: Window, position: Position) {
+    unsafe {
+        cur::wmove(window.as_raw(), position.row, position.col);
+    }
+}
+
+/// Write one glyph to a window.
+pub fn write_window_glyph(window: Window, glyph: char) {
+    unsafe {
+        cur::waddch(window.as_raw(), glyph as c_uint);
+    }
+}
+
+/// Write text to a window.
+pub fn write_window_text(window: Window, text: &str) {
+    unsafe {
+        let text = CString::new(text).expect("window text contains a NUL byte");
+        cur::waddstr(window.as_raw(), text.as_ptr());
+    }
+}
+
+/// Flush pending changes for a window.
+pub fn refresh_window(window: Window) {
+    unsafe {
+        cur::wrefresh(window.as_raw());
+    }
+}
+
+/// Mark a window for repaint during its next refresh.
+pub fn touch_window(window: Window) {
+    unsafe {
+        cur::touchwin(window.as_raw());
+    }
+}
+
+/// Request a full repaint of a window on its next refresh.
+pub fn set_clear_on_refresh(window: Window, enabled: bool) {
+    unsafe {
+        cur::clearok(window.as_raw(), u8::from(enabled));
+    }
+}
+
+/// Enable or disable ncurses insert/delete-line optimization for a window.
+pub fn set_line_optimization(window: Window, enabled: bool) {
+    unsafe {
+        cur::idlok(window.as_raw(), i32::from(enabled));
+    }
+}
+
+/// Enable or disable standout output for a window.
+pub fn set_window_standout(window: Window, enabled: bool) {
+    unsafe {
+        if enabled {
+            cur::wstandout(window.as_raw());
+        } else {
+            cur::wstandend(window.as_raw());
+        }
+    }
+}
+
+/// Render a key byte in printable caret notation.
+pub fn format_key(key: u8) -> String {
+    match key {
+        0x00..=0x1f => format!("^{}", (key + b'@') as char),
+        0x7f => "^?".to_owned(),
+        0x80..=0xff => {
+            let low = key & 0x7f;
+            if low < 0x20 {
+                format!("M-^{}", (low + b'@') as char)
+            } else {
+                format!("M-{}", low as char)
+            }
+        }
+        _ => (key as char).to_string(),
+    }
 }
 
 #[cfg(not(test))]
-unsafe fn display_message(text: *const c_char) -> c_int {
-    if text.is_null() || *text == 0 {
-        cur::move_(0, 0);
-        cur::clrtoeol();
+unsafe fn append_message(text: &str) {
+    let should_flush = {
+        let state = MESSAGE_STATE
+            .lock()
+            .unwrap_or_else(|lock| lock.into_inner());
+        state.pending.len() + text.len() >= MAXMSG
+    };
+    if should_flush {
+        endmsg();
+    }
+
+    let mut state = MESSAGE_STATE
+        .lock()
+        .unwrap_or_else(|lock| lock.into_inner());
+    state.pending.push_str(text);
+    state.next_position = state.pending.len() as i32;
+}
+
+#[cfg(not(test))]
+unsafe fn display_message(text: &str) -> MessageResult {
+    if text.is_empty() {
+        move_cursor(Position::new(0, 0));
+        clear_to_end_of_line();
         mpos = 0;
-        return !ESCAPE;
+        return MessageResult::Displayed;
     }
 
     append_message(text);
     endmsg()
-}
-
-#[cfg(not(test))]
-unsafe fn append_message_str(text: *const c_char) {
-    append_message(text);
 }
 
 /// Display a Rust-formatted message, bypassing the legacy C variadic
@@ -86,18 +270,16 @@ unsafe fn append_message_str(text: *const c_char) {
 /// Returns the message result (useful for `--More--`
 /// escape detection when listing long inventories).
 #[inline]
-pub unsafe fn msg_str(text: &str) -> c_int {
-    let mut result = 0;
+pub unsafe fn msg_str(text: &str) -> MessageResult {
     #[cfg(not(test))]
     {
-        let ctext = CString::new(text).unwrap();
-        result = display_message(ctext.as_ptr());
+        display_message(text)
     }
     #[cfg(test)]
     {
         let _ = text;
+        MessageResult::Displayed
     }
-    result
 }
 
 /// Append a Rust-formatted message segment, bypassing the legacy C
@@ -106,8 +288,7 @@ pub unsafe fn msg_str(text: &str) -> c_int {
 pub unsafe fn addmsg_str(text: &str) {
     #[cfg(not(test))]
     {
-        let ctext = CString::new(text).unwrap();
-        append_message_str(ctext.as_ptr());
+        append_message(text);
     }
     #[cfg(test)]
     {
@@ -120,14 +301,24 @@ pub unsafe fn addmsg_str(text: &str) {
 /// Callers that need current game graphics must render them before calling
 /// this function; output policy does not invoke the game renderer.
 #[cfg(not(test))]
-pub unsafe fn endmsg() -> c_int {
+pub unsafe fn endmsg() -> MessageResult {
+    let (mut pending, next_position) = {
+        let mut state = MESSAGE_STATE
+            .lock()
+            .unwrap_or_else(|lock| lock.into_inner());
+        (std::mem::take(&mut state.pending), state.next_position)
+    };
+
     if save_msg != false as c_uchar {
-        strcpy(huh.as_mut_ptr(), msgbuf.as_ptr());
+        let bytes = pending.as_bytes();
+        let copy_len = bytes.len().min(MAXSTR - 1);
+        std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), huh.as_mut_ptr(), copy_len);
+        huh[copy_len] = 0;
     }
 
     if mpos != 0 {
-        cur::mvaddstr(0, mpos, c"--More--".as_ptr());
-        cur::refresh();
+        write_text_at(Position::new(0, mpos), "--More--");
+        refresh();
 
         if msg_esc == false as c_uchar {
             wait_for(' ' as c_int);
@@ -138,32 +329,37 @@ pub unsafe fn endmsg() -> c_int {
                     break;
                 }
                 if ch == ESCAPE {
-                    msgbuf[0] = 0;
+                    pending.clear();
                     mpos = 0;
-                    newpos = 0;
-                    return ESCAPE;
+                    let mut state = MESSAGE_STATE
+                        .lock()
+                        .unwrap_or_else(|lock| lock.into_inner());
+                    state.next_position = 0;
+                    return MessageResult::Escaped;
                 }
             }
         }
     }
 
-    if islower(msgbuf[0] as c_int) != 0 && lower_msg == false as c_uchar && msgbuf[1] != 0 {
-        msgbuf[0] = toupper(msgbuf[0] as c_int) as c_char;
+    if lower_msg == false as c_uchar && pending.len() > 1 {
+        if let Some(first) = pending.get_mut(0..1) {
+            first.make_ascii_uppercase();
+        }
     }
 
-    cur::mvaddstr(0, 0, msgbuf.as_ptr());
-    cur::clrtoeol();
-    mpos = newpos;
-    newpos = 0;
-    msgbuf[0] = 0;
-    cur::refresh();
-    !ESCAPE
+    write_text_at(Position::new(0, 0), &pending);
+    clear_to_end_of_line();
+    mpos = next_position;
+    let mut state = MESSAGE_STATE
+        .lock()
+        .unwrap_or_else(|lock| lock.into_inner());
+    state.next_position = 0;
+    refresh();
+    MessageResult::Displayed
 }
 
 #[cfg(not(test))]
 pub unsafe fn status() {
-    let mut oy = 0;
-    let mut ox = 0;
     let pstats = &mut (*thing_t(&raw mut player)).t_stats;
     let max_hp = pstats.s_maxhp;
     let mut temp = if !EQUIPMENT.armor().is_null() {
@@ -201,7 +397,7 @@ pub unsafe fn status() {
     }
 
     s_arm = temp;
-    getyx_(stdscr, &mut oy, &mut ox);
+    let old_cursor = window_cursor(Window::from_raw(stdscr));
     if s_hp != max_hp {
         let mut temp_hp = max_hp;
         s_hp = max_hp;
@@ -220,7 +416,7 @@ pub unsafe fn status() {
     s_hungry = hungry_state;
 
     if stat_msg != false as c_uchar {
-        cur::move_(0, 0);
+        move_cursor(Position::new(0, 0));
         msg_str(&format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -236,7 +432,7 @@ pub unsafe fn status() {
             w = hpwidth as usize,
         ));
     } else {
-        cur::move_(STATLINE, 0);
+        move_cursor(Position::new(STATLINE, 0));
         let line = format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -251,39 +447,48 @@ pub unsafe fn status() {
             CStr::from_ptr(state_name[hungry_state as usize]).to_string_lossy(),
             w = hpwidth as usize,
         );
-        let c_line = CString::new(line).unwrap();
-        cur::addstr(c_line.as_ptr());
+        write_text(&line);
     }
 
-    // C API uses non-variadic `clrtoeol()` and cursor restoration.
-    // The project expects the cursor to remain where it was after the status line update.
-    let _ = &oy;
-    let _ = &ox;
-    cur::clrtoeol();
-    cur::move_(oy, ox);
+    clear_to_end_of_line();
+    move_cursor(old_cursor);
 }
 
 #[cfg(not(test))]
-pub unsafe fn show_win(message: *const c_char) {
-    let win = hw;
-    cur::wmove(win, 0, 0);
-    cur::waddstr(win, message);
-    cur::touchwin(win);
+pub unsafe fn show_win(message: &str) {
+    let window = Window::from_raw(hw);
+    move_window_cursor(window, Position::new(0, 0));
+    write_window_text(window, message);
+    touch_window(window);
     let hero = (*thing_t(&raw mut player)).t_pos;
-    cur::wmove(win, hero.y, hero.x);
-    cur::wrefresh(win);
+    move_window_cursor(window, Position::new(hero.y, hero.x));
+    refresh_window(window);
     wait_for(' ' as c_int);
-    cur::clearok(stdscr, true as c_uchar);
-    cur::touchwin(stdscr);
+    let standard_screen = Window::from_raw(stdscr);
+    set_clear_on_refresh(standard_screen, true);
+    touch_window(standard_screen);
 }
 
 #[cfg(test)]
-pub unsafe fn endmsg() -> c_int {
-    !ESCAPE
+pub unsafe fn endmsg() -> MessageResult {
+    MessageResult::Displayed
 }
 
 #[cfg(test)]
 pub unsafe fn status() {}
 
 #[cfg(test)]
-pub unsafe fn show_win(_message: *const c_char) {}
+pub unsafe fn show_win(_message: &str) {}
+
+#[cfg(test)]
+mod tests {
+    use super::format_key;
+
+    #[test]
+    fn formats_control_and_meta_keys() {
+        assert_eq!(format_key(b'a'), "a");
+        assert_eq!(format_key(0x01), "^A");
+        assert_eq!(format_key(0x7f), "^?");
+        assert_eq!(format_key(0x81), "M-^A");
+    }
+}

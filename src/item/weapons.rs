@@ -5,7 +5,7 @@ use crate::item::pack::{get_item, leave_pack};
 use crate::misc::{is_current, show_floor};
 use crate::rnd::rnd;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
-use crate::ui::terminal as cur;
+use crate::ui::{output, Position};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
@@ -205,7 +205,10 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
             if ch == FLOOR && !show_floor() {
                 ch = ' ' as c_int;
             }
-            cur::mvaddch((*o).o_pos.y, (*o).o_pos.x, ch as c_uint);
+            output::write_glyph_at(
+                Position::new((*o).o_pos.y, (*o).o_pos.x),
+                (ch as u8) as char,
+            );
         }
 
         (*o).o_pos.y += ydelta;
@@ -214,8 +217,11 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
         let ch = winat((*o).o_pos.y, (*o).o_pos.x);
         if glyph_is_walkable(ch as u8) && ch != DOOR {
             if cansee((*o).o_pos.y, (*o).o_pos.x) != 0 && terse == 0 {
-                cur::mvaddch((*o).o_pos.y, (*o).o_pos.x, (*o).o_type as c_uint);
-                cur::refresh();
+                output::write_glyph_at(
+                    Position::new((*o).o_pos.y, (*o).o_pos.x),
+                    ((*o).o_type as u8) as char,
+                );
+                output::refresh();
             }
             continue;
         }
@@ -235,7 +241,10 @@ pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
             if !m.is_null() {
                 (*thing_t(m)).t_oldch = (*thing_o(obj)).o_type as c_char;
             } else {
-                cur::mvaddch(FALL_POS.y, FALL_POS.x, (*thing_o(obj)).o_type as c_uint);
+                output::write_glyph_at(
+                    Position::new(FALL_POS.y, FALL_POS.x),
+                    ((*thing_o(obj)).o_type as u8) as char,
+                );
             }
         }
 

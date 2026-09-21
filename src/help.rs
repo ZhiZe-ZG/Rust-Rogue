@@ -6,7 +6,7 @@ use std::os::raw::{c_int, c_uchar, c_void};
 use crate::globals::{hw, lower_msg, monsters, mpos};
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::output::msg_str;
-use crate::ui::terminal as cur;
+use crate::ui::{output, Position, Window};
 
 const ESCAPE: c_int = 27;
 
@@ -181,19 +181,19 @@ pub(crate) unsafe fn help() {
     mpos = 0;
 
     if helpch != b'*' {
-        cur::move_(0, 0);
+        output::move_cursor(Position::new(0, 0));
         if let Some(entry) = HELP_ENTRIES.iter().find(|entry| entry.ch == helpch) {
             lower_msg = true as c_uchar;
             msg_str(&format!(
                 "{}{}",
-                CStr::from_ptr(cur::unctrl(entry.ch as c_int)).to_string_lossy(),
+                output::format_key(entry.ch),
                 entry.desc.to_string_lossy()
             ));
             lower_msg = false as c_uchar;
         } else {
             msg_str(&format!(
                 "unknown character '{}'",
-                CStr::from_ptr(cur::unctrl(helpch as c_int)).to_string_lossy()
+                output::format_key(helpch)
             ));
         }
         return;
@@ -205,7 +205,8 @@ pub(crate) unsafe fn help() {
     }
     numprint = (numprint / 2).min(LINES - 1);
 
-    cur::wclear(hw);
+    let help_window = Window::from_raw(hw);
+    output::clear_window(help_window);
     for (count, entry) in HELP_ENTRIES
         .iter()
         .filter(|entry| entry.print)
@@ -213,25 +214,28 @@ pub(crate) unsafe fn help() {
         .enumerate()
     {
         let count = count as c_int;
-        cur::wmove(
-            hw,
-            count % numprint,
-            if count >= numprint { COLS / 2 } else { 0 },
+        output::move_window_cursor(
+            help_window,
+            Position::new(
+                count % numprint,
+                if count >= numprint { COLS / 2 } else { 0 },
+            ),
         );
         if entry.ch != 0 {
-            cur::waddstr(hw, cur::unctrl(entry.ch as c_int));
+            output::write_window_text(help_window, &output::format_key(entry.ch));
         }
-        cur::waddstr(hw, entry.desc.as_ptr());
+        output::write_window_text(help_window, &entry.desc.to_string_lossy());
     }
 
-    cur::wmove(hw, LINES - 1, 0);
-    cur::waddstr(hw, c"--Press space to continue--".as_ptr());
-    cur::wrefresh(hw);
+    output::move_window_cursor(help_window, Position::new(LINES - 1, 0));
+    output::write_window_text(help_window, "--Press space to continue--");
+    output::refresh_window(help_window);
     wait_for(b' ' as c_int);
-    cur::clearok(stdscr, true as c_uchar);
+    let standard_screen = Window::from_raw(stdscr);
+    output::set_clear_on_refresh(standard_screen, true);
     msg_str("");
-    cur::touchwin(stdscr);
-    cur::wrefresh(stdscr);
+    output::touch_window(standard_screen);
+    output::refresh_window(standard_screen);
 }
 
 /// Describes a map glyph or monster letter selected by the player.
@@ -258,7 +262,7 @@ pub(crate) unsafe fn identify() {
 
     msg_str(&format!(
         "'{}': {}",
-        CStr::from_ptr(cur::unctrl(ch)).to_string_lossy(),
+        output::format_key(ch as u8),
         description
     ));
 }

@@ -12,8 +12,9 @@ use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
 use crate::rnd::rnd;
 use crate::startup::roll;
+use crate::ui::output;
 use crate::ui::output::{addmsg_str, msg_str};
-use crate::ui::terminal as cur;
+use crate::ui::runtime;
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -244,13 +245,13 @@ pub unsafe extern "C" fn wanderer() {
     new_monster(tp, randmonster(true), &mut cp);
 
     if player_has(SEEMONST) {
-        cur::standout();
+        output::set_standout(true);
         if !player_has(ISHALU) {
-            cur::addch((*thing_t(tp)).t_type as c_uint);
+            output::write_glyph(((*thing_t(tp)).t_type as u8) as char);
         } else {
-            cur::addch((rnd(26) + 'A' as c_int) as c_uint);
+            output::write_glyph((rnd(26) as u8 + b'A') as char);
         }
-        cur::standend();
+        output::set_standout(false);
     }
 
     runto(&mut (*thing_t(tp)).t_pos);
@@ -269,7 +270,7 @@ pub unsafe extern "C" fn wanderer() {
 pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
     let tp = crate::game::monster_at(y, x);
     if tp.is_null() {
-        cur::endwin();
+        runtime::shutdown();
         abort();
     }
 

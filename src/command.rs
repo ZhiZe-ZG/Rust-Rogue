@@ -32,8 +32,8 @@ use crate::rnd::rnd;
 use crate::save::save_game;
 use crate::startup::{quit, shell};
 use crate::ui::input::readchar;
-use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
-use crate::ui::terminal as cur;
+use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
+use crate::ui::{Position, Window};
 use crate::wizard::{create_obj, show_map, teleport, whatis};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
@@ -316,9 +316,9 @@ pub unsafe extern "C" fn command() {
         status();
         lastscore = purse;
         let hero = hero_pos();
-        cur::move_(hero.y, hero.x);
+        output::move_cursor(Position::new(hero.y, hero.x));
         if !((running != 0 || count != 0) && jump != 0) {
-            cur::refresh(); // Draw screen
+            output::refresh(); // Draw screen
         }
         take = 0;
         after = true as c_uchar;
@@ -618,8 +618,9 @@ pub unsafe extern "C" fn command() {
                     }
                     CTRL_R => {
                         after = false as c_uchar;
-                        cur::clearok(curscr, true as c_uchar);
-                        cur::wrefresh(curscr);
+                        let screen = Window::from_raw(curscr);
+                        output::set_clear_on_refresh(screen, true);
+                        output::refresh_window(screen);
                     }
                     b'v' => {
                         after = false as c_uchar;
@@ -862,7 +863,7 @@ pub unsafe extern "C" fn illcom(ch: c_int) {
     count = 0;
     msg_str(&format!(
         "illegal command '{}'",
-        CStr::from_ptr(cur::unctrl(ch)).to_string_lossy()
+        output::format_key(ch as u8)
     ));
     save_msg = true as c_uchar;
 }

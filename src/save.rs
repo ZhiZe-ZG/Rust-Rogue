@@ -8,9 +8,10 @@ use crate::options::get_str;
 use crate::rnd::set_seed;
 use crate::startup::playit;
 use crate::state::{rs_restore_file, rs_save_file};
-use crate::ui::input::readchar;
-use crate::ui::output::msg_str;
-use crate::ui::terminal as cur;
+use crate::ui::input::{self, readchar};
+use crate::ui::output::{self, msg_str};
+use crate::ui::runtime;
+use crate::ui::{Position, Window};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr;
@@ -133,8 +134,8 @@ pub unsafe extern "C" fn save_game() {
             }
 
             if c == 'y' as c_int || c == 'Y' as c_int {
-                cur::addstr(c"Yes\n".as_ptr());
-                cur::refresh();
+                output::write_text("Yes\n");
+                output::refresh();
                 copy_cstr(buf.as_mut_ptr(), file_name_ptr, MAXSTR);
                 // Continue to file-open logic using current buffer value.
             } else {
@@ -204,9 +205,9 @@ pub unsafe extern "C" fn save_file(savef: *mut CFile) {
     let header = format!("{} x {}\n", lines, cols);
     let version_ptr = &raw const version;
 
-    cur::mvcur(0, cols - 1, lines - 1, 0);
+    runtime::move_physical_cursor(Position::new(0, cols - 1), Position::new(lines - 1, 0));
     putchar('\n' as c_int);
-    cur::endwin();
+    runtime::shutdown();
     resetltchars();
     md_chmod(&raw mut file_name as *mut c_char, 0o400);
 
@@ -259,12 +260,12 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     let _ = sscanf(buf.as_ptr(), c"%d x %d\n".as_ptr(), &mut lines, &mut cols);
 
     if stdscr.is_null() {
-        cur::initscr();
+        runtime::initialize();
     }
-    cur::keypad(stdscr as *mut CWindow, 1);
+    input::set_keypad(Window::from_raw(stdscr as *mut CWindow), true);
 
     if lines > LINES {
-        cur::endwin();
+        runtime::shutdown();
         msg_str(&format!(
             "Sorry, original game was played on a screen with {} lines.\n",
             lines
@@ -276,7 +277,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
         return 0;
     }
     if cols > COLS {
-        cur::endwin();
+        runtime::shutdown();
         msg_str(&format!(
             "Sorry, original game was played on a screen with {} columns.\n",
             cols
@@ -288,7 +289,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
         return 0;
     }
 
-    hw = cur::newwin(LINES, COLS, 0, 0) as *mut CWindow;
+    hw = runtime::create_window(Position::new(LINES, COLS), Position::new(0, 0)).into_raw();
     setup();
     let _ = rs_restore_file(inf.cast());
 
@@ -298,10 +299,10 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     }
 
     mpos = 0;
-    cur::clearok(stdscr as *mut CWindow, 1);
+    output::set_clear_on_refresh(Window::from_raw(stdscr as *mut CWindow), true);
 
     if restore_player_dead() {
-        cur::endwin();
+        runtime::shutdown();
         msg_str("\n\"He's dead, Jim\"\n");
         return 0;
     }
@@ -309,7 +310,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     md_tstpresume();
     environ = envp;
     copy_cstr(file_name_ptr, file_ptr, MAXSTR);
-    cur::clearok(curscr as *mut CWindow, 1);
+    output::set_clear_on_refresh(Window::from_raw(curscr as *mut CWindow), true);
     set_seed(md_getpid());
     msg_str(&format!(
         "file name: {}",

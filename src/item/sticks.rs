@@ -10,7 +10,7 @@ use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
 use crate::ui::output::{endmsg, msg_str};
-use crate::ui::terminal as cur;
+use crate::ui::{output, Position};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 const STICK: c_int = '/' as c_int;
@@ -323,8 +323,8 @@ pub unsafe extern "C" fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *
         }
     }
 
-    cur::mvaddch(pos.y, pos.x, '/' as c_uint);
-    cur::refresh();
+    output::write_glyph_at(Position::new(pos.y, pos.x), '/');
+    output::refresh();
 }
 
 /// charge_str:
