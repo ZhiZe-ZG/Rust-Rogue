@@ -9,7 +9,8 @@ use crate::item::things::{add_line, inv_name};
 use crate::misc::{find_obj, show_floor};
 use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
-use crate::ui::{output, Position};
+use crate::ui::output;
+use glam::IVec2;
 
 const MAXPACK: c_int = 23;
 const MAXSTR: usize = 1024;
@@ -149,7 +150,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         // The object is removed from `lvl_obj`, so the terrain glyph shows
         // automatically via draw.
         output::write_glyph_at(
-            Position::new(hero_coord().y, hero_coord().x),
+            IVec2::new(hero_coord().x, hero_coord().y),
             (floor_char_for_room() as u8) as char,
         );
         discard_item(item);
@@ -292,7 +293,7 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_u
         // The object is removed from `lvl_obj`, so the terrain glyph shows
         // automatically via draw.
         output::write_glyph_at(
-            Position::new(hero_coord().y, hero_coord().x),
+            IVec2::new(hero_coord().x, hero_coord().y),
             (floor_char_for_room() as u8) as char,
         );
     }
@@ -497,7 +498,7 @@ pub unsafe extern "C" fn money(value: c_int) {
     purse += value;
     // The gold object was discarded, so the terrain glyph shows via draw.
     output::write_glyph_at(
-        Position::new(hero_coord().y, hero_coord().x),
+        IVec2::new(hero_coord().x, hero_coord().y),
         (floor_char_for_room() as u8) as char,
     );
     if value > 0 {

@@ -16,7 +16,8 @@ use crate::level::find_floor;
 use crate::machdep::flush_type;
 use crate::ui::input::readchar;
 use crate::ui::output::{msg_str, show_win};
-use crate::ui::{output, Position, Window};
+use crate::ui::{output, Window};
+use glam::IVec2;
 
 const POTION: c_int = b'!' as c_int;
 const SCROLL: c_int = b'?' as c_int;
@@ -283,7 +284,7 @@ pub unsafe extern "C" fn teleport() {
     let mut c = CCoord { x: 0, y: 0 };
     let mut hero = hero();
 
-    output::write_glyph_at(Position::new(hero.y, hero.x), (floor_at() as u8) as char);
+    output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
     find_floor(ptr::null_mut(), &mut c, 0, true);
     if roomin(&mut c) != proom() {
         leave_room(&mut hero);
@@ -294,7 +295,7 @@ pub unsafe extern "C" fn teleport() {
         look(true as c_uchar);
     }
     (*thing_t(&raw mut player)).t_pos = hero;
-    output::write_glyph_at(Position::new(hero.y, hero.x), '@');
+    output::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
 
     if ((*thing_t(&raw mut player)).t_flags & ISHELD) != 0 {
         (*thing_t(&raw mut player)).t_flags &= !ISHELD;
@@ -326,7 +327,7 @@ pub unsafe extern "C" fn show_map() {
             if ((real as u8) & (F_REAL as u8)) == 0 {
                 output::set_window_standout(window, true);
             }
-            output::move_window_cursor(window, Position::new(y, x));
+            output::move_window_cursor(window, IVec2::new(x, y));
             output::write_window_glyph(window, (chat(y, x) as u8) as char);
             if real == 0 {
                 output::set_window_standout(window, false);

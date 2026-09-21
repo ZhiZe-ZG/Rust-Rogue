@@ -11,7 +11,8 @@ use crate::item::pack::floor_at;
 use crate::level::{be_trapped, Trap};
 use crate::rnd::rnd;
 use crate::ui::output::msg_str;
-use crate::ui::{output, Position};
+use crate::ui::output;
+use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 const DOOR: c_char = b'+' as c_char;
@@ -195,7 +196,7 @@ pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
 #[inline]
 unsafe fn move_stuff(next_pos: &mut CCoord, fl: c_char) {
     let hero = hero_pos();
-    output::write_glyph_at(Position::new(hero.y, hero.x), (floor_at() as u8) as char);
+    output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
     if (fl as u8 & F_PASS as u8) != 0 && chat_at(oldpos.y, oldpos.x) == DOOR {
         draw_leave_room(next_pos);
     }

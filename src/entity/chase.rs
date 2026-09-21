@@ -19,7 +19,8 @@ use crate::level::glyph_is_walkable;
 use crate::misc::sign;
 use crate::rnd::rnd;
 use crate::ui::output::{endmsg, msg_str};
-use crate::ui::{output, Position};
+use crate::ui::output;
+use glam::IVec2;
 
 const DRAGONSHOT: c_int = 5; // one chance in DRAGONSHOT that a dragon will flame
 
@@ -212,7 +213,7 @@ pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut CCoord) {
     }
     if !coord_eq(*new_loc, (*thing_t(th)).t_pos) {
         output::write_glyph_at(
-            Position::new((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x),
+            IVec2::new((*thing_t(th)).t_pos.x, (*thing_t(th)).t_pos.y),
             ((*thing_t(th)).t_oldch as u8) as char,
         );
         (*thing_t(th)).t_room = roomin(new_loc);
@@ -230,7 +231,7 @@ pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut CCoord) {
         (*thing_t(th)).t_pos = *new_loc;
         set_moat_at((*new_loc).y, (*new_loc).x, th);
     }
-    output::move_cursor(Position::new((*new_loc).y, (*new_loc).x));
+    output::move_cursor(IVec2::new((*new_loc).x, (*new_loc).y));
     if see_monst(th) != false as c_uchar {
         output::write_glyph(((*thing_t(th)).t_disguise as u8) as char);
     } else if player_has(SEEMONST) {
@@ -376,7 +377,7 @@ pub unsafe extern "C" fn set_oldch(tp: *mut CThing, cp: *mut CCoord) {
 
     let sch = (*thing_t(tp)).t_oldch;
     (*thing_t(tp)).t_oldch =
-        (output::glyph_at(Position::new((*cp).y, (*cp).x)) as u8 & 0x7f) as c_char;
+        (output::glyph_at(IVec2::new((*cp).x, (*cp).y)) as u8 & 0x7f) as c_char;
     if !player_has(ISBLIND) {
         if (sch == FLOOR || (*thing_t(tp)).t_oldch == FLOOR)
             && ((*(*thing_t(tp)).t_room).r_flags & ISDARK) != 0

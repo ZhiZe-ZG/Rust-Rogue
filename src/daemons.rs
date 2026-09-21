@@ -1,5 +1,6 @@
 use crate::rnd::rnd;
-use crate::ui::{output, Position};
+use crate::ui::output;
+use glam::IVec2;
 /*
  * All the daemon and fuse callback functions.
  *
@@ -172,7 +173,7 @@ pub unsafe extern "C" fn unsee() {
     while !th.is_null() {
         if ((*thing_t(th)).t_flags & ISINVIS) != 0 && see_monst(th) != 0 {
             output::write_glyph_at(
-                Position::new((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x),
+                IVec2::new((*thing_t(th)).t_pos.x, (*thing_t(th)).t_pos.y),
                 ((*thing_t(th)).t_oldch as u8) as char,
             );
         }
@@ -306,7 +307,7 @@ pub unsafe extern "C" fn come_down() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
             output::write_glyph_at(
-                Position::new((*op).o_pos.y, (*op).o_pos.x),
+                IVec2::new((*op).o_pos.x, (*op).o_pos.y),
                 ((*op).o_type as u8) as char,
             );
         }
@@ -317,9 +318,9 @@ pub unsafe extern "C" fn come_down() {
     let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
     let mut tp = mlist;
     while !tp.is_null() {
-        output::move_cursor(Position::new(
-            (*thing_t(tp)).t_pos.y,
+        output::move_cursor(IVec2::new(
             (*thing_t(tp)).t_pos.x,
+            (*thing_t(tp)).t_pos.y,
         ));
         if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
             if ((*thing_t(tp)).t_flags & ISINVIS) == 0
@@ -355,7 +356,7 @@ pub unsafe extern "C" fn visuals() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
             output::write_glyph_at(
-                Position::new((*op).o_pos.y, (*op).o_pos.x),
+                IVec2::new((*op).o_pos.x, (*op).o_pos.y),
                 (rnd_thing() as u8) as char,
             );
         }
@@ -365,7 +366,7 @@ pub unsafe extern "C" fn visuals() {
     // Change the stairs.
     if seenstairs == 0 && cansee(stairs.y, stairs.x) != 0 {
         output::write_glyph_at(
-            Position::new(stairs.y, stairs.x),
+            IVec2::new(stairs.x, stairs.y),
             (rnd_thing() as u8) as char,
         );
     }
@@ -374,9 +375,9 @@ pub unsafe extern "C" fn visuals() {
     let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
     let mut tp = mlist;
     while !tp.is_null() {
-        output::move_cursor(Position::new(
-            (*thing_t(tp)).t_pos.y,
+        output::move_cursor(IVec2::new(
             (*thing_t(tp)).t_pos.x,
+            (*thing_t(tp)).t_pos.y,
         ));
         if see_monst(tp) != 0 {
             if (*thing_t(tp)).t_type == b'X' as c_char

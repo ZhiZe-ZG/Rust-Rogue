@@ -10,7 +10,8 @@ use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
 use crate::ui::output::{endmsg, msg_str};
-use crate::ui::{output, Position};
+use crate::ui::output;
+use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 const STICK: c_int = '/' as c_int;
@@ -323,7 +324,7 @@ pub unsafe extern "C" fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *
         }
     }
 
-    output::write_glyph_at(Position::new(pos.y, pos.x), '/');
+    output::write_glyph_at(IVec2::new(pos.x, pos.y), '/');
     output::refresh();
 }
 

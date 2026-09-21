@@ -24,7 +24,8 @@ use crate::save::restore;
 use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::output::{self, msg_str, status};
 use crate::ui::runtime;
-use crate::ui::{Position, Window};
+use crate::ui::Window;
+use glam::IVec2;
 
 const MAXSTR: usize = 1024;
 const AFTER: c_int = 2;
@@ -148,7 +149,7 @@ pub unsafe extern "C" fn endit(sig: c_int) {
 #[no_mangle]
 pub unsafe extern "C" fn fatal(s: *mut c_char) {
     output::write_text_at(
-        Position::new(LINES - 2, 0),
+        IVec2::new(0, LINES - 2),
         &CStr::from_ptr(s).to_string_lossy(),
     );
     output::refresh();
@@ -181,7 +182,7 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
      * leave nicely
      */
     let old_cursor = output::window_cursor(Window::from_raw(curscr));
-    runtime::move_physical_cursor(Position::new(0, COLS - 1), Position::new(LINES - 1, 0));
+    runtime::move_physical_cursor(IVec2::new(COLS - 1, 0), IVec2::new(0, LINES - 1));
     runtime::shutdown();
     resetltchars();
     fflush(c_stdout());
@@ -261,13 +262,13 @@ pub unsafe extern "C" fn quit(sig: c_int) {
         signal(SIGINT, leave as usize);
         output::clear_screen();
         let line = format!("You quit with {} gold pieces", purse);
-        output::write_text_at(Position::new(LINES - 2, 0), &line);
-        output::move_cursor(Position::new(LINES - 1, 0));
+        output::write_text_at(IVec2::new(0, LINES - 2), &line);
+        output::move_cursor(IVec2::new(0, LINES - 1));
         output::refresh();
         score(purse, 1, 0);
         my_exit(0);
     } else {
-        output::move_cursor(Position::new(0, 0));
+        output::move_cursor(IVec2::new(0, 0));
         output::clear_to_end_of_line();
         status();
         output::move_cursor(old_cursor);
@@ -287,7 +288,7 @@ pub unsafe extern "C" fn leave(sig: c_int) {
     setbuf(c_stdout(), LEAVE_BUF.as_mut_ptr()); /* throw away pending output */
 
     if !runtime::is_shutdown() {
-        runtime::move_physical_cursor(Position::new(0, COLS - 1), Position::new(LINES - 1, 0));
+        runtime::move_physical_cursor(IVec2::new(COLS - 1, 0), IVec2::new(0, LINES - 1));
         runtime::shutdown();
     }
 
@@ -304,7 +305,7 @@ pub unsafe extern "C" fn shell() {
     /*
      * Set the terminal back to original mode
      */
-    output::move_cursor(Position::new(LINES - 1, 0));
+    output::move_cursor(IVec2::new(0, LINES - 1));
     output::refresh();
     runtime::shutdown();
     resetltchars();
@@ -466,7 +467,7 @@ pub unsafe extern "C" fn rogue_main(
     init_stones();
     init_materials();
     setup();
-    hw = runtime::create_window(Position::new(LINES, COLS), Position::new(0, 0)).into_raw();
+    hw = runtime::create_window(IVec2::new(COLS, LINES), IVec2::new(0, 0)).into_raw();
     output::set_line_optimization(Window::from_raw(stdscr), true);
     output::set_line_optimization(Window::from_raw(hw), true);
     if master_mode_enabled != 0 {

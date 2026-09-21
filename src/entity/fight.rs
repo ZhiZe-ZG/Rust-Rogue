@@ -31,7 +31,8 @@ use crate::item::things::inv_name;
 use crate::item::weapons::{fall, fallpos};
 use crate::machdep::flush_type;
 use crate::startup::roll;
-use crate::ui::{output, Position};
+use crate::ui::output;
+use glam::IVec2;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -230,7 +231,7 @@ pub unsafe extern "C" fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uch
         if on_p(&raw mut player, ISHALU) {
             ch = (rnd(26) + b'A' as c_int) as c_char;
             output::write_glyph_at(
-                Position::new((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x),
+                IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y),
                 (ch as u8) as char,
             );
         }
@@ -310,7 +311,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
         (*thing_t(mp)).t_disguise = b'X' as c_char;
         if on_p(&raw mut player, ISHALU) {
             output::write_glyph_at(
-                Position::new((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x),
+                IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
                 (rnd(26) as u8 + b'A') as char,
             );
         }
@@ -545,9 +546,9 @@ pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
 
     let mname: *mut c_char;
     if on_p(&raw mut player, ISHALU) {
-        output::move_cursor(Position::new(
-            (*thing_t(tp)).t_pos.y,
+        output::move_cursor(IVec2::new(
             (*thing_t(tp)).t_pos.x,
+            (*thing_t(tp)).t_pos.y,
         ));
         let ch = toascii(output::glyph_at_cursor() as c_int);
         let idx = if isupper(ch) != 0 {
@@ -828,7 +829,7 @@ pub unsafe extern "C" fn remove_mon(mp: *mut CCoord, tp: *mut CThing, waskill: c
     set_moat((*mp).y, (*mp).x, std::ptr::null_mut());
     // Re-draw the underlying character.
     let oldch = (*thing_t(tp)).t_oldch;
-    output::write_glyph_at(Position::new((*mp).y, (*mp).x), (oldch as u8) as char);
+    output::write_glyph_at(IVec2::new((*mp).x, (*mp).y), (oldch as u8) as char);
 
     detach(&raw mut mlist as *mut *mut CThing, tp);
 

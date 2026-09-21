@@ -8,7 +8,8 @@ use crate::mdport::{md_getuid, md_raw_standend, md_raw_standout};
 use crate::score::{rd_score, wr_score};
 use crate::startup::my_exit;
 use crate::ui::input::wait_for;
-use crate::ui::{output, Position};
+use crate::ui::output;
+use glam::IVec2;
 
 const MAXSTR: usize = 1024;
 
@@ -219,7 +220,7 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
     if flags >= 0 || wizard != 0 {
         // Keep the legacy interactive flow behavior close to the C version without
         // requiring the full curses backend to be reimplemented in Rust here.
-        output::write_text_at(Position::new(23, 0), "[Press return to continue]");
+        output::write_text_at(IVec2::new(0, 23), "[Press return to continue]");
         output::refresh();
     }
 
@@ -341,7 +342,7 @@ pub unsafe extern "C" fn death(monst: c_char) {
 
     if tombstone == 0 {
         // Legacy C path: print a compact death message when tombstones are disabled.
-        output::write_text_at(Position::new(23, 0), "Killed by ");
+        output::write_text_at(IVec2::new(0, 23), "Killed by ");
         if monst != b's' as c_char && monst != b'h' as c_char {
             let article = if matches!(
                 killer.as_bytes().first(),
@@ -378,9 +379,9 @@ pub unsafe extern "C" fn death(monst: c_char) {
             output::write_text(&CStr::from_ptr(rogue_rip_line(i)).to_string_lossy());
         }
         let killer_x = center_string(&killer) as c_int;
-        output::write_text_at(Position::new(17, killer_x), &killer);
+        output::write_text_at(IVec2::new(killer_x, 17), &killer);
         if monst == b's' as c_char || monst == b'h' as c_char {
-            output::write_text_at(Position::new(16, 32), " ");
+            output::write_text_at(IVec2::new(32, 16), " ");
         } else {
             let article = if matches!(
                 killer.as_bytes().first(),
@@ -401,20 +402,20 @@ pub unsafe extern "C" fn death(monst: c_char) {
             };
             let phrase = format!("{}{}", article, killer);
             if !phrase.is_empty() {
-                output::write_text_at(Position::new(16, 33), &phrase);
+                output::write_text_at(IVec2::new(33, 16), &phrase);
             }
         }
         let hero_name = CStr::from_ptr(whoami.as_ptr()).to_string_lossy();
         output::write_text_at(
-            Position::new(14, center_string(hero_name.as_ref()) as c_int),
+            IVec2::new(center_string(hero_name.as_ref()) as c_int, 14),
             hero_name.as_ref(),
         );
         let score_text = format!("{} Au", purse);
-        output::move_cursor(Position::new(15, center_string(&score_text) as c_int));
+        output::move_cursor(IVec2::new(center_string(&score_text) as c_int, 15));
         output::write_text(&score_text);
         let year = 1900 + 0;
         let year_text = format!("{:4}", year);
-        output::write_text_at(Position::new(18, 26), &year_text);
+        output::write_text_at(IVec2::new(26, 18), &year_text);
     }
 
     output::refresh();
@@ -448,11 +449,11 @@ pub unsafe extern "C" fn total_winner() {
     }
     output::set_standout(false);
     output::write_text("\nYou have joined the elite ranks of those who have escaped the\nDungeons of Doom alive.  You journey home and sell all your loot at\na great profit and are admitted to the Fighters' Guild.\n");
-    output::write_text_at(Position::new(23, 0), "--Press space to continue--");
+    output::write_text_at(IVec2::new(0, 23), "--Press space to continue--");
     output::refresh();
     wait_for(b' ' as c_int);
     output::clear_screen();
-    output::write_text_at(Position::new(0, 0), "   Worth  Item\n");
+    output::write_text_at(IVec2::new(0, 0), "   Worth  Item\n");
     let oldpurse = purse;
     let mut obj = pack_ptr();
     while !obj.is_null() {

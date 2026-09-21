@@ -14,8 +14,9 @@ use crate::item::thing_list::{discard, new_item};
 use crate::level::glyph_is_walkable;
 use crate::misc::{aggravate, call_it, choose_str, find_obj};
 use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win, status};
-use crate::ui::{output, Position, Window};
+use crate::ui::{output, Window};
 use crate::wizard::{teleport, whatis};
+use glam::IVec2;
 
 const SLEEPTIME: c_int = 5;
 
@@ -323,7 +324,7 @@ pub unsafe extern "C" fn read_scroll() {
                             (*thing_t(tp)).t_oldch = ch as c_char;
                         }
                         if tp.is_null() || !player_has(SEEMONST) {
-                            output::write_glyph_at(Position::new(y, x), (ch as u8) as char);
+                            output::write_glyph_at(IVec2::new(x, y), (ch as u8) as char);
                         }
                     }
                 }
@@ -339,7 +340,7 @@ pub unsafe extern "C" fn read_scroll() {
                     found = true as c_uchar;
                     output::move_window_cursor(
                         window,
-                        Position::new((*thing_o(it)).o_pos.y, (*thing_o(it)).o_pos.x),
+                        IVec2::new((*thing_o(it)).o_pos.x, (*thing_o(it)).o_pos.y),
                     );
                     output::write_window_glyph(window, (FOOD as u8) as char);
                 }

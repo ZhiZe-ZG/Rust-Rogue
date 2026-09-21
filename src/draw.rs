@@ -27,7 +27,8 @@ use crate::level::{
 };
 use crate::misc::find_obj;
 use crate::rnd::rnd;
-use crate::ui::{output, Position, Window};
+use crate::ui::{output, Window};
+use glam::IVec2;
 
 // ─── Glyphs ───────────────────────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ pub(crate) unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
 
 /// Redraw one cell from the current game model.
 pub(crate) unsafe fn redraw_cell(y: c_int, x: c_int) {
-    output::write_glyph_at(Position::new(y, x), (chat_at(y, x) as u8) as char);
+    output::write_glyph_at(IVec2::new(x, y), (chat_at(y, x) as u8) as char);
 }
 
 /// Visible glyph at `(y, x)`: a monster's disguise if one stands here,
@@ -343,7 +344,7 @@ pub unsafe extern "C" fn add_pass() {
                     out_ch = PASSAGE;
                 }
                 set_seen_at(y, x);
-                output::move_cursor(Position::new(y, x));
+                output::move_cursor(IVec2::new(x, y));
                 let monst = game::monster_at(y, x);
                 if !monst.is_null() {
                     (*thing_t(monst)).t_oldch = ch;
@@ -463,7 +464,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
                 continue;
             }
 
-            output::move_cursor(Position::new(y, x));
+            output::move_cursor(IVec2::new(x, y));
             let player_room = (*thing_t(&raw mut player)).t_room;
             if !player_room.is_null()
                 && ((*player_room).r_flags & (ISGONE as c_short | ISDARK as c_short)) == ISDARK
@@ -528,7 +529,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
         running = false as c_uchar;
     }
     if running == 0 || jump == 0 {
-        output::write_glyph_at(Position::new(hero.y, hero.x), '@');
+        output::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
     }
 }
 
@@ -577,7 +578,7 @@ pub unsafe extern "C" fn erase_lamp(pos: *mut CCoord, rp: *mut CRoom) {
             if y == hero.y && x == hero.x {
                 continue;
             }
-            output::move_cursor(Position::new(y, x));
+            output::move_cursor(IVec2::new(x, y));
             if output::glyph_at_cursor() as u8 as c_char == FLOOR {
                 output::write_glyph(' ');
             }
@@ -623,7 +624,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut CCoord) {
     let x_end = x0 + (*rp).r_max.x;
     let mut y = y0;
     while y < y_end {
-        output::move_cursor(Position::new(y, x0));
+        output::move_cursor(IVec2::new(x0, y));
         let mut x = x0;
         while x < x_end {
             let tp = game::monster_at(y, x);
@@ -633,7 +634,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut CCoord) {
                 if cchar_at_cursor() != ch {
                     output::write_glyph((ch as u8) as char);
                 } else {
-                    output::move_cursor(Position::new(y, x + 1));
+                    output::move_cursor(IVec2::new(x + 1, y));
                 }
             } else {
                 (*thing_t(tp)).t_oldch = ch;
@@ -693,7 +694,7 @@ pub unsafe extern "C" fn leave_room(cp: *mut CCoord) {
     while y < y_end {
         let mut x = x0;
         while x < x_end {
-            output::move_cursor(Position::new(y, x));
+            output::move_cursor(IVec2::new(x, y));
             let ch = cchar_at_cursor();
             if ch == FLOOR {
                 if floor == SPACE && ch != SPACE {

@@ -9,7 +9,8 @@ use crate::entity::player::{CStats, CThing, CThingMonster};
 use crate::game::EQUIPMENT;
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::terminal as cur;
-use crate::ui::{Position, Window};
+use crate::ui::Window;
+use glam::IVec2;
 
 const ESCAPE: c_int = 27;
 const MAXSTR: usize = 1024;
@@ -56,9 +57,9 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 }
 
 /// Move the standard-screen cursor.
-pub fn move_cursor(position: Position) {
+pub fn move_cursor(position: IVec2) {
     unsafe {
-        cur::move_(position.row, position.col);
+        cur::move_(position.y, position.x);
     }
 }
 
@@ -70,9 +71,9 @@ pub fn write_glyph(glyph: char) {
 }
 
 /// Move to a position and write one glyph.
-pub fn write_glyph_at(position: Position, glyph: char) {
+pub fn write_glyph_at(position: IVec2, glyph: char) {
     unsafe {
-        cur::mvaddch(position.row, position.col, glyph as c_uint);
+        cur::mvaddch(position.y, position.x, glyph as c_uint);
     }
 }
 
@@ -82,9 +83,9 @@ pub fn glyph_at_cursor() -> char {
 }
 
 /// Read the glyph displayed at a position on the standard screen.
-pub fn glyph_at(position: Position) -> char {
+pub fn glyph_at(position: IVec2) -> char {
     unsafe {
-        char::from_u32((cur::mvinch(position.row, position.col) as u32) & 0xff).unwrap_or('\0')
+        char::from_u32((cur::mvinch(position.y, position.x) as u32) & 0xff).unwrap_or('\0')
     }
 }
 
@@ -129,10 +130,10 @@ pub fn write_text(text: &str) {
 }
 
 /// Move to a position and write UTF-8 text.
-pub fn write_text_at(position: Position, text: &str) {
+pub fn write_text_at(position: IVec2, text: &str) {
     unsafe {
         let text = CString::new(text).expect("terminal text contains a NUL byte");
-        cur::mvaddstr(position.row, position.col, text.as_ptr());
+        cur::mvaddstr(position.y, position.x, text.as_ptr());
     }
 }
 
@@ -144,8 +145,8 @@ pub fn set_leave_cursor(window: Window, enabled: bool) {
 }
 
 /// Return the current cursor position in a window.
-pub fn window_cursor(window: Window) -> Position {
-    unsafe { Position::new(cur::getcury(window.as_raw()), cur::getcurx(window.as_raw())) }
+pub fn window_cursor(window: Window) -> IVec2 {
+    unsafe { IVec2::new(cur::getcurx(window.as_raw()), cur::getcury(window.as_raw())) }
 }
 
 /// Clear a window.
@@ -156,9 +157,9 @@ pub fn clear_window(window: Window) {
 }
 
 /// Move a window's cursor.
-pub fn move_window_cursor(window: Window, position: Position) {
+pub fn move_window_cursor(window: Window, position: IVec2) {
     unsafe {
-        cur::wmove(window.as_raw(), position.row, position.col);
+        cur::wmove(window.as_raw(), position.y, position.x);
     }
 }
 
@@ -255,7 +256,7 @@ unsafe fn append_message(text: &str) {
 #[cfg(not(test))]
 unsafe fn display_message(text: &str) -> MessageResult {
     if text.is_empty() {
-        move_cursor(Position::new(0, 0));
+        move_cursor(IVec2::new(0, 0));
         clear_to_end_of_line();
         mpos = 0;
         return MessageResult::Displayed;
@@ -317,7 +318,7 @@ pub unsafe fn endmsg() -> MessageResult {
     }
 
     if mpos != 0 {
-        write_text_at(Position::new(0, mpos), "--More--");
+        write_text_at(IVec2::new(mpos, 0), "--More--");
         refresh();
 
         if msg_esc == false as c_uchar {
@@ -347,7 +348,7 @@ pub unsafe fn endmsg() -> MessageResult {
         }
     }
 
-    write_text_at(Position::new(0, 0), &pending);
+    write_text_at(IVec2::new(0, 0), &pending);
     clear_to_end_of_line();
     mpos = next_position;
     let mut state = MESSAGE_STATE
@@ -416,7 +417,7 @@ pub unsafe fn status() {
     s_hungry = hungry_state;
 
     if stat_msg != false as c_uchar {
-        move_cursor(Position::new(0, 0));
+        move_cursor(IVec2::new(0, 0));
         msg_str(&format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -432,7 +433,7 @@ pub unsafe fn status() {
             w = hpwidth as usize,
         ));
     } else {
-        move_cursor(Position::new(STATLINE, 0));
+        move_cursor(IVec2::new(0, STATLINE));
         let line = format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -457,11 +458,11 @@ pub unsafe fn status() {
 #[cfg(not(test))]
 pub unsafe fn show_win(message: &str) {
     let window = Window::from_raw(hw);
-    move_window_cursor(window, Position::new(0, 0));
+    move_window_cursor(window, IVec2::new(0, 0));
     write_window_text(window, message);
     touch_window(window);
     let hero = (*thing_t(&raw mut player)).t_pos;
-    move_window_cursor(window, Position::new(hero.y, hero.x));
+    move_window_cursor(window, IVec2::new(hero.x, hero.y));
     refresh_window(window);
     wait_for(' ' as c_int);
     let standard_screen = Window::from_raw(stdscr);

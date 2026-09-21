@@ -9,18 +9,9 @@ pub mod output;
 pub mod runtime;
 mod terminal;
 
-/// A terminal cell position in row/column order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Position {
-    pub row: i32,
-    pub col: i32,
-}
-
-impl Position {
-    pub const fn new(row: i32, col: i32) -> Self {
-        Self { row, col }
-    }
-}
+/// A terminal cell position, stored as an integer 2D vector where `x` is the
+/// column and `y` is the row.
+pub use glam::IVec2;
 
 /// Opaque handle to a terminal window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

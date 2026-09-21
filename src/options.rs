@@ -4,7 +4,8 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 use crate::draw::{erase_lamp, look};
 use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster};
 use crate::ui::input::{self, readchar, wait_for};
-use crate::ui::{output, Position, Window};
+use crate::ui::{output, Window};
+use glam::IVec2;
 
 const ESCAPE: c_int = 27;
 const NORM: c_int = 0;
@@ -168,7 +169,7 @@ pub unsafe extern "C" fn option() {
         output::write_window_glyph(options_window, '\n');
     }
 
-    output::move_window_cursor(options_window, Position::new(0, 0));
+    output::move_window_cursor(options_window, IVec2::new(0, 0));
     for index in 0..optlist.len() {
         let item = &mut optlist[index];
         pr_optname_slot(item);
@@ -177,7 +178,7 @@ pub unsafe extern "C" fn option() {
             break;
         }
         if retval == MINUS && index > 0 {
-            output::move_window_cursor(options_window, Position::new((index as i32) - 1, 0));
+            output::move_window_cursor(options_window, IVec2::new(0, (index as i32) - 1));
             let prev = index as isize - 2;
             if prev >= 0 {
                 let _ = prev;
@@ -185,7 +186,7 @@ pub unsafe extern "C" fn option() {
         }
     }
 
-    output::move_window_cursor(options_window, Position::new(23, 0));
+    output::move_window_cursor(options_window, IVec2::new(0, 23));
     paint(hw, "--Press space to continue--");
     output::refresh_window(options_window);
     wait_for(' ' as c_int);
@@ -252,7 +253,7 @@ pub unsafe extern "C" fn get_bool(vp: *mut c_void, win: *mut c_void) -> c_int {
             ESCAPE => return QUIT,
             ch if ch == '-' as c_int => return MINUS,
             _ => {
-                output::move_window_cursor(window, Position::new(origin.row, origin.col + 10));
+                output::move_window_cursor(window, IVec2::new(origin.x + 10, origin.y));
                 output::write_window_text(window, "(T or F)");
             }
         }
@@ -388,7 +389,7 @@ pub unsafe extern "C" fn get_inv_t(vp: *mut c_void, win: *mut c_void) -> c_int {
             ESCAPE => return QUIT,
             ch if ch == '-' as c_int => return MINUS,
             _ => {
-                output::move_window_cursor(window, Position::new(origin.row, origin.col + 15));
+                output::move_window_cursor(window, IVec2::new(origin.x + 15, origin.y));
                 output::write_window_text(window, "(O, S, or C)");
             }
         }

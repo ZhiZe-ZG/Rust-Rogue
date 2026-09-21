@@ -15,7 +15,8 @@ use crate::item::thing_list::discard;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
 use crate::startup::roll;
 use crate::ui::output::{self, endmsg, msg_str, show_win, status};
-use crate::ui::{Position, Window};
+use crate::ui::Window;
+use glam::IVec2;
 use std::ffi::CStr;
 
 /// Potion and status-effect handling for the Rust FFI bridge.
@@ -353,7 +354,7 @@ pub unsafe extern "C" fn quaff() {
                         show = true;
                         output::move_window_cursor(
                             window,
-                            Position::new((*thing_o(tp)).o_pos.y, (*thing_o(tp)).o_pos.x),
+                            IVec2::new((*thing_o(tp)).o_pos.x, (*thing_o(tp)).o_pos.y),
                         );
                         output::write_window_glyph(window, (MAGIC as u8) as char);
                         (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know =
@@ -369,7 +370,7 @@ pub unsafe extern "C" fn quaff() {
                             show = true;
                             output::move_window_cursor(
                                 window,
-                                Position::new((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x),
+                                IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
                             );
                             output::write_window_glyph(window, (MAGIC as u8) as char);
                         }
@@ -511,7 +512,7 @@ pub unsafe extern "C" fn invis_on() {
     while !mp.is_null() {
         if thing_has(mp, ISINVIS) && see_monst(mp) != 0 && !player_has(ISHALU) {
             output::write_glyph_at(
-                Position::new((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x),
+                IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
                 ((*thing_t(mp)).t_disguise as u8) as char,
             );
         }
@@ -527,9 +528,9 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
     let mut add_new = 0;
 
     while !mp.is_null() {
-        output::move_cursor(Position::new(
-            (*thing_t(mp)).t_pos.y,
+        output::move_cursor(IVec2::new(
             (*thing_t(mp)).t_pos.x,
+            (*thing_t(mp)).t_pos.y,
         ));
         let can_see = see_monst(mp) != 0;
         if turn_off != 0 {
@@ -572,7 +573,7 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
 pub unsafe extern "C" fn seen_stairs() -> c_uchar {
     let tp: *mut CThing;
 
-    output::move_cursor(Position::new(stairs.y, stairs.x));
+    output::move_cursor(IVec2::new(stairs.x, stairs.y));
     if output::glyph_at_cursor() as c_int == STAIRS {
         return 1;
     }

@@ -6,7 +6,8 @@ use std::os::raw::{c_int, c_uchar, c_void};
 use crate::globals::{hw, lower_msg, monsters, mpos};
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::output::msg_str;
-use crate::ui::{output, Position, Window};
+use crate::ui::{output, Window};
+use glam::IVec2;
 
 const ESCAPE: c_int = 27;
 
@@ -181,7 +182,7 @@ pub(crate) unsafe fn help() {
     mpos = 0;
 
     if helpch != b'*' {
-        output::move_cursor(Position::new(0, 0));
+        output::move_cursor(IVec2::new(0, 0));
         if let Some(entry) = HELP_ENTRIES.iter().find(|entry| entry.ch == helpch) {
             lower_msg = true as c_uchar;
             msg_str(&format!(
@@ -216,9 +217,9 @@ pub(crate) unsafe fn help() {
         let count = count as c_int;
         output::move_window_cursor(
             help_window,
-            Position::new(
-                count % numprint,
+            IVec2::new(
                 if count >= numprint { COLS / 2 } else { 0 },
+                count % numprint,
             ),
         );
         if entry.ch != 0 {
@@ -227,7 +228,7 @@ pub(crate) unsafe fn help() {
         output::write_window_text(help_window, &entry.desc.to_string_lossy());
     }
 
-    output::move_window_cursor(help_window, Position::new(LINES - 1, 0));
+    output::move_window_cursor(help_window, IVec2::new(0, LINES - 1));
     output::write_window_text(help_window, "--Press space to continue--");
     output::refresh_window(help_window);
     wait_for(b' ' as c_int);

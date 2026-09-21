@@ -11,7 +11,8 @@ use crate::state::{rs_restore_file, rs_save_file};
 use crate::ui::input::{self, readchar};
 use crate::ui::output::{self, msg_str};
 use crate::ui::runtime;
-use crate::ui::{Position, Window};
+use crate::ui::Window;
+use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr;
@@ -205,7 +206,7 @@ pub unsafe extern "C" fn save_file(savef: *mut CFile) {
     let header = format!("{} x {}\n", lines, cols);
     let version_ptr = &raw const version;
 
-    runtime::move_physical_cursor(Position::new(0, cols - 1), Position::new(lines - 1, 0));
+    runtime::move_physical_cursor(IVec2::new(cols - 1, 0), IVec2::new(0, lines - 1));
     putchar('\n' as c_int);
     runtime::shutdown();
     resetltchars();
@@ -289,7 +290,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
         return 0;
     }
 
-    hw = runtime::create_window(Position::new(LINES, COLS), Position::new(0, 0)).into_raw();
+    hw = runtime::create_window(IVec2::new(COLS, LINES), IVec2::new(0, 0)).into_raw();
     setup();
     let _ = rs_restore_file(inf.cast());
 

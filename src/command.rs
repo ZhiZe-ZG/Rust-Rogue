@@ -33,8 +33,9 @@ use crate::save::save_game;
 use crate::startup::{quit, shell};
 use crate::ui::input::readchar;
 use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
-use crate::ui::{Position, Window};
+use crate::ui::Window;
 use crate::wizard::{create_obj, show_map, teleport, whatis};
+use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
@@ -316,7 +317,7 @@ pub unsafe extern "C" fn command() {
         status();
         lastscore = purse;
         let hero = hero_pos();
-        output::move_cursor(Position::new(hero.y, hero.x));
+        output::move_cursor(IVec2::new(hero.x, hero.y));
         if !((running != 0 || count != 0) && jump != 0) {
             output::refresh(); // Draw screen
         }

@@ -15,7 +15,8 @@ use crate::draw::{terrain_chat_at, FLOOR, PASSAGE};
 use crate::entity::player::{CCoord, CRoom, CThing};
 use crate::game;
 use crate::rnd::rnd;
-use crate::ui::{output, Position};
+use crate::ui::output;
+use glam::IVec2;
 
 use super::level::{with_current_level_mut, LevelFlags};
 use super::symbols::{
@@ -361,9 +362,9 @@ unsafe fn place_hero() {
     );
     enter_room(&raw mut (*thing_t(&raw mut player)).t_pos);
     output::write_glyph_at(
-        Position::new(
-            (*thing_t(&raw mut player)).t_pos.y,
+        IVec2::new(
             (*thing_t(&raw mut player)).t_pos.x,
+            (*thing_t(&raw mut player)).t_pos.y,
         ),
         (PLAYER as u8) as char,
     );
