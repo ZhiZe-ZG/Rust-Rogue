@@ -14,7 +14,7 @@ use crate::draw::{self, chat_at, place_at, winat as draw_winat};
 use crate::entity::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::item::thing_list::{attach, discard};
 use crate::item::things::{dropcheck, inv_name};
-use crate::level::glyph_is_walkable;
+use crate::level::tile_is_walkable;
 
 const NO_WEAPON: c_int = -1;
 
@@ -216,7 +216,7 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
         (*o).o_pos.x += xdelta;
 
         let ch = winat((*o).o_pos.y, (*o).o_pos.x);
-        if glyph_is_walkable(ch as u8) && ch != DOOR {
+        if tile_is_walkable(ch as u8) && ch != DOOR {
             if cansee((*o).o_pos.y, (*o).o_pos.x) != 0 && terse == 0 {
                 output::write_glyph_at(
                     IVec2::new((*o).o_pos.x, (*o).o_pos.y),

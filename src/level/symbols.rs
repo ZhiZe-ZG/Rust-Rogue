@@ -15,7 +15,7 @@ use crate::entity::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThing
 pub(crate) use crate::item::potions::turn_see;
 pub(crate) use crate::item::thing_list::{attach, free_list, new_item};
 pub(crate) use crate::item::things::new_thing;
-pub(crate) use crate::level::glyph_is_walkable;
+pub(crate) use crate::level::tile_is_walkable;
 
 use crate::config::GameConfig;
 

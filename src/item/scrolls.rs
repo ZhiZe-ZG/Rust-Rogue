@@ -11,7 +11,7 @@ use crate::game::EQUIPMENT;
 use crate::init::pick_color;
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::thing_list::{discard, new_item};
-use crate::level::glyph_is_walkable;
+use crate::level::tile_is_walkable;
 use crate::misc::{aggravate, call_it, choose_str, find_obj};
 use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win, status};
 use crate::ui::{output, Window};
@@ -270,7 +270,7 @@ pub unsafe extern "C" fn read_scroll() {
                         continue;
                     }
                     let ch = winat(y, x);
-                    if !glyph_is_walkable(ch as u8) {
+                    if !tile_is_walkable(ch as u8) {
                         continue;
                     }
                     if ch == SCROLL {

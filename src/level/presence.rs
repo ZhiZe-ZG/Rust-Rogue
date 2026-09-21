@@ -20,7 +20,7 @@ use glam::IVec2;
 
 use super::level::{with_current_level_mut, LevelFlags};
 use super::symbols::{
-    amulet, attach, enter_room, give_pack, glyph_is_walkable, level, lvl_obj, max_level, mlist,
+    amulet, attach, enter_room, give_pack, tile_is_walkable, level, lvl_obj, max_level, mlist,
     new_item, new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs,
     stairs, thing_o, thing_t, turn_see, visuals, AMULET, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY,
     ISMEAN, PLAYER, SEEMONST,
@@ -93,7 +93,7 @@ pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: b
         let ch = terrain_chat_at((*cp).y, (*cp).x);
 
         if monst {
-            if game::monster_at((*cp).y, (*cp).x).is_null() && glyph_is_walkable(ch as u8) {
+            if game::monster_at((*cp).y, (*cp).x).is_null() && tile_is_walkable(ch as u8) {
                 return true;
             }
         } else if ch == compchar {

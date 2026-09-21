@@ -63,22 +63,22 @@ impl Tile {
 /// Blank cells and wall glyphs are solid. ASCII letters represent monsters,
 /// so they are also blocked; terrain, traps, stairs, and item glyphs remain
 /// traversable.
-pub const fn glyph_is_walkable(glyph: u8) -> bool {
+pub const fn tile_is_walkable(glyph: u8) -> bool {
     !matches!(glyph, b' ' | b'|' | b'-') && !glyph.is_ascii_alphabetic()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::glyph_is_walkable;
+    use super::tile_is_walkable;
 
     #[test]
     fn glyph_walkability_matches_map_semantics() {
         for blocked in [b' ', b'|', b'-', b'A', b'z'] {
-            assert!(!glyph_is_walkable(blocked));
+            assert!(!tile_is_walkable(blocked));
         }
 
         for walkable in [b'.', b'#', b'+', b'^', b'%', b'!', b'?', b')'] {
-            assert!(glyph_is_walkable(walkable));
+            assert!(tile_is_walkable(walkable));
         }
     }
 }

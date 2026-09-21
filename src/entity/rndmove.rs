@@ -3,7 +3,7 @@ use std::os::raw::{c_char, c_int, c_uchar};
 use crate::entity::chase::diag_ok;
 use crate::entity::player::{CCoord, CThing, CThingMonster, CThingObject};
 use crate::item::scrolls::ScrollType;
-use crate::level::glyph_is_walkable;
+use crate::level::tile_is_walkable;
 use crate::rnd::rnd;
 
 const SCROLL: c_char = b'?' as c_char;
@@ -50,7 +50,7 @@ pub unsafe extern "C" fn rndmove(who: *mut CThing) -> *mut CCoord {
     }
 
     let ch = winat(RET.y, RET.x);
-    if !glyph_is_walkable(ch as u8) {
+    if !tile_is_walkable(ch as u8) {
         RET = pos;
         return &raw mut RET;
     }

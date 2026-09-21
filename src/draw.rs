@@ -23,7 +23,7 @@ use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::game;
 use crate::level::Trap;
 use crate::level::{
-    door_open, glyph_is_walkable, with_current_level, with_current_level_mut, Tile,
+    door_open, tile_is_walkable, with_current_level, with_current_level_mut, Tile,
 };
 use crate::misc::find_obj;
 use crate::rnd::rnd;
@@ -429,8 +429,8 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             {
                 if hero.x != x
                     && hero.y != y
-                    && !glyph_is_walkable(chat_at(y, hero.x) as u8)
-                    && !glyph_is_walkable(chat_at(hero.y, x) as u8)
+                    && !tile_is_walkable(chat_at(y, hero.x) as u8)
+                    && !tile_is_walkable(chat_at(hero.y, x) as u8)
                 {
                     continue;
                 }

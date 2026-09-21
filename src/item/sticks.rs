@@ -5,7 +5,7 @@ use crate::entity::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThin
 use crate::game::EQUIPMENT;
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
-use crate::level::glyph_is_walkable;
+use crate::level::tile_is_walkable;
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
@@ -214,7 +214,7 @@ pub unsafe extern "C" fn do_zap() {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
-            while glyph_is_walkable(winat(y, x) as u8) {
+            while tile_is_walkable(winat(y, x) as u8) {
                 y += delta.y;
                 x += delta.x;
             }
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn do_zap() {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
-            while glyph_is_walkable(winat(y, x) as u8) {
+            while tile_is_walkable(winat(y, x) as u8) {
                 y += delta.y;
                 x += delta.x;
             }
