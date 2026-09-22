@@ -1,3 +1,7 @@
+//! Tile vocabulary for the Rust-side level representation.
+//!
+//! A [`Tile`] describes logical map content; its on-screen glyph is chosen at
+//! draw time.
 /// Semantic tile kinds used by Rust level-generation structures.
 ///
 /// These values describe logical map content, independent of the concrete

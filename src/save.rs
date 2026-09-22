@@ -1,3 +1,6 @@
+//! Game save, restore, and shell-escape handling.
+//!
+//! Ported from `src/c/save.c` to Rust.
 use crate::entity::player::{CThing, CThingMonster};
 use crate::machdep::{resetltchars, setup};
 use crate::mdport::{

@@ -1,15 +1,14 @@
+//! All the fighting gets done here.
+//!
+//! Ported from `src/c/fight.c` to Rust.
+//!
+//! Rogue: Exploring the Dungeons of Doom
+//! Copyright (C) 1980-1983, 1985, 1999 Michael Toy, Ken Arnold and Glenn Wichman
+//! All rights reserved.
+//!
+//! See the file LICENSE.TXT for full copyright and licensing information.
+
 use crate::rnd::rnd;
-/*
- * All the fighting gets done here.
- *
- * Ported from fight.c to Rust.
- *
- * Rogue: Exploring the Dungeons of Doom
- * Copyright (C) 1980-1983, 1985, 1999 Michael Toy, Ken Arnold and Glenn Wichman
- * All rights reserved.
- *
- * See the file LICENSE.TXT for full copyright and licensing information.
- */
 
 use crate::entity::chase::{runto, see_monst};
 use crate::entity::monsters::save;

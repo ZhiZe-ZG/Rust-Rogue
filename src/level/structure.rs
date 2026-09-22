@@ -1,3 +1,4 @@
+//! A rectangular grid of level [`Tile`]s used by generation.
 use glam::IVec2;
 
 use super::tile::Tile;

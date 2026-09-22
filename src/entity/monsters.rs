@@ -1,3 +1,6 @@
+//! Monster creation and behaviour.
+//!
+//! Ported from `src/c/monsters.c` to Rust.
 use crate::config::GameConfig;
 use crate::daemon::{fuse, lengthen};
 use crate::daemons::unconfuse;

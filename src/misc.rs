@@ -1,3 +1,7 @@
+//! Miscellaneous game routines.
+//!
+//! Ported from `src/c/misc.c` to Rust: gold, hunger, the floor map, and other
+//! helpers shared across the game loop.
 use crate::config::GameConfig;
 use crate::daemon::{extinguish, fuse};
 use crate::daemons::nohaste;

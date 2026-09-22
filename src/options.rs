@@ -1,3 +1,6 @@
+//! Runtime option handling and the option screen.
+//!
+//! Ported from `src/c/options.c` to Rust.
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 

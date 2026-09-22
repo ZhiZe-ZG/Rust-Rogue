@@ -1,17 +1,16 @@
+//! All the daemon and fuse callback functions.
+//!
+//! Ported from `src/c/daemons.c` to Rust.
+//!
+//! Rogue: Exploring the Dungeons of Doom
+//! Copyright (C) 1980-1983, 1985, 1999 Michael Toy, Ken Arnold and Glenn Wichman
+//! All rights reserved.
+//!
+//! See the file LICENSE.TXT for full copyright and licensing information.
+
 use crate::rnd::rnd;
 use crate::ui::output;
 use glam::IVec2;
-/*
- * All the daemon and fuse callback functions.
- *
- * Ported from daemons.c to Rust.
- *
- * Rogue: Exploring the Dungeons of Doom
- * Copyright (C) 1980-1983, 1985, 1999 Michael Toy, Ken Arnold and Glenn Wichman
- * All rights reserved.
- *
- * See the file LICENSE.TXT for full copyright and licensing information.
- */
 
 use crate::ui::output::{addmsg_str, msg_str};
 use std::ffi::CStr;

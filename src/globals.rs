@@ -1,3 +1,7 @@
+//! Global game data shared across the ported C modules.
+//!
+//! Mirrors the process-wide storage the original C code declared in
+//! `extern.c` and `init.c`: material tables, monster state, and other globals.
 use crate::config::GameConfig;
 use crate::entity::player::{
     CCoord as PlayerCCoord, CPlace as PlayerCPlace, CRoom as PlayerCRoom, CStats as PlayerCStats,

@@ -1,3 +1,7 @@
+//! Scoreboard file I/O.
+//!
+//! Ported from `src/c/score.c` to Rust; reads and writes the legacy on-disk
+//! top-ten score-file format.
 use crate::globals::{numscores, scoreboard};
 use std::os::raw::{c_char, c_int, c_uint, c_ushort};
 

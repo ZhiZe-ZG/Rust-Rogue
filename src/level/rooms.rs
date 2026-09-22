@@ -1,3 +1,7 @@
+//! Room placement for dungeon generation.
+//!
+//! Rust-side reimplementation of the room logic from `src/c/rooms.c` and
+//! `src/c/new_level.c`.
 use crate::rnd::rnd;
 use glam::IVec2;
 

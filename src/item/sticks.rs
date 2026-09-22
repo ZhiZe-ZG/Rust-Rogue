@@ -1,3 +1,6 @@
+//! Wands and staves (the legacy `sticks`): zapping and their bolt effects.
+//!
+//! Ported from `src/c/sticks.c` to Rust.
 use crate::entity::chase::{cansee, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};

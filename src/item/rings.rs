@@ -1,3 +1,6 @@
+//! Rings: putting them on, taking them off, and their magical effects.
+//!
+//! Ported from `src/c/rings.c` to Rust.
 use crate::entity::player::{CThing, CThingObject};
 use crate::item::potions::invis_on;
 use crate::rnd::rnd;

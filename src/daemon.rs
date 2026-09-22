@@ -1,15 +1,12 @@
-/*
- * Contains functions for dealing with things that happen in the future
- * (daemons and fuses).
- *
- * Ported from daemon.c to Rust.
- *
- * Rogue: Exploring the Dungeons of Doom
- * Copyright (C) 1980-1983, 1985, 1999 Michael Toy, Ken Arnold and Glenn Wichman
- * All rights reserved.
- *
- * See the file LICENSE.TXT for full copyright and licensing information.
- */
+//! Delayed actions that happen in the future — daemons and fuses.
+//!
+//! Ported from `src/c/daemon.c` to Rust.
+//!
+//! Rogue: Exploring the Dungeons of Doom
+//! Copyright (C) 1980-1983, 1985, 1999 Michael Toy, Ken Arnold and Glenn Wichman
+//! All rights reserved.
+//!
+//! See the file LICENSE.TXT for full copyright and licensing information.
 
 use std::os::raw::{c_int, c_void};
 

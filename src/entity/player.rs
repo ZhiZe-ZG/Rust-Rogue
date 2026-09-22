@@ -1,3 +1,7 @@
+//! Player movement, running, and the player/monster `THING` types.
+//!
+//! Ported from `src/c/move.c` to Rust, together with the shared `THING`,
+//! `PLACE`, and `COORD` layouts the rest of the port relies on.
 use crate::config::GameConfig;
 use crate::draw::{
     chat_at, enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room,

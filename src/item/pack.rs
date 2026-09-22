@@ -1,3 +1,6 @@
+//! Pack and inventory management.
+//!
+//! Ported from `src/c/pack.c` to Rust.
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 

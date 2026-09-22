@@ -1,3 +1,6 @@
+//! Weapons: wielding, throwing, and weapon initialization.
+//!
+//! Ported from `src/c/weapons.c` to Rust.
 use crate::entity::chase::cansee;
 use crate::entity::fight::fight;
 use crate::game::EQUIPMENT;

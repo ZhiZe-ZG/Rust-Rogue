@@ -1,3 +1,6 @@
+//! Death handling, the scoreboard display, and tombstones.
+//!
+//! Ported from `src/c/rip.c` to Rust.
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_ushort};
 

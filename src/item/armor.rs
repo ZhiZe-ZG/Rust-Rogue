@@ -1,3 +1,6 @@
+//! Armor: wearing, removing, and protection.
+//!
+//! Ported from `src/c/armor.c` to Rust.
 use crate::daemon::{do_daemons, do_fuses};
 use crate::entity::player::{CThing, CThingObject};
 use crate::game::EQUIPMENT;

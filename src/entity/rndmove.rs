@@ -1,3 +1,6 @@
+//! Random movement for confused or otherwise disoriented monsters.
+//!
+//! Split out from the movement logic originally found in `src/c/move.c`.
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::chase::diag_ok;

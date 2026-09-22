@@ -1,3 +1,6 @@
+//! Potions and quaffing.
+//!
+//! Ported from `src/c/potions.c` to Rust.
 use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 use std::ptr;

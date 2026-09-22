@@ -1,3 +1,6 @@
+//! Scrolls and reading them.
+//!
+//! Ported from `src/c/scrolls.c` to Rust.
 use crate::rnd::rnd;
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};

@@ -1,16 +1,15 @@
+//! Global variable initialization.
+//!
+//! Ported from `src/c/init.c` to Rust.
+//!
+//! Rogue: Exploring the Dungeons of Doom
+//! Copyright (C) 1980-1983, 1985, 1999 Michael Toy, Ken Arnold and Glenn Wichman
+//! All rights reserved.
+//!
+//! See the file LICENSE.TXT for full copyright and licensing information.
+
 use crate::game::EQUIPMENT;
 use crate::rnd::rnd;
-/*
- * Global variable initialization.
- *
- * Ported from init.c to Rust.
- *
- * Rogue: Exploring the Dungeons of Doom
- * Copyright (C) 1980-1983, 1985, 1999 Michael Toy, Ken Arnold and Glenn Wichman
- * All rights reserved.
- *
- * See the file LICENSE.TXT for full copyright and licensing information.
- */
 
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 

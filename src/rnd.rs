@@ -1,3 +1,7 @@
+//! Random number generation.
+//!
+//! Provides the legacy `rnd()` contract used throughout the port, backed by a
+//! shared, seedable RNG so generated levels and save files stay deterministic.
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::sync::{Mutex, OnceLock};

@@ -1,3 +1,6 @@
+//! Object information tables and object naming/inventory helpers.
+//!
+//! Ported from `src/c/things.c` to Rust.
 use crate::daemon::extinguish;
 use crate::daemons::unsee;
 use crate::game::EQUIPMENT;
