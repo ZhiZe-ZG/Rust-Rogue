@@ -110,7 +110,6 @@ static WAND_MONS: [c_char; 26] = [
 ];
 
 unsafe extern "C" {
-    static mut level: c_int;
     static mut max_level: c_int;
     static mut mlist: *mut CThing;
     static mut monsters: [CMonster; 26];
@@ -158,6 +157,7 @@ unsafe fn iswearing(which: RingType) -> bool {
 #[no_mangle]
 pub unsafe fn randmonster(wander: bool) -> c_char {
     let mons = if wander { &WAND_MONS } else { &LVL_MONS };
+    let level = crate::game::current_depth();
     loop {
         let mut d = level + (rnd(10) - 6);
         if d < 0 {
@@ -176,6 +176,7 @@ pub unsafe fn randmonster(wander: bool) -> c_char {
 /// Initializes a freshly allocated monster thing and places it on the map.
 #[no_mangle]
 pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: *mut CCoord) {
+    let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
         lev_add = 0;
@@ -335,7 +336,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
 #[no_mangle]
 pub unsafe extern "C" fn give_pack(tp: *mut CThing) {
-    if level >= max_level
+    if crate::game::current_depth() >= max_level
         && rnd(100) < monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry
     {
         attach(&mut (*thing_t(tp)).t_pack, new_thing());

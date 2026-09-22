@@ -20,10 +20,10 @@ use glam::IVec2;
 
 use super::level::{with_current_level_mut, LevelFlags};
 use super::symbols::{
-    amulet, attach, enter_room, give_pack, tile_is_walkable, level, lvl_obj, max_level, mlist,
-    new_item, new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs,
-    stairs, thing_o, thing_t, turn_see, visuals, AMULET, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY,
-    ISMEAN, PLAYER, SEEMONST,
+    amulet, attach, enter_room, give_pack, tile_is_walkable, lvl_obj, max_level, mlist, new_item,
+    new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, stairs,
+    thing_o, thing_t, turn_see, visuals, AMULET, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN,
+    PLAYER, SEEMONST,
 };
 use super::tile::Tile;
 use super::trap::Trap;
@@ -145,7 +145,8 @@ unsafe fn treas_room() {
         nm = spots;
     }
 
-    level += 1;
+    let depth = game::current_depth();
+    game::set_current_depth(depth + 1);
     while nm > 0 {
         if find_floor(
             rp as *mut CRoom,
@@ -160,7 +161,7 @@ unsafe fn treas_room() {
         }
         nm -= 1;
     }
-    level -= 1;
+    game::set_current_depth(depth);
 }
 
 /// Scatter gold and monsters through every active room.
@@ -173,6 +174,7 @@ unsafe fn treas_room() {
 /// ```
 unsafe fn place_room_contents() {
     let mut mp = CCoord { x: 0, y: 0 };
+    let level = game::current_depth();
 
     for i in 0..GameConfig::MAX_ROOMS {
         let rp = (&raw mut rooms[i]) as *mut CRoom;
@@ -215,6 +217,8 @@ unsafe fn place_room_contents() {
 /// Uses globals: amulet, level, max_level, lvl_obj, places (via chat).
 /// ```
 unsafe fn put_things() {
+    let level = game::current_depth();
+
     // Once you have found the amulet, the only way to get new stuff is
     // go down into the dungeon.
     if amulet && level < max_level {
@@ -283,6 +287,8 @@ unsafe fn put_things() {
 /// Uses globals: level, ntraps, places, stairs.
 /// ```
 unsafe fn place_traps() {
+    let level = game::current_depth();
+
     if rnd(10) >= level {
         return;
     }

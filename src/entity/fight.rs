@@ -129,7 +129,6 @@ unsafe extern "C" {
     static mut vf_hit: c_int;
     static mut max_hit: c_int;
     static mut purse: c_int;
-    static mut level: c_int;
     static mut max_level: c_int;
 }
 
@@ -434,6 +433,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 }
             } else if mtype == b'L' as c_char {
                 // Leprechaun: steals gold
+                let level = crate::game::current_depth();
                 let lastpurse = purse;
                 purse -= rnd(50 + 10 * level) + 2; // GOLDCALC
                 if save(VS_MAGIC) == 0 {
@@ -862,6 +862,7 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
     } else if mtype == b'L' as c_char {
         let mut gold_pos = CCoord { x: 0, y: 0 };
         let tp_room = (*thing_t(tp)).t_room;
+        let level = crate::game::current_depth();
         if !tp_room.is_null()
             && fallpos(&mut (*thing_t(tp)).t_pos, &mut (*tp_room).r_gold) != 0
             && level >= max_level

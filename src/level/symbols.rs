@@ -41,7 +41,6 @@ pub(crate) const GOLDGRP: c_int = 1;
 // -- C booleans (flow through `c_uchar`) --
 
 unsafe extern "C" {
-    pub(crate) static mut level: c_int;
     pub(crate) static mut max_level: c_int;
     pub(crate) static mut amulet: bool;
     pub(crate) static mut rooms: [CRoom; GameConfig::MAX_ROOMS];

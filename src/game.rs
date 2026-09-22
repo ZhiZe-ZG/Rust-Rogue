@@ -215,6 +215,18 @@ pub fn with_current_level_mut<R>(operation: impl FnOnce(&mut Level) -> R) -> R {
     CURRENT_LEVEL.with_mut(operation)
 }
 
+/// Read the current dungeon depth (`Level::depth`).
+#[inline]
+pub fn current_depth() -> i32 {
+    CURRENT_LEVEL.with(|level| level.depth)
+}
+
+/// Set the current dungeon depth (`Level::depth`).
+#[inline]
+pub fn set_current_depth(depth: i32) {
+    CURRENT_LEVEL.with_mut(|level| level.depth = depth);
+}
+
 /// Convenience alias for the crate-wide level size constants.
 pub const GAME_HEIGHT: usize = GameConfig::LEVEL_HEIGHT;
 pub const GAME_WIDTH: usize = GameConfig::LEVEL_WIDTH;

@@ -76,7 +76,6 @@ unsafe extern "C" {
     static mut hungry_state: c_int;
     static mut jump: c_uchar;
     static mut last_dir: c_char;
-    static mut level: c_int;
     static mut max_stats: crate::entity::player::CStats;
     static mut mpos: c_int;
     static mut no_command: c_int;
@@ -452,7 +451,7 @@ pub unsafe extern "C" fn rnd_thing() -> c_char {
     let thing_list = [
         POTION, SCROLL, RING, STICK, FOOD, WEAPON, ARMOR, STAIRS, GOLD, AMULET,
     ];
-    let idx = if level >= GameConfig::AMULET_LEVEL {
+    let idx = if crate::game::current_depth() >= GameConfig::AMULET_LEVEL {
         rnd(thing_list.len() as c_int)
     } else {
         rnd((thing_list.len() - 1) as c_int)

@@ -200,7 +200,6 @@ unsafe extern "C" {
     static mut hungry_state: c_int;
     static mut inpack: c_int;
     static mut inv_type: c_int;
-    static mut level: c_int;
     static mut max_level: c_int;
     static mut mpos: c_int;
     static mut no_food: c_int;
@@ -2326,7 +2325,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_int(savef, hungry_state);
     let _ = rs_write_int(savef, inpack);
     let _ = rs_write_int(savef, inv_type);
-    let _ = rs_write_int(savef, level);
+    let _ = rs_write_int(savef, crate::game::current_depth());
     let _ = rs_write_int(savef, max_level);
     let _ = rs_write_int(savef, mpos);
     let _ = rs_write_int(savef, no_food);
@@ -2469,6 +2468,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let mut dummyint: c_int = 0;
+    let mut depth: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -2534,7 +2534,8 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_int(inf, &mut hungry_state);
     let _ = rs_read_int(inf, &mut inpack);
     let _ = rs_read_int(inf, &mut inv_type);
-    let _ = rs_read_int(inf, &mut level);
+    let _ = rs_read_int(inf, &mut depth);
+    crate::game::set_current_depth(depth);
     let _ = rs_read_int(inf, &mut max_level);
     let _ = rs_read_int(inf, &mut mpos);
     let _ = rs_read_int(inf, &mut no_food);

@@ -67,7 +67,6 @@ unsafe extern "C" {
     static mut count: c_int;
     static mut no_command: c_int;
     static mut no_move: c_int;
-    static mut level: c_int;
     static mut cNCOLORS: c_int;
     static mut rainbow: [*const c_char; 27];
     static mut player: CThing;
@@ -121,7 +120,7 @@ pub unsafe fn be_trapped(pos: CCoord) -> Trap {
 
     match trap {
         Trap::Door => {
-            level += 1;
+            crate::game::set_current_depth(crate::game::current_depth() + 1);
             new_level();
             msg_str("you fell into a trap!");
         }

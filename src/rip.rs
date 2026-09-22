@@ -48,7 +48,6 @@ pub struct Score {
 
 unsafe extern "C" {
     static mut amulet: c_uchar;
-    static mut level: c_int;
     static mut max_level: c_int;
     static mut noscore: c_int;
     static mut pack: *mut crate::entity::player::CThing;
@@ -278,7 +277,11 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
             let entry = &mut top_ten[insert_at];
             entry.sc_score = amount;
             entry.sc_flags = flags as c_uint;
-            entry.sc_level = if flags == 2 { max_level } else { level };
+            entry.sc_level = if flags == 2 {
+                max_level
+            } else {
+                crate::game::current_depth()
+            };
             entry.sc_monster = monst as c_ushort;
             entry.sc_uid = uid;
             for (idx, byte) in bytes.iter().enumerate() {

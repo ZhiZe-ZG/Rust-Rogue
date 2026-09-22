@@ -17,8 +17,7 @@ use super::presence::populate_level;
 use super::rooms::Room;
 use super::structure::Structure;
 use super::symbols::{
-    free_list, level, lvl_obj, max_level, mlist, no_food, player, thing_t, wake_monster, ISGONE,
-    ISHELD,
+    free_list, lvl_obj, max_level, mlist, no_food, player, thing_t, wake_monster, ISGONE, ISHELD,
 };
 use super::tile::Tile;
 
@@ -41,8 +40,7 @@ unsafe fn sync_generated_rooms(generated: &[Room; GameConfig::MAX_ROOMS]) {
 }
 
 unsafe fn reset_level() {
-    with_current_level_mut(|current| {
-        current.depth = level;
+    let depth = with_current_level_mut(|current| {
         current.map = Structure::new(
             GameConfig::SCREEN_LINES as usize,
             GameConfig::SCREEN_COLS as usize,
@@ -53,11 +51,12 @@ unsafe fn reset_level() {
         current.passages.clear();
         current.passage_links.clear();
         current.reset_flags();
+        current.depth
     });
 
     (*thing_t(&raw mut player)).t_flags &= !ISHELD;
-    if level > max_level {
-        max_level = level;
+    if depth > max_level {
+        max_level = depth;
     }
 
     clear_level();

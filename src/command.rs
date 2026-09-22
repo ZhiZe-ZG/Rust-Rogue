@@ -180,7 +180,6 @@ unsafe extern "C" {
     static mut last_dir: c_char;
     static mut last_pick: *mut CThing;
     static mut lastscore: c_int;
-    static mut level: c_int;
     static mut lvl_obj: *mut CThing;
     static mut max_hit: c_int;
     static mut move_on: c_uchar;
@@ -758,11 +757,11 @@ pub unsafe extern "C" fn command() {
                                 }
                                 CTRL_W => whatis(false as c_uchar, 0),
                                 CTRL_D => {
-                                    level += 1;
+                                    crate::game::set_current_depth(crate::game::current_depth() + 1);
                                     new_level();
                                 }
                                 CTRL_A => {
-                                    level -= 1;
+                                    crate::game::set_current_depth(crate::game::current_depth() - 1);
                                     new_level();
                                 }
                                 CTRL_F => show_map(),
@@ -975,7 +974,7 @@ pub unsafe extern "C" fn d_level() {
     if chat_at(hero.y, hero.x) != STAIRS {
         msg_str("I see no way down");
     } else {
-        level += 1;
+        crate::game::set_current_depth(crate::game::current_depth() + 1);
         seenstairs = false as c_uchar;
         new_level();
     }
@@ -993,8 +992,8 @@ pub unsafe extern "C" fn u_level() {
     let hero = hero_pos();
     if chat_at(hero.y, hero.x) == STAIRS {
         if amulet != 0 {
-            level -= 1;
-            if level == 0 {
+            crate::game::set_current_depth(crate::game::current_depth() - 1);
+            if crate::game::current_depth() == 0 {
                 total_winner();
             }
             new_level();

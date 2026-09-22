@@ -38,7 +38,6 @@ static MESSAGE_STATE: Mutex<MessageState> = Mutex::new(MessageState {
 unsafe extern "C" {
     static mut hungry_state: c_int;
     static mut huh: [c_char; MAXSTR];
-    static mut level: c_int;
     static mut max_stats: CStats;
     static mut mpos: c_int;
     static mut msg_esc: c_uchar;
@@ -362,6 +361,7 @@ pub unsafe fn endmsg() -> MessageResult {
 #[cfg(not(test))]
 pub unsafe fn status() {
     let pstats = &mut (*thing_t(&raw mut player)).t_stats;
+    let level = crate::game::current_depth();
     let max_hp = pstats.s_maxhp;
     let mut temp = if !EQUIPMENT.armor().is_null() {
         (*EQUIPMENT.armor()).o.o_arm

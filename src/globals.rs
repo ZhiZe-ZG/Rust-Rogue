@@ -195,8 +195,6 @@ pub static mut inpack: c_int = 0;
 #[no_mangle]
 pub static mut inv_type: c_int = 0;
 #[no_mangle]
-pub static mut level: c_int = 1;
-#[no_mangle]
 pub static mut max_hit: c_int = 0;
 #[no_mangle]
 pub static mut max_level: c_int = 0;

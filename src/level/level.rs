@@ -78,7 +78,7 @@ pub struct Level {
 impl Level {
     pub fn new() -> Self {
         Self {
-            depth: 0,
+            depth: 1,
             rooms: (0..GameConfig::MAX_ROOMS)
                 .map(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
                 .collect(),

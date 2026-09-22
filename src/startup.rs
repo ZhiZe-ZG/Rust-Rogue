@@ -82,7 +82,6 @@ unsafe extern "C" {
     static mut LINES: c_int;
     static mut COLS: c_int;
     static mut hw: *mut c_void;
-    static mut level: c_int;
     static master_mode_enabled: c_uchar;
     static mut noscore: c_int;
     static mut player: CThing;
@@ -420,7 +419,7 @@ pub unsafe extern "C" fn rogue_main(
                 rnd(100);
             }
             purse = rnd(100) + 1;
-            level = rnd(100) + 1;
+            crate::game::set_current_depth(rnd(100) + 1);
             runtime::initialize();
             getltchars();
             death(death_monst());
