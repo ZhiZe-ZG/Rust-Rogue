@@ -261,10 +261,7 @@ pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut CThing, thrown: c_ucha
             (*thing_t(&raw mut player)).t_flags &= !CANHUH;
             endmsg();
             has_hit = false as c_uchar;
-            msg_str(&format!(
-                "your hands stop glowing {}",
-                CStr::from_ptr(pick_color(c"red".as_ptr().cast_mut())).to_string_lossy()
-            ));
+            msg_str(&format!("your hands stop glowing {}", pick_color("red")));
         }
         if (*thing_t(tp)).t_stats.hit_points <= 0 {
             killed(tp, true as c_uchar);

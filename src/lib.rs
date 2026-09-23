@@ -3,6 +3,7 @@
 //! The crate mirrors the module layout of the original C sources: each module
 //! is a direct port of the corresponding `.c` file and preserves its C ABI
 //! wherever the legacy engine still depends on it.
+pub mod colors;
 pub mod command;
 pub mod config;
 pub mod daemon;

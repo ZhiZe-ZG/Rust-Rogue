@@ -244,12 +244,10 @@ unsafe extern "C" {
     static mut nh: IVec2;
     static mut group: c_int;
 
-    // material arrays (defined in init.rs as rainbow/stones/wood/metal)
-    static mut rainbow: [*mut c_char; 27];
+    // material arrays (defined in init.rs as stones/wood/metal)
     static stones: [CStone; 26];
     static mut wood: [*mut c_char; 33];
     static mut metal: [*mut c_char; 22];
-    static mut cNCOLORS: c_int;
     static mut cNSTONES: c_int;
     static mut cNWOOD: c_int;
     static mut cNMETAL: c_int;
@@ -1138,9 +1136,21 @@ unsafe fn rs_read_scrolls(inf: *mut CFile) -> c_int {
     read_stat()
 }
 
+/// Index of `ptr` within [`crate::colors::POTION_COLORS`], or `-1` if it is not
+/// a potion colour. Bridges the legacy `p_colors` pointer array to the Rust
+/// colour table.
+fn potion_color_index(ptr: *const c_char) -> c_int {
+    for (i, color) in crate::colors::POTION_COLORS.iter().enumerate() {
+        if color.as_ptr() as *const c_char == ptr {
+            return i as c_int;
+        }
+    }
+    -1
+}
+
 /// Serializes the global potion colors to the save file.
 ///
-/// Uses globals: rainbow, p_colors.
+/// Uses globals: p_colors.
 unsafe fn rs_write_potions(savef: *mut CFile) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -1148,12 +1158,7 @@ unsafe fn rs_write_potions(savef: *mut CFile) -> c_int {
 
     let mut i = 0;
     while i < MAXPOTIONS {
-        let _ = rs_write_string_index(
-            savef,
-            (&raw mut rainbow) as *mut *mut c_char,
-            cNCOLORS,
-            p_colors[i],
-        );
+        let _ = rs_write_int(savef, potion_color_index(p_colors[i] as *const c_char));
         i += 1;
     }
 
@@ -1162,7 +1167,7 @@ unsafe fn rs_write_potions(savef: *mut CFile) -> c_int {
 
 /// Restores the global potion colors from the save file.
 ///
-/// Uses globals: rainbow, p_colors.
+/// Uses globals: p_colors.
 unsafe fn rs_read_potions(inf: *mut CFile) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1170,12 +1175,13 @@ unsafe fn rs_read_potions(inf: *mut CFile) -> c_int {
 
     let mut i = 0;
     while i < MAXPOTIONS {
-        let _ = rs_read_string_index(
-            inf,
-            (&raw mut rainbow) as *mut *mut c_char,
-            cNCOLORS,
-            &mut p_colors[i],
-        );
+        let mut idx: c_int = 0;
+        let _ = rs_read_int(inf, &mut idx);
+        p_colors[i] = if idx >= 0 && (idx as usize) < crate::colors::POTION_COLOR_COUNT {
+            crate::colors::POTION_COLORS[idx as usize].as_ptr() as *mut c_char
+        } else {
+            std::ptr::null_mut()
+        };
         i += 1;
     }
 
@@ -2288,7 +2294,7 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
 /// jump, kamikaze, lower_msg, move_on, msg_esc, passgo, playing,
 /// q_comm, running, save_msg, see_floor, stat_msg, terse, to_death,
 /// tombstone, wizard, pack_used, dir_ch, file_name, huh, p_colors,
-/// rainbow, prbuf, r_stones, stones, release, runch, s_names, take,
+/// prbuf, r_stones, stones, release, runch, s_names, take,
 /// whoami, ws_made, ws_type, wood, metal, orig_dsusp, fruit, home,
 /// inv_t_name, l_last_comm, l_last_dir, last_comm, last_dir, tr_name,
 /// n_objs, ntraps, hungry_state, inpack, inv_type, level, max_level,
@@ -2491,7 +2497,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 /// jump, kamikaze, lower_msg, move_on, msg_esc, passgo, playing,
 /// q_comm, running, save_msg, see_floor, stat_msg, terse, to_death,
 /// tombstone, wizard, pack_used, dir_ch, file_name, huh, p_colors,
-/// rainbow, prbuf, r_stones, stones, release, runch, s_names, take,
+/// prbuf, r_stones, stones, release, runch, s_names, take,
 /// whoami, ws_made, ws_type, wood, metal, orig_dsusp, fruit, home,
 /// inv_t_name, l_last_comm, l_last_dir, last_comm, last_dir, tr_name,
 /// n_objs, ntraps, hungry_state, inpack, inv_type, level, max_level,

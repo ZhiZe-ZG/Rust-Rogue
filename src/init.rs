@@ -77,46 +77,9 @@ unsafe impl Sync for CStone {}
 
 // ─── Exported global data arrays ─────────────────────────────────────────────
 
-const NCOLORS: usize = 27;
 const NSTONES: usize = 26;
 const NWOOD: usize = 33;
 const NMETAL: usize = 22;
-
-/// Potion colours.  Exported as `char *rainbow[]` for C.
-#[no_mangle]
-pub static mut rainbow: [*mut c_char; NCOLORS] = [
-    b"amber\0".as_ptr() as *mut c_char,
-    b"aquamarine\0".as_ptr() as *mut c_char,
-    b"black\0".as_ptr() as *mut c_char,
-    b"blue\0".as_ptr() as *mut c_char,
-    b"brown\0".as_ptr() as *mut c_char,
-    b"clear\0".as_ptr() as *mut c_char,
-    b"crimson\0".as_ptr() as *mut c_char,
-    b"cyan\0".as_ptr() as *mut c_char,
-    b"ecru\0".as_ptr() as *mut c_char,
-    b"gold\0".as_ptr() as *mut c_char,
-    b"green\0".as_ptr() as *mut c_char,
-    b"grey\0".as_ptr() as *mut c_char,
-    b"magenta\0".as_ptr() as *mut c_char,
-    b"orange\0".as_ptr() as *mut c_char,
-    b"pink\0".as_ptr() as *mut c_char,
-    b"plaid\0".as_ptr() as *mut c_char,
-    b"purple\0".as_ptr() as *mut c_char,
-    b"red\0".as_ptr() as *mut c_char,
-    b"silver\0".as_ptr() as *mut c_char,
-    b"tan\0".as_ptr() as *mut c_char,
-    b"tangerine\0".as_ptr() as *mut c_char,
-    b"topaz\0".as_ptr() as *mut c_char,
-    b"turquoise\0".as_ptr() as *mut c_char,
-    b"vermilion\0".as_ptr() as *mut c_char,
-    b"violet\0".as_ptr() as *mut c_char,
-    b"white\0".as_ptr() as *mut c_char,
-    b"yellow\0".as_ptr() as *mut c_char,
-];
-
-/// Count of entries in `rainbow`.  Exported as `int cNCOLORS` for C.
-#[no_mangle]
-pub static mut cNCOLORS: c_int = NCOLORS as c_int;
 
 /// Ring-stone table.  Exported as `STONE stones[]` for C.
 #[no_mangle]
@@ -321,7 +284,7 @@ const SYLLS: &[&str] = &[
     "xo", "y", "yot", "yu", "zant", "zeb", "zim", "zok", "zon", "zum",
 ];
 
-// MAX3(NCOLORS=27, NSTONES=26, NWOOD=33) = 33
+// Size = max(potion colours 27, stones 26, wood 33) = 33.
 /// Shared boolean scratch array used by init_colors, init_stones,
 /// and init_materials (mirrors the C-side `static bool used[]`).
 static mut USED: [c_uchar; 33] = [false as c_uchar; 33];
@@ -422,21 +385,21 @@ pub unsafe extern "C" fn init_player() {
     add_pack(obj, true as c_uchar);
 }
 
-/// Assign a random colour from `rainbow` to each potion.
+/// Assign a random colour from [`crate::colors::POTION_COLORS`] to each potion.
 #[no_mangle]
 pub unsafe extern "C" fn init_colors() {
-    for i in 0..NCOLORS {
+    for i in 0..crate::colors::POTION_COLOR_COUNT {
         USED[i] = false as c_uchar;
     }
     for i in 0..MAXPOTIONS {
         let j = loop {
-            let j = rnd(NCOLORS as c_int) as usize;
+            let j = rnd(crate::colors::POTION_COLOR_COUNT as c_int) as usize;
             if USED[j] == false as c_uchar {
                 break j;
             }
         };
         USED[j] = true as c_uchar;
-        p_colors[i] = rainbow[j];
+        p_colors[i] = crate::colors::POTION_COLORS[j].as_ptr() as *mut c_char;
     }
 }
 
@@ -556,10 +519,9 @@ pub unsafe extern "C" fn init_probs() {
 
 /// Return a random colour if the player is hallucinating, otherwise
 /// return the supplied colour unchanged.
-#[no_mangle]
-pub unsafe extern "C" fn pick_color(col: *mut c_char) -> *mut c_char {
+pub unsafe fn pick_color(col: &'static str) -> &'static str {
     if (*thing_t(&raw mut player)).t_flags & ISHALU != 0 {
-        rainbow[rnd(NCOLORS as c_int) as usize]
+        crate::colors::random_color()
     } else {
         col
     }

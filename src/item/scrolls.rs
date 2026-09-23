@@ -193,10 +193,7 @@ pub unsafe extern "C" fn read_scroll() {
     match scroll_type {
         ScrollType::Confuse => {
             (*thing_t(&raw mut player)).t_flags |= CANHUH;
-            msg_str(&format!(
-                "your hands begin to glow {}",
-                CStr::from_ptr(pick_color(c"red".as_ptr().cast_mut())).to_string_lossy()
-            ));
+            msg_str(&format!("your hands begin to glow {}", pick_color("red")));
         }
         ScrollType::Armor => {
             if !EQUIPMENT.armor().is_null() {
@@ -204,7 +201,7 @@ pub unsafe extern "C" fn read_scroll() {
                 (*thing_o(EQUIPMENT.armor())).o_flags &= !ISCURSED;
                 msg_str(&format!(
                     "your armor glows {} for a moment",
-                    CStr::from_ptr(pick_color(c"silver".as_ptr().cast_mut())).to_string_lossy()
+                    pick_color("silver")
                 ));
             }
         }
@@ -363,7 +360,7 @@ pub unsafe extern "C" fn read_scroll() {
                         weap_info[(*thing_o(EQUIPMENT.weapon())).o_which as usize].oi_name,
                     )
                     .to_string_lossy(),
-                    CStr::from_ptr(pick_color(c"blue".as_ptr().cast_mut())).to_string_lossy()
+                    pick_color("blue")
                 ));
             }
         }
@@ -392,7 +389,7 @@ pub unsafe extern "C" fn read_scroll() {
                 (*thing_o(EQUIPMENT.armor())).o_flags |= ISPROT;
                 msg_str(&format!(
                     "your armor is covered by a shimmering {} shield",
-                    CStr::from_ptr(pick_color(c"gold".as_ptr().cast_mut())).to_string_lossy()
+                    pick_color("gold")
                 ));
             } else {
                 msg_str("you feel a strange sense of loss");

@@ -6,7 +6,6 @@
 //! [`crate::player`]; the legacy C ABI is intentionally not retained.
 
 use glam::IVec2;
-use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 use crate::entity::fight::swing;
@@ -82,11 +81,6 @@ unsafe extern "C" {
     // Number of turns the hero cannot move (held). The bear trap adds
     // `spread(3)`.
     static mut no_move: c_int;
-    // Count of colour names in `rainbow` (27). Defined in `crate::init`.
-    static mut cNCOLORS: c_int;
-    // Potion colour-name table (C `char *rainbow[]`), defined in
-    // `crate::init`. Read by the mystery trap to pick a random colour.
-    static mut rainbow: [*const c_char; 27];
     // The player/hero object (C `THING player`), defined in `crate::globals`.
     // `be_trapped` reads `t_flags`, `t_stats`, and `t_pos` from it.
     static mut player: CThing;
@@ -110,12 +104,6 @@ unsafe fn hero_pos() -> IVec2 {
 #[inline]
 unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
-}
-
-/// Pick a color name from the C `rainbow` table.
-#[inline]
-unsafe fn rainbow_color() -> *const c_char {
-    rainbow[rnd(cNCOLORS) as usize]
 }
 
 /// Applies the trap at the given map cell, returning the trap kind that fired.
@@ -149,11 +137,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
             msg_str("you are caught in a bear trap");
         }
         Trap::Mystery => {
-            let color = || {
-                CStr::from_ptr(rainbow_color())
-                    .to_string_lossy()
-                    .into_owned()
-            };
+            let color = || crate::colors::random_color();
             match rnd(11) {
                 0 => {
                     msg_str("you are suddenly in a parallel dimension");
