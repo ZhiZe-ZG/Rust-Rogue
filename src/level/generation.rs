@@ -16,7 +16,7 @@ use super::presence::populate_level;
 use super::rooms::Room;
 use super::structure::Structure;
 use super::symbols::{
-    free_list, lvl_obj, max_level, no_food, player, thing_t, wake_monster, ISHELD, MLIST,
+    free_list, max_level, no_food, player, thing_t, wake_monster, ISHELD, MLIST,
 };
 use super::tile::Tile;
 
@@ -58,7 +58,7 @@ unsafe fn clear_previous_level_items() {
         monster = next;
     }
     MLIST.free_list();
-    free_list((&raw mut lvl_obj) as *mut *mut CThing);
+    with_current_level_mut(|current| current.items.clear());
 }
 
 /// Wake monsters in a room when it becomes visible.

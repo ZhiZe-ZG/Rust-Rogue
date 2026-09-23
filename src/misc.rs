@@ -89,7 +89,6 @@ unsafe extern "C" {
     static mut seenstairs: c_uchar;
     static mut see_floor: bool;
     static mut terse: c_uchar;
-    static mut lvl_obj: *mut CThing;
 
     fn free(ptr: *mut c_void);
     fn isupper(c: c_int) -> c_int;
@@ -147,7 +146,7 @@ pub unsafe fn show_floor() -> bool {
 
 #[no_mangle]
 pub unsafe extern "C" fn find_obj(y: c_int, x: c_int) -> *mut CThing {
-    let mut obj = lvl_obj;
+    let mut obj = crate::game::with_current_level(|level| level.items.head());
     while !obj.is_null() {
         if (*thing_o(obj)).o_pos.y == y && (*thing_o(obj)).o_pos.x == x {
             return obj;

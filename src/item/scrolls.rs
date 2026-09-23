@@ -122,7 +122,6 @@ unsafe extern "C" {
     static mut no_command: c_int;
     static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
-    static mut lvl_obj: *mut CThing;
     static mut scr_info: [CObjInfo; MAXSCROLLS];
     static mut weap_info: [CObjInfo; 10];
 
@@ -336,7 +335,7 @@ pub unsafe extern "C" fn read_scroll() {
             let mut found = false as c_uchar;
             let window = Window::Stdscr;
             output::clear_window(window);
-            let mut it = lvl_obj;
+            let mut it = crate::game::with_current_level(|level| level.items.head());
             while !it.is_null() {
                 if (*thing_o(it)).o_type == FOOD {
                     found = true as c_uchar;

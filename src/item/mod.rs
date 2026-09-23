@@ -4,6 +4,7 @@
 //! behavior live under this module.
 
 pub mod armor;
+pub mod item_list;
 pub mod pack;
 pub mod potions;
 pub mod rings;

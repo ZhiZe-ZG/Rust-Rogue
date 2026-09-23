@@ -57,7 +57,6 @@ unsafe extern "C" {
     static mut arm_info: [CObjInfo; MAXARMORS];
     static mut fruit: [c_char; MAXSTR];
     static mut inv_describe: c_uchar;
-    static mut lvl_obj: *mut CThing;
     static mut no_food: c_int;
     static mut player: CThing;
     static mut pot_info: [CObjInfo; MAXPOTIONS];

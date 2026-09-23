@@ -57,7 +57,6 @@ const STARVETIME: c_int = 850;
 unsafe extern "C" {
     static mut player: CThing;
     static mut quiet: c_int;
-    static mut lvl_obj: *mut CThing;
     static mut hungry_state: c_int;
     static mut food_left: c_int;
     static mut no_command: c_int;
@@ -297,7 +296,7 @@ pub unsafe extern "C" fn come_down() {
     }
 
     // Undo the things (objects on the level).
-    let mut tp = lvl_obj;
+    let mut tp = crate::game::with_current_level(|level| level.items.head());
     while !tp.is_null() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
@@ -343,7 +342,7 @@ pub unsafe extern "C" fn visuals() {
     }
 
     // Change the things (objects).
-    let mut tp = lvl_obj;
+    let mut tp = crate::game::with_current_level(|level| level.items.head());
     while !tp.is_null() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {

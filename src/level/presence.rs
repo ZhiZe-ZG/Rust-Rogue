@@ -12,7 +12,6 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use crate::config::GameConfig;
 use crate::draw::{terrain_chat_at, FLOOR, PASSAGE};
-use crate::entity::player::CThing;
 use crate::game;
 use crate::item::thing_list::new_item;
 use crate::rnd::rnd;
@@ -20,7 +19,7 @@ use crate::ui::output;
 
 use super::level::{with_current_level_mut, LevelFlags};
 use super::symbols::{
-    amulet, attach, enter_room, give_pack, lvl_obj, max_level, new_monster, new_thing, ntraps,
+    amulet, enter_room, give_pack, max_level, new_monster, new_thing, ntraps,
     player, randmonster, roomin, seenstairs, thing_o, thing_t, turn_see, visuals, AMULET, GOLD,
     GOLDGRP, ISHALU, ISMANY, ISMEAN, MLIST, PLAYER, SEEMONST,
 };
@@ -115,7 +114,7 @@ unsafe fn treas_room() {
         let tp = new_thing();
         (*thing_o(tp)).o_pos = mp;
         // Objects render from the `lvl_obj` list; no glyph write needed.
-        attach((&raw mut lvl_obj) as *mut *mut CThing, tp);
+        with_current_level_mut(|current| current.items.attach(tp));
         nm -= 1;
     }
 
@@ -176,7 +175,7 @@ unsafe fn place_room_contents() {
                 (*og).o_flags = ISMANY;
                 (*og).o_group = GOLDGRP;
                 (*og).o_type = GOLD as c_int;
-                attach((&raw mut lvl_obj) as *mut *mut CThing, gold);
+                with_current_level_mut(|current| current.items.attach(gold));
             }
         }
 
@@ -212,7 +211,7 @@ unsafe fn put_things() {
         if rnd(100) < 36 {
             // Pick a new object and link it in the list.
             let obj = new_thing();
-            attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
+            with_current_level_mut(|current| current.items.attach(obj));
             // Put it somewhere.
             let og = thing_o(obj);
             let pos = &raw mut (*og).o_pos;
@@ -224,7 +223,7 @@ unsafe fn put_things() {
     // yet, put it somewhere on the ground.
     if level >= GameConfig::AMULET_LEVEL && !amulet {
         let obj = new_item();
-        attach((&raw mut lvl_obj) as *mut *mut CThing, obj);
+        with_current_level_mut(|current| current.items.attach(obj));
         let og = thing_o(obj);
         (*og).o_hplus = 0;
         (*og).o_dplus = 0;

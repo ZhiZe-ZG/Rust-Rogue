@@ -19,6 +19,7 @@ use super::structure::Structure;
 use super::tile::Tile;
 use super::trap::Trap;
 use crate::config::GameConfig;
+use crate::item::item_list::ItemList;
 
 /// Per-cell flat-flag data for the level.
 ///
@@ -75,6 +76,9 @@ pub struct Level {
     /// Door exits of each numbered passage component, index-aligned with the
     /// C `passages` array and copied over by `sync_passages_to_c`.
     pub passage_links: Vec<PassageLinks>,
+    /// Floor items (objects) resting on the level, replacing the legacy C
+    /// `lvl_obj` global.
+    pub items: ItemList,
 }
 
 impl Level {
@@ -94,6 +98,7 @@ impl Level {
             ),
             flags: LevelFlags::cleared(),
             passage_links: Vec::new(),
+            items: ItemList::new(),
         }
     }
 

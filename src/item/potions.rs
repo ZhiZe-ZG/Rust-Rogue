@@ -139,7 +139,6 @@ unsafe extern "C" {
     static mut fruit: [c_char; 1024];
     static mut prbuf: [c_char; 2048];
     static mut player: CThing;
-    static mut lvl_obj: *mut CThing;
     static mut places: [CPlace; 32 * 80];
     static mut pot_info: [CObjInfo; MAXPOTIONS];
     static mut max_stats: Stats;
@@ -346,10 +345,11 @@ pub unsafe extern "C" fn quaff() {
             }
         }
         PotionType::TrapFind => {
-            if !lvl_obj.is_null() {
+            let head = crate::game::with_current_level(|level| level.items.head());
+            if !head.is_null() {
                 let window = Window::Stdscr;
                 output::clear_window(window);
-                tp = lvl_obj;
+                tp = head;
                 while !tp.is_null() {
                     if is_magic_local(tp) {
                         show = true;

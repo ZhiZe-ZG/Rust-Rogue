@@ -15,7 +15,7 @@ use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::draw::{self, chat_at, place_at, winat as draw_winat};
 use crate::entity::player::{CPlace, CThing, CThingMonster, CThingObject};
-use crate::item::thing_list::{attach, discard};
+use crate::item::thing_list::discard;
 use crate::item::things::{dropcheck, inv_name};
 use crate::level::tile_is_walkable;
 
@@ -120,7 +120,6 @@ unsafe extern "C" {
     static mut has_hit: c_uchar;
     static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
-    static mut lvl_obj: *mut CThing;
     static mut weap_info: [CObjInfo; MAXWEAPONS + 1];
 
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
@@ -249,7 +248,7 @@ pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
             }
         }
 
-        attach(&raw mut lvl_obj, obj);
+        crate::game::with_current_level_mut(|level| level.items.attach(obj));
         return;
     }
 

@@ -46,7 +46,6 @@ unsafe extern "C" {
     static mut l_last_dir: c_char;
     static mut last_pick: *mut CThing;
     static mut l_last_pick: *mut CThing;
-    static mut lvl_obj: *mut CThing;
     static mut move_on: c_uchar;
     static mut msg_esc: c_uchar;
     static mut mpos: c_int;
@@ -70,12 +69,12 @@ unsafe fn next_item(item: *mut CThing) -> *mut CThing {
     (*thing_t(item)).l_next
 }
 
-unsafe fn prev_item(item: *mut CThing) -> *mut CThing {
-    (*thing_t(item)).l_prev
-}
-
 unsafe fn detach_list(head: *mut *mut CThing, item: *mut CThing) {
     detach(head, item);
+}
+
+unsafe fn prev_item(item: *mut CThing) -> *mut CThing {
+    (*thing_t(item)).l_prev
 }
 
 unsafe fn discard_item(item: *mut CThing) {
@@ -139,7 +138,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         && (*thing_o(item)).o_which == ScrollType::Scare as c_int
         && ((*thing_o(item)).o_flags & ISFOUND) != 0
     {
-        detach_list(&raw mut lvl_obj, item);
+        crate::game::with_current_level_mut(|level| level.items.detach(item));
         // The object is removed from `lvl_obj`, so the terrain glyph shows
         // automatically via draw.
         output::write_glyph_at(
@@ -282,7 +281,7 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_u
     }
 
     if from_floor != 0 {
-        detach_list(&raw mut lvl_obj, obj);
+        crate::game::with_current_level_mut(|level| level.items.detach(obj));
         // The object is removed from `lvl_obj`, so the terrain glyph shows
         // automatically via draw.
         output::write_glyph_at(
@@ -415,7 +414,7 @@ pub unsafe extern "C" fn pick_up(ch: c_char) {
                     return;
                 }
                 money((*thing_o(obj)).o_arm);
-                detach_list(&raw mut lvl_obj, obj);
+                crate::game::with_current_level_mut(|level| level.items.detach(obj));
                 discard_item(obj);
                 if proom().is_some() {
                     crate::game::set_room_goldval(proom(), 0);

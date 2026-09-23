@@ -223,7 +223,6 @@ unsafe extern "C" {
     static mut player: CThing;
     static mut l_last_pick: *mut CThing;
     static mut last_pick: *mut CThing;
-    static mut lvl_obj: *mut CThing;
 
     // rooms / map
     static mut places: [CPlace; 32 * 80];
@@ -1911,7 +1910,7 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
             let _ = rs_write_int(savef, 1);
             let _ = rs_write_int(savef, i);
         } else {
-            i = find_object_coord(lvl_obj, t_dest);
+            i = find_object_coord(crate::game::with_current_level(|level| level.items.head()), t_dest);
 
             if i >= 0 {
                 let _ = rs_write_int(savef, 2);
@@ -1995,7 +1994,7 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
         (*thing_t(t)).t_reserved = index;
     } else if listid == 2 {
         /* object */
-        let item = get_list_item(lvl_obj, index);
+        let item = get_list_item(crate::game::with_current_level(|level| level.items.head()), index);
 
         if !item.is_null() {
             (*thing_t(t)).t_dest = (&raw mut (*thing_o(item)).o_pos) as *mut IVec2;
@@ -2413,7 +2412,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, l_last_pick);
     let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, last_pick);
 
-    let _ = rs_write_object_list(savef, lvl_obj);
+    let _ = rs_write_object_list(savef, crate::game::with_current_level(|level| level.items.head()));
     let _ = rs_write_thing_list(savef, MLIST.head());
 
     let _ = rs_write_places(
@@ -2631,7 +2630,9 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     );
     let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut last_pick);
 
-    let _ = rs_read_object_list(inf, &raw mut lvl_obj);
+    let mut items_head: *mut CThing = std::ptr::null_mut();
+    let _ = rs_read_object_list(inf, &raw mut items_head);
+    crate::game::with_current_level_mut(|level| level.items.set_head(items_head));
     let mut mlist: *mut CThing = std::ptr::null_mut();
     let _ = rs_read_thing_list(inf, &raw mut mlist);
     MLIST.set_head(mlist);

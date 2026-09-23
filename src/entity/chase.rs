@@ -15,7 +15,7 @@ use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::entity::rndmove::rndmove;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
-use crate::item::thing_list::{attach, detach};
+use crate::item::thing_list::attach;
 use crate::level::tile_is_walkable;
 use crate::misc::sign;
 use crate::rnd::rnd;
@@ -65,7 +65,6 @@ static mut TRYP: IVec2 = IVec2 { x: 0, y: 0 };
 static mut CANSEE_TP: IVec2 = IVec2 { x: 0, y: 0 };
 
 unsafe extern "C" {
-    static mut lvl_obj: *mut CThing;
     static mut player: CThing;
 
     static mut has_hit: c_uchar;
@@ -339,10 +338,10 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
         if coord_eq(THIS, hero_pos()) {
             return attack(th);
         } else if coord_eq(THIS, *(*thing_t(th)).t_dest) {
-            obj = lvl_obj;
+            obj = crate::game::with_current_level(|level| level.items.head());
             while !obj.is_null() {
                 if (*thing_t(th)).t_dest == &raw mut (*thing_o(obj)).o_pos {
-                    detach(&raw mut lvl_obj, obj);
+                    crate::game::with_current_level_mut(|level| level.items.detach(obj));
                     attach(&raw mut (*thing_t(th)).t_pack, obj);
                     // Objects render from the `lvl_obj` list; the floor glyph
                     // under a picked-up object is then the terrain char.
@@ -510,7 +509,7 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut IVec2) -> c_uchar {
                         // If it is a scroll, it might be a scare monster scroll
                         // so we need to look it up to see what type it is.
                         if ch == SCROLL {
-                            let mut obj = lvl_obj;
+                            let mut obj = crate::game::with_current_level(|level| level.items.head());
                             while !obj.is_null() {
                                 if y == (*thing_o(obj)).o_pos.y && x == (*thing_o(obj)).o_pos.x {
                                     break;
@@ -650,7 +649,7 @@ pub unsafe extern "C" fn find_dest(tp: *mut CThing) -> *mut IVec2 {
     {
         return hero_ptr();
     }
-    let mut obj = lvl_obj;
+    let mut obj = crate::game::with_current_level(|level| level.items.head());
     while !obj.is_null() {
         if (*thing_o(obj)).o_type == SCROLL as c_int
             && (*thing_o(obj)).o_which == ScrollType::Scare as c_int

@@ -77,7 +77,6 @@ unsafe extern "C" {
     static mut running: c_uchar;
     static mut see_floor: c_uchar;
     static mut seenstairs: c_uchar;
-    static mut lvl_obj: *mut CThing;
 
 }
 

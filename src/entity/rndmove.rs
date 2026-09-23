@@ -13,7 +13,6 @@ use crate::rnd::rnd;
 const SCROLL: c_char = b'?' as c_char;
 
 unsafe extern "C" {
-    static mut lvl_obj: *mut CThing;
 }
 
 #[inline]
@@ -61,7 +60,7 @@ pub unsafe extern "C" fn rndmove(who: *mut CThing) -> *mut IVec2 {
 
     // Refuse to step on a scroll of scare monster
     if ch == SCROLL {
-        let mut obj = lvl_obj;
+        let mut obj = crate::game::with_current_level(|level| level.items.head());
         while !obj.is_null() {
             if RET.y == (*thing_o(obj)).o_pos.y && RET.x == (*thing_o(obj)).o_pos.x {
                 break;

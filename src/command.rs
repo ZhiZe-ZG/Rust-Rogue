@@ -179,7 +179,6 @@ unsafe extern "C" {
     static mut last_dir: c_char;
     static mut last_pick: *mut CThing;
     static mut lastscore: c_int;
-    static mut lvl_obj: *mut CThing;
     static mut max_hit: c_int;
     static mut move_on: c_uchar;
     static mut mpos: c_int;
@@ -437,7 +436,7 @@ pub unsafe extern "C" fn command() {
                 match ch {
                     b',' => {
                         let hero = hero_pos();
-                        let mut obj = lvl_obj;
+                        let mut obj = crate::game::with_current_level(|level| level.items.head());
                         let mut found = false;
                         while !obj.is_null() {
                             if (*thing_o(obj)).o_pos.y == hero.y
@@ -750,7 +749,7 @@ pub unsafe extern "C" fn command() {
                                     msg_str(&format!("inpack = {}", inpack));
                                 }
                                 CTRL_G => {
-                                    let _ = inventory(lvl_obj, 0);
+                                    let _ = inventory(crate::game::with_current_level(|level| level.items.head()), 0);
                                 }
                                 CTRL_W => whatis(false as c_uchar, 0),
                                 CTRL_D => {
@@ -1178,7 +1177,7 @@ pub unsafe extern "C" fn current(cur: *mut CThing, how: *const c_char, where_: *
 /// Uses globals: lvl_obj, mlist.
 #[no_mangle]
 pub unsafe extern "C" fn pr_list() {
-    let mut obj = lvl_obj;
+    let mut obj = crate::game::with_current_level(|level| level.items.head());
     while !obj.is_null() {
         msg_str(&format!(
             "{}) {}",

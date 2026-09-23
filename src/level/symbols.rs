@@ -14,7 +14,7 @@ pub(crate) use crate::entity::monster_list::MLIST;
 pub(crate) use crate::entity::monsters::{give_pack, new_monster, randmonster, wake_monster};
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 pub(crate) use crate::item::potions::turn_see;
-pub(crate) use crate::item::thing_list::{attach, free_list, new_item};
+pub(crate) use crate::item::thing_list::free_list;
 pub(crate) use crate::item::things::new_thing;
 pub(crate) use crate::level::tile_is_walkable;
 
@@ -35,7 +35,6 @@ pub(crate) const GOLDGRP: c_int = 1;
 unsafe extern "C" {
     pub(crate) static mut max_level: c_int;
     pub(crate) static mut amulet: bool;
-    pub(crate) static mut lvl_obj: *mut CThing;
     pub(crate) static mut player: CThing;
     pub(crate) static mut no_food: c_int;
     pub(crate) static mut ntraps: c_int;
