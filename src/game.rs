@@ -4,17 +4,13 @@
 //! in globals:
 //!
 //! * the **current level** — the [`Level`] singleton (tile map, flags, rooms,
-//!   passages) for the live dungeon depth;
-//! * the **places grid** — a Rust-owned `places` array replacing the C
-//!   `PLACE places[MAXLINES*MAXCOLS]` global; every legacy extern
-//!   `static mut places: [CPlace; 32*80]` declaration binds to this symbol;
-//! * the **per-cell monster map** — the `p_monst` column of the `places`
-//!   grid is the single monster-occupancy lookup per cell.
+//!   passages, floor items, and per-cell monster occupancy) for the live
+//!   dungeon depth;
 //! * the **current equipment** — non-owning pointers to the armor, rings, and
 //!   weapon selected from the player's pack.
 //!
-//! Cell display glyphs and flat flags are no longer cached in `places` (the
-//! `p_ch`/`p_flags` members were removed); every access goes through
+//! Cell display glyphs and flat flags are no longer cached in a legacy per-cell
+//! grid (the `p_ch`/`p_flags` members were removed); every access goes through
 //! `crate::draw`, which computes them from the [`Level`] tile map and flag
 //! grids on the fly.
 
@@ -22,7 +18,7 @@ use std::os::raw::c_int;
 use std::sync::RwLock;
 
 use crate::config::GameConfig;
-use crate::entity::player::{CPlace, CThing};
+use crate::entity::player::CThing;
 use crate::level::Level;
 use glam::IVec2;
 
@@ -156,37 +152,16 @@ impl CurrentLevel {
     }
 }
 
-/// Index of a grid cell, matching the legacy C layout `&places[(x<<5)+y]`.
-#[inline]
-fn cell_index(y: c_int, x: c_int) -> usize {
-    ((x as usize) << 5) + (y as usize)
-}
-
-/// The legacy `PLACE` grid, now owned by Rust and reduced to its only
-/// remaining member, the per-cell monster pointer.
-///
-/// Previously defined in `extern.c` as `PLACE places[MAXLINES*MAXCOLS]`, this
-/// array is the single source of truth for each cell's monster occupancy. The
-/// type stays `crate::player::CPlace` so every existing
-/// `extern "C" { static mut places: [CPlace; 32 * 80] }` declaration links
-/// against this storage unchanged.
-#[no_mangle]
-pub static mut places: [CPlace; GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH] = [CPlace {
-    p_monst: std::ptr::null_mut(),
-};
-    GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH];
-
 /// Read the monster at `(y, x)`, or null.
 #[inline]
 pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut CThing {
-    places[cell_index(y, x)].p_monst
+    with_current_level(|level| level.monsters.at(y as usize, x as usize))
 }
 
 /// Place `tp` at `(y, x)` in the per-cell monster occupancy map.
 #[inline]
 pub unsafe fn set_monster(y: c_int, x: c_int, tp: *mut CThing) {
-    let i = cell_index(y, x);
-    places[i].p_monst = tp;
+    with_current_level_mut(|level| level.monsters.set(y as usize, x as usize, tp));
 }
 
 /// Read the monster map at `(y, x)` (equivalent to [`monster_at`]).
@@ -201,15 +176,9 @@ pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
     set_monster(y, x, tp);
 }
 
-/// Reset the places grid's monster pointers for a fresh level.
+/// Clear every cell's monster pointer for a fresh level.
 pub unsafe fn clear_level() {
-    let place_cells = std::slice::from_raw_parts_mut(
-        (&raw mut places).cast::<CPlace>(),
-        GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH,
-    );
-    for cell in place_cells {
-        cell.p_monst = std::ptr::null_mut();
-    }
+    with_current_level_mut(|level| level.monsters.clear());
 }
 
 /// Process-wide owner for the live dungeon level.

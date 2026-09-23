@@ -8,10 +8,10 @@ use std::ptr;
 use crate::daemon::{fuse, lengthen, start_daemon};
 use crate::daemons::{come_down, land, sight, unconfuse, unsee, visuals};
 use crate::draw::look;
-use crate::draw::place_at;
+
 use crate::entity::chase::see_monst;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CPlace, Stats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
@@ -139,7 +139,6 @@ unsafe extern "C" {
     static mut fruit: [c_char; 1024];
     static mut prbuf: [c_char; 2048];
     static mut player: CThing;
-    static mut places: [CPlace; 32 * 80];
     static mut pot_info: [CObjInfo; MAXPOTIONS];
     static mut max_stats: Stats;
     static mut e_levels: [c_int; 21];
@@ -186,7 +185,7 @@ unsafe fn next_thing(tp: *mut CThing) -> *mut CThing {
 
 #[inline]
 unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst
+    crate::game::monster_at(y, x)
 }
 
 #[inline]

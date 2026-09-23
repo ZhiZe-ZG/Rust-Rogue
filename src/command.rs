@@ -12,7 +12,7 @@ use crate::config::GameConfig;
 use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
-use crate::entity::player::{do_move, do_run, CPlace, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{do_move, do_run, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::help::{help, identify};
 use crate::item::armor::{take_off, wear};
@@ -184,7 +184,6 @@ unsafe extern "C" {
     static mut mpos: c_int;
     static mut no_command: c_int;
     static mut noscore: c_int;
-    static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
     static mut prbuf: [c_char; 2 * MAXSTR];
     static mut purse: c_int;

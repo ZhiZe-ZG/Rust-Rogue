@@ -36,7 +36,7 @@ use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
 use crate::entity::chase::runners;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CPlace, Stats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::thing_list::{allocated_count, new_item};
 use crate::item::things::CObjInfo;
@@ -225,7 +225,6 @@ unsafe extern "C" {
     static mut last_pick: *mut CThing;
 
     // rooms / map
-    static mut places: [CPlace; 32 * 80];
     static mut max_stats: Stats;
     static mut oldrp: Option<usize>;
 
@@ -2216,12 +2215,11 @@ unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
             let _ = rs_write_boolean(savef, lvl.flags.seen[idx] as c_int);
             let _ = rs_write_char(savef, lvl.flags.passnum[idx] as c_char);
             let _ = rs_write_char(savef, lvl.flags.trap[idx] as u8 as c_char);
-            // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
-            let place_idx = ((x as usize) << 5) + (y as usize);
+            // Per-cell monster occupancy.
             let _ = rs_write_thing_reference(
                 savef,
                 MLIST.head(),
-                crate::game::places[place_idx].p_monst,
+                lvl.monsters.at(y as usize, x as usize),
             );
             i += 1;
         }
@@ -2272,9 +2270,8 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
             lvl.flags.passnum[idx] = passnum as u8;
             lvl.flags.trap[idx] = crate::level::Trap::from_raw(trap_kind as u8);
 
-            // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
-            let place_idx = ((x as usize) << 5) + (y as usize);
-            crate::game::places[place_idx].p_monst = monst;
+            // Per-cell monster occupancy.
+            lvl.monsters.set(y as usize, x as usize, monst);
             i += 1;
         }
 

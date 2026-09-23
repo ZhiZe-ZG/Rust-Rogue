@@ -4,7 +4,7 @@
 use crate::entity::chase::{cansee, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};
-use crate::entity::player::{CPlace, Stats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
@@ -88,7 +88,6 @@ unsafe extern "C" {
     static mut after: c_uchar;
     static mut delta: IVec2;
     static mut ws_info: [CObjInfo; MAXSTICKS];
-    static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
     static mut weap_info: [CObjInfo; 10];
 
@@ -112,11 +111,6 @@ unsafe fn hero_pos() -> IVec2 {
 #[inline]
 unsafe fn hero_stats_mut() -> *mut Stats {
     &mut (*thing_t(&raw mut player)).t_stats
-}
-
-#[inline]
-unsafe fn place_idx(y: c_int, x: c_int) -> usize {
-    ((x as usize) << 5) + (y as usize)
 }
 
 #[inline]

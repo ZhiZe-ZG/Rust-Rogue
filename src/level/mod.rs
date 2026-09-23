@@ -5,6 +5,7 @@
 
 mod generation;
 mod level;
+mod monster_map;
 mod passages;
 mod presence;
 mod roomgraph;
@@ -16,6 +17,7 @@ mod trap;
 
 pub use generation::{door_open, new_level};
 pub use level::{with_current_level, with_current_level_mut, Level, LevelFlags};
+pub use monster_map::MonsterMap;
 pub(crate) use presence::find_floor;
 
 pub use passages::{Passage, PassageLinks};

@@ -13,8 +13,8 @@ use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::draw::{self, chat_at, place_at, winat as draw_winat};
-use crate::entity::player::{CPlace, CThing, CThingMonster, CThingObject};
+use crate::draw::{self, chat_at, winat as draw_winat};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::item::thing_list::discard;
 use crate::item::things::{dropcheck, inv_name};
 use crate::level::tile_is_walkable;
@@ -118,7 +118,6 @@ unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
     static mut has_hit: c_uchar;
-    static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
     static mut weap_info: [CObjInfo; MAXWEAPONS + 1];
 
@@ -149,7 +148,7 @@ unsafe fn chat(y: c_int, x: c_int) -> c_int {
 
 #[inline]
 unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
-    (*place_at((&raw mut places) as *mut CPlace, y, x)).p_monst
+    crate::game::monster_at(y, x)
 }
 
 #[inline]

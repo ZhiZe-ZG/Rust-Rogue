@@ -84,15 +84,6 @@ pub union CThing {
     pub o: CThingObject,
 }
 
-/// Per-cell monster occupancy, mirroring the legacy C `PLACE` struct minus the
-/// obsolete `p_ch`/`p_flags` members (those now live in `CURRENT_LEVEL`'s tile
-/// map and flag grids; see [`crate::draw`]).
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CPlace {
-    pub p_monst: *mut CThing,
-}
-
 unsafe extern "C" {
     static mut after: c_uchar;
     static mut count: c_int;
@@ -110,7 +101,6 @@ unsafe extern "C" {
     static mut delta: IVec2;
     static mut player: CThing;
     static mut runch: c_char;
-    static mut places: [CPlace; 32 * 80];
 
 }
 

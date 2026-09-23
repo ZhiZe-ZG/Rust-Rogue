@@ -82,13 +82,6 @@ unsafe extern "C" {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/// Offset a base pointer to the grid cell at `(y, x)` using the legacy
-/// `(x<<5)+y` layout shared with the `places` array.
-#[inline]
-pub(crate) unsafe fn place_at<T>(base: *mut T, y: c_int, x: c_int) -> *mut T {
-    base.add(((x as usize) << 5) + (y as usize))
-}
-
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
     tp as *mut CThingMonster

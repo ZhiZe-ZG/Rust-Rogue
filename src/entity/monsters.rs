@@ -7,7 +7,7 @@ use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CPlace, Stats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach, new_item};
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
 
     (*thing_t(tp)).t_oldch = crate::draw::chat_at((*cp).y, (*cp).x);
     (*thing_t(tp)).t_room = roomin(cp);
-    // Keep the authoritative Rust occupancy map and legacy places mirror in sync.
+    // Record the monster in the per-cell occupancy map.
     crate::game::set_monster((*cp).y, (*cp).x, tp);
 
     let mp = &monsters[(monster_type as i32 - 'A' as i32) as usize];

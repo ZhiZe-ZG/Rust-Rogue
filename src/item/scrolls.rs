@@ -8,7 +8,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::config::GameConfig;
 use crate::draw::{chat_at as draw_chat, look, map_cell_reveal, winat as draw_winat};
 use crate::entity::monsters::{new_monster, randmonster};
-use crate::entity::player::{CPlace, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game;
 use crate::game::EQUIPMENT;
 use crate::init::pick_color;
@@ -120,7 +120,6 @@ pub struct CObjInfo {
 unsafe extern "C" {
     static mut terse: c_uchar;
     static mut no_command: c_int;
-    static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
     static mut scr_info: [CObjInfo; MAXSCROLLS];
     static mut weap_info: [CObjInfo; 10];

@@ -13,6 +13,7 @@ use super::passages::{
     apply_passage, build_passage, collect_corridor_end, corridor_tiles, mark_passages,
     number_passages, plan_corridor, Passage, PassageLinks,
 };
+use super::monster_map::MonsterMap;
 use super::roomgraph::RoomGraph;
 use super::rooms::{build_generated_rooms, Room};
 use super::structure::Structure;
@@ -79,6 +80,8 @@ pub struct Level {
     /// Floor items (objects) resting on the level, replacing the legacy C
     /// `lvl_obj` global.
     pub items: ItemList,
+    /// Per-cell monster occupancy, replacing the legacy C `places` grid.
+    pub monsters: MonsterMap,
 }
 
 impl Level {
@@ -99,6 +102,7 @@ impl Level {
             flags: LevelFlags::cleared(),
             passage_links: Vec::new(),
             items: ItemList::new(),
+            monsters: MonsterMap::new(),
         }
     }
 
