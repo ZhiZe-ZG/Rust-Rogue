@@ -244,8 +244,6 @@ pub static mut last_pick: *mut CThing = std::ptr::null_mut();
 #[no_mangle]
 pub static mut lvl_obj: *mut CThing = std::ptr::null_mut();
 #[no_mangle]
-pub static mut mlist: *mut CThing = std::ptr::null_mut();
-#[no_mangle]
 pub static mut player: CThing = CThing {
     t: crate::entity::player::CThingMonster {
         l_next: std::ptr::null_mut(),

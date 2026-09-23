@@ -15,6 +15,7 @@ use crate::ui::output::{addmsg_str, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
+use crate::entity::monster_list::MLIST;
 use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::startup::roll;
 
@@ -92,7 +93,6 @@ unsafe extern "C" {
     static mut stairs: CCoord;
     static mut terse: c_uchar;
     static mut lvl_obj: *mut CThing;
-    static mut mlist: *mut CThing;
 
     fn free(ptr: *mut c_void);
     fn isupper(c: c_int) -> c_int;
@@ -291,7 +291,7 @@ pub unsafe fn add_haste(potion: bool) -> bool {
 
 #[no_mangle]
 pub unsafe extern "C" fn aggravate() {
-    let mut mp = mlist;
+    let mut mp = MLIST.head();
     while !mp.is_null() {
         runto(&mut (*thing_t(mp)).t_pos);
         mp = (*thing_t(mp)).l_next;

@@ -10,6 +10,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar};
 pub(crate) use crate::daemons::visuals;
 pub(crate) use crate::draw::enter_room;
 pub(crate) use crate::entity::chase::roomin;
+pub(crate) use crate::entity::monster_list::MLIST;
 pub(crate) use crate::entity::monsters::{give_pack, new_monster, randmonster, wake_monster};
 use crate::entity::player::{CCoord, CPlace, CRoom, CThing, CThingMonster, CThingObject};
 pub(crate) use crate::item::potions::turn_see;
@@ -47,7 +48,6 @@ unsafe extern "C" {
     pub(crate) static mut passages: [CRoom; GameConfig::MAX_PASSAGES];
     pub(crate) static mut lvl_obj: *mut CThing;
     pub(crate) static mut player: CThing;
-    pub(crate) static mut mlist: *mut CThing;
     pub(crate) static mut no_food: c_int;
     pub(crate) static mut ntraps: c_int;
     pub(crate) static mut stairs: CCoord;

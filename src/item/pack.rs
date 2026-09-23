@@ -5,6 +5,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::draw::chat_at as draw_chat;
+use crate::entity::monster_list::MLIST;
 use crate::entity::player::{CRoom, CThing};
 use crate::item::scrolls::ScrollType;
 use crate::item::thing_list::{detach, discard, new_item};
@@ -48,7 +49,6 @@ unsafe extern "C" {
     static mut last_pick: *mut CThing;
     static mut l_last_pick: *mut CThing;
     static mut lvl_obj: *mut CThing;
-    static mut mlist: *mut CThing;
     static mut move_on: c_uchar;
     static mut msg_esc: c_uchar;
     static mut mpos: c_int;
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
 
     (*thing_o(item)).o_flags |= ISFOUND as c_int;
 
-    op = mlist;
+    op = MLIST.head();
     while !op.is_null() {
         if (*thing_t(op)).t_dest == &raw mut (*thing_o(item)).o_pos {
             (*thing_t(op)).t_dest = &raw mut (*thing_t(&raw mut player)).t_pos;

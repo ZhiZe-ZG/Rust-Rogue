@@ -10,6 +10,7 @@ use crate::daemons::{come_down, land, sight, unconfuse, unsee, visuals};
 use crate::draw::look;
 use crate::draw::place_at;
 use crate::entity::chase::see_monst;
+use crate::entity::monster_list::MLIST;
 use crate::entity::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::pack::{get_item, leave_pack};
@@ -139,7 +140,6 @@ unsafe extern "C" {
     static mut prbuf: [c_char; 2048];
     static mut player: CThing;
     static mut lvl_obj: *mut CThing;
-    static mut mlist: *mut CThing;
     static mut places: [CPlace; 32 * 80];
     static mut pot_info: [CObjInfo; MAXPOTIONS];
     static mut max_stats: CStats;
@@ -364,7 +364,7 @@ pub unsafe extern "C" fn quaff() {
                     }
                     tp = next_thing(tp);
                 }
-                mp = mlist;
+                mp = MLIST.head();
                 while !mp.is_null() {
                     tp = (*thing_t(mp)).t_pack;
                     while !tp.is_null() {
@@ -509,7 +509,7 @@ pub unsafe extern "C" fn is_magic(obj: *mut CThing) -> c_uchar {
 /// Turn on the ability to see invisible.
 #[no_mangle]
 pub unsafe extern "C" fn invis_on() {
-    let mut mp = mlist;
+    let mut mp = MLIST.head();
     (*thing_t(&raw mut player)).t_flags |= CANSEE;
     while !mp.is_null() {
         if thing_has(mp, ISINVIS) && see_monst(mp) != 0 && !player_has(ISHALU) {
@@ -526,7 +526,7 @@ pub unsafe extern "C" fn invis_on() {
 /// Put on or off seeing monsters on this level.
 #[no_mangle]
 pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
-    let mut mp = mlist;
+    let mut mp = MLIST.head();
     let mut add_new = 0;
 
     while !mp.is_null() {

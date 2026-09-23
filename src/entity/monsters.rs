@@ -6,6 +6,7 @@ use crate::daemon::{fuse, lengthen};
 use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
+use crate::entity::monster_list::MLIST;
 use crate::entity::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
@@ -111,7 +112,6 @@ static WAND_MONS: [c_char; 26] = [
 
 unsafe extern "C" {
     static mut max_level: c_int;
-    static mut mlist: *mut CThing;
     static mut monsters: [CMonster; 26];
     static mut player: CThing;
     static mut wizard: c_int;
@@ -182,7 +182,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
         lev_add = 0;
     }
 
-    attach(&raw mut mlist, tp);
+    MLIST.attach(tp);
 
     (*thing_t(tp)).t_type = monster_type;
     (*thing_t(tp)).t_disguise = monster_type;

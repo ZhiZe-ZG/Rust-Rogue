@@ -19,6 +19,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon};
 use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
+use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::wanderer;
 use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
@@ -59,7 +60,6 @@ const STARVETIME: c_int = 850;
 unsafe extern "C" {
     static mut player: CThing;
     static mut quiet: c_int;
-    static mut mlist: *mut CThing;
     static mut lvl_obj: *mut CThing;
     static mut hungry_state: c_int;
     static mut food_left: c_int;
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn unconfuse() {
 /// Turn off the ability to see invisible.
 #[no_mangle]
 pub unsafe extern "C" fn unsee() {
-    let mut th = mlist;
+    let mut th = MLIST.head();
     while !th.is_null() {
         if ((*thing_t(th)).t_flags & ISINVIS) != 0 && see_monst(th) != 0 {
             output::write_glyph_at(
@@ -315,7 +315,7 @@ pub unsafe extern "C" fn come_down() {
 
     // Undo the monsters.
     let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
-    let mut tp = mlist;
+    let mut tp = MLIST.head();
     while !tp.is_null() {
         output::move_cursor(IVec2::new(
             (*thing_t(tp)).t_pos.x,
@@ -372,7 +372,7 @@ pub unsafe extern "C" fn visuals() {
 
     // Change the monsters.
     let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
-    let mut tp = mlist;
+    let mut tp = MLIST.head();
     while !tp.is_null() {
         output::move_cursor(IVec2::new(
             (*thing_t(tp)).t_pos.x,

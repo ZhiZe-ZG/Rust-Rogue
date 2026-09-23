@@ -5,6 +5,7 @@
 
 pub mod chase;
 pub mod fight;
+pub mod monster_list;
 pub mod monsters;
 pub mod player;
 pub mod rndmove;

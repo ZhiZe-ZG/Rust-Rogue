@@ -17,7 +17,7 @@ use super::presence::populate_level;
 use super::rooms::Room;
 use super::structure::Structure;
 use super::symbols::{
-    free_list, lvl_obj, max_level, mlist, no_food, player, thing_t, wake_monster, ISGONE, ISHELD,
+    free_list, lvl_obj, max_level, no_food, player, thing_t, wake_monster, ISGONE, ISHELD, MLIST,
 };
 use super::tile::Tile;
 
@@ -64,13 +64,13 @@ unsafe fn reset_level() {
 }
 
 unsafe fn clear_previous_level_items() {
-    let mut monster = mlist;
+    let mut monster = MLIST.head();
     while !monster.is_null() {
         let next = (*thing_t(monster)).l_next;
         free_list((&raw mut (*thing_t(monster)).t_pack) as *mut *mut CThing);
         monster = next;
     }
-    free_list((&raw mut mlist) as *mut *mut CThing);
+    MLIST.free_list();
     free_list((&raw mut lvl_obj) as *mut *mut CThing);
 }
 

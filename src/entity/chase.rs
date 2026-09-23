@@ -10,6 +10,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
+use crate::entity::monster_list::MLIST;
 use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
 use crate::entity::rndmove::rndmove;
 use crate::item::scrolls::ScrollType;
@@ -66,7 +67,6 @@ static mut TRYP: CCoord = CCoord { x: 0, y: 0 };
 static mut CANSEE_TP: CCoord = CCoord { x: 0, y: 0 };
 
 unsafe extern "C" {
-    static mut mlist: *mut CThing;
     static mut lvl_obj: *mut CThing;
     static mut player: CThing;
     static mut passages: [CRoom; GameConfig::MAX_PASSAGES];
@@ -156,7 +156,7 @@ unsafe fn winat(y: c_int, x: c_int) -> c_char {
 /// Uses globals: mlist, hero, to_death, has_hit.
 #[no_mangle]
 pub unsafe extern "C" fn runners() {
-    let mut tp = mlist;
+    let mut tp = MLIST.head();
     while !tp.is_null() {
         // remember this in case the monster's "next" is changed
         let next = (*thing_t(tp)).l_next;
@@ -668,7 +668,7 @@ pub unsafe extern "C" fn find_dest(tp: *mut CThing) -> *mut CCoord {
             continue;
         }
         if roomin(&raw mut (*thing_o(obj)).o_pos) == (*thing_t(tp)).t_room && rnd(100) < prob {
-            let mut m = mlist;
+            let mut m = MLIST.head();
             while !m.is_null() {
                 if (*thing_t(m)).t_dest == &raw mut (*thing_o(obj)).o_pos {
                     break;

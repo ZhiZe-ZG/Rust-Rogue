@@ -11,6 +11,7 @@
 use crate::rnd::rnd;
 
 use crate::entity::chase::{runto, see_monst};
+use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::save;
 use crate::game::EQUIPMENT;
 use crate::init::pick_color;
@@ -112,7 +113,6 @@ static mut PRNAME_BUF: [c_char; MAXSTR] = [0; MAXSTR];
 
 unsafe extern "C" {
     static mut player: CThing;
-    static mut mlist: *mut CThing;
     static mut monsters: [CMonster; 26];
     static mut weap_info: [CObjInfo; 10]; // MAXWEAPONS + 1
     static mut e_levels: [c_int; 21];
@@ -830,7 +830,7 @@ pub unsafe extern "C" fn remove_mon(mp: *mut CCoord, tp: *mut CThing, waskill: c
     let oldch = (*thing_t(tp)).t_oldch;
     output::write_glyph_at(IVec2::new((*mp).x, (*mp).y), (oldch as u8) as char);
 
-    detach(&raw mut mlist as *mut *mut CThing, tp);
+    MLIST.detach(tp);
 
     if on_p(tp, ISTARGET) {
         kamikaze = false as c_uchar;

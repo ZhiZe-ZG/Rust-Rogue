@@ -20,7 +20,7 @@ use glam::IVec2;
 
 use super::level::{with_current_level_mut, LevelFlags};
 use super::symbols::{
-    amulet, attach, enter_room, give_pack, tile_is_walkable, lvl_obj, max_level, mlist, new_item,
+    amulet, attach, enter_room, give_pack, tile_is_walkable, lvl_obj, max_level, MLIST, new_item,
     new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, stairs,
     thing_o, thing_t, turn_see, visuals, AMULET, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN,
     PLAYER, SEEMONST,
@@ -343,7 +343,7 @@ unsafe fn place_stairs() {
 /// Uses globals: mlist.
 /// ```
 pub(crate) unsafe fn link_monsters_to_rooms() {
-    let mut tp = mlist;
+    let mut tp = MLIST.head();
     while !tp.is_null() {
         let t = thing_t(tp);
         (*t).t_room = roomin(&raw mut (*t).t_pos);

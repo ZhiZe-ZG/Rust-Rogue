@@ -34,6 +34,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
 use crate::entity::chase::runners;
+use crate::entity::monster_list::MLIST;
 use crate::entity::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::thing_list::{allocated_count, new_item};
@@ -222,7 +223,6 @@ unsafe extern "C" {
     static mut l_last_pick: *mut CThing;
     static mut last_pick: *mut CThing;
     static mut lvl_obj: *mut CThing;
-    static mut mlist: *mut CThing;
 
     // rooms / map
     static mut places: [CPlace; 32 * 80];
@@ -1853,7 +1853,7 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
         let _ = rs_write_int(savef, 0);
         let _ = rs_write_int(savef, 1);
     } else if !t_dest.is_null() {
-        i = find_thing_coord(mlist, t_dest);
+        i = find_thing_coord(MLIST.head(), t_dest);
 
         if i >= 0 {
             let _ = rs_write_int(savef, 1);
@@ -1979,7 +1979,7 @@ unsafe fn rs_fix_thing(t: *mut CThing) {
         return;
     }
 
-    let item = get_list_item(mlist, (*thing_t(t)).t_reserved);
+    let item = get_list_item(MLIST.head(), (*thing_t(t)).t_reserved);
 
     if !item.is_null() {
         (*thing_t(t)).t_dest = (&raw mut (*thing_t(item)).t_pos) as *mut CCoord;
@@ -2171,7 +2171,11 @@ unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
             let _ = rs_write_char(savef, lvl.flags.trap[idx] as u8 as c_char);
             // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
             let place_idx = ((x as usize) << 5) + (y as usize);
-            let _ = rs_write_thing_reference(savef, mlist, crate::game::places[place_idx].p_monst);
+            let _ = rs_write_thing_reference(
+                savef,
+                MLIST.head(),
+                crate::game::places[place_idx].p_monst,
+            );
             i += 1;
         }
 
@@ -2210,7 +2214,7 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
             let _ = rs_read_boolean(inf, &mut seen);
             let _ = rs_read_char(inf, &mut passnum);
             let _ = rs_read_char(inf, &mut trap_kind);
-            let _ = rs_read_thing_reference(inf, mlist, &mut monst);
+            let _ = rs_read_thing_reference(inf, MLIST.head(), &mut monst);
 
             let tile =
                 crate::level::Tile::from_u8(tile_disc as u8).unwrap_or(crate::level::Tile::Empty);
@@ -2362,7 +2366,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, last_pick);
 
     let _ = rs_write_object_list(savef, lvl_obj);
-    let _ = rs_write_thing_list(savef, mlist);
+    let _ = rs_write_thing_list(savef, MLIST.head());
 
     let _ = rs_write_places(
         savef,
@@ -2584,7 +2588,9 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut last_pick);
 
     let _ = rs_read_object_list(inf, &raw mut lvl_obj);
+    let mut mlist: *mut CThing = std::ptr::null_mut();
     let _ = rs_read_thing_list(inf, &raw mut mlist);
+    MLIST.set_head(mlist);
     rs_fix_thing(&raw mut player);
     rs_fix_thing_list(mlist);
 
