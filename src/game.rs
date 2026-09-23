@@ -19,68 +19,93 @@
 //! grids on the fly.
 
 use std::os::raw::c_int;
-use std::sync::atomic::{AtomicPtr, Ordering};
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 use crate::config::GameConfig;
 use crate::entity::player::{CPlace, CThing};
 use crate::level::Level;
 
+/// A non-owning, interior-mutable cell for a raw [`CThing`] pointer.
+///
+/// The game is single-threaded, but these pointers are shared through
+/// `static`s (which must be `Sync`). The raw pointer itself is neither `Send`
+/// nor `Sync`, so this wrapper opts in explicitly and exposes lock-guarded
+/// access.
+struct PtrCell(RwLock<*mut CThing>);
+
+// SAFETY: access to the pointer is always guarded by the inner `RwLock`, and
+// the pointer is only dereferenced by the owning (single-threaded) game logic.
+unsafe impl Send for PtrCell {}
+unsafe impl Sync for PtrCell {}
+
+impl PtrCell {
+    const fn new() -> Self {
+        Self(RwLock::new(std::ptr::null_mut()))
+    }
+
+    #[inline]
+    fn get(&self) -> *mut CThing {
+        *self.0.read().unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    #[inline]
+    fn set(&self, ptr: *mut CThing) {
+        *self.0.write().unwrap_or_else(|poison| poison.into_inner()) = ptr;
+    }
+}
+
 /// Non-owning pointers to the objects currently equipped by the player.
 pub struct Equipment {
-    armor: AtomicPtr<CThing>,
-    rings: [AtomicPtr<CThing>; 2],
-    weapon: AtomicPtr<CThing>,
+    armor: PtrCell,
+    rings: [PtrCell; 2],
+    weapon: PtrCell,
 }
 
 impl Equipment {
     const EMPTY: Self = Self {
-        armor: AtomicPtr::new(std::ptr::null_mut()),
-        rings: [
-            AtomicPtr::new(std::ptr::null_mut()),
-            AtomicPtr::new(std::ptr::null_mut()),
-        ],
-        weapon: AtomicPtr::new(std::ptr::null_mut()),
+        armor: PtrCell::new(),
+        rings: [PtrCell::new(), PtrCell::new()],
+        weapon: PtrCell::new(),
     };
 
     #[inline]
     pub fn armor(&self) -> *mut CThing {
-        self.armor.load(Ordering::Relaxed)
+        self.armor.get()
     }
 
     #[inline]
     pub fn set_armor(&self, armor: *mut CThing) {
-        self.armor.store(armor, Ordering::Relaxed);
+        self.armor.set(armor);
     }
 
     #[inline]
     pub fn left_ring(&self) -> *mut CThing {
-        self.rings[0].load(Ordering::Relaxed)
+        self.rings[0].get()
     }
 
     #[inline]
     pub fn right_ring(&self) -> *mut CThing {
-        self.rings[1].load(Ordering::Relaxed)
+        self.rings[1].get()
     }
 
     #[inline]
     pub fn set_left_ring(&self, ring: *mut CThing) {
-        self.rings[0].store(ring, Ordering::Relaxed);
+        self.rings[0].set(ring);
     }
 
     #[inline]
     pub fn set_right_ring(&self, ring: *mut CThing) {
-        self.rings[1].store(ring, Ordering::Relaxed);
+        self.rings[1].set(ring);
     }
 
     #[inline]
     pub fn weapon(&self) -> *mut CThing {
-        self.weapon.load(Ordering::Relaxed)
+        self.weapon.get()
     }
 
     #[inline]
     pub fn set_weapon(&self, weapon: *mut CThing) {
-        self.weapon.store(weapon, Ordering::Relaxed);
+        self.weapon.set(weapon);
     }
 }
 
@@ -89,35 +114,43 @@ pub static EQUIPMENT: Equipment = Equipment::EMPTY;
 
 /// Lazily initialized owner of the live dungeon level.
 pub struct CurrentLevel {
-    level: Mutex<Option<Level>>,
+    level: RwLock<Option<Level>>,
 }
 
 impl CurrentLevel {
     const EMPTY: Self = Self {
-        level: Mutex::new(None),
+        level: RwLock::new(None),
     };
 
+    /// Ensure the live level exists, initializing it on first access.
     #[inline]
-    pub fn with<R>(&self, operation: impl FnOnce(&Level) -> R) -> R {
+    fn ensure_initialized(&self) {
         let mut level = self
             .level
-            .lock()
+            .write()
             .unwrap_or_else(|poison| poison.into_inner());
         if level.is_none() {
             *level = Some(Level::new());
         }
+    }
+
+    #[inline]
+    pub fn with<R>(&self, operation: impl FnOnce(&Level) -> R) -> R {
+        self.ensure_initialized();
+        let level = self
+            .level
+            .read()
+            .unwrap_or_else(|poison| poison.into_inner());
         operation(level.as_ref().unwrap())
     }
 
     #[inline]
     pub fn with_mut<R>(&self, operation: impl FnOnce(&mut Level) -> R) -> R {
+        self.ensure_initialized();
         let mut level = self
             .level
-            .lock()
+            .write()
             .unwrap_or_else(|poison| poison.into_inner());
-        if level.is_none() {
-            *level = Some(Level::new());
-        }
         operation(level.as_mut().unwrap())
     }
 }
@@ -178,7 +211,7 @@ pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
 }
 
 /// Reset the places grid's monster pointers and the monster map for a fresh
-/// level. (The `Level` reset — tiles/flags — is handled by `Level::reset`.)
+/// level.
 pub unsafe fn clear_level() {
     let place_cells = std::slice::from_raw_parts_mut(
         (&raw mut places).cast::<CPlace>(),
