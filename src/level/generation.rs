@@ -20,7 +20,7 @@ use super::symbols::{
 };
 use super::tile::Tile;
 
-unsafe fn generate_rooms_and_connections() -> [Room; GameConfig::MAX_ROOMS] {
+fn generate_rooms_and_connections() -> [Room; GameConfig::MAX_ROOMS] {
     let rooms = std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO));
     let room_size = IVec2::new(GameConfig::SCREEN_COLS / 3, GameConfig::SCREEN_LINES / 3);
     with_current_level_mut(|current| current.generate_rooms_and_connections(rooms, room_size))
