@@ -2,12 +2,11 @@
 //!
 //! A [`Tile`] describes logical map content; its on-screen glyph is chosen at
 //! draw time.
-/// Semantic tile kinds used by Rust level-generation structures.
+
+/// Semantic tile kinds for the level map.
 ///
-/// These values describe logical map content, independent of the concrete
-/// glyphs rendered by the C/ncurses side. Orientation-sensitive tiles such as
-/// [`Tile::Wall`] have their on-screen character (`-` vs `|`) decided at draw
-/// time from the neighbouring cells.
+/// Orientation-sensitive tiles such as [`Tile::Wall`] have their on-screen
+/// character (`-` vs `|`) decided at draw time from the neighbouring cells.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Tile {
     /// Outside playable geometry / uninitialized map cell.
@@ -26,8 +25,8 @@ pub enum Tile {
     HiddenDoor,
     /// Down staircase to the next dungeon level.
     Stairs,
-    /// Hidden trap that can trigger gameplay effects; renders like floor
-    /// until it is revealed.
+    /// Hidden trap that can trigger gameplay effects; renders as floor until
+    /// seen.
     Trap,
 }
 
