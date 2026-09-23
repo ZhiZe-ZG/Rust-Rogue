@@ -13,11 +13,9 @@ use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::draw::{self, chat_at, winat as draw_winat};
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::item::thing_list::discard;
 use crate::item::things::{dropcheck, inv_name};
-use crate::level::tile_is_walkable;
 
 const NO_WEAPON: c_int = -1;
 
@@ -143,17 +141,12 @@ unsafe fn hero() -> IVec2 {
 
 #[inline]
 unsafe fn chat(y: c_int, x: c_int) -> c_int {
-    chat_at(y, x) as c_uchar as c_int
+    crate::draw::cell_glyph(y, x) as c_uchar as c_int
 }
 
 #[inline]
 unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
     crate::game::monster_at(y, x)
-}
-
-#[inline]
-unsafe fn winat(y: c_int, x: c_int) -> c_int {
-    draw_winat(y, x) as c_uchar as c_int
 }
 
 #[inline]
@@ -213,8 +206,9 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
         (*o).o_pos.y += ydelta;
         (*o).o_pos.x += xdelta;
 
-        let ch = winat((*o).o_pos.y, (*o).o_pos.x);
-        if tile_is_walkable(ch as u8) && ch != DOOR {
+        if crate::game::cell_is_walkable((*o).o_pos.y, (*o).o_pos.x)
+            && !crate::game::is_door_at((*o).o_pos.y, (*o).o_pos.x)
+        {
             if cansee((*o).o_pos.y, (*o).o_pos.x) != 0 && terse == 0 {
                 output::write_glyph_at(
                     IVec2::new((*o).o_pos.x, (*o).o_pos.y),

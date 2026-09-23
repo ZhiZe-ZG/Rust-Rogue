@@ -246,11 +246,6 @@ unsafe fn player_has(flag: c_short) -> bool {
 }
 
 #[inline]
-unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    crate::draw::chat_at(y, x)
-}
-
-#[inline]
 unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
     crate::game::monster_at(y, x)
 }
@@ -899,8 +894,8 @@ pub unsafe extern "C" fn search() {
             }
             let flags = crate::draw::flat_at(y, x);
             if (flags as u8 & F_REAL as u8) == 0 {
-                match chat_at(y, x) as u8 {
-                    b'|' | b'-' => {
+                match crate::game::tile_at(y, x) {
+                    crate::level::Tile::Wall | crate::level::Tile::HiddenDoor => {
                         if rnd(5 + probinc) == 0 {
                             crate::draw::reveal_secret_at(y, x);
                             msg_str("a secret door");
@@ -909,7 +904,7 @@ pub unsafe extern "C" fn search() {
                             running = false as c_uchar;
                         }
                     }
-                    b'.' => {
+                    crate::level::Tile::Trap => {
                         if rnd(2 + probinc) == 0 {
                             crate::level::with_current_level_mut(|current| {
                                 current.reveal_trap(y as usize, x as usize);
@@ -937,7 +932,7 @@ pub unsafe extern "C" fn search() {
                             running = false as c_uchar;
                         }
                     }
-                    b' ' => {
+                    crate::level::Tile::Empty => {
                         if rnd(3 + probinc) == 0 {
                             crate::draw::reveal_secret_at(y, x);
                             found = true;
@@ -970,7 +965,7 @@ pub unsafe extern "C" fn d_level() {
         return;
     }
     let hero = hero_pos();
-    if chat_at(hero.y, hero.x) != STAIRS {
+    if crate::game::tile_at(hero.y, hero.x) != crate::level::Tile::Stairs {
         msg_str("I see no way down");
     } else {
         crate::game::set_current_depth(crate::game::current_depth() + 1);
@@ -989,7 +984,7 @@ pub unsafe extern "C" fn u_level() {
         return;
     }
     let hero = hero_pos();
-    if chat_at(hero.y, hero.x) == STAIRS {
+    if crate::game::tile_at(hero.y, hero.x) == crate::level::Tile::Stairs {
         if amulet != 0 {
             crate::game::set_current_depth(crate::game::current_depth() - 1);
             if crate::game::current_depth() == 0 {

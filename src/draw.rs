@@ -3,7 +3,7 @@
 //! The single place that turns the Rust `CURRENT_LEVEL` (tile [`Tile`] map +
 //! [`LevelFlags`] grids) plus the global monster/object lists into the ASCII
 //! graphic printed by ncurses. Cell *state* (the legacy `p_ch`) is never
-//! cached: every read ([`chat_at`], [`winat`], [`flat_at`]) is computed on
+//! cached: every read ([`cell_glyph`], [`winat`], [`flat_at`]) is computed on
 //! the fly, so the `p_ch`/`p_flags` members removed from `PLACE` are not
 //! missed. Runtime reveal/mutation helpers ([`map_cell_reveal`],
 //! [`reveal_secret_at`], [`reveal_trap_at`], [`set_seen_at`]) update the
@@ -167,10 +167,10 @@ pub(crate) unsafe fn terrain_chat_at(y: c_int, x: c_int) -> c_char {
     })
 }
 
-/// Display glyph at `(y, x)`: a level object's type char if one lies here,
+/// Rendering glyph at `(y, x)`: a level object's type char if one lies here,
 /// otherwise the terrain glyph. Excludes the monster overlay (that's
 /// [`winat`]).
-pub(crate) unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
+pub(crate) unsafe fn cell_glyph(y: c_int, x: c_int) -> c_char {
     let obj = find_obj(y, x);
     if !obj.is_null() {
         (*thing_o(obj)).o_type as c_char
@@ -181,15 +181,15 @@ pub(crate) unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
 
 /// Redraw one cell from the current game model.
 pub(crate) unsafe fn redraw_cell(y: c_int, x: c_int) {
-    output::write_glyph_at(IVec2::new(x, y), (chat_at(y, x) as u8) as char);
+    output::write_glyph_at(IVec2::new(x, y), (cell_glyph(y, x) as u8) as char);
 }
 
 /// Visible glyph at `(y, x)`: a monster's disguise if one stands here,
-/// otherwise [`chat_at`].
+/// otherwise [`cell_glyph`].
 pub(crate) unsafe fn winat(y: c_int, x: c_int) -> c_char {
     let tp = game::monster_at(y, x);
     if tp.is_null() {
-        chat_at(y, x)
+        cell_glyph(y, x)
     } else {
         (*thing_t(tp)).t_disguise
     }
@@ -314,14 +314,14 @@ fn is_door_or_hidden(ch: c_char, flags: c_char) -> bool {
 /// Draw all passage and door tiles for the current level (FFI export).
 ///
 /// Iterates the screen and redraws every cell marked as a passage or a door,
-/// marking it seen. Every glyph comes from [`chat_at`]/[`flat_at`] which read
+/// marking it seen. Every glyph comes from [`cell_glyph`]/[`flat_at`] which read
 /// `CURRENT_LEVEL` directly.
 #[no_mangle]
 pub unsafe extern "C" fn add_pass() {
     for y in 1..GameConfig::SCREEN_LINES - 1 {
         for x in 0..GameConfig::SCREEN_COLS {
             let flags = flat_at(y, x);
-            let ch = chat_at(y, x);
+            let ch = cell_glyph(y, x);
             if (flags as u8 & F_PASS as u8) != 0 || is_door_or_hidden(ch, flags) {
                 let mut out_ch = ch;
                 if (flags as u8 & F_PASS as u8) != 0 {
@@ -381,7 +381,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
         diffhero = hero.y - hero.x;
     }
 
-    pch = chat_at(hero.y, hero.x);
+    pch = cell_glyph(hero.y, hero.x);
     pfl = flat_at(hero.y, hero.x);
 
     for y in sy..=ey {
@@ -396,7 +396,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
                 continue;
             }
 
-            ch = chat_at(y, x) as c_int;
+            ch = cell_glyph(y, x) as c_int;
             if ch == b' ' as c_int {
                 continue;
             }
@@ -413,8 +413,8 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             {
                 if hero.x != x
                     && hero.y != y
-                    && !tile_is_walkable(chat_at(y, hero.x) as u8)
-                    && !tile_is_walkable(chat_at(hero.y, x) as u8)
+                    && !tile_is_walkable(game::tile_at(y, hero.x))
+                    && !tile_is_walkable(game::tile_at(hero.y, x))
                 {
                     continue;
                 }
@@ -618,7 +618,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut IVec2) {
         let mut x = x0;
         while x < x_end {
             let tp = game::monster_at(y, x);
-            let ch = chat_at(y, x);
+            let ch = cell_glyph(y, x);
 
             if tp.is_null() {
                 if cchar_at_cursor() != ch {
@@ -700,7 +700,7 @@ pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
                     output::write_glyph((ch as u8) as char);
                     output::set_standout(false);
                 } else {
-                    let out = if chat_at(y, x) == DOOR { DOOR } else { floor };
+                    let out = if game::is_door_at(y, x) { DOOR } else { floor };
                     output::write_glyph((out as u8) as char);
                 }
             }

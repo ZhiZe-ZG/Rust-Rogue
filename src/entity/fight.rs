@@ -182,11 +182,6 @@ unsafe fn on_p(tp: *mut CThing, flag: c_short) -> bool {
 }
 
 #[inline]
-unsafe fn chat(y: c_int, x: c_int) -> c_char {
-    crate::draw::chat_at(y, x)
-}
-
-#[inline]
 unsafe fn isring(ring: *mut CThing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }

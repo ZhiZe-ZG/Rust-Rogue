@@ -188,7 +188,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
     (*thing_t(tp)).t_disguise = monster_type;
     (*thing_t(tp)).t_pos = *cp;
 
-    (*thing_t(tp)).t_oldch = crate::draw::chat_at((*cp).y, (*cp).x);
+    (*thing_t(tp)).t_oldch = crate::draw::cell_glyph((*cp).y, (*cp).x);
     (*thing_t(tp)).t_room = roomin(cp);
     // Record the monster in the per-cell occupancy map.
     crate::game::set_monster((*cp).y, (*cp).x, tp);

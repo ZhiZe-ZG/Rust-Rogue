@@ -7,7 +7,6 @@ use std::os::raw::{c_char, c_int, c_uchar};
 use crate::entity::chase::diag_ok;
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::item::scrolls::ScrollType;
-use crate::level::tile_is_walkable;
 use crate::rnd::rnd;
 
 const SCROLL: c_char = b'?' as c_char;
@@ -23,11 +22,6 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
     tp as *mut CThingObject
-}
-
-#[inline]
-unsafe fn winat(y: c_int, x: c_int) -> c_char {
-    crate::draw::winat(y, x)
 }
 
 /// Persistent return coordinate, mirroring C's `static coord ret`.
@@ -52,25 +46,22 @@ pub unsafe extern "C" fn rndmove(who: *mut CThing) -> *mut IVec2 {
         return &raw mut RET;
     }
 
-    let ch = winat(RET.y, RET.x);
-    if !tile_is_walkable(ch as u8) {
+    if !crate::game::cell_is_walkable(RET.y, RET.x) {
         RET = pos;
         return &raw mut RET;
     }
 
     // Refuse to step on a scroll of scare monster
-    if ch == SCROLL {
-        let mut obj = crate::game::with_current_level(|level| level.items.head());
-        while !obj.is_null() {
-            if RET.y == (*thing_o(obj)).o_pos.y && RET.x == (*thing_o(obj)).o_pos.x {
-                break;
-            }
-            obj = (*thing_o(obj)).l_next;
+    let mut obj = crate::game::with_current_level(|level| level.items.head());
+    while !obj.is_null() {
+        if RET.y == (*thing_o(obj)).o_pos.y && RET.x == (*thing_o(obj)).o_pos.x {
+            break;
         }
-        if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
-            RET = pos;
-            return &raw mut RET;
-        }
+        obj = (*thing_o(obj)).l_next;
+    }
+    if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
+        RET = pos;
+        return &raw mut RET;
     }
 
     &raw mut RET

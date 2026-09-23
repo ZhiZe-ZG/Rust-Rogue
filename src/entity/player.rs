@@ -4,7 +4,7 @@
 //! `PLACE`, and `COORD` layouts the rest of the port relies on.
 use crate::config::GameConfig;
 use crate::draw::{
-    chat_at, enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room,
+    enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room,
     turnref as draw_turnref, winat,
 };
 use crate::entity::chase::{diag_ok, roomin};
@@ -144,7 +144,7 @@ unsafe fn is_upper(ch: c_char) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
     let flags = flat_at(y, x) as u8;
-    if chat_at(y, x) == DOOR
+    if crate::game::is_door_at(y, x)
         || (flags & (F_REAL as u8 | F_PASS as u8)) == (F_REAL as u8 | F_PASS as u8)
     {
         true as c_uchar
@@ -157,7 +157,7 @@ pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
 unsafe fn move_stuff(next_pos: &mut IVec2, fl: c_char) {
     let hero = hero_pos();
     output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
-    if (fl as u8 & F_PASS as u8) != 0 && chat_at(oldpos.y, oldpos.x) == DOOR {
+    if (fl as u8 & F_PASS as u8) != 0 && crate::game::is_door_at(oldpos.y, oldpos.x) {
         draw_leave_room(next_pos);
     }
     *hero_ptr() = *next_pos;

@@ -11,7 +11,6 @@ use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use crate::config::GameConfig;
-use crate::draw::{terrain_chat_at, FLOOR, PASSAGE};
 use crate::game;
 use crate::item::thing_list::new_item;
 use crate::rnd::rnd;
@@ -60,29 +59,32 @@ pub unsafe fn find_floor(
             return false;
         }
 
-        let (compchar, pos) = with_current_level_mut(|current| {
+        let (expected_tile, pos) = with_current_level_mut(|current| {
             let idx = match room_idx {
                 Some(idx) => idx,
                 None => current.rnd_room(),
             };
             let room = &current.rooms[idx];
-            let compchar = if room.is_maze() { PASSAGE } else { FLOOR };
-            (compchar, current.rnd_pos(room))
+            let expected_tile = if room.is_maze() {
+                Tile::Passage
+            } else {
+                Tile::Floor
+            };
+            (expected_tile, current.rnd_pos(room))
         });
 
         (*cp).x = pos.x;
         (*cp).y = pos.y;
 
-        // `find_floor` validates terrain: an object overlay (`!`, `?`, ...)
-        // must not count as a free floor cell, matching the legacy behavior
-        // where placed objects were scribbled into `places[].p_ch`.
-        let ch = terrain_chat_at((*cp).y, (*cp).x);
+        // `find_floor` validates the map tile directly; an object overlay does
+        // not count as a free floor cell.
+        let tile = game::tile_at((*cp).y, (*cp).x);
 
         if monst {
-            if game::monster_at((*cp).y, (*cp).x).is_null() && super::tile_is_walkable(ch as u8) {
+            if game::monster_at((*cp).y, (*cp).x).is_null() && super::tile_is_walkable(tile) {
                 return true;
             }
-        } else if ch == compchar {
+        } else if tile == expected_tile {
             return true;
         }
     }
@@ -272,7 +274,7 @@ unsafe fn place_traps() {
     while i > 0 {
         loop {
             find_floor(None, &raw mut stairs, 0, false);
-            if terrain_chat_at(stairs.y, stairs.x) == FLOOR {
+            if game::tile_at(stairs.y, stairs.x) == Tile::Floor {
                 break;
             }
         }

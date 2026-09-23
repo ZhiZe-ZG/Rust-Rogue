@@ -16,7 +16,6 @@ use crate::entity::player::{CThing, CThingMonster, CThingObject};
 pub(crate) use crate::item::potions::turn_see;
 pub(crate) use crate::item::thing_list::free_list;
 pub(crate) use crate::item::things::new_thing;
-pub(crate) use crate::level::tile_is_walkable;
 
 // -- Object/thing flags --
 pub(crate) const ISMANY: c_int = 0o0000010;

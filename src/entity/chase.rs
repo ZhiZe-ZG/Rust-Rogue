@@ -116,11 +116,6 @@ unsafe fn coord_eq(a: IVec2, b: IVec2) -> bool {
 }
 
 #[inline]
-unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    crate::draw::chat_at(y, x)
-}
-
-#[inline]
 unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
     crate::draw::flat_at(y, x)
 }
@@ -133,16 +128,6 @@ unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
 #[inline]
 unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
     crate::game::set_monster(y, x, tp);
-}
-
-#[inline]
-unsafe fn winat(y: c_int, x: c_int) -> c_char {
-    let tp = moat_at(y, x);
-    if tp.is_null() {
-        chat_at(y, x)
-    } else {
-        (*thing_t(tp)).t_disguise
-    }
 }
 
 /// runners:
@@ -260,7 +245,7 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
         roomin((*thing_t(th)).t_dest)
     };
     // We don't count doors as inside rooms for this routine
-    door = chat_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x) == DOOR;
+    door = crate::game::is_door_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x);
     // If the object of our desire is in a different room,
     // and we are not in a corridor, run to the door nearest to
     // our goal.
@@ -384,7 +369,7 @@ pub unsafe extern "C" fn set_oldch(tp: *mut CThing, cp: *mut IVec2) {
         {
             (*thing_t(tp)).t_oldch = b' ' as c_char;
         } else if dist_cp(cp, hero_ptr()) <= LAMPDIST && see_floor != 0 {
-            (*thing_t(tp)).t_oldch = chat_at((*cp).y, (*cp).x);
+            (*thing_t(tp)).t_oldch = crate::draw::cell_glyph((*cp).y, (*cp).x);
         }
     }
 }
@@ -406,8 +391,8 @@ pub unsafe extern "C" fn see_monst(mp: *mut CThing) -> c_uchar {
     if dist(y, x, hero_pos().y, hero_pos().x) < LAMPDIST {
         if y != hero_pos().y
             && x != hero_pos().x
-            && !tile_is_walkable(chat_at(y, hero_pos().x) as u8)
-            && !tile_is_walkable(chat_at(hero_pos().y, x) as u8)
+            && !tile_is_walkable(crate::game::tile_at(y, hero_pos().x))
+            && !tile_is_walkable(crate::game::tile_at(hero_pos().y, x))
         {
             return false as c_uchar;
         }
@@ -504,24 +489,19 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut IVec2) -> c_uchar {
                         y += 1;
                         continue;
                     }
-                    let ch = winat(y, x);
-                    if tile_is_walkable(ch as u8) {
+                    if crate::game::cell_is_walkable(y, x) {
                         // If it is a scroll, it might be a scare monster scroll
                         // so we need to look it up to see what type it is.
-                        if ch == SCROLL {
-                            let mut obj = crate::game::with_current_level(|level| level.items.head());
-                            while !obj.is_null() {
-                                if y == (*thing_o(obj)).o_pos.y && x == (*thing_o(obj)).o_pos.x {
-                                    break;
-                                }
-                                obj = (*thing_o(obj)).l_next;
+                        let mut obj = crate::game::with_current_level(|level| level.items.head());
+                        while !obj.is_null() {
+                            if y == (*thing_o(obj)).o_pos.y && x == (*thing_o(obj)).o_pos.x {
+                                break;
                             }
-                            if !obj.is_null()
-                                && (*thing_o(obj)).o_which == ScrollType::Scare as c_int
-                            {
-                                y += 1;
-                                continue;
-                            }
+                            obj = (*thing_o(obj)).l_next;
+                        }
+                        if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
+                            y += 1;
+                            continue;
                         }
                         // It can also be a Xeroc, which we shouldn't step on.
                         let obj = moat_at(y, x);
@@ -594,8 +574,8 @@ pub unsafe extern "C" fn diag_ok(sp: *mut IVec2, ep: *mut IVec2) -> c_uchar {
     if (*ep).x == (*sp).x || (*ep).y == (*sp).y {
         return true as c_uchar;
     }
-    if tile_is_walkable(chat_at((*ep).y, (*sp).x) as u8)
-        && tile_is_walkable(chat_at((*sp).y, (*ep).x) as u8)
+    if tile_is_walkable(crate::game::tile_at((*ep).y, (*sp).x))
+        && tile_is_walkable(crate::game::tile_at((*sp).y, (*ep).x))
     {
         true as c_uchar
     } else {
@@ -616,8 +596,8 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
         if (flat_at(y, x) & F_PASS) != 0 {
             if y != hero_pos().y
                 && x != hero_pos().x
-                && !tile_is_walkable(chat_at(y, hero_pos().x) as u8)
-                && !tile_is_walkable(chat_at(hero_pos().y, x) as u8)
+                && !tile_is_walkable(crate::game::tile_at(y, hero_pos().x))
+                && !tile_is_walkable(crate::game::tile_at(hero_pos().y, x))
             {
                 return false as c_uchar;
             }

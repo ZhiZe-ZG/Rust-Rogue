@@ -4,7 +4,7 @@
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-use crate::draw::chat_at as draw_chat;
+
 use crate::entity::monster_list::MLIST;
 use crate::entity::player::CThing;
 use crate::item::scrolls::ScrollType;
@@ -103,10 +103,6 @@ unsafe fn proom() -> Option<usize> {
 
 unsafe fn player_has(flag: c_short) -> bool {
     ((*thing_t(&raw mut player)).t_flags & flag) != 0
-}
-
-unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    draw_chat(y, x)
 }
 
 unsafe fn floor_char_for_room() -> c_char {
@@ -508,7 +504,7 @@ pub unsafe extern "C" fn floor_ch() -> c_char {
 
 #[no_mangle]
 pub unsafe extern "C" fn floor_at() -> c_char {
-    let ch = chat_at(hero_coord().y, hero_coord().x);
+    let ch = crate::draw::cell_glyph(hero_coord().y, hero_coord().x);
     if ch == FLOOR {
         floor_char_for_room()
     } else {

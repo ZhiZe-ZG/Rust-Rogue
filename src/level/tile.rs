@@ -62,26 +62,32 @@ impl Tile {
     }
 }
 
-/// Whether a rendered map glyph can be entered or crossed.
+/// Whether a [`Tile`] can be entered or crossed.
 ///
-/// Blank cells and wall glyphs are solid. ASCII letters represent monsters,
-/// so they are also blocked; terrain, traps, stairs, and item glyphs remain
-/// traversable.
-pub const fn tile_is_walkable(glyph: u8) -> bool {
-    !matches!(glyph, b' ' | b'|' | b'-') && !glyph.is_ascii_alphabetic()
+/// Blank cells, walls, and hidden doors block movement; floors, passages,
+/// doors, stairs, and traps are traversable. Monsters are not part of a tile —
+/// occupancy is checked separately against the per-cell monster map.
+pub const fn tile_is_walkable(tile: Tile) -> bool {
+    !matches!(tile, Tile::Empty | Tile::Wall | Tile::HiddenDoor)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::tile_is_walkable;
+    use super::{tile_is_walkable, Tile};
 
     #[test]
-    fn glyph_walkability_matches_map_semantics() {
-        for blocked in [b' ', b'|', b'-', b'A', b'z'] {
+    fn tile_walkability_matches_map_semantics() {
+        for blocked in [Tile::Empty, Tile::Wall, Tile::HiddenDoor] {
             assert!(!tile_is_walkable(blocked));
         }
 
-        for walkable in [b'.', b'#', b'+', b'^', b'%', b'!', b'?', b')'] {
+        for walkable in [
+            Tile::Floor,
+            Tile::Passage,
+            Tile::Door,
+            Tile::Stairs,
+            Tile::Trap,
+        ] {
             assert!(tile_is_walkable(walkable));
         }
     }

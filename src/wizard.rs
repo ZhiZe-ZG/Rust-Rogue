@@ -77,7 +77,7 @@ unsafe fn flat(y: c_int, x: c_int) -> c_char {
 
 #[inline]
 unsafe fn chat(y: c_int, x: c_int) -> c_int {
-    draw::chat_at(y, x) as c_uchar as c_int
+    draw::cell_glyph(y, x) as c_uchar as c_int
 }
 
 #[inline]

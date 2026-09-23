@@ -6,7 +6,7 @@ use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::config::GameConfig;
-use crate::draw::{chat_at as draw_chat, look, map_cell_reveal, winat as draw_winat};
+use crate::draw::{look, map_cell_reveal};
 use crate::entity::monsters::{new_monster, randmonster};
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game;
@@ -14,7 +14,6 @@ use crate::game::EQUIPMENT;
 use crate::init::pick_color;
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::thing_list::{discard, new_item};
-use crate::level::tile_is_walkable;
 use crate::misc::{aggravate, call_it, choose_str, find_obj};
 use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win, status};
 use crate::ui::{output, Window};
@@ -147,18 +146,8 @@ unsafe fn proom() -> Option<usize> {
 }
 
 #[inline]
-unsafe fn chat(y: c_int, x: c_int) -> c_int {
-    draw_chat(y, x) as c_uchar as c_int
-}
-
-#[inline]
 unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
     game::monster_at(y, x) as *mut CThing
-}
-
-#[inline]
-unsafe fn winat(y: c_int, x: c_int) -> c_int {
-    draw_winat(y, x) as c_uchar as c_int
 }
 
 #[inline]
@@ -269,17 +258,15 @@ pub unsafe extern "C" fn read_scroll() {
                     if y == h.y && x == h.x {
                         continue;
                     }
-                    let ch = winat(y, x);
-                    if !tile_is_walkable(ch as u8) {
+                    if !crate::game::cell_is_walkable(y, x) {
                         continue;
                     }
-                    if ch == SCROLL {
-                        let found = find_obj(y, x);
-                        if !found.is_null()
-                            && (*thing_o(found)).o_which == ScrollType::Scare as c_int
-                        {
-                            continue;
-                        }
+                    let found = find_obj(y, x);
+                    if !found.is_null()
+                        && (*thing_o(found)).o_type == SCROLL as c_int
+                        && (*thing_o(found)).o_which == ScrollType::Scare as c_int
+                    {
+                        continue;
                     }
                     i += 1;
                     if rnd(i) == 0 {

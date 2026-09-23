@@ -8,7 +8,6 @@ use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
-use crate::level::tile_is_walkable;
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
@@ -114,11 +113,6 @@ unsafe fn hero_stats_mut() -> *mut Stats {
 }
 
 #[inline]
-unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
-    crate::draw::chat_at(y, x)
-}
-
-#[inline]
 unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
     crate::game::monster_at(y, x) as *mut CThing
 }
@@ -211,7 +205,7 @@ pub unsafe extern "C" fn do_zap() {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
-            while tile_is_walkable(winat(y, x) as u8) {
+            while crate::game::cell_is_walkable(y, x) {
                 y += delta.y;
                 x += delta.x;
             }
@@ -247,7 +241,7 @@ pub unsafe extern "C" fn do_zap() {
             let hero = hero_pos();
             let mut y = hero.y;
             let mut x = hero.x;
-            while tile_is_walkable(winat(y, x) as u8) {
+            while crate::game::cell_is_walkable(y, x) {
                 y += delta.y;
                 x += delta.x;
             }
@@ -341,7 +335,4 @@ unsafe fn charge_str(obj: *mut CThing) -> *mut c_char {
     BUF.as_mut_ptr()
 }
 
-#[inline]
-unsafe fn winat(y: c_int, x: c_int) -> c_char {
-    crate::draw::winat(y, x)
-}
+

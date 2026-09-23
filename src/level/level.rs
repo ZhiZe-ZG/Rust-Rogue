@@ -127,6 +127,23 @@ impl Level {
         self.flags.trap[LevelFlags::flag_idx(y, x)]
     }
 
+    /// The tile at `(y, x)`, defaulting to [`Tile::Empty`] outside the map.
+    #[inline]
+    pub fn tile_at(&self, y: usize, x: usize) -> Tile {
+        self.map.get(y, x).unwrap_or(Tile::Empty)
+    }
+
+    /// Whether `(y, x)` is a door: an ordinary door, or a hidden door that has
+    /// been revealed.
+    #[inline]
+    pub fn is_door_at(&self, y: usize, x: usize) -> bool {
+        match self.tile_at(y, x) {
+            Tile::Door => true,
+            Tile::HiddenDoor => self.flags.real[LevelFlags::flag_idx(y, x)],
+            _ => false,
+        }
+    }
+
     /// Dig a single corridor between two adjacent rooms `r1` and `r2`.
     ///
     /// Works in three phases: first the corridor geometry is generated purely

@@ -19,7 +19,7 @@ use std::sync::RwLock;
 
 use crate::config::GameConfig;
 use crate::entity::player::CThing;
-use crate::level::Level;
+use crate::level::{tile_is_walkable, Level, Tile};
 use glam::IVec2;
 
 /// A non-owning, interior-mutable cell for a raw [`CThing`] pointer.
@@ -179,6 +179,26 @@ pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
 /// Clear every cell's monster pointer for a fresh level.
 pub unsafe fn clear_level() {
     with_current_level_mut(|level| level.monsters.clear());
+}
+
+/// Whether the cell at `(y, x)` can be entered: no monster stands there and the
+/// terrain tile is walkable.
+pub unsafe fn cell_is_walkable(y: c_int, x: c_int) -> bool {
+    if !monster_at(y, x).is_null() {
+        return false;
+    }
+    with_current_level(|level| tile_is_walkable(level.tile_at(y as usize, x as usize)))
+}
+
+/// The tile at `(y, x)`, defaulting to [`Tile::Empty`] outside the map.
+pub unsafe fn tile_at(y: c_int, x: c_int) -> Tile {
+    with_current_level(|level| level.tile_at(y as usize, x as usize))
+}
+
+/// Whether `(y, x)` is a door: an ordinary door, or a hidden door that has been
+/// revealed.
+pub unsafe fn is_door_at(y: c_int, x: c_int) -> bool {
+    with_current_level(|level| level.is_door_at(y as usize, x as usize))
 }
 
 /// Process-wide owner for the live dungeon level.
