@@ -21,9 +21,9 @@ use glam::IVec2;
 use super::level::{with_current_level_mut, LevelFlags};
 use super::symbols::{
     amulet, attach, enter_room, give_pack, tile_is_walkable, lvl_obj, max_level, MLIST, new_item,
-    new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, stairs,
-    thing_o, thing_t, turn_see, visuals, AMULET, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN,
-    PLAYER, SEEMONST,
+    new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, thing_o,
+    thing_t, turn_see, visuals, AMULET, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN, PLAYER,
+    SEEMONST,
 };
 use super::tile::Tile;
 use super::trap::Trap;
@@ -299,6 +299,7 @@ unsafe fn place_traps() {
     }
 
     let mut i = ntraps;
+    let mut stairs = IVec2::ZERO;
     while i > 0 {
         loop {
             find_floor(std::ptr::null_mut(), &raw mut stairs, 0, false);
@@ -327,9 +328,11 @@ unsafe fn place_traps() {
 /// Uses globals: stairs, places, seenstairs.
 /// ```
 unsafe fn place_stairs() {
+    let mut stairs = IVec2::ZERO;
     find_floor(std::ptr::null_mut(), &raw mut stairs, 0, false);
     // The staircase is a tile in the level map; it renders `%` via draw.
     with_current_level_mut(|current| {
+        current.stairs = stairs;
         current
             .map
             .set(stairs.y as usize, stairs.x as usize, Tile::Stairs);

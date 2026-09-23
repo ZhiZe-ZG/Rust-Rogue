@@ -217,7 +217,6 @@ unsafe extern "C" {
     // coords
     static mut delta: IVec2;
     static mut oldpos: IVec2;
-    static mut stairs: IVec2;
 
     // player / lists
     static mut player: CThing;
@@ -2344,7 +2343,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_ints(savef, (&raw mut e_levels) as *mut c_int, 21);
     let _ = rs_write_coord(savef, delta);
     let _ = rs_write_coord(savef, oldpos);
-    let _ = rs_write_coord(savef, stairs);
+    let _ = rs_write_coord(savef, crate::game::stairs());
 
     let _ = rs_write_thing(savef, &raw mut player);
     let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, EQUIPMENT.armor());
@@ -2553,7 +2552,9 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_ints(inf, (&raw mut e_levels) as *mut c_int, 21);
     let _ = rs_read_coord(inf, &mut delta);
     let _ = rs_read_coord(inf, &mut oldpos);
+    let mut stairs = IVec2::ZERO;
     let _ = rs_read_coord(inf, &mut stairs);
+    crate::game::set_stairs(stairs);
 
     let _ = rs_read_thing(inf, &raw mut player);
     let mut equipment_item = std::ptr::null_mut();

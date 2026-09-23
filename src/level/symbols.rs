@@ -5,7 +5,6 @@
 //! that mirror `rogue.h` (room/thing flags, treasure tuning, glyphs). Sibling
 //! modules import from here instead of redeclaring or re-hardcoding them.
 
-use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 pub(crate) use crate::daemons::visuals;
@@ -51,7 +50,6 @@ unsafe extern "C" {
     pub(crate) static mut player: CThing;
     pub(crate) static mut no_food: c_int;
     pub(crate) static mut ntraps: c_int;
-    pub(crate) static mut stairs: IVec2;
     pub(crate) static mut seenstairs: bool;
 
 }

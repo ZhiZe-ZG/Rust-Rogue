@@ -91,7 +91,6 @@ unsafe extern "C" {
     static mut running: c_uchar;
     static mut seenstairs: c_uchar;
     static mut see_floor: bool;
-    static mut stairs: IVec2;
     static mut terse: c_uchar;
     static mut lvl_obj: *mut CThing;
 

@@ -24,6 +24,7 @@ use std::sync::RwLock;
 use crate::config::GameConfig;
 use crate::entity::player::{CPlace, CThing};
 use crate::level::Level;
+use glam::IVec2;
 
 /// A non-owning, interior-mutable cell for a raw [`CThing`] pointer.
 ///
@@ -258,6 +259,18 @@ pub fn current_depth() -> i32 {
 #[inline]
 pub fn set_current_depth(depth: i32) {
     CURRENT_LEVEL.with_mut(|level| level.depth = depth);
+}
+
+/// Read the current down-staircase position (`Level::stairs`).
+#[inline]
+pub fn stairs() -> IVec2 {
+    CURRENT_LEVEL.with(|level| level.stairs)
+}
+
+/// Set the current down-staircase position (`Level::stairs`).
+#[inline]
+pub fn set_stairs(pos: IVec2) {
+    CURRENT_LEVEL.with_mut(|level| level.stairs = pos);
 }
 
 /// Convenience alias for the crate-wide level size constants.

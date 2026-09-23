@@ -143,7 +143,6 @@ unsafe extern "C" {
     static mut places: [CPlace; 32 * 80];
     static mut pot_info: [CObjInfo; MAXPOTIONS];
     static mut max_stats: CStats;
-    static mut stairs: IVec2;
     static mut e_levels: [c_int; 21];
 
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
@@ -574,6 +573,7 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
 #[no_mangle]
 pub unsafe extern "C" fn seen_stairs() -> c_uchar {
     let tp: *mut CThing;
+    let stairs = crate::game::stairs();
 
     output::move_cursor(IVec2::new(stairs.x, stairs.y));
     if output::glyph_at_cursor() as c_int == STAIRS {

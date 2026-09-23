@@ -65,6 +65,8 @@ impl LevelFlags {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Level {
     pub depth: i32,
+    /// Position of the down staircase on this level.
+    pub stairs: IVec2,
     pub rooms: Vec<Room>,
     pub room_graph: RoomGraph,
     pub passages: Vec<Passage>,
@@ -79,6 +81,7 @@ impl Level {
     pub fn new() -> Self {
         Self {
             depth: 1,
+            stairs: IVec2::ZERO,
             rooms: (0..GameConfig::MAX_ROOMS)
                 .map(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
                 .collect(),

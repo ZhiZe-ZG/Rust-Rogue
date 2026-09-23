@@ -72,7 +72,6 @@ unsafe extern "C" {
     static mut after: c_uchar;
     static mut jump: c_uchar;
     static mut seenstairs: c_uchar;
-    static mut stairs: IVec2;
 }
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
@@ -363,6 +362,7 @@ pub unsafe extern "C" fn visuals() {
     }
 
     // Change the stairs.
+    let stairs = crate::game::stairs();
     if seenstairs == 0 && cansee(stairs.y, stairs.x) != 0 {
         output::write_glyph_at(
             IVec2::new(stairs.x, stairs.y),

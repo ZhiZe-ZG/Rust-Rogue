@@ -235,8 +235,6 @@ pub static mut delta: IVec2 = IVec2 { x: 0, y: 0 };
 #[no_mangle]
 pub static mut oldpos: IVec2 = IVec2 { x: 0, y: 0 };
 #[no_mangle]
-pub static mut stairs: IVec2 = IVec2 { x: 0, y: 0 };
-#[no_mangle]
 pub static mut l_last_pick: *mut CThing = std::ptr::null_mut();
 #[no_mangle]
 pub static mut last_pick: *mut CThing = std::ptr::null_mut();

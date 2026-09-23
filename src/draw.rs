@@ -83,7 +83,6 @@ unsafe extern "C" {
     static mut running: c_uchar;
     static mut see_floor: c_uchar;
     static mut seenstairs: c_uchar;
-    static mut stairs: IVec2;
     static mut lvl_obj: *mut CThing;
 
 }
@@ -545,7 +544,7 @@ pub unsafe extern "C" fn trip_ch(y: c_int, x: c_int, ch: c_int) -> c_int {
             && tile != b' ' as c_char
             && tile != b'-' as c_char
             && tile != b'|' as c_char
-            && !(y == stairs.y && x == stairs.x && seenstairs != 0)
+            && !(y == game::stairs().y && x == game::stairs().x && seenstairs != 0)
         {
             return rnd(26) as c_char as c_int;
         }
