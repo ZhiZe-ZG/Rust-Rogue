@@ -5,7 +5,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 use std::sync::Mutex;
 
 use crate::config::GameConfig;
-use crate::entity::player::{CStats, CThing, CThingMonster};
+use crate::entity::player::{Stats, CThing, CThingMonster};
 use crate::game::EQUIPMENT;
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::terminal as cur;
@@ -38,7 +38,7 @@ static MESSAGE_STATE: Mutex<MessageState> = Mutex::new(MessageState {
 unsafe extern "C" {
     static mut hungry_state: c_int;
     static mut huh: [c_char; MAXSTR];
-    static mut max_stats: CStats;
+    static mut max_stats: Stats;
     static mut mpos: c_int;
     static mut msg_esc: c_uchar;
     static mut player: CThing;
@@ -303,11 +303,11 @@ pub unsafe fn endmsg() -> MessageResult {
 pub unsafe fn status() {
     let pstats = &mut (*thing_t(&raw mut player)).t_stats;
     let level = crate::game::current_depth();
-    let max_hp = pstats.s_maxhp;
+    let max_hp = pstats.max_hit_points;
     let mut temp = if !EQUIPMENT.armor().is_null() {
         (*EQUIPMENT.armor()).o.o_arm
     } else {
-        pstats.s_arm
+        pstats.armor
     };
 
     static mut hpwidth: c_int = 0;
@@ -326,11 +326,11 @@ pub unsafe fn status() {
         c"Faint".as_ptr(),
     ];
 
-    if s_hp == pstats.s_hpt
-        && s_exp == pstats.s_exp
+    if s_hp == pstats.hit_points
+        && s_exp == pstats.experience
         && s_pur == purse
         && s_arm == temp
-        && s_str == pstats.s_str
+        && s_str == pstats.strength
         && s_lvl == level
         && s_hungry == hungry_state
         && stat_msg == false as c_uchar
@@ -352,9 +352,9 @@ pub unsafe fn status() {
 
     s_lvl = level;
     s_pur = purse;
-    s_hp = pstats.s_hpt;
-    s_str = pstats.s_str;
-    s_exp = pstats.s_exp;
+    s_hp = pstats.hit_points;
+    s_str = pstats.strength;
+    s_exp = pstats.experience;
     s_hungry = hungry_state;
 
     if stat_msg != false as c_uchar {
@@ -363,13 +363,13 @@ pub unsafe fn status() {
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
             purse,
-            pstats.s_hpt,
+            pstats.hit_points,
             max_hp,
-            pstats.s_str,
-            max_stats.s_str,
+            pstats.strength,
+            max_stats.strength,
             10 - s_arm,
-            pstats.s_lvl,
-            pstats.s_exp,
+            pstats.level,
+            pstats.experience,
             CStr::from_ptr(state_name[hungry_state as usize]).to_string_lossy(),
             w = hpwidth as usize,
         ));
@@ -379,13 +379,13 @@ pub unsafe fn status() {
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
             purse,
-            pstats.s_hpt,
+            pstats.hit_points,
             max_hp,
-            pstats.s_str,
-            max_stats.s_str,
+            pstats.strength,
+            max_stats.strength,
             10 - s_arm,
-            pstats.s_lvl,
-            pstats.s_exp,
+            pstats.level,
+            pstats.experience,
             CStr::from_ptr(state_name[hungry_state as usize]).to_string_lossy(),
             w = hpwidth as usize,
         );

@@ -93,7 +93,7 @@ unsafe fn copy_cstr(dst: *mut c_char, src: *const c_char, max: usize) {
 unsafe fn restore_player_dead() -> bool {
     (*(std::ptr::addr_of_mut!(player) as *mut CThingMonster))
         .t_stats
-        .s_hpt
+        .hit_points
         <= 0
 }
 

@@ -76,7 +76,7 @@ unsafe extern "C" {
     static mut hungry_state: c_int;
     static mut jump: c_uchar;
     static mut last_dir: c_char;
-    static mut max_stats: crate::entity::player::CStats;
+    static mut max_stats: crate::entity::player::Stats;
     static mut mpos: c_int;
     static mut no_command: c_int;
     static mut no_move: c_int;
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn eat() {
             CStr::from_ptr(fruit.as_ptr()).to_string_lossy()
         ));
     } else if rnd(100) > 70 {
-        (*thing_t(&raw mut player)).t_stats.s_exp += 1;
+        (*thing_t(&raw mut player)).t_stats.experience += 1;
         msg_str("bummer, this food tastes awful");
     } else {
         msg_str("yum, that tasted good");
@@ -201,18 +201,18 @@ pub unsafe extern "C" fn eat() {
 pub unsafe extern "C" fn check_level() {
     let mut i: c_int = 0;
     while e_levels[i as usize] != 0 {
-        if e_levels[i as usize] > (*thing_t(&raw mut player)).t_stats.s_exp {
+        if e_levels[i as usize] > (*thing_t(&raw mut player)).t_stats.experience {
             break;
         }
         i += 1;
     }
     i += 1;
-    let olevel = (*thing_t(&raw mut player)).t_stats.s_lvl;
-    (*thing_t(&raw mut player)).t_stats.s_lvl = i;
+    let olevel = (*thing_t(&raw mut player)).t_stats.level;
+    (*thing_t(&raw mut player)).t_stats.level = i;
     if i > olevel {
         let add = roll(i - olevel, 10);
-        (*thing_t(&raw mut player)).t_stats.s_maxhp += add;
-        (*thing_t(&raw mut player)).t_stats.s_hpt += add;
+        (*thing_t(&raw mut player)).t_stats.max_hit_points += add;
+        (*thing_t(&raw mut player)).t_stats.hit_points += add;
         msg_str(&format!("welcome to level {}", i));
     }
 }
@@ -223,14 +223,14 @@ pub unsafe extern "C" fn chg_str(amt: c_int) {
         return;
     }
     let stats = &mut (*thing_t(&raw mut player)).t_stats;
-    let mut new_strength = stats.s_str as c_int + amt;
+    let mut new_strength = stats.strength as c_int + amt;
     if new_strength < 3 {
         new_strength = 3;
     } else if new_strength > 31 {
         new_strength = 31;
     }
-    stats.s_str = new_strength as c_uint;
-    let mut comp = stats.s_str;
+    stats.strength = new_strength as c_uint;
+    let mut comp = stats.strength;
 
     if !EQUIPMENT.left_ring().is_null() {
         let ring = EQUIPMENT.left_ring();
@@ -244,8 +244,8 @@ pub unsafe extern "C" fn chg_str(amt: c_int) {
         let reduced = comp as c_int - bonus;
         comp = if reduced < 3 { 3 } else { reduced as c_uint };
     }
-    if comp > max_stats.s_str {
-        max_stats.s_str = comp;
+    if comp > max_stats.strength {
+        max_stats.strength = comp;
     }
 }
 

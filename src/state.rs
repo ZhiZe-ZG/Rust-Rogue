@@ -36,7 +36,7 @@ use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
 use crate::entity::chase::runners;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::thing_list::{allocated_count, new_item};
 use crate::item::things::CObjInfo;
@@ -120,14 +120,14 @@ pub struct CStone {
     pub st_value: c_int,
 }
 
-/// Local layout mirror of the C `struct monster` with `player::CStats`
-/// (the `monsters::CStats` type is distinct and would not type-check here).
+/// Local layout mirror of the C `struct monster` with `player::Stats`
+/// (the `monsters::Stats` type is distinct and would not type-check here).
 #[repr(C)]
 struct CMonsterState {
     m_name: *mut c_char,
     m_carry: c_int,
     m_flags: c_short,
-    m_stats: CStats,
+    m_stats: Stats,
 }
 
 /// Delayed-action callback slot type (same representation as `daemon::DFunc`).
@@ -227,7 +227,7 @@ unsafe extern "C" {
 
     // rooms / map
     static mut places: [CPlace; 32 * 80];
-    static mut max_stats: CStats;
+    static mut max_stats: Stats;
     static mut oldrp: Option<usize>;
 
     // monster / object info tables
@@ -1023,36 +1023,36 @@ unsafe fn list_size(mut l: *mut CThing) -> c_int {
 
 // ─── Stats / stone / item tables ─────────────────────────────────────────────
 
-unsafe fn rs_write_stats(savef: *mut CFile, s: *mut CStats) -> c_int {
+unsafe fn rs_write_stats(savef: *mut CFile, s: *mut Stats) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
     let _ = rs_write_marker(savef, RSID_STATS);
-    let _ = rs_write_str_t(savef, (*s).s_str);
-    let _ = rs_write_int(savef, (*s).s_exp);
-    let _ = rs_write_int(savef, (*s).s_lvl);
-    let _ = rs_write_int(savef, (*s).s_arm);
-    let _ = rs_write_int(savef, (*s).s_hpt);
-    let _ = rs_write_chars(savef, (&raw mut (*s).s_dmg) as *mut c_char, 13);
-    let _ = rs_write_int(savef, (*s).s_maxhp);
+    let _ = rs_write_str_t(savef, (*s).strength);
+    let _ = rs_write_int(savef, (*s).experience);
+    let _ = rs_write_int(savef, (*s).level);
+    let _ = rs_write_int(savef, (*s).armor);
+    let _ = rs_write_int(savef, (*s).hit_points);
+    let _ = rs_write_chars(savef, (&raw mut (*s).damage) as *mut c_char, 13);
+    let _ = rs_write_int(savef, (*s).max_hit_points);
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_stats(inf: *mut CFile, s: *mut CStats) -> c_int {
+unsafe fn rs_read_stats(inf: *mut CFile, s: *mut Stats) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
     let _ = rs_read_marker(inf, RSID_STATS);
-    let _ = rs_read_str_t(inf, &raw mut (*s).s_str);
-    let _ = rs_read_int(inf, &mut (*s).s_exp);
-    let _ = rs_read_int(inf, &mut (*s).s_lvl);
-    let _ = rs_read_int(inf, &mut (*s).s_arm);
-    let _ = rs_read_int(inf, &mut (*s).s_hpt);
-    let _ = rs_read_chars(inf, (&raw mut (*s).s_dmg) as *mut c_char, 13);
-    let _ = rs_read_int(inf, &mut (*s).s_maxhp);
+    let _ = rs_read_str_t(inf, &raw mut (*s).strength);
+    let _ = rs_read_int(inf, &mut (*s).experience);
+    let _ = rs_read_int(inf, &mut (*s).level);
+    let _ = rs_read_int(inf, &mut (*s).armor);
+    let _ = rs_read_int(inf, &mut (*s).hit_points);
+    let _ = rs_read_chars(inf, (&raw mut (*s).damage) as *mut c_char, 13);
+    let _ = rs_read_int(inf, &mut (*s).max_hit_points);
 
     read_stat()
 }

@@ -198,9 +198,9 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
         }
         Trap::Arrow => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;
-            if swing(stats.s_lvl - 1, stats.s_arm, 1) != 0 {
-                stats.s_hpt -= roll(1, 6);
-                if stats.s_hpt <= 0 {
+            if swing(stats.level - 1, stats.armor, 1) != 0 {
+                stats.hit_points -= roll(1, 6);
+                if stats.hit_points <= 0 {
                     msg_str("an arrow killed you");
                     death(b'a' as c_char);
                 } else {
@@ -220,11 +220,11 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
         }
         Trap::Dart => {
             let stats = &mut (*thing_t(&raw mut player)).t_stats;
-            if swing(stats.s_lvl + 1, stats.s_arm, 1) == 0 {
+            if swing(stats.level + 1, stats.armor, 1) == 0 {
                 msg_str("a small dart whizzes by your ear and vanishes");
             } else {
-                stats.s_hpt -= roll(1, 4);
-                if stats.s_hpt <= 0 {
+                stats.hit_points -= roll(1, 4);
+                if stats.hit_points <= 0 {
                     msg_str("a poisoned dart killed you");
                     death(b'd' as c_char);
                 }

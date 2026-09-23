@@ -7,7 +7,7 @@ use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach, new_item};
@@ -49,7 +49,7 @@ pub struct CMonster {
     pub m_name: *mut c_char,
     pub m_carry: c_int,
     pub m_flags: c_short,
-    pub m_stats: CStats,
+    pub m_stats: Stats,
 }
 
 static LVL_MONS: [c_char; 26] = [
@@ -194,13 +194,13 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
     crate::game::set_monster((*cp).y, (*cp).x, tp);
 
     let mp = &monsters[(monster_type as i32 - 'A' as i32) as usize];
-    (*thing_t(tp)).t_stats.s_lvl = mp.m_stats.s_lvl + lev_add;
-    (*thing_t(tp)).t_stats.s_maxhp = roll((*thing_t(tp)).t_stats.s_lvl, 8);
-    (*thing_t(tp)).t_stats.s_hpt = (*thing_t(tp)).t_stats.s_maxhp;
-    (*thing_t(tp)).t_stats.s_arm = mp.m_stats.s_arm - lev_add;
-    (*thing_t(tp)).t_stats.s_dmg = mp.m_stats.s_dmg;
-    (*thing_t(tp)).t_stats.s_str = mp.m_stats.s_str;
-    (*thing_t(tp)).t_stats.s_exp = mp.m_stats.s_exp + lev_add * 10 + exp_add(tp);
+    (*thing_t(tp)).t_stats.level = mp.m_stats.level + lev_add;
+    (*thing_t(tp)).t_stats.max_hit_points = roll((*thing_t(tp)).t_stats.level, 8);
+    (*thing_t(tp)).t_stats.hit_points = (*thing_t(tp)).t_stats.max_hit_points;
+    (*thing_t(tp)).t_stats.armor = mp.m_stats.armor - lev_add;
+    (*thing_t(tp)).t_stats.damage = mp.m_stats.damage;
+    (*thing_t(tp)).t_stats.strength = mp.m_stats.strength;
+    (*thing_t(tp)).t_stats.experience = mp.m_stats.experience + lev_add * 10 + exp_add(tp);
     (*thing_t(tp)).t_flags = mp.m_flags;
     if level > 29 {
         (*thing_t(tp)).t_flags |= ISHASTE;
@@ -219,15 +219,15 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
 /// Computes bonus experience from a monster's level and max HP.
 #[no_mangle]
 pub unsafe extern "C" fn exp_add(tp: *mut CThing) -> c_int {
-    let mut modu = if (*thing_t(tp)).t_stats.s_lvl == 1 {
-        (*thing_t(tp)).t_stats.s_maxhp / 8
+    let mut modu = if (*thing_t(tp)).t_stats.level == 1 {
+        (*thing_t(tp)).t_stats.max_hit_points / 8
     } else {
-        (*thing_t(tp)).t_stats.s_maxhp / 6
+        (*thing_t(tp)).t_stats.max_hit_points / 6
     };
 
-    if (*thing_t(tp)).t_stats.s_lvl > 9 {
+    if (*thing_t(tp)).t_stats.level > 9 {
         modu *= 20;
-    } else if (*thing_t(tp)).t_stats.s_lvl > 6 {
+    } else if (*thing_t(tp)).t_stats.level > 6 {
         modu *= 4;
     }
     modu
@@ -346,7 +346,7 @@ pub unsafe extern "C" fn give_pack(tp: *mut CThing) {
 /// Rolls a saving throw for any creature against an effect category.
 #[no_mangle]
 pub unsafe extern "C" fn save_throw(which: c_int, tp: *mut CThing) -> c_int {
-    let need = 14 + which - (*thing_t(tp)).t_stats.s_lvl / 2;
+    let need = 14 + which - (*thing_t(tp)).t_stats.level / 2;
     if roll(1, 20) >= need {
         1
     } else {

@@ -102,26 +102,26 @@ pub static mut between: c_int = 0;
 /// A healing daemon that restores hit points after rest.
 #[no_mangle]
 pub unsafe extern "C" fn doctor() {
-    let lv = (*thing_t(&raw mut player)).t_stats.s_lvl;
-    let ohp = (*thing_t(&raw mut player)).t_stats.s_hpt;
+    let lv = (*thing_t(&raw mut player)).t_stats.level;
+    let ohp = (*thing_t(&raw mut player)).t_stats.hit_points;
     quiet += 1;
     if lv < 8 {
         if quiet + (lv << 1) > 20 {
-            (*thing_t(&raw mut player)).t_stats.s_hpt += 1;
+            (*thing_t(&raw mut player)).t_stats.hit_points += 1;
         }
     } else if quiet >= 3 {
-        (*thing_t(&raw mut player)).t_stats.s_hpt += rnd(lv - 7) + 1;
+        (*thing_t(&raw mut player)).t_stats.hit_points += rnd(lv - 7) + 1;
     }
     if isring(EQUIPMENT.left_ring(), RingType::Regeneration) {
-        (*thing_t(&raw mut player)).t_stats.s_hpt += 1;
+        (*thing_t(&raw mut player)).t_stats.hit_points += 1;
     }
     if isring(EQUIPMENT.right_ring(), RingType::Regeneration) {
-        (*thing_t(&raw mut player)).t_stats.s_hpt += 1;
+        (*thing_t(&raw mut player)).t_stats.hit_points += 1;
     }
-    if ohp != (*thing_t(&raw mut player)).t_stats.s_hpt {
-        let max = (*thing_t(&raw mut player)).t_stats.s_maxhp;
-        if (*thing_t(&raw mut player)).t_stats.s_hpt > max {
-            (*thing_t(&raw mut player)).t_stats.s_hpt = max;
+    if ohp != (*thing_t(&raw mut player)).t_stats.hit_points {
+        let max = (*thing_t(&raw mut player)).t_stats.max_hit_points;
+        if (*thing_t(&raw mut player)).t_stats.hit_points > max {
+            (*thing_t(&raw mut player)).t_stats.hit_points = max;
         }
         quiet = 0;
     }

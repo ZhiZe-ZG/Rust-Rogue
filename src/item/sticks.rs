@@ -4,7 +4,7 @@
 use crate::entity::chase::{cansee, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};
-use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
@@ -110,7 +110,7 @@ unsafe fn hero_pos() -> IVec2 {
 }
 
 #[inline]
-unsafe fn hero_stats_mut() -> *mut CStats {
+unsafe fn hero_stats_mut() -> *mut Stats {
     &mut (*thing_t(&raw mut player)).t_stats
 }
 
@@ -203,7 +203,7 @@ pub unsafe extern "C" fn do_zap() {
             msg_str("the corridor glows and then fades");
         }
         Some(StickType::Drain) => {
-            if unsafe { (*hero_stats_mut()).s_hpt } < 2 {
+            if unsafe { (*hero_stats_mut()).hit_points } < 2 {
                 msg_str("you are too weak to use it");
                 return;
             }
@@ -286,8 +286,8 @@ pub unsafe extern "C" fn do_zap() {
 /// Reduce the hero's hit points and apply a simple draining effect.
 #[no_mangle]
 pub unsafe extern "C" fn drain() {
-    if (*hero_stats_mut()).s_hpt >= 2 {
-        (*hero_stats_mut()).s_hpt /= 2;
+    if (*hero_stats_mut()).hit_points >= 2 {
+        (*hero_stats_mut()).hit_points /= 2;
     }
     msg_str("you have a tingling feeling");
 }
@@ -312,7 +312,7 @@ pub unsafe extern "C" fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, name: *mu
     pos.x += (*dir).x;
     if hit_hero && ce_coord(pos, hero) != 0 {
         if save(VS_MAGIC) == 0 {
-            if ((*hero_stats_mut()).s_hpt - roll(6, 6)) <= 0 {
+            if ((*hero_stats_mut()).hit_points - roll(6, 6)) <= 0 {
                 death('b' as c_char);
             }
             msg_str("the bolt hits");

@@ -14,7 +14,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::draw::{self, chat_at, place_at, winat as draw_winat};
-use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, CThing, CThingMonster, CThingObject};
 use crate::item::thing_list::{attach, discard};
 use crate::item::things::{dropcheck, inv_name};
 use crate::level::tile_is_walkable;

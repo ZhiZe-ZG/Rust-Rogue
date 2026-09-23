@@ -11,7 +11,7 @@ use crate::draw::look;
 use crate::draw::place_at;
 use crate::entity::chase::see_monst;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
@@ -142,7 +142,7 @@ unsafe extern "C" {
     static mut lvl_obj: *mut CThing;
     static mut places: [CPlace; 32 * 80];
     static mut pot_info: [CObjInfo; MAXPOTIONS];
-    static mut max_stats: CStats;
+    static mut max_stats: Stats;
     static mut e_levels: [c_int; 21];
 
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
@@ -316,10 +316,10 @@ pub unsafe extern "C" fn quaff() {
         PotionType::Healing => {
             let stats = thing_t(&raw mut player);
             (*pot_info.as_mut_ptr().add(PotionType::Healing.index())).oi_know = true as c_uchar;
-            (*stats).t_stats.s_hpt += roll((*stats).t_stats.s_lvl, 4);
-            if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp {
-                (*stats).t_stats.s_maxhp += 1;
-                (*stats).t_stats.s_hpt = (*stats).t_stats.s_maxhp;
+            (*stats).t_stats.hit_points += roll((*stats).t_stats.level, 4);
+            if (*stats).t_stats.hit_points > (*stats).t_stats.max_hit_points {
+                (*stats).t_stats.max_hit_points += 1;
+                (*stats).t_stats.hit_points = (*stats).t_stats.max_hit_points;
             }
             sight();
             msg_str("you begin to feel better");
@@ -425,13 +425,13 @@ pub unsafe extern "C" fn quaff() {
             let stats = thing_t(&raw mut player);
             (*pot_info.as_mut_ptr().add(PotionType::ExtraHealing.index())).oi_know =
                 true as c_uchar;
-            (*stats).t_stats.s_hpt += roll((*stats).t_stats.s_lvl, 8);
-            if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp {
-                if (*stats).t_stats.s_hpt > (*stats).t_stats.s_maxhp + (*stats).t_stats.s_lvl + 1 {
-                    (*stats).t_stats.s_maxhp += 1;
+            (*stats).t_stats.hit_points += roll((*stats).t_stats.level, 8);
+            if (*stats).t_stats.hit_points > (*stats).t_stats.max_hit_points {
+                if (*stats).t_stats.hit_points > (*stats).t_stats.max_hit_points + (*stats).t_stats.level + 1 {
+                    (*stats).t_stats.max_hit_points += 1;
                 }
-                (*stats).t_stats.s_maxhp += 1;
-                (*stats).t_stats.s_hpt = (*stats).t_stats.s_maxhp;
+                (*stats).t_stats.max_hit_points += 1;
+                (*stats).t_stats.hit_points = (*stats).t_stats.max_hit_points;
             }
             sight();
             come_down();
@@ -448,28 +448,28 @@ pub unsafe extern "C" fn quaff() {
             let stats = thing_t(&raw mut player);
             if ring_is(EQUIPMENT.left_ring(), RingType::AddStrength) {
                 add_str(
-                    &mut (*stats).t_stats.s_str,
+                    &mut (*stats).t_stats.strength,
                     -(*thing_o(EQUIPMENT.left_ring())).o_arm,
                 );
             }
             if ring_is(EQUIPMENT.right_ring(), RingType::AddStrength) {
                 add_str(
-                    &mut (*stats).t_stats.s_str,
+                    &mut (*stats).t_stats.strength,
                     -(*thing_o(EQUIPMENT.right_ring())).o_arm,
                 );
             }
-            if (*stats).t_stats.s_str < max_stats.s_str {
-                (*stats).t_stats.s_str = max_stats.s_str;
+            if (*stats).t_stats.strength < max_stats.strength {
+                (*stats).t_stats.strength = max_stats.strength;
             }
             if ring_is(EQUIPMENT.left_ring(), RingType::AddStrength) {
                 add_str(
-                    &mut (*stats).t_stats.s_str,
+                    &mut (*stats).t_stats.strength,
                     (*thing_o(EQUIPMENT.left_ring())).o_arm,
                 );
             }
             if ring_is(EQUIPMENT.right_ring(), RingType::AddStrength) {
                 add_str(
-                    &mut (*stats).t_stats.s_str,
+                    &mut (*stats).t_stats.strength,
                     (*thing_o(EQUIPMENT.right_ring())).o_arm,
                 );
             }
@@ -597,8 +597,8 @@ pub unsafe extern "C" fn seen_stairs() -> c_uchar {
 /// The player just magically went up a level.
 #[no_mangle]
 pub unsafe extern "C" fn raise_level() {
-    (*thing_t(&raw mut player)).t_stats.s_exp =
-        e_levels[(*thing_t(&raw mut player)).t_stats.s_lvl as usize - 1] + 1;
+    (*thing_t(&raw mut player)).t_stats.experience =
+        e_levels[(*thing_t(&raw mut player)).t_stats.level as usize - 1] + 1;
     check_level();
 }
 

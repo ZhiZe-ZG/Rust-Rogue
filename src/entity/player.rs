@@ -17,7 +17,9 @@ use crate::rnd::rnd;
 use crate::ui::output;
 use crate::ui::output::msg_str;
 use glam::IVec2;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_short, c_uchar};
+
+pub use crate::entity::stats::Stats;
 
 const DOOR: c_char = b'+' as c_char;
 const FLOOR: c_char = b'.' as c_char;
@@ -36,32 +38,6 @@ const ISLEVIT: c_short = 0o0000010;
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_REAL: c_char = 0x10u8 as c_char;
 
-/// Combat/statistics block shared by the hero and monsters.
-///
-/// Layout mirror of the legacy C `struct stats`; each field's name keeps the
-/// original `s_` prefix so the port stays a faithful 1:1 translation.
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CStats {
-    /// Strength. Stored as an unsigned value because strength never goes
-    /// negative; adjusted by `chg_str`/`add_str`.
-    pub s_str: c_uint,
-    /// Experience points earned so far.
-    pub s_exp: c_int,
-    /// Current experience level.
-    pub s_lvl: c_int,
-    /// Armor class (lower is better).
-    pub s_arm: c_int,
-    /// Current hit points (health).
-    pub s_hpt: c_int,
-    /// Damage specification as a NUL-terminated C string, e.g. `"2x4"` (a
-    /// 2d4 roll) or `"1x8/1x8/3x10"` for multiple attacks; fixed 13-byte
-    /// buffer so it can be serialized verbatim.
-    pub s_dmg: [c_char; 13],
-    /// Maximum hit points.
-    pub s_maxhp: c_int,
-}
-
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CThingMonster {
@@ -74,7 +50,7 @@ pub struct CThingMonster {
     pub t_oldch: c_char,
     pub t_dest: *mut IVec2,
     pub t_flags: c_short,
-    pub t_stats: CStats,
+    pub t_stats: Stats,
     pub t_room: Option<usize>,
     pub t_pack: *mut CThing,
     pub t_reserved: c_int,

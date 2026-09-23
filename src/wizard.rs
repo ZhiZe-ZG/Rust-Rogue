@@ -304,7 +304,7 @@ pub unsafe extern "C" fn teleport() {
         let dmg = b"000x0\0";
         std::ptr::copy_nonoverlapping(
             dmg.as_ptr() as *const c_char,
-            (&mut monsters[('F' as u8 - 'A' as u8) as usize].m_stats.s_dmg[0]) as *mut c_char,
+            (&mut monsters[('F' as u8 - 'A' as u8) as usize].m_stats.damage[0]) as *mut c_char,
             dmg.len(),
         );
     }

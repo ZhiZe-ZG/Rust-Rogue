@@ -24,7 +24,7 @@ use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-use crate::entity::player::{CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach, detach, discard, new_item};
 use crate::item::things::inv_name;
@@ -152,7 +152,7 @@ pub struct CMonster {
     pub m_name: *mut c_char,
     pub m_carry: c_int,
     pub m_flags: c_short,
-    pub m_stats: CStats,
+    pub m_stats: Stats,
 }
 
 #[repr(C)]
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut CThing, thrown: c_ucha
                 CStr::from_ptr(pick_color(c"red".as_ptr().cast_mut())).to_string_lossy()
             ));
         }
-        if (*thing_t(tp)).t_stats.s_hpt <= 0 {
+        if (*thing_t(tp)).t_stats.hit_points <= 0 {
             killed(tp, true as c_uchar);
         } else if did_hit != 0 && !on_p(&raw mut player, ISBLIND) {
             msg_str(&format!(
@@ -316,7 +316,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
     }
 
     let mname = set_mname(mp);
-    let oldhp = (*thing_t(&raw mut player)).t_stats.s_hpt;
+    let oldhp = (*thing_t(&raw mut player)).t_stats.hit_points;
 
     if roll_em(mp, &raw mut player, std::ptr::null_mut(), false as c_uchar) != 0 {
         if (*thing_t(mp)).t_type != b'I' as c_char {
@@ -329,14 +329,14 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
         }
         has_hit = false as c_uchar;
 
-        if (*thing_t(&raw mut player)).t_stats.s_hpt <= 0 {
+        if (*thing_t(&raw mut player)).t_stats.hit_points <= 0 {
             death((*thing_t(mp)).t_type);
         } else if kamikaze == 0 {
-            let damage_dealt = oldhp - (*thing_t(&raw mut player)).t_stats.s_hpt;
+            let damage_dealt = oldhp - (*thing_t(&raw mut player)).t_stats.hit_points;
             if damage_dealt > max_hit {
                 max_hit = damage_dealt;
             }
-            if (*thing_t(&raw mut player)).t_stats.s_hpt <= max_hit {
+            if (*thing_t(&raw mut player)).t_stats.hit_points <= max_hit {
                 to_death = false as c_uchar;
             }
         }
@@ -388,15 +388,15 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                     let fewer;
                     if mtype == b'W' as c_char {
                         let pstats = &mut (*thing_t(&raw mut player)).t_stats;
-                        if pstats.s_exp == 0 {
+                        if pstats.experience == 0 {
                             death(b'W' as c_char);
                         }
-                        pstats.s_lvl -= 1;
-                        if pstats.s_lvl == 0 {
-                            pstats.s_exp = 0;
-                            pstats.s_lvl = 1;
+                        pstats.level -= 1;
+                        if pstats.level == 0 {
+                            pstats.experience = 0;
+                            pstats.level = 1;
                         } else {
-                            pstats.s_exp = e_levels[(pstats.s_lvl - 1) as usize] + 1;
+                            pstats.experience = e_levels[(pstats.level - 1) as usize] + 1;
                         }
                         fewer = roll(1, 10);
                     } else {
@@ -404,12 +404,12 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                     }
                     {
                         let pstats = &mut (*thing_t(&raw mut player)).t_stats;
-                        pstats.s_hpt -= fewer;
-                        pstats.s_maxhp -= fewer;
-                        if pstats.s_hpt <= 0 {
-                            pstats.s_hpt = 1;
+                        pstats.hit_points -= fewer;
+                        pstats.max_hit_points -= fewer;
+                        if pstats.hit_points <= 0 {
+                            pstats.hit_points = 1;
                         }
-                        if pstats.s_maxhp <= 0 {
+                        if pstats.max_hit_points <= 0 {
                             death(mtype);
                         }
                     }
@@ -422,13 +422,13 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 sprintf(
                     monsters[(b'F' as usize) - (b'A' as usize)]
                         .m_stats
-                        .s_dmg
+                        .damage
                         .as_mut_ptr(),
                     c"%dx1".as_ptr(),
                     vf_hit,
                 );
-                (*thing_t(&raw mut player)).t_stats.s_hpt -= 1;
-                if (*thing_t(&raw mut player)).t_stats.s_hpt <= 0 {
+                (*thing_t(&raw mut player)).t_stats.hit_points -= 1;
+                if (*thing_t(&raw mut player)).t_stats.hit_points <= 0 {
                     death(b'F' as c_char);
                 }
             } else if mtype == b'L' as c_char {
@@ -501,8 +501,8 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
             has_hit = false as c_uchar;
         }
         if (*thing_t(mp)).t_type == b'F' as c_char {
-            (*thing_t(&raw mut player)).t_stats.s_hpt -= vf_hit;
-            if (*thing_t(&raw mut player)).t_stats.s_hpt <= 0 {
+            (*thing_t(&raw mut player)).t_stats.hit_points -= vf_hit;
+            if (*thing_t(&raw mut player)).t_stats.hit_points <= 0 {
                 death((*thing_t(mp)).t_type);
             }
         }
@@ -586,7 +586,7 @@ pub unsafe extern "C" fn roll_em(
     let dplus: c_int;
 
     if weap.is_null() {
-        cp = (*thing_t(thatt)).t_stats.s_dmg.as_mut_ptr();
+        cp = (*thing_t(thatt)).t_stats.damage.as_mut_ptr();
         dplus = 0;
         hplus = 0;
     } else {
@@ -642,7 +642,7 @@ unsafe fn roll_em_inner(
     let hplus = hplus + if !on_p(thdef, ISRUN) { 4 } else { 0 };
 
     // Defender's armor class
-    let def_arm_base = (*thing_t(thdef)).t_stats.s_arm;
+    let def_arm_base = (*thing_t(thdef)).t_stats.armor;
     let player_is_def = thdef as *const u8 == (&raw const player) as *const u8;
     let mut def_arm = def_arm_base;
     if player_is_def {
@@ -657,8 +657,8 @@ unsafe fn roll_em_inner(
         }
     }
 
-    let att_str = (*thing_t(thatt)).t_stats.s_str as usize;
-    let att_lvl = (*thing_t(thatt)).t_stats.s_lvl;
+    let att_str = (*thing_t(thatt)).t_stats.strength as usize;
+    let att_lvl = (*thing_t(thatt)).t_stats.level;
     let str_idx = att_str.min(STR_PLUS.len() - 1);
     let mut did_hit = 0i32;
 
@@ -676,7 +676,7 @@ unsafe fn roll_em_inner(
         if swing(att_lvl, def_arm, hplus + STR_PLUS[str_idx]) != 0 {
             let proll = roll(ndice, nsides);
             let damage = dplus + proll + ADD_DAM[str_idx];
-            (*thing_t(thdef)).t_stats.s_hpt -= if damage > 0 { damage } else { 0 };
+            (*thing_t(thdef)).t_stats.hit_points -= if damage > 0 { damage } else { 0 };
             did_hit = 1;
         }
         cp = strchr(cp, b'/' as c_int);
@@ -843,7 +843,7 @@ pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut CThing, waskill: c_
 /// Called to put a monster to death.
 #[no_mangle]
 pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
-    (*thing_t(&raw mut player)).t_stats.s_exp += (*thing_t(tp)).t_stats.s_exp;
+    (*thing_t(&raw mut player)).t_stats.experience += (*thing_t(tp)).t_stats.experience;
 
     let mtype = (*thing_t(tp)).t_type;
 
@@ -853,7 +853,7 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
         // Reset damage string to "000x0"
         let dmg = monsters[(b'F' as usize) - (b'A' as usize)]
             .m_stats
-            .s_dmg
+            .damage
             .as_mut_ptr();
         strcpy(dmg, c"000x0".as_ptr());
     } else if mtype == b'L' as c_char {

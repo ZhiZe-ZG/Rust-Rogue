@@ -13,7 +13,7 @@ use crate::rnd::rnd;
 
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 
-use crate::entity::player::{CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::item::pack::add_pack;
 use crate::item::thing_list::new_item;
 use crate::item::weapons::init_weapon;
@@ -330,7 +330,7 @@ static mut USED: [c_uchar; 33] = [false as c_uchar; 33];
 
 unsafe extern "C" {
     static mut player: CThing;
-    static mut max_stats: CStats;
+    static mut max_stats: Stats;
     static mut food_left: c_int;
     static mut a_class: [c_int; 26];
 
