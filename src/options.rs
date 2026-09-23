@@ -5,7 +5,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::draw::{erase_lamp, look};
-use crate::entity::player::{CRoom, CThing, CThingMonster};
+use crate::entity::player::{CThing, CThingMonster};
 use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::{output, Window};
 use glam::IVec2;
@@ -64,7 +64,7 @@ unsafe fn hero_pos() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 
-unsafe fn proom_ptr() -> *mut CRoom {
+unsafe fn proom_ptr() -> Option<usize> {
     (*thing_t(&raw mut player)).t_room
 }
 
@@ -202,10 +202,7 @@ unsafe fn pr_optname(op: *mut OPTION) {
 
 unsafe fn put_bool(vp: *mut c_void) {
     let bp = vp as *mut c_uchar;
-    output::write_window_text(
-        Window::Stdscr,
-        if *bp != 0 { "True" } else { "False" },
-    );
+    output::write_window_text(Window::Stdscr, if *bp != 0 { "True" } else { "False" });
 }
 
 unsafe fn put_str(vp: *mut c_void) {

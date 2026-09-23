@@ -312,7 +312,9 @@ pub(crate) unsafe fn getch() -> i32 {
     let wait = if INPUT_TIMEOUT <= 0 {
         None
     } else {
-        Some(std::time::Duration::from_millis((INPUT_TIMEOUT as u64) * 100))
+        Some(std::time::Duration::from_millis(
+            (INPUT_TIMEOUT as u64) * 100,
+        ))
     };
 
     if let Some(duration) = wait {

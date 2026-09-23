@@ -9,7 +9,7 @@ use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon};
 use crate::daemons::{doctor, stomach, swander};
 use crate::entity::chase::{roomin, runners};
-use crate::entity::player::{CRoom, CThing, CThingMonster};
+use crate::entity::player::{CThing, CThingMonster};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
@@ -95,7 +95,7 @@ unsafe extern "C" {
     static mut jump: c_uchar;
     static mut mpos: c_int;
     static mut oldpos: IVec2;
-    static mut oldrp: *mut CRoom;
+    static mut oldrp: Option<usize>;
     static mut playing: c_uchar;
     static mut q_comm: c_uchar;
     static mut running: c_uchar;

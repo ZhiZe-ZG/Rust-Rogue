@@ -545,10 +545,7 @@ pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
 
     let mname: *mut c_char;
     if on_p(&raw mut player, ISHALU) {
-        output::move_cursor(IVec2::new(
-            (*thing_t(tp)).t_pos.x,
-            (*thing_t(tp)).t_pos.y,
-        ));
+        output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
         let ch = toascii(output::glyph_at_cursor() as c_int);
         let idx = if isupper(ch) != 0 {
             (ch - b'A' as c_int) as usize
@@ -860,11 +857,13 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
             .as_mut_ptr();
         strcpy(dmg, c"000x0".as_ptr());
     } else if mtype == b'L' as c_char {
-        let mut gold_pos = IVec2 { x: 0, y: 0 };
         let tp_room = (*thing_t(tp)).t_room;
         let level = crate::game::current_depth();
-        if !tp_room.is_null()
-            && fallpos(&mut (*thing_t(tp)).t_pos, &mut (*tp_room).r_gold) != 0
+        if tp_room.is_some()
+            && fallpos(
+                &mut (*thing_t(tp)).t_pos,
+                crate::game::room_gold_ptr(tp_room),
+            ) != 0
             && level >= max_level
         {
             let gold = new_item();

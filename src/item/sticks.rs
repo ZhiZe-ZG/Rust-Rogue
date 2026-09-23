@@ -12,8 +12,8 @@ use crate::level::tile_is_walkable;
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
-use crate::ui::output::{endmsg, msg_str};
 use crate::ui::output;
+use crate::ui::output::{endmsg, msg_str};
 use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 

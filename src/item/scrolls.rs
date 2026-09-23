@@ -8,7 +8,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::config::GameConfig;
 use crate::draw::{chat_at as draw_chat, look, map_cell_reveal, winat as draw_winat};
 use crate::entity::monsters::{new_monster, randmonster};
-use crate::entity::player::{CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::game;
 use crate::game::EQUIPMENT;
 use crate::init::pick_color;
@@ -144,7 +144,7 @@ unsafe fn hero() -> IVec2 {
 }
 
 #[inline]
-unsafe fn proom() -> *mut CRoom {
+unsafe fn proom() -> Option<usize> {
     (*thing_t(&raw mut player)).t_room
 }
 

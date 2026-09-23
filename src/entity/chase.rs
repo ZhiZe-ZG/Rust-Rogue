@@ -6,12 +6,12 @@
 //! Rust `const` values so the debug behavior is always available and there is
 //! no need for preprocessor conditionals in Rust.
 
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CRoom, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::entity::rndmove::rndmove;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
@@ -19,8 +19,8 @@ use crate::item::thing_list::{attach, detach};
 use crate::level::tile_is_walkable;
 use crate::misc::sign;
 use crate::rnd::rnd;
-use crate::ui::output::{endmsg, msg_str};
 use crate::ui::output;
+use crate::ui::output::{endmsg, msg_str};
 use glam::IVec2;
 
 const DRAGONSHOT: c_int = 5; // one chance in DRAGONSHOT that a dragon will flame
@@ -28,8 +28,6 @@ const DRAGONSHOT: c_int = 5; // one chance in DRAGONSHOT that a dragon will flam
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_PNUM: c_char = 0x0fu8 as c_char;
 
-const ISDARK: c_short = 0o000001;
-const ISGONE: c_short = 0o000002;
 const ISBLIND: c_short = 0o000004;
 const ISCANC: c_short = 0o000010;
 const ISGREED: c_short = 0o000040;
@@ -69,8 +67,6 @@ static mut CANSEE_TP: IVec2 = IVec2 { x: 0, y: 0 };
 unsafe extern "C" {
     static mut lvl_obj: *mut CThing;
     static mut player: CThing;
-    static mut passages: [CRoom; GameConfig::MAX_PASSAGES];
-    static mut rooms: [CRoom; GameConfig::MAX_ROOMS];
 
     static mut has_hit: c_uchar;
     static mut to_death: c_uchar;
@@ -251,11 +247,11 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
     let mut mindist: c_int = 32767;
     let mut curdist: c_int;
     let mut stoprun = false; // true as c_uchar means we are there
-    let mut door: bool;
+    let door: bool;
     let mut obj: *mut CThing;
 
-    let mut rer = (*thing_t(th)).t_room; // Find room of chaser
-    if monster_has(th, ISGREED) && (*rer).r_goldval == 0 {
+    let rer = (*thing_t(th)).t_room; // Find room of chaser
+    if monster_has(th, ISGREED) && crate::game::room_goldval(rer) == 0 {
         (*thing_t(th)).t_dest = hero_ptr(); // If gold has been taken, run after hero
     }
     let ree = if (*thing_t(th)).t_dest == hero_ptr() {
@@ -271,14 +267,11 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
     // our goal.
     let mut loop_rer = rer;
     let mut loop_door = door;
-    let mut loop_ree = ree;
+    let loop_ree = ree;
     loop {
         if loop_rer != loop_ree {
-            let exits: &[IVec2] = std::slice::from_raw_parts(
-                (*loop_rer).r_exit.as_ptr(),
-                (*loop_rer).r_nexits as usize,
-            );
-            for cp in exits {
+            let exits = crate::game::room_exits(loop_rer);
+            for cp in exits.iter() {
                 curdist = dist_cp((*thing_t(th)).t_dest, cp as *const IVec2 as *mut IVec2);
                 if curdist < mindist {
                     THIS = *cp;
@@ -288,7 +281,15 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
             if loop_door {
                 let pnum =
                     (flat_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x) & F_PNUM) as usize;
-                loop_rer = &raw mut passages[pnum] as *mut CRoom;
+                let passage_exits = crate::game::passage_exits(Some(pnum));
+                for cp in passage_exits.iter() {
+                    curdist = dist_cp((*thing_t(th)).t_dest, cp as *const IVec2 as *mut IVec2);
+                    if curdist < mindist {
+                        THIS = *cp;
+                        mindist = curdist;
+                    }
+                }
+                loop_rer = loop_ree;
                 loop_door = false;
                 continue;
             }
@@ -380,7 +381,7 @@ pub unsafe extern "C" fn set_oldch(tp: *mut CThing, cp: *mut IVec2) {
         (output::glyph_at(IVec2::new((*cp).x, (*cp).y)) as u8 & 0x7f) as c_char;
     if !player_has(ISBLIND) {
         if (sch == FLOOR || (*thing_t(tp)).t_oldch == FLOOR)
-            && ((*(*thing_t(tp)).t_room).r_flags & ISDARK) != 0
+            && crate::game::room_dark((*thing_t(tp)).t_room)
         {
             (*thing_t(tp)).t_oldch = b' ' as c_char;
         } else if dist_cp(cp, hero_ptr()) <= LAMPDIST && see_floor != 0 {
@@ -416,7 +417,7 @@ pub unsafe extern "C" fn see_monst(mp: *mut CThing) -> c_uchar {
     if (*thing_t(mp)).t_room != (*thing_t(&raw mut player)).t_room {
         return false as c_uchar;
     }
-    if ((*(*thing_t(mp)).t_room).r_flags & ISDARK) != 0 {
+    if crate::game::room_dark((*thing_t(mp)).t_room) {
         false as c_uchar
     } else {
         true as c_uchar
@@ -562,30 +563,20 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut IVec2) -> c_uchar {
 ///
 /// Uses globals: places (via flat), passages, rooms, msg.
 #[no_mangle]
-pub unsafe extern "C" fn roomin(cp: *mut IVec2) -> *mut CRoom {
+pub unsafe fn roomin(cp: *mut IVec2) -> Option<usize> {
     if cp.is_null() {
-        return std::ptr::null_mut();
+        return None;
     }
-    let fp = flat_at((*cp).y, (*cp).x);
-    if (fp & F_PASS) != 0 {
-        return &raw mut passages[(fp & F_PNUM) as usize] as *mut CRoom;
-    }
-
-    for rp in rooms.iter_mut() {
-        if (*cp).x <= rp.r_pos.x + rp.r_max.x
-            && rp.r_pos.x <= (*cp).x
-            && (*cp).y <= rp.r_pos.y + rp.r_max.y
-            && rp.r_pos.y <= (*cp).y
-        {
-            return rp as *mut CRoom;
-        }
+    let room = crate::game::with_current_level(|level| level.room_at((*cp).y, (*cp).x));
+    if room.is_some() {
+        return room;
     }
 
     msg_str(&format!("in some bizarre place ({}, {})", (*cp).y, (*cp).x));
     if MASTER {
         abort();
     }
-    std::ptr::null_mut()
+    None
 }
 
 /// diag_ok:
@@ -639,7 +630,7 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
     CANSEE_TP.y = y;
     CANSEE_TP.x = x;
     let rer = roomin(&raw mut CANSEE_TP);
-    if rer == (*thing_t(&raw mut player)).t_room && ((*rer).r_flags & ISDARK) == 0 {
+    if rer == (*thing_t(&raw mut player)).t_room && !crate::game::room_dark(rer) {
         true as c_uchar
     } else {
         false as c_uchar

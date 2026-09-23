@@ -14,8 +14,8 @@ use crate::game;
 use crate::item::pack::floor_at;
 use crate::level::{be_trapped, Trap};
 use crate::rnd::rnd;
-use crate::ui::output::msg_str;
 use crate::ui::output;
+use crate::ui::output::msg_str;
 use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -50,18 +50,6 @@ pub struct CStats {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct CRoom {
-    pub r_pos: IVec2,
-    pub r_max: IVec2,
-    pub r_gold: IVec2,
-    pub r_goldval: c_int,
-    pub r_flags: c_short,
-    pub r_nexits: c_int,
-    pub r_exit: [IVec2; 12],
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
 pub struct CThingMonster {
     pub l_next: *mut CThing,
     pub l_prev: *mut CThing,
@@ -73,7 +61,7 @@ pub struct CThingMonster {
     pub t_dest: *mut IVec2,
     pub t_flags: c_short,
     pub t_stats: CStats,
-    pub t_room: *mut CRoom,
+    pub t_room: Option<usize>,
     pub t_pack: *mut CThing,
     pub t_reserved: c_int,
 }
@@ -200,8 +188,8 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
     let current_room = (*thing_t(&raw mut player)).t_room;
     if passgo == 0
         || running == 0
-        || current_room.is_null()
-        || ((*current_room).r_flags & 0o000002) == 0
+        || current_room.is_none()
+        || !crate::game::room_gone(current_room)
         || player_has(ISBLIND)
     {
         return false;

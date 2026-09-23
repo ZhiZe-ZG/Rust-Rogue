@@ -19,12 +19,10 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar};
 use crate::config::GameConfig;
 use crate::entity::chase::{roomin, see_monst};
 use crate::entity::monsters::wake_monster;
-use crate::entity::player::{CRoom, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game;
 use crate::level::Trap;
-use crate::level::{
-    door_open, tile_is_walkable, with_current_level, with_current_level_mut, Tile,
-};
+use crate::level::{door_open, tile_is_walkable, with_current_level, with_current_level_mut, Tile};
 use crate::misc::find_obj;
 use crate::rnd::rnd;
 use crate::ui::{output, Window};
@@ -57,10 +55,7 @@ pub const F_TMASK: c_char = 0x07u8 as c_char;
 // ─── Player/monster flags ─────────────────────────────────────────────────────
 
 const ISBLIND: c_short = 0o0000004;
-const ISDARK: c_short = 0o0000001;
-const ISGONE: c_short = 0o0000002;
 const ISHALU: c_short = 0o0004000;
-const ISMAZE: c_short = 0o0000004;
 const ISRUN: c_short = 0o020000;
 const SEEMONST: c_short = 0o040000;
 
@@ -76,9 +71,8 @@ unsafe extern "C" {
     static mut firstmove: c_uchar;
     static mut jump: c_uchar;
     static mut oldpos: IVec2;
-    static mut oldrp: *mut CRoom;
+    static mut oldrp: Option<usize>;
     static mut player: CThing;
-    static mut passages: [CRoom; GameConfig::MAX_PASSAGES];
     static mut runch: c_char;
     static mut running: c_uchar;
     static mut see_floor: c_uchar;
@@ -464,8 +458,9 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
 
             output::move_cursor(IVec2::new(x, y));
             let player_room = (*thing_t(&raw mut player)).t_room;
-            if !player_room.is_null()
-                && ((*player_room).r_flags & (ISGONE as c_short | ISDARK as c_short)) == ISDARK
+            if player_room.is_some()
+                && crate::game::room_dark(player_room)
+                && !crate::game::room_gone(player_room)
                 && see_floor == 0
                 && ch == FLOOR as c_int
             {
@@ -555,10 +550,11 @@ pub unsafe extern "C" fn trip_ch(y: c_int, x: c_int, ch: c_int) -> c_int {
 /// erase_lamp:
 /// Clear the highlighted floor cells when a lamp fades in a dark room.
 #[no_mangle]
-pub unsafe extern "C" fn erase_lamp(pos: *mut IVec2, rp: *mut CRoom) {
+pub unsafe extern "C" fn erase_lamp(pos: *mut IVec2, rp: Option<usize>) {
     if !((see_floor != 0)
-        && !rp.is_null()
-        && ((*rp).r_flags & (ISGONE as c_short | ISDARK as c_short)) == ISDARK
+        && rp.is_some()
+        && crate::game::room_dark(rp)
+        && !crate::game::room_gone(rp)
         && !player_has(ISBLIND))
     {
         return;
@@ -605,21 +601,25 @@ pub unsafe extern "C" fn enter_room(cp: *mut IVec2) {
     }
 
     let rp = roomin(cp);
-    if rp.is_null() {
+    if rp.is_none() {
         return;
     }
 
     (*thing_t(&raw mut player)).t_room = rp;
     door_open(rp);
 
-    if ((*rp).r_flags & ISDARK) != 0 || player_has(ISBLIND) {
+    if crate::game::room_dark(rp) || player_has(ISBLIND) {
         return;
     }
 
-    let y0 = (*rp).r_pos.y;
-    let x0 = (*rp).r_pos.x;
-    let y_end = y0 + (*rp).r_max.y;
-    let x_end = x0 + (*rp).r_max.x;
+    let (pos, size) = match crate::game::room_bounds(rp) {
+        Some(b) => b,
+        None => return,
+    };
+    let y0 = pos.y;
+    let x0 = pos.x;
+    let y_end = y0 + size.y;
+    let x_end = x0 + size.x;
     let mut y = y0;
     while y < y_end {
         output::move_cursor(IVec2::new(x0, y));
@@ -663,17 +663,17 @@ pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
     }
 
     let rp = (*thing_t(&raw mut player)).t_room;
-    if rp.is_null() {
+    if rp.is_none() {
         return;
     }
 
-    if ((*rp).r_flags & ISMAZE) != 0 {
+    if crate::game::room_maze(rp) {
         return;
     }
 
-    let floor = if ((*rp).r_flags & ISGONE) != 0 {
+    let floor = if crate::game::room_gone(rp) {
         PASSAGE
-    } else if ((*rp).r_flags & ISDARK) == 0 || player_has(ISBLIND) {
+    } else if !crate::game::room_dark(rp) || player_has(ISBLIND) {
         FLOOR
     } else {
         SPACE
@@ -681,13 +681,17 @@ pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
 
     let pnum = (flat_at((*cp).y, (*cp).x) as u8 & F_PNUM as u8) as usize;
     if pnum < GameConfig::MAX_PASSAGES {
-        (*thing_t(&raw mut player)).t_room = (&raw mut passages[pnum]) as *mut CRoom;
+        (*thing_t(&raw mut player)).t_room = None;
     }
 
-    let y0 = (*rp).r_pos.y;
-    let x0 = (*rp).r_pos.x;
-    let y_end = y0 + (*rp).r_max.y;
-    let x_end = x0 + (*rp).r_max.x;
+    let (pos, size) = match crate::game::room_bounds(rp) {
+        Some(b) => b,
+        None => return,
+    };
+    let y0 = pos.y;
+    let x0 = pos.x;
+    let y_end = y0 + size.y;
+    let x_end = x0 + size.x;
     let mut y = y0;
     while y < y_end {
         let mut x = x0;

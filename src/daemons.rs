@@ -21,7 +21,7 @@ use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
 use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::wanderer;
-use crate::entity::player::{CRoom, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
@@ -44,9 +44,6 @@ const ISRUN: c_short = 0o0020000;
 const SEEMONST: c_short = 0o0040000;
 const CANSEE: c_short = 0o0000002;
 const ISLEVIT: c_short = 0o0000010;
-
-// Room flags
-const ISGONE: c_short = 0o0000002;
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
@@ -187,8 +184,8 @@ pub unsafe extern "C" fn sight() {
     if ((*thing_t(&raw mut player)).t_flags & ISBLIND) != 0 {
         extinguish(sight as *const c_void);
         (*thing_t(&raw mut player)).t_flags &= !ISBLIND;
-        let proom: *mut CRoom = (*thing_t(&raw mut player)).t_room;
-        if !proom.is_null() && ((*proom).r_flags & ISGONE) == 0 {
+        let proom = (*thing_t(&raw mut player)).t_room;
+        if !crate::game::room_gone(proom) {
             enter_room(&mut (*thing_t(&raw mut player)).t_pos);
         }
         msg_str(
@@ -316,10 +313,7 @@ pub unsafe extern "C" fn come_down() {
     let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
     let mut tp = MLIST.head();
     while !tp.is_null() {
-        output::move_cursor(IVec2::new(
-            (*thing_t(tp)).t_pos.x,
-            (*thing_t(tp)).t_pos.y,
-        ));
+        output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
         if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
             if ((*thing_t(tp)).t_flags & ISINVIS) == 0
                 || ((*thing_t(&raw mut player)).t_flags & CANSEE) != 0
@@ -364,20 +358,14 @@ pub unsafe extern "C" fn visuals() {
     // Change the stairs.
     let stairs = crate::game::stairs();
     if seenstairs == 0 && cansee(stairs.y, stairs.x) != 0 {
-        output::write_glyph_at(
-            IVec2::new(stairs.x, stairs.y),
-            (rnd_thing() as u8) as char,
-        );
+        output::write_glyph_at(IVec2::new(stairs.x, stairs.y), (rnd_thing() as u8) as char);
     }
 
     // Change the monsters.
     let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
     let mut tp = MLIST.head();
     while !tp.is_null() {
-        output::move_cursor(IVec2::new(
-            (*thing_t(tp)).t_pos.x,
-            (*thing_t(tp)).t_pos.y,
-        ));
+        output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
         if see_monst(tp) != 0 {
             if (*thing_t(tp)).t_type == b'X' as c_char
                 && (*thing_t(tp)).t_disguise != b'X' as c_char

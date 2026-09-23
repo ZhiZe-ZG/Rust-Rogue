@@ -4,7 +4,7 @@
 //! `extern.c` and `init.c`: material tables, monster state, and other globals.
 use crate::config::GameConfig;
 use crate::entity::player::{
-    CPlace as PlayerCPlace, CRoom as PlayerCRoom, CStats as PlayerCStats, CThing as PlayerCThing,
+    CPlace as PlayerCPlace, CStats as PlayerCStats, CThing as PlayerCThing,
 };
 use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
@@ -55,7 +55,6 @@ pub struct CObjInfo {
 }
 
 pub type CStats = PlayerCStats;
-pub type CRoom = PlayerCRoom;
 pub type CThing = PlayerCThing;
 pub type CThingMonster = crate::entity::player::CThingMonster;
 pub type CThingObject = crate::entity::player::CThingObject;
@@ -261,7 +260,7 @@ pub static mut player: CThing = CThing {
             s_dmg: [0; 13],
             s_maxhp: 0,
         },
-        t_room: std::ptr::null_mut(),
+        t_room: None,
         t_pack: std::ptr::null_mut(),
         t_reserved: 0,
     },
@@ -278,27 +277,7 @@ pub static mut max_stats: CStats = CStats {
     s_maxhp: 12,
 };
 #[no_mangle]
-pub static mut oldrp: *mut CRoom = std::ptr::null_mut();
-#[no_mangle]
-pub static mut rooms: [CRoom; GameConfig::MAX_ROOMS] = [CRoom {
-    r_pos: IVec2 { x: 0, y: 0 },
-    r_max: IVec2 { x: 0, y: 0 },
-    r_gold: IVec2 { x: 0, y: 0 },
-    r_goldval: 0,
-    r_flags: 0,
-    r_nexits: 0,
-    r_exit: [IVec2 { x: 0, y: 0 }; 12],
-}; GameConfig::MAX_ROOMS];
-#[no_mangle]
-pub static mut passages: [CRoom; GameConfig::MAX_PASSAGES] = [CRoom {
-    r_pos: IVec2 { x: 0, y: 0 },
-    r_max: IVec2 { x: 0, y: 0 },
-    r_gold: IVec2 { x: 0, y: 0 },
-    r_goldval: 0,
-    r_flags: 0,
-    r_nexits: 0,
-    r_exit: [IVec2 { x: 0, y: 0 }; 12],
-}; GameConfig::MAX_PASSAGES];
+pub static mut oldrp: Option<usize> = None;
 #[no_mangle]
 pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
     CMonsterState {

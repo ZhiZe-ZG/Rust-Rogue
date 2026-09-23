@@ -5,7 +5,6 @@
 
 mod generation;
 mod level;
-mod mirror;
 mod passages;
 mod presence;
 mod roomgraph;
@@ -19,7 +18,7 @@ pub use generation::{door_open, new_level};
 pub use level::{with_current_level, with_current_level_mut, Level, LevelFlags};
 pub(crate) use presence::find_floor;
 
-pub use passages::Passage;
+pub use passages::{Passage, PassageLinks};
 pub use roomgraph::RoomGraph;
 pub use rooms::{Door, DoorKind, Room};
 pub use structure::Structure;

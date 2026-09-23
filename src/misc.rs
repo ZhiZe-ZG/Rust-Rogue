@@ -17,7 +17,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CRoom, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::startup::roll;
 
 const PASSAGE: c_char = b'#' as c_char;
@@ -37,8 +37,6 @@ const AMULET: c_char = b',' as c_char;
 const RING: c_char = b'=' as c_char;
 const STICK: c_char = b'/' as c_char;
 
-const ISDARK: c_short = 0o0000001;
-const ISGONE: c_short = 0o0000002;
 const ISHALU: c_short = 0o0004000;
 const ISBLIND: c_short = 0o0000004;
 const ISHASTE: c_short = 0o0000100;
@@ -83,7 +81,6 @@ unsafe extern "C" {
     static mut no_command: c_int;
     static mut no_move: c_int;
     static mut oldpos: IVec2;
-    static mut oldrp: *mut CRoom;
     static mut passgo: c_uchar;
     static mut player: CThing;
     static mut prbuf: [c_char; MAXSTR];
@@ -118,15 +115,6 @@ unsafe fn on(thing: *mut CThing, flag: c_short) -> bool {
 }
 
 #[inline]
-unsafe fn room_flags(rp: *mut CRoom) -> c_short {
-    if rp.is_null() {
-        0
-    } else {
-        (*rp).r_flags
-    }
-}
-
-#[inline]
 unsafe fn hero_pos() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
@@ -148,7 +136,8 @@ unsafe fn first_is_vowel(s: *const c_char) -> bool {
 #[no_mangle]
 pub unsafe fn show_floor() -> bool {
     let player_room = (*thing_t(&raw mut player)).t_room;
-    if (room_flags(player_room) & (ISGONE as c_short | ISDARK as c_short)) == ISDARK
+    if crate::game::room_dark(player_room)
+        && !crate::game::room_gone(player_room)
         && !on(&raw mut player, ISBLIND)
     {
         return see_floor;

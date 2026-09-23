@@ -7,56 +7,43 @@
 //! [`super::symbols`]. [`super::generation::new_level`] calls these after the
 //! rooms/passages have been dug and mirrored.
 
-use std::mem::size_of;
+use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use crate::config::GameConfig;
 use crate::draw::{terrain_chat_at, FLOOR, PASSAGE};
-use crate::entity::player::{CRoom, CThing};
+use crate::entity::player::CThing;
 use crate::game;
+use crate::item::thing_list::new_item;
 use crate::rnd::rnd;
 use crate::ui::output;
-use glam::IVec2;
 
 use super::level::{with_current_level_mut, LevelFlags};
 use super::symbols::{
-    amulet, attach, enter_room, give_pack, tile_is_walkable, lvl_obj, max_level, MLIST, new_item,
-    new_monster, new_thing, ntraps, player, randmonster, roomin, rooms, seenstairs, thing_o,
-    thing_t, turn_see, visuals, AMULET, GOLD, GOLDGRP, ISGONE, ISHALU, ISMANY, ISMEAN, PLAYER,
-    SEEMONST,
+    amulet, attach, enter_room, give_pack, lvl_obj, max_level, new_monster, new_thing, ntraps,
+    player, randmonster, roomin, seenstairs, thing_o, thing_t, turn_see, visuals, AMULET, GOLD,
+    GOLDGRP, ISHALU, ISMANY, ISMEAN, MLIST, PLAYER, SEEMONST,
 };
 use super::tile::Tile;
 use super::trap::Trap;
 
-/// Map a pointer into the C `rooms` array back to its Rust room-slot index.
-///
-/// The pointer is only used for address arithmetic against the C `rooms`
-/// global so the caller can look the slot up in the `Level::rooms` member;
-/// it is never dereferenced. Returns `None` for a null or out-of-range
-/// pointer.
-unsafe fn room_slot_of(rp: *mut CRoom) -> Option<usize> {
-    if rp.is_null() {
-        return None;
-    }
-    let base = rooms.as_ptr() as usize;
-    let idx = (rp as usize).wrapping_sub(base) / size_of::<CRoom>();
-    (idx < GameConfig::MAX_ROOMS).then_some(idx)
-}
-
 /// Find a floor cell to place something, optionally avoiding monsters.
 ///
-/// If `rp` is null a random room slot is tried each iteration via
-/// `Level::rnd_room`; otherwise `rp` is mapped back to the matching `Level`
-/// room slot. Room selection and geometry come from the Rust `Level` model
-/// (`Level::rnd_pos`), while the candidate cell is validated against the C
-/// `places` grid. Returns `true as c_uchar` and stores the chosen cell into `cp` on
-/// success; `false as c_uchar` when `limit` (if nonzero) attempts are exhausted.
-pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut IVec2, limit: c_int, monst: bool) -> bool {
+/// If `room_idx` is `None` a random room slot is tried each iteration via
+/// `Level::rnd_room`; otherwise the cell is chosen inside that room. Room
+/// selection and geometry come from the Rust `Level` model (`Level::rnd_pos`),
+/// while the candidate cell is validated against the C `places` grid. Returns
+/// `true` and stores the chosen cell into `cp` on success; `false` when
+/// `limit` (if nonzero) attempts are exhausted.
+pub unsafe fn find_floor(
+    room_idx: Option<usize>,
+    cp: *mut IVec2,
+    limit: c_int,
+    monst: bool,
+) -> bool {
     if cp.is_null() {
         return false;
     }
-
-    let room_idx = room_slot_of(rp);
 
     let mut cnt = limit;
     let mut guard = 0u32;
@@ -93,7 +80,7 @@ pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut IVec2, limit: c_int, monst: bo
         let ch = terrain_chat_at((*cp).y, (*cp).x);
 
         if monst {
-            if game::monster_at((*cp).y, (*cp).x).is_null() && tile_is_walkable(ch as u8) {
+            if game::monster_at((*cp).y, (*cp).x).is_null() && super::tile_is_walkable(ch as u8) {
                 return true;
             }
         } else if ch == compchar {
@@ -104,14 +91,13 @@ pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut IVec2, limit: c_int, monst: bo
 
 /// Fill one treasure room with `MIN..MAX` objects and monsters.
 unsafe fn treas_room() {
-    let mut mp = IVec2 { x: 0, y: 0 };
+    let mut mp = IVec2::ZERO;
     let (idx, mut spots) = with_current_level_mut(|current| {
         let idx = current.rnd_room();
         let room = &current.rooms[idx];
         let spots = (room.size.y - 2) * (room.size.x - 2) - GameConfig::MIN_TREASURES;
         (idx, spots)
     });
-    let rp = &mut rooms[idx];
 
     if spots > (GameConfig::MAX_TREASURES - GameConfig::MIN_TREASURES) {
         spots = GameConfig::MAX_TREASURES - GameConfig::MIN_TREASURES;
@@ -121,7 +107,7 @@ unsafe fn treas_room() {
     let num_monst = nm;
     while nm > 0 {
         find_floor(
-            rp as *mut CRoom,
+            Some(idx),
             &mut mp,
             2 * GameConfig::MAX_PLACEMENT_ATTEMPTS,
             false,
@@ -148,12 +134,7 @@ unsafe fn treas_room() {
     let depth = game::current_depth();
     game::set_current_depth(depth + 1);
     while nm > 0 {
-        if find_floor(
-            rp as *mut CRoom,
-            &mut mp,
-            GameConfig::MAX_PLACEMENT_ATTEMPTS,
-            true,
-        ) {
+        if find_floor(Some(idx), &mut mp, GameConfig::MAX_PLACEMENT_ATTEMPTS, true) {
             let tp = new_item();
             new_monster(tp, randmonster(false), &mut mp);
             (*thing_t(tp)).t_flags |= ISMEAN;
@@ -168,18 +149,13 @@ unsafe fn treas_room() {
 ///
 /// Each room may hold a gold stash (value `rnd(50 + 10*level) + 2`) and has a
 /// chance of a monster guarding it (higher when the room has gold).
-///
-/// ```text
-/// Uses globals: amulet, level, max_level, rooms, lvl_obj, places.
-/// ```
 unsafe fn place_room_contents() {
-    let mut mp = IVec2 { x: 0, y: 0 };
+    let mut mp = IVec2::ZERO;
     let level = game::current_depth();
 
     for i in 0..GameConfig::MAX_ROOMS {
-        let rp = (&raw mut rooms[i]) as *mut CRoom;
-
-        if (rooms[i].r_flags & ISGONE) != 0 {
+        let gone = with_current_level_mut(|current| current.rooms[i].gone);
+        if gone {
             continue;
         }
 
@@ -190,9 +166,13 @@ unsafe fn place_room_contents() {
                 let og = thing_o(gold);
 
                 (*og).o_arm = rnd(50 + 10 * level) + 2;
-                (*rp).r_goldval = (*og).o_arm;
-                find_floor(rp, &mut (*rp).r_gold, 0, false);
-                (*og).o_pos = (*rp).r_gold;
+                let mut gold_pos = IVec2::ZERO;
+                find_floor(Some(i), &mut gold_pos, 0, false);
+                with_current_level_mut(|current| {
+                    current.rooms[i].gold = gold_pos;
+                    current.rooms[i].goldval = (*og).o_arm;
+                });
+                (*og).o_pos = gold_pos;
                 (*og).o_flags = ISMANY;
                 (*og).o_group = GOLDGRP;
                 (*og).o_type = GOLD as c_int;
@@ -200,10 +180,11 @@ unsafe fn place_room_contents() {
             }
         }
 
-        if rnd(100) < if (*rp).r_goldval > 0 { 80 } else { 25 } {
+        let goldval = with_current_level_mut(|current| current.rooms[i].goldval);
+        if rnd(100) < if goldval > 0 { 80 } else { 25 } {
             let tp = new_item();
             if !tp.is_null() {
-                find_floor(rp, &mut mp, 0, true);
+                find_floor(Some(i), &mut mp, 0, true);
                 new_monster(tp, randmonster(false), &mut mp);
                 give_pack(tp);
             }
@@ -212,10 +193,6 @@ unsafe fn place_room_contents() {
 }
 
 /// Put potions and scrolls (and, deep enough, the Amulet of Yendor) on this level.
-///
-/// ```text
-/// Uses globals: amulet, level, max_level, lvl_obj, places (via chat).
-/// ```
 unsafe fn put_things() {
     let level = game::current_depth();
 
@@ -239,7 +216,7 @@ unsafe fn put_things() {
             // Put it somewhere.
             let og = thing_o(obj);
             let pos = &raw mut (*og).o_pos;
-            find_floor(std::ptr::null_mut(), pos, 0, false);
+            find_floor(None, pos, 0, false);
         }
     }
 
@@ -251,8 +228,6 @@ unsafe fn put_things() {
         let og = thing_o(obj);
         (*og).o_hplus = 0;
         (*og).o_dplus = 0;
-        // Copy "0x0" into the 8-byte damage strings (zero-padded), matching
-        // C's strncpy(obj->o_damage, "0x0", sizeof(obj->o_damage)).
         (*og).o_damage = [
             b'0' as c_char,
             b'x' as c_char,
@@ -275,17 +250,12 @@ unsafe fn put_things() {
         ];
         (*og).o_arm = 11;
         (*og).o_type = AMULET as c_int;
-        // Put it somewhere.
         let pos = &raw mut (*og).o_pos;
-        find_floor(std::ptr::null_mut(), pos, 0, false);
+        find_floor(None, pos, 0, false);
     }
 }
 
 /// Scatter traps (scaled by depth) on floor cells.
-///
-/// ```text
-/// Uses globals: level, ntraps, places, stairs.
-/// ```
 unsafe fn place_traps() {
     let level = game::current_depth();
 
@@ -302,14 +272,12 @@ unsafe fn place_traps() {
     let mut stairs = IVec2::ZERO;
     while i > 0 {
         loop {
-            find_floor(std::ptr::null_mut(), &raw mut stairs, 0, false);
+            find_floor(None, &raw mut stairs, 0, false);
             if terrain_chat_at(stairs.y, stairs.x) == FLOOR {
                 break;
             }
         }
 
-        // Record the trap in the level model: a floor cell becomes a hidden
-        // trap (non-real, with its kind in the trap grid).
         with_current_level_mut(|current| {
             current
                 .map
@@ -323,13 +291,9 @@ unsafe fn place_traps() {
 }
 
 /// Place the down staircase on a floor cell.
-///
-/// ```text
-/// Uses globals: stairs, places, seenstairs.
-/// ```
 unsafe fn place_stairs() {
     let mut stairs = IVec2::ZERO;
-    find_floor(std::ptr::null_mut(), &raw mut stairs, 0, false);
+    find_floor(None, &raw mut stairs, 0, false);
     // The staircase is a tile in the level map; it renders `%` via draw.
     with_current_level_mut(|current| {
         current.stairs = stairs;
@@ -341,10 +305,6 @@ unsafe fn place_stairs() {
 }
 
 /// Link every monster on the level to the room its position falls in.
-///
-/// ```text
-/// Uses globals: mlist.
-/// ```
 pub(crate) unsafe fn link_monsters_to_rooms() {
     let mut tp = MLIST.head();
     while !tp.is_null() {
@@ -355,20 +315,8 @@ pub(crate) unsafe fn link_monsters_to_rooms() {
 }
 
 /// Place the hero on an open floor cell and finalize the screen.
-///
-/// Moves the hero to a random walkable cell, triggers room entry, draws the
-/// hero, and refreshes the display according to the hero's current flags.
-///
-/// ```text
-/// Uses globals: player, places (via find_floor).
-/// ```
 unsafe fn place_hero() {
-    find_floor(
-        std::ptr::null_mut(),
-        &raw mut (*thing_t(&raw mut player)).t_pos,
-        0,
-        true,
-    );
+    find_floor(None, &raw mut (*thing_t(&raw mut player)).t_pos, 0, true);
     enter_room(&raw mut (*thing_t(&raw mut player)).t_pos);
     output::write_glyph_at(
         IVec2::new(

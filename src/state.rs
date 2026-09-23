@@ -36,10 +36,11 @@ use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
 use crate::entity::chase::runners;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::thing_list::{allocated_count, new_item};
 use crate::item::things::CObjInfo;
+use crate::level::{PassageLinks, Room};
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -227,9 +228,7 @@ unsafe extern "C" {
     // rooms / map
     static mut places: [CPlace; 32 * 80];
     static mut max_stats: CStats;
-    static mut oldrp: *mut CRoom;
-    static mut rooms: [CRoom; crate::config::GameConfig::MAX_ROOMS];
-    static mut passages: [CRoom; crate::config::GameConfig::MAX_PASSAGES];
+    static mut oldrp: Option<usize>;
 
     // monster / object info tables
     static mut monsters: [CMonsterState; MAXMONSTERS];
@@ -1455,63 +1454,83 @@ unsafe fn rs_read_obj_info(inf: *mut CFile, mi: *mut CObjInfo, count: c_int) -> 
 
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_room(savef: *mut CFile, r: *mut CRoom) -> c_int {
+unsafe fn rs_write_room(savef: *mut CFile, r: &Room) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let _ = rs_write_coord(savef, (*r).r_pos);
-    let _ = rs_write_coord(savef, (*r).r_max);
-    let _ = rs_write_coord(savef, (*r).r_gold);
-    let _ = rs_write_int(savef, (*r).r_goldval);
-    let _ = rs_write_short(savef, (*r).r_flags);
-    let _ = rs_write_int(savef, (*r).r_nexits);
+    let _ = rs_write_coord(savef, r.position);
+    let _ = rs_write_coord(savef, r.size);
+    let _ = rs_write_coord(savef, r.gold);
+    let _ = rs_write_int(savef, r.goldval);
+    let _ = rs_write_boolean(savef, r.gone as c_int);
+    let _ = rs_write_boolean(savef, r.dark as c_int);
+    let _ = rs_write_boolean(savef, r.maze as c_int);
+    let _ = rs_write_int(savef, r.entry_point_count);
     let mut i = 0;
     while i < 12 {
-        let _ = rs_write_coord(savef, (*r).r_exit[i]);
+        let exit = r.entry_points.get(i).copied().unwrap_or(IVec2::ZERO);
+        let _ = rs_write_coord(savef, exit);
         i += 1;
     }
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_room(inf: *mut CFile, r: *mut CRoom) -> c_int {
+unsafe fn rs_read_room(inf: *mut CFile, r: &mut Room) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
-    let _ = rs_read_coord(inf, &mut (*r).r_pos);
-    let _ = rs_read_coord(inf, &mut (*r).r_max);
-    let _ = rs_read_coord(inf, &mut (*r).r_gold);
-    let _ = rs_read_int(inf, &mut (*r).r_goldval);
-    let _ = rs_read_short(inf, &mut (*r).r_flags);
-    let _ = rs_read_int(inf, &mut (*r).r_nexits);
+    let mut position = IVec2::ZERO;
+    let mut size = IVec2::ZERO;
+    let mut gold = IVec2::ZERO;
+    let mut gone = 0;
+    let mut dark = 0;
+    let mut maze = 0;
+    let _ = rs_read_coord(inf, &mut position);
+    let _ = rs_read_coord(inf, &mut size);
+    let _ = rs_read_coord(inf, &mut gold);
+    let _ = rs_read_int(inf, &mut r.goldval);
+    let _ = rs_read_boolean(inf, &mut gone);
+    let _ = rs_read_boolean(inf, &mut dark);
+    let _ = rs_read_boolean(inf, &mut maze);
+    let _ = rs_read_int(inf, &mut r.entry_point_count);
+    r.position = position;
+    r.size = size;
+    r.gold = gold;
+    r.gone = gone != 0;
+    r.dark = dark != 0;
+    r.maze = maze != 0;
+    r.entry_points.clear();
     let mut i = 0;
     while i < 12 {
-        let _ = rs_read_coord(inf, &mut (*r).r_exit[i]);
+        let mut exit = IVec2::ZERO;
+        let _ = rs_read_coord(inf, &mut exit);
+        if i < r.entry_point_count.max(0) as usize {
+            r.entry_points.push(exit);
+        }
         i += 1;
     }
 
     read_stat()
 }
 
-unsafe fn rs_write_rooms(savef: *mut CFile, r: *mut CRoom, count: c_int) -> c_int {
+unsafe fn rs_write_rooms(savef: *mut CFile, rooms: &[Room]) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let _ = rs_write_int(savef, count);
+    let _ = rs_write_int(savef, rooms.len() as c_int);
 
-    let mut n: c_int = 0;
-    while n < count {
-        let _ = rs_write_room(savef, &mut *r.add(n as usize));
-        n += 1;
+    for room in rooms {
+        let _ = rs_write_room(savef, room);
     }
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_rooms(inf: *mut CFile, r: *mut CRoom, count: c_int) -> c_int {
+unsafe fn rs_read_rooms(inf: *mut CFile, rooms: &mut [Room]) -> c_int {
     let mut value: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -1520,46 +1539,79 @@ unsafe fn rs_read_rooms(inf: *mut CFile, r: *mut CRoom, count: c_int) -> c_int {
 
     let _ = rs_read_int(inf, &mut value);
 
-    if value > count {
+    if value < 0 || value as usize > rooms.len() {
         FORMAT_ERROR = 1;
     }
 
     let mut n: c_int = 0;
-    while n < value {
-        let _ = rs_read_room(inf, &mut *r.add(n as usize));
+    while n < value && (n as usize) < rooms.len() {
+        let _ = rs_read_room(inf, &mut rooms[n as usize]);
         n += 1;
     }
 
     read_stat()
 }
 
-/// Writes an index into the global rooms[] table for a room pointer.
-///
-/// Uses globals: rooms.
-unsafe fn rs_write_room_reference(savef: *mut CFile, rp: *mut CRoom) -> c_int {
-    let mut room: c_int = -1;
-
+unsafe fn rs_write_passage_links(savef: *mut CFile, links: &[PassageLinks]) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let mut i = 0;
-    while i < crate::config::GameConfig::MAX_ROOMS {
-        if (&raw mut rooms[i]) as *mut CRoom == rp {
-            room = i as c_int;
+    let _ = rs_write_int(savef, links.len() as c_int);
+    for link in links {
+        let _ = rs_write_int(savef, link.exits.len() as c_int);
+        for exit in &link.exits {
+            let _ = rs_write_coord(savef, *exit);
         }
-        i += 1;
     }
-
-    let _ = rs_write_int(savef, room);
 
     WRITE_ERROR
 }
 
-/// Reads an index into the global rooms[] table, resolving the pointer.
-///
-/// Uses globals: rooms.
-unsafe fn rs_read_room_reference(inf: *mut CFile, rp: *mut *mut CRoom) -> c_int {
+unsafe fn rs_read_passage_links(inf: *mut CFile, links: &mut Vec<PassageLinks>) -> c_int {
+    let mut count = 0;
+
+    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
+        return read_stat();
+    }
+
+    let _ = rs_read_int(inf, &mut count);
+    if count < 0 {
+        FORMAT_ERROR = 1;
+        return read_stat();
+    }
+
+    links.clear();
+    for _ in 0..count {
+        let mut exit_count = 0;
+        let _ = rs_read_int(inf, &mut exit_count);
+        if exit_count < 0 {
+            FORMAT_ERROR = 1;
+            break;
+        }
+        let mut exits = Vec::with_capacity(exit_count as usize);
+        for _ in 0..exit_count {
+            let mut exit = IVec2::ZERO;
+            let _ = rs_read_coord(inf, &mut exit);
+            exits.push(exit);
+        }
+        links.push(PassageLinks { exits });
+    }
+
+    read_stat()
+}
+
+unsafe fn rs_write_room_reference(savef: *mut CFile, room: Option<usize>) -> c_int {
+    if WRITE_ERROR != 0 {
+        return WRITE_ERROR;
+    }
+
+    let _ = rs_write_int(savef, room.map_or(-1, |i| i as c_int));
+
+    WRITE_ERROR
+}
+
+unsafe fn rs_read_room_reference(inf: *mut CFile, room: &mut Option<usize>) -> c_int {
     let mut i: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -1568,10 +1620,10 @@ unsafe fn rs_read_room_reference(inf: *mut CFile, rp: *mut *mut CRoom) -> c_int 
 
     let _ = rs_read_int(inf, &mut i);
 
-    if (i as usize) < crate::config::GameConfig::MAX_ROOMS {
-        *rp = (&raw mut rooms[i as usize]) as *mut CRoom;
+    if i >= 0 && (i as usize) < crate::config::GameConfig::MAX_ROOMS {
+        *room = Some(i as usize);
     } else {
-        *rp = std::ptr::null_mut();
+        *room = None;
     }
 
     read_stat()
@@ -1766,11 +1818,11 @@ unsafe fn rs_read_object_reference(
 
 // ─── Thing serialization ─────────────────────────────────────────────────────
 
-unsafe fn find_room_coord(rmlist: *mut CRoom, c: *mut IVec2, n: c_int) -> c_int {
+unsafe fn find_room_coord(c: *mut IVec2) -> c_int {
     let mut i: c_int = 0;
 
-    while i < n {
-        if (&raw mut (*rmlist.add(i as usize)).r_gold) as *mut IVec2 == c {
+    while (i as usize) < crate::config::GameConfig::MAX_ROOMS {
+        if crate::game::room_gold_ptr(Some(i as usize)) == c {
             return i;
         }
         i += 1;
@@ -1865,11 +1917,7 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
                 let _ = rs_write_int(savef, 2);
                 let _ = rs_write_int(savef, i);
             } else {
-                i = find_room_coord(
-                    (&raw mut rooms) as *mut CRoom,
-                    t_dest,
-                    crate::config::GameConfig::MAX_ROOMS as c_int,
-                );
+                i = find_room_coord(t_dest);
 
                 if i >= 0 {
                     let _ = rs_write_int(savef, 3);
@@ -1955,7 +2003,7 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
     } else if listid == 3 {
         /* gold */
         if (index as usize) < crate::config::GameConfig::MAX_ROOMS {
-            (*thing_t(t)).t_dest = (&raw mut rooms[index as usize].r_gold) as *mut IVec2;
+            (*thing_t(t)).t_dest = crate::game::room_gold_ptr(Some(index as usize));
         } else {
             (*thing_t(t)).t_dest = std::ptr::null_mut();
         }
@@ -2374,17 +2422,11 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     );
 
     let _ = rs_write_stats(savef, &raw mut max_stats);
-    let _ = rs_write_rooms(
-        savef,
-        (&raw mut rooms) as *mut CRoom,
-        crate::config::GameConfig::MAX_ROOMS as c_int,
-    );
+    let _ = crate::game::with_current_level(|level| rs_write_rooms(savef, &level.rooms));
     let _ = rs_write_room_reference(savef, oldrp);
-    let _ = rs_write_rooms(
-        savef,
-        (&raw mut passages) as *mut CRoom,
-        crate::config::GameConfig::MAX_PASSAGES as c_int,
-    );
+    let _ = crate::game::with_current_level(|level| {
+        rs_write_passage_links(savef, &level.passage_links)
+    });
 
     let _ = rs_write_monsters(
         savef,
@@ -2602,17 +2644,11 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     );
 
     let _ = rs_read_stats(inf, &raw mut max_stats);
-    let _ = rs_read_rooms(
-        inf,
-        (&raw mut rooms) as *mut CRoom,
-        crate::config::GameConfig::MAX_ROOMS as c_int,
-    );
-    let _ = rs_read_room_reference(inf, &raw mut oldrp);
-    let _ = rs_read_rooms(
-        inf,
-        (&raw mut passages) as *mut CRoom,
-        crate::config::GameConfig::MAX_PASSAGES as c_int,
-    );
+    let _ = crate::game::with_current_level_mut(|level| rs_read_rooms(inf, &mut level.rooms));
+    let _ = rs_read_room_reference(inf, &mut oldrp);
+    let _ = crate::game::with_current_level_mut(|level| {
+        rs_read_passage_links(inf, &mut level.passage_links)
+    });
 
     let _ = rs_read_monsters(
         inf,

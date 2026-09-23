@@ -754,11 +754,15 @@ pub unsafe extern "C" fn command() {
                                 }
                                 CTRL_W => whatis(false as c_uchar, 0),
                                 CTRL_D => {
-                                    crate::game::set_current_depth(crate::game::current_depth() + 1);
+                                    crate::game::set_current_depth(
+                                        crate::game::current_depth() + 1,
+                                    );
                                     new_level();
                                 }
                                 CTRL_A => {
-                                    crate::game::set_current_depth(crate::game::current_depth() - 1);
+                                    crate::game::set_current_depth(
+                                        crate::game::current_depth() - 1,
+                                    );
                                     new_level();
                                 }
                                 CTRL_F => show_map(),

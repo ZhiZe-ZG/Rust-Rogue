@@ -11,7 +11,7 @@ use glam::IVec2;
 
 use super::passages::{
     apply_passage, build_passage, collect_corridor_end, corridor_tiles, mark_passages,
-    number_passages, plan_corridor, stamp_door, stamp_passage, Passage, PassageLinks,
+    number_passages, plan_corridor, Passage, PassageLinks,
 };
 use super::roomgraph::RoomGraph;
 use super::rooms::{build_generated_rooms, Room};
@@ -186,6 +186,114 @@ impl Level {
             &self.rooms,
             &mut self.passage_links,
         );
+    }
+
+    /// Borrow the room slot `index`.
+    #[inline]
+    pub fn room(&self, index: usize) -> Option<&Room> {
+        self.rooms.get(index)
+    }
+
+    /// Borrow a passage component's door links.
+    #[inline]
+    pub fn passage_links(&self, index: usize) -> Option<&PassageLinks> {
+        self.passage_links.get(index)
+    }
+
+    /// Whether `room` resolves to a dark room.
+    #[inline]
+    pub fn room_dark(&self, room: Option<usize>) -> bool {
+        room.and_then(|i| self.rooms.get(i)).is_some_and(|r| r.dark)
+    }
+
+    /// Whether `room` resolves to a removed (gone) room.
+    #[inline]
+    pub fn room_gone(&self, room: Option<usize>) -> bool {
+        room.and_then(|i| self.rooms.get(i)).is_some_and(|r| r.gone)
+    }
+
+    /// Whether `room` resolves to a maze room.
+    #[inline]
+    pub fn room_maze(&self, room: Option<usize>) -> bool {
+        room.and_then(|i| self.rooms.get(i)).is_some_and(|r| r.maze)
+    }
+
+    /// The gold-stash position of `room` (or `None`).
+    #[inline]
+    pub fn room_gold(&self, room: Option<usize>) -> Option<IVec2> {
+        room.and_then(|i| self.rooms.get(i)).map(|r| r.gold)
+    }
+
+    /// The value of the gold stash of `room`.
+    #[inline]
+    pub fn room_goldval(&self, room: Option<usize>) -> i32 {
+        room.and_then(|i| self.rooms.get(i))
+            .map_or(0, |r| r.goldval)
+    }
+
+    /// Set the value of the gold stash of `room`.
+    #[inline]
+    pub fn set_room_goldval(&mut self, room: Option<usize>, value: i32) {
+        if let Some(room) = room.and_then(|i| self.rooms.get_mut(i)) {
+            room.goldval = value;
+        }
+    }
+
+    /// The `(position, size)` pair of `room`.
+    #[inline]
+    pub fn room_bounds(&self, room: Option<usize>) -> Option<(IVec2, IVec2)> {
+        room.and_then(|i| self.rooms.get(i))
+            .map(|r| (r.position, r.size))
+    }
+
+    /// Compute the room index for the cell at `(y, x)`.
+    pub fn room_at(&self, y: i32, x: i32) -> Option<usize> {
+        if y < 0
+            || x < 0
+            || y >= GameConfig::LEVEL_HEIGHT as i32
+            || x >= GameConfig::LEVEL_WIDTH as i32
+        {
+            return None;
+        }
+        for (i, room) in self.rooms.iter().enumerate() {
+            if x <= room.position.x + room.size.x
+                && room.position.x <= x
+                && y <= room.position.y + room.size.y
+                && room.position.y <= y
+            {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// Compute the passage index for the cell at `(y, x)`.
+    pub fn passage_at(&self, y: i32, x: i32) -> Option<usize> {
+        if y < 0
+            || x < 0
+            || y >= GameConfig::LEVEL_HEIGHT as i32
+            || x >= GameConfig::LEVEL_WIDTH as i32
+        {
+            return None;
+        }
+        let idx = y as usize * GameConfig::LEVEL_WIDTH + x as usize;
+        let passnum = self.flags.passnum[idx];
+        (passnum > 0).then_some((passnum - 1) as usize)
+    }
+
+    /// Absolute door-exit coordinates for a room index.
+    pub fn room_exits(&self, room: Option<usize>) -> Vec<IVec2> {
+        room.and_then(|i| self.rooms.get(i))
+            .map(|r| r.entry_points.iter().map(|ep| *ep + r.position).collect())
+            .unwrap_or_default()
+    }
+
+    /// Absolute door-exit coordinates for a passage index.
+    pub fn passage_exits(&self, passage: Option<usize>) -> Vec<IVec2> {
+        passage
+            .and_then(|i| self.passage_links.get(i))
+            .map(|l| l.exits.clone())
+            .unwrap_or_default()
     }
 
     /// Pick a random room slot that has not been removed for this level.
@@ -444,10 +552,10 @@ mod tests {
         let passage = &level.passages[0];
         assert_eq!(links.exits.len(), passage.entry_points.len());
         for exit in &links.exits {
-            assert_eq!(
+            assert!(matches!(
                 level.map.get(exit.y as usize, exit.x as usize),
-                Some(Tile::Door)
-            );
+                Some(Tile::Door | Tile::HiddenDoor)
+            ));
         }
 
         // Every interior passage tile carries component number 1.

@@ -529,10 +529,7 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
     let mut add_new = 0;
 
     while !mp.is_null() {
-        output::move_cursor(IVec2::new(
-            (*thing_t(mp)).t_pos.x,
-            (*thing_t(mp)).t_pos.y,
-        ));
+        output::move_cursor(IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y));
         let can_see = see_monst(mp) != 0;
         if turn_off != 0 {
             if !can_see {

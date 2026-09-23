@@ -36,9 +36,7 @@ pub struct Passage {
 
 /// Door exits of one numbered passage component.
 ///
-/// Produced by [`number_passages`] and mirrored to one slot of the C
-/// `passages` array (a `CRoom` used as an exit table) by
-/// `crate::level::mirror::sync_passages_to_c`.
+/// Produced by [`number_passages`] and stored in the owning [`Level`](super::level::Level).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PassageLinks {
     /// Absolute map coordinates of the component's doorways.
@@ -481,7 +479,7 @@ pub(crate) fn number_passages(
         .collect();
     for seed in seeds {
         scan.open_component();
-        number_passage(map, flags, links, &mut scan, seed.x, seed.y);
+        number_passage(map, flags, links, &mut scan, seed.y, seed.x);
     }
 }
 

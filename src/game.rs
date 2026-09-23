@@ -273,6 +273,71 @@ pub fn set_stairs(pos: IVec2) {
     CURRENT_LEVEL.with_mut(|level| level.stairs = pos);
 }
 
+/// Whether the room reference `reference` points to a dark room.
+#[inline]
+pub fn room_dark(room: Option<usize>) -> bool {
+    CURRENT_LEVEL.with(|level| level.room_dark(room))
+}
+
+/// Whether the room reference `reference` points to a removed room.
+#[inline]
+pub fn room_gone(room: Option<usize>) -> bool {
+    CURRENT_LEVEL.with(|level| level.room_gone(room))
+}
+
+/// Whether the room reference `reference` points to a maze room.
+#[inline]
+pub fn room_maze(room: Option<usize>) -> bool {
+    CURRENT_LEVEL.with(|level| level.room_maze(room))
+}
+
+/// The value of the gold stash of the room `reference` points to.
+#[inline]
+pub fn room_goldval(room: Option<usize>) -> i32 {
+    CURRENT_LEVEL.with(|level| level.room_goldval(room))
+}
+
+/// Set the value of the gold stash of the room `reference` points to.
+#[inline]
+pub fn set_room_goldval(room: Option<usize>, value: i32) {
+    CURRENT_LEVEL.with_mut(|level| level.set_room_goldval(room, value));
+}
+
+/// Stable per-room gold positions, mirrored from `Level` so chase targets can
+/// hold raw pointers without borrowing the locked level. Kept in sync by level
+/// population (`presence::place_room_contents`) and save restore.
+pub static mut ROOM_GOLD: [IVec2; GameConfig::MAX_ROOMS] = [IVec2::ZERO; GameConfig::MAX_ROOMS];
+
+/// A stable raw pointer to the gold-stash position of `reference` (or null).
+///
+/// The pointed-to slot lives in the process-wide [`ROOM_GOLD`] array, so it
+/// does not borrow the level lock and is safe for chase-target storage.
+#[inline]
+pub unsafe fn room_gold_ptr(room: Option<usize>) -> *mut IVec2 {
+    match room {
+        Some(i) if i < GameConfig::MAX_ROOMS => (&raw mut ROOM_GOLD[i]) as *mut IVec2,
+        _ => std::ptr::null_mut(),
+    }
+}
+
+/// The `(position, size)` of the room `reference` points to.
+#[inline]
+pub fn room_bounds(room: Option<usize>) -> Option<(IVec2, IVec2)> {
+    CURRENT_LEVEL.with(|level| level.room_bounds(room))
+}
+
+/// Absolute door-exit coordinates for the room/passage `reference` points to.
+#[inline]
+pub fn room_exits(room: Option<usize>) -> Vec<IVec2> {
+    CURRENT_LEVEL.with(|level| level.room_exits(room))
+}
+
+/// Absolute door-exit coordinates for a passage index.
+#[inline]
+pub fn passage_exits(passage: Option<usize>) -> Vec<IVec2> {
+    CURRENT_LEVEL.with(|level| level.passage_exits(passage))
+}
+
 /// Convenience alias for the crate-wide level size constants.
 pub const GAME_HEIGHT: usize = GameConfig::LEVEL_HEIGHT;
 pub const GAME_WIDTH: usize = GameConfig::LEVEL_WIDTH;

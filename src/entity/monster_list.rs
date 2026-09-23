@@ -39,30 +39,21 @@ impl MonsterList {
     /// Prepend `item` to the list.
     #[inline]
     pub unsafe fn attach(&self, item: *mut CThing) {
-        let mut guard = self
-            .0
-            .write()
-            .unwrap_or_else(|poison| poison.into_inner());
+        let mut guard = self.0.write().unwrap_or_else(|poison| poison.into_inner());
         attach_thing(&raw mut *guard, item);
     }
 
     /// Unlink `item` from the list.
     #[inline]
     pub unsafe fn detach(&self, item: *mut CThing) {
-        let mut guard = self
-            .0
-            .write()
-            .unwrap_or_else(|poison| poison.into_inner());
+        let mut guard = self.0.write().unwrap_or_else(|poison| poison.into_inner());
         detach_thing(&raw mut *guard, item);
     }
 
     /// Drop every item in the list.
     #[inline]
     pub unsafe fn free_list(&self) {
-        let mut guard = self
-            .0
-            .write()
-            .unwrap_or_else(|poison| poison.into_inner());
+        let mut guard = self.0.write().unwrap_or_else(|poison| poison.into_inner());
         free_thing_list(&raw mut *guard);
     }
 }

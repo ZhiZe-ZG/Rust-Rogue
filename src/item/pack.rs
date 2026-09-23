@@ -6,14 +6,14 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::draw::chat_at as draw_chat;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CRoom, CThing};
+use crate::entity::player::CThing;
 use crate::item::scrolls::ScrollType;
 use crate::item::thing_list::{detach, discard, new_item};
 use crate::item::things::{add_line, inv_name};
 use crate::misc::{find_obj, show_floor};
 use crate::ui::input::readchar;
-use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use crate::ui::output;
+use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
 
 const MAXPACK: c_int = 23;
@@ -33,9 +33,7 @@ const CALLABLE: c_int = -1;
 const R_OR_S: c_int = -2;
 const ESCAPE: c_int = 27;
 const ISFOUND: c_int = 0o0000020;
-const ISGONE: c_short = 0o0000002;
 const ISLEVIT: c_short = 0o0000010;
-const ISDARK: c_short = 0o0000001;
 
 unsafe extern "C" {
     static mut after: c_uchar;
@@ -88,14 +86,6 @@ unsafe fn alloc_item() -> *mut CThing {
     new_item()
 }
 
-unsafe fn room_flags(rp: *mut CRoom) -> c_short {
-    if rp.is_null() {
-        0
-    } else {
-        (*rp).r_flags
-    }
-}
-
 unsafe fn pack_head() -> *mut CThing {
     (*thing_t(&raw mut player)).t_pack
 }
@@ -108,7 +98,7 @@ unsafe fn hero_coord() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 
-unsafe fn proom() -> *mut CRoom {
+unsafe fn proom() -> Option<usize> {
     (*thing_t(&raw mut player)).t_room
 }
 
@@ -121,7 +111,7 @@ unsafe fn chat_at(y: c_int, x: c_int) -> c_char {
 }
 
 unsafe fn floor_char_for_room() -> c_char {
-    if room_flags(proom()) & ISGONE != 0 {
+    if crate::game::room_gone(proom()) {
         PASSAGE
     } else if show_floor() {
         FLOOR
@@ -427,8 +417,8 @@ pub unsafe extern "C" fn pick_up(ch: c_char) {
                 money((*thing_o(obj)).o_arm);
                 detach_list(&raw mut lvl_obj, obj);
                 discard_item(obj);
-                if !proom().is_null() {
-                    (*proom()).r_goldval = 0;
+                if proom().is_some() {
+                    crate::game::set_room_goldval(proom(), 0);
                 }
             }
             ARMOR | POTION | FOOD | WEAPON | SCROLL | AMULET | RING | STICK => {

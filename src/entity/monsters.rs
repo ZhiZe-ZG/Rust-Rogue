@@ -3,12 +3,11 @@
 //! Ported from `src/c/monsters.c` to Rust.
 use crate::config::GameConfig;
 use crate::daemon::{fuse, lengthen};
-use glam::IVec2;
 use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach, new_item};
@@ -20,6 +19,7 @@ use crate::startup::roll;
 use crate::ui::output;
 use crate::ui::output::{addmsg_str, msg_str};
 use crate::ui::runtime;
+use glam::IVec2;
 use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
@@ -28,7 +28,6 @@ const HUHDURATION: c_int = 20;
 const AFTER: c_int = 2;
 const VS_MAGIC: c_int = 0o03;
 
-const ISDARK: c_short = 0o000001;
 const ISBLIND: c_short = 0o000004;
 const ISCANC: c_short = 0o000010;
 const ISLEVIT: c_short = 0o000010;
@@ -241,7 +240,7 @@ pub unsafe extern "C" fn wanderer() {
     let mut cp = IVec2 { x: 0, y: 0 };
 
     loop {
-        let _ = find_floor(std::ptr::null_mut(), &mut cp, 0, true);
+        let _ = find_floor(None, &mut cp, 0, true);
         if roomin(&mut cp) != (*player_t()).t_room {
             break;
         }
@@ -300,7 +299,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
         && has_flag(tp, ISRUN)
     {
         let rp = (*player_t()).t_room;
-        if (!rp.is_null() && ((*rp).r_flags & ISDARK) == 0)
+        if (rp.is_some() && !crate::game::room_dark(rp))
             || dist(y, x, (*player_t()).t_pos.y, (*player_t()).t_pos.x) < LAMPDIST
         {
             (*thing_t(tp)).t_flags |= ISFOUND;
@@ -324,8 +323,8 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
     if has_flag(tp, ISGREED) && !has_flag(tp, ISRUN) {
         (*thing_t(tp)).t_flags |= ISRUN;
         let pr = (*player_t()).t_room;
-        if !pr.is_null() && (*pr).r_goldval != 0 {
-            (*thing_t(tp)).t_dest = &mut (*pr).r_gold;
+        if pr.is_some() && crate::game::room_goldval(pr) != 0 {
+            (*thing_t(tp)).t_dest = crate::game::room_gold_ptr(pr);
         } else {
             (*thing_t(tp)).t_dest = &mut (*player_t()).t_pos;
         }

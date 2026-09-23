@@ -9,7 +9,7 @@ use std::ptr;
 use crate::config::GameConfig;
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
-use crate::entity::player::{CRoom, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::item::pack::{add_pack, floor_at, get_item};
 use crate::item::sticks::fix_stick;
 use crate::item::thing_list::new_item;
@@ -66,7 +66,7 @@ unsafe fn hero() -> IVec2 {
 }
 
 #[inline]
-unsafe fn proom() -> *mut CRoom {
+unsafe fn proom() -> Option<usize> {
     (*thing_t(&raw mut player)).t_room
 }
 
@@ -286,7 +286,7 @@ pub unsafe extern "C" fn teleport() {
     let mut hero = hero();
 
     output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
-    find_floor(ptr::null_mut(), &mut c, 0, true);
+    find_floor(None, &mut c, 0, true);
     if roomin(&mut c) != proom() {
         leave_room(&mut hero);
         hero = c;
