@@ -63,13 +63,32 @@ impl Trap {
 const ARROW: c_int = 3;
 const VS_POISON: c_int = 0;
 
+// ─── Extern C globals ────────────────────────────────────────────────────────
+//
+// These bind to the process-wide symbols exported by `crate::globals` (game
+// control state) and `crate::init` (material tables), preserving the legacy C
+// ABI used by the ported `be_trapped` from `src/c/trap.c`.
+
 unsafe extern "C" {
+    // Whether the hero is currently auto-running (repeating a movement in one
+    // direction). Cleared by `be_trapped` so a trap interrupts the run.
     static mut running: c_uchar;
+    // Command repetition / run-step count (the numeric prefix). Reset to zero
+    // when a trap fires to stop any pending repeat or run.
     static mut count: c_int;
+    // Number of turns the hero is unable to issue commands (confused/asleep).
+    // The sleep trap adds `spread(5)`.
     static mut no_command: c_int;
+    // Number of turns the hero cannot move (held). The bear trap adds
+    // `spread(3)`.
     static mut no_move: c_int;
+    // Count of colour names in `rainbow` (27). Defined in `crate::init`.
     static mut cNCOLORS: c_int;
+    // Potion colour-name table (C `char *rainbow[]`), defined in
+    // `crate::init`. Read by the mystery trap to pick a random colour.
     static mut rainbow: [*const c_char; 27];
+    // The player/hero object (C `THING player`), defined in `crate::globals`.
+    // `be_trapped` reads `t_flags`, `t_stats`, and `t_pos` from it.
     static mut player: CThing;
 }
 
