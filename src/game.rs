@@ -8,8 +8,8 @@
 //! * the **places grid** — a Rust-owned `places` array replacing the C
 //!   `PLACE places[MAXLINES*MAXCOLS]` global; every legacy extern
 //!   `static mut places: [CPlace; 32*80]` declaration binds to this symbol;
-//! * the **monster map** — a dedicated [`MONSTERS`] per-cell monster
-//!   occupancy array that backs the `p_monst` column of `places`.
+//! * the **per-cell monster map** — the `p_monst` column of the `places`
+//!   grid is the single monster-occupancy lookup per cell.
 //! * the **current equipment** — non-owning pointers to the armor, rings, and
 //!   weapon selected from the player's pack.
 //!
@@ -166,36 +166,26 @@ fn cell_index(y: c_int, x: c_int) -> usize {
 /// remaining member, the per-cell monster pointer.
 ///
 /// Previously defined in `extern.c` as `PLACE places[MAXLINES*MAXCOLS]`, this
-/// array is the single source of truth for each cell's monster occupancy (in
-/// sync with [`MONSTERS`]). The type stays `crate::player::CPlace` so every
-/// existing `extern "C" { static mut places: [CPlace; 32 * 80] }`
-/// declaration links against this storage unchanged.
+/// array is the single source of truth for each cell's monster occupancy. The
+/// type stays `crate::player::CPlace` so every existing
+/// `extern "C" { static mut places: [CPlace; 32 * 80] }` declaration links
+/// against this storage unchanged.
 #[no_mangle]
 pub static mut places: [CPlace; GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH] = [CPlace {
     p_monst: std::ptr::null_mut(),
 };
     GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH];
 
-/// Dense per-cell monster occupancy map.
-///
-/// Replaces the conceptual `p_monst` column of the old C `places` global with
-/// an explicit map. Uses the same `(x<<5)+y` indexing as the grid. `set_monster`
-/// keeps the `p_monst` field of [`places`] in sync, preserving the legacy save
-/// format.
-pub static mut MONSTERS: [*mut CThing; GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH] =
-    [std::ptr::null_mut(); GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH];
-
 /// Read the monster at `(y, x)`, or null.
 #[inline]
 pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut CThing {
-    MONSTERS[cell_index(y, x)]
+    places[cell_index(y, x)].p_monst
 }
 
-/// Place `tp` at `(y, x)` on the monster map and mirror it into [`places`].
+/// Place `tp` at `(y, x)` in the per-cell monster occupancy map.
 #[inline]
 pub unsafe fn set_monster(y: c_int, x: c_int, tp: *mut CThing) {
     let i = cell_index(y, x);
-    MONSTERS[i] = tp;
     places[i].p_monst = tp;
 }
 
@@ -205,14 +195,13 @@ pub unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
     monster_at(y, x)
 }
 
-/// Place a monster on the monster map (and sync the places grid).
+/// Place a monster in the per-cell monster occupancy map.
 #[inline]
 pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
     set_monster(y, x, tp);
 }
 
-/// Reset the places grid's monster pointers and the monster map for a fresh
-/// level.
+/// Reset the places grid's monster pointers for a fresh level.
 pub unsafe fn clear_level() {
     let place_cells = std::slice::from_raw_parts_mut(
         (&raw mut places).cast::<CPlace>(),
@@ -220,14 +209,6 @@ pub unsafe fn clear_level() {
     );
     for cell in place_cells {
         cell.p_monst = std::ptr::null_mut();
-    }
-
-    let monsters = std::slice::from_raw_parts_mut(
-        (&raw mut MONSTERS).cast::<*mut CThing>(),
-        GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH,
-    );
-    for monster in monsters {
-        *monster = std::ptr::null_mut();
     }
 }
 

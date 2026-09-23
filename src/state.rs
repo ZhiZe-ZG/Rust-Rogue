@@ -2275,7 +2275,6 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
             // Per-cell monster occupancy, using the legacy `(x<<5)+y` layout.
             let place_idx = ((x as usize) << 5) + (y as usize);
             crate::game::places[place_idx].p_monst = monst;
-            crate::game::MONSTERS[place_idx] = monst;
             i += 1;
         }
 
