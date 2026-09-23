@@ -5,20 +5,35 @@
 //! room when it becomes visible.
 
 use glam::IVec2;
+use std::os::raw::{c_int, c_short};
 
 use crate::config::GameConfig;
 use crate::draw::winat;
-use crate::entity::player::CThing;
+use crate::entity::monster_list::MLIST;
+use crate::entity::monsters::wake_monster;
+use crate::entity::player::{CThing, CThingMonster};
 use crate::game::{clear_level, with_current_level_mut};
+use crate::item::thing_list::free_list;
 use crate::ui::output;
 
 use super::presence::populate_level;
 use super::rooms::Room;
 use super::structure::Structure;
-use super::symbols::{
-    free_list, max_level, no_food, player, thing_t, wake_monster, ISHELD, MLIST,
-};
 use super::tile::Tile;
+
+const ISHELD: c_short = 0o0000400;
+
+unsafe extern "C" {
+    static mut max_level: c_int;
+    static mut no_food: c_int;
+    static mut player: CThing;
+}
+
+/// Interpret `tp` as a monster (`CThingMonster`).
+#[inline]
+unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+    tp as *mut CThingMonster
+}
 
 fn generate_rooms_and_connections() -> [Room; GameConfig::MAX_ROOMS] {
     let rooms = std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO));

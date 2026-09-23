@@ -11,7 +11,6 @@ mod presence;
 mod roomgraph;
 mod rooms;
 mod structure;
-mod symbols;
 mod tile;
 mod trap;
 

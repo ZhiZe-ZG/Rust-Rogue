@@ -3,27 +3,63 @@
 //!
 //! Room selection and geometry go through the Rust `Level` model
 //! (`Level::rnd_room`/`Level::rnd_pos` through scoped level access); the
-//! remaining C `places`/`player` globals are touched via the raw symbols in
-//! [`super::symbols`]. [`super::generation::new_level`] calls these after the
-//! rooms/passages have been dug and mirrored.
+//! remaining C `places`/`player` globals are touched via the raw `extern` C
+//! symbols declared at the top of this module. [`super::generation::new_level`]
+//! calls these after the rooms/passages have been dug and mirrored.
 
 use glam::IVec2;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::config::GameConfig;
+use crate::daemons::visuals;
+use crate::draw::enter_room;
+use crate::entity::chase::roomin;
+use crate::entity::monster_list::MLIST;
+use crate::entity::monsters::{give_pack, new_monster, randmonster};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game;
+use crate::item::potions::turn_see;
 use crate::item::thing_list::new_item;
+use crate::item::things::new_thing;
 use crate::rnd::rnd;
 use crate::ui::output;
 
 use super::level::{with_current_level_mut, LevelFlags};
-use super::symbols::{
-    amulet, enter_room, give_pack, max_level, new_monster, new_thing, ntraps,
-    player, randmonster, roomin, seenstairs, thing_o, thing_t, turn_see, visuals, AMULET, GOLD,
-    GOLDGRP, ISHALU, ISMANY, ISMEAN, MLIST, PLAYER, SEEMONST,
-};
 use super::tile::Tile;
 use super::trap::Trap;
+
+// -- Object/thing flags --
+const ISMANY: c_int = 0o0000010;
+const ISMEAN: c_short = 0o0004000;
+const SEEMONST: c_short = 0o040000;
+const ISHALU: c_short = 0o0004000;
+
+// -- Glyphs --
+const AMULET: c_char = b',' as c_char;
+const GOLD: c_char = b'*' as c_char;
+const PLAYER: c_char = b'@' as c_char;
+
+const GOLDGRP: c_int = 1;
+
+unsafe extern "C" {
+    static mut amulet: bool;
+    static mut max_level: c_int;
+    static mut ntraps: c_int;
+    static mut player: CThing;
+    static mut seenstairs: bool;
+}
+
+/// Interpret `tp` as an object (`CThingObject`).
+#[inline]
+unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+    tp as *mut CThingObject
+}
+
+/// Interpret `tp` as a monster (`CThingMonster`).
+#[inline]
+unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+    tp as *mut CThingMonster
+}
 
 /// Find a floor cell to place something, optionally avoiding monsters.
 ///
