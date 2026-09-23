@@ -1,10 +1,11 @@
 //! Random movement for confused or otherwise disoriented monsters.
 //!
 //! Split out from the movement logic originally found in `src/c/move.c`.
+use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::chase::diag_ok;
-use crate::entity::player::{CCoord, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::item::scrolls::ScrollType;
 use crate::level::tile_is_walkable;
 use crate::rnd::rnd;
@@ -31,12 +32,12 @@ unsafe fn winat(y: c_int, x: c_int) -> c_char {
 }
 
 /// Persistent return coordinate, mirroring C's `static coord ret`.
-static mut RET: CCoord = CCoord { x: 0, y: 0 };
+static mut RET: IVec2 = IVec2 { x: 0, y: 0 };
 
 /// rndmove:
 /// Move in a random direction if the monster/person is confused.
 #[no_mangle]
-pub unsafe extern "C" fn rndmove(who: *mut CThing) -> *mut CCoord {
+pub unsafe extern "C" fn rndmove(who: *mut CThing) -> *mut IVec2 {
     let pos = (*thing_t(who)).t_pos;
     RET.y = pos.y + rnd(3) - 1;
     RET.x = pos.x + rnd(3) - 1;

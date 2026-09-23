@@ -29,13 +29,14 @@
 //! OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 //! SUCH DAMAGE.
 
+use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 
 use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
 use crate::entity::chase::runners;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::thing_list::{allocated_count, new_item};
 use crate::item::things::CObjInfo;
@@ -214,9 +215,9 @@ unsafe extern "C" {
     static mut e_levels: [c_int; 21];
 
     // coords
-    static mut delta: CCoord;
-    static mut oldpos: CCoord;
-    static mut stairs: CCoord;
+    static mut delta: IVec2;
+    static mut oldpos: IVec2;
+    static mut stairs: IVec2;
 
     // player / lists
     static mut player: CThing;
@@ -244,7 +245,7 @@ unsafe extern "C" {
     // daemons (defined in daemon.rs as `d_list`) and misc C-visible globals
     static mut d_list: [CDelayedAction; MAXDAEMONS];
     static mut between: c_int;
-    static mut nh: CCoord;
+    static mut nh: IVec2;
     static mut group: c_int;
 
     // material arrays (defined in init.rs as rainbow/stones/wood/metal)
@@ -883,7 +884,7 @@ unsafe fn rs_read_str_t(inf: *mut CFile, st: *mut c_uint) -> c_int {
 
 // ─── Coords / windows ────────────────────────────────────────────────────────
 
-unsafe fn rs_write_coord(savef: *mut CFile, c: CCoord) -> c_int {
+unsafe fn rs_write_coord(savef: *mut CFile, c: IVec2) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -894,8 +895,8 @@ unsafe fn rs_write_coord(savef: *mut CFile, c: CCoord) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_coord(inf: *mut CFile, c: *mut CCoord) -> c_int {
-    let mut in_coord: CCoord = CCoord { x: 0, y: 0 };
+unsafe fn rs_read_coord(inf: *mut CFile, c: *mut IVec2) -> c_int {
+    let mut in_coord: IVec2 = IVec2 { x: 0, y: 0 };
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1766,11 +1767,11 @@ unsafe fn rs_read_object_reference(
 
 // ─── Thing serialization ─────────────────────────────────────────────────────
 
-unsafe fn find_room_coord(rmlist: *mut CRoom, c: *mut CCoord, n: c_int) -> c_int {
+unsafe fn find_room_coord(rmlist: *mut CRoom, c: *mut IVec2, n: c_int) -> c_int {
     let mut i: c_int = 0;
 
     while i < n {
-        if (&raw mut (*rmlist.add(i as usize)).r_gold) as *mut CCoord == c {
+        if (&raw mut (*rmlist.add(i as usize)).r_gold) as *mut IVec2 == c {
             return i;
         }
         i += 1;
@@ -1779,12 +1780,12 @@ unsafe fn find_room_coord(rmlist: *mut CRoom, c: *mut CCoord, n: c_int) -> c_int
     -1
 }
 
-unsafe fn find_thing_coord(monlist: *mut CThing, c: *mut CCoord) -> c_int {
+unsafe fn find_thing_coord(monlist: *mut CThing, c: *mut IVec2) -> c_int {
     let mut mitem: *mut CThing = monlist;
     let mut i: c_int = 0;
 
     while !mitem.is_null() {
-        if c == (&raw mut (*thing_t(mitem)).t_pos) as *mut CCoord {
+        if c == (&raw mut (*thing_t(mitem)).t_pos) as *mut IVec2 {
             return i;
         }
         i += 1;
@@ -1794,12 +1795,12 @@ unsafe fn find_thing_coord(monlist: *mut CThing, c: *mut CCoord) -> c_int {
     -1
 }
 
-unsafe fn find_object_coord(objlist: *mut CThing, c: *mut CCoord) -> c_int {
+unsafe fn find_object_coord(objlist: *mut CThing, c: *mut IVec2) -> c_int {
     let mut oitem: *mut CThing = objlist;
     let mut i: c_int = 0;
 
     while !oitem.is_null() {
-        if c == (&raw mut (*thing_o(oitem)).o_pos) as *mut CCoord {
+        if c == (&raw mut (*thing_o(oitem)).o_pos) as *mut IVec2 {
             return i;
         }
         i += 1;
@@ -1846,7 +1847,7 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
         the current location of what we are chasing.
     */
 
-    let hero_pos_ptr = (&raw mut (*thing_t(&raw mut player)).t_pos) as *mut CCoord;
+    let hero_pos_ptr = (&raw mut (*thing_t(&raw mut player)).t_pos) as *mut IVec2;
     let t_dest = (*thing_t(t)).t_dest;
 
     if t_dest == hero_pos_ptr {
@@ -1937,7 +1938,7 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
     if listid == 0 {
         /* hero or NULL */
         if index == 1 {
-            (*thing_t(t)).t_dest = (&raw mut (*thing_t(&raw mut player)).t_pos) as *mut CCoord;
+            (*thing_t(t)).t_dest = (&raw mut (*thing_t(&raw mut player)).t_pos) as *mut IVec2;
         } else {
             (*thing_t(t)).t_dest = std::ptr::null_mut();
         }
@@ -1950,12 +1951,12 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
         let item = get_list_item(lvl_obj, index);
 
         if !item.is_null() {
-            (*thing_t(t)).t_dest = (&raw mut (*thing_o(item)).o_pos) as *mut CCoord;
+            (*thing_t(t)).t_dest = (&raw mut (*thing_o(item)).o_pos) as *mut IVec2;
         }
     } else if listid == 3 {
         /* gold */
         if (index as usize) < crate::config::GameConfig::MAX_ROOMS {
-            (*thing_t(t)).t_dest = (&raw mut rooms[index as usize].r_gold) as *mut CCoord;
+            (*thing_t(t)).t_dest = (&raw mut rooms[index as usize].r_gold) as *mut IVec2;
         } else {
             (*thing_t(t)).t_dest = std::ptr::null_mut();
         }
@@ -1982,7 +1983,7 @@ unsafe fn rs_fix_thing(t: *mut CThing) {
     let item = get_list_item(MLIST.head(), (*thing_t(t)).t_reserved);
 
     if !item.is_null() {
-        (*thing_t(t)).t_dest = (&raw mut (*thing_t(item)).t_pos) as *mut CCoord;
+        (*thing_t(t)).t_dest = (&raw mut (*thing_t(item)).t_pos) as *mut IVec2;
     }
 }
 

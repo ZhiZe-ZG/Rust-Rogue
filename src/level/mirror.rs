@@ -11,7 +11,7 @@ use std::os::raw::{c_int, c_short};
 use glam::IVec2;
 
 use crate::config::GameConfig;
-use crate::entity::player::{CCoord, CRoom};
+use crate::entity::player::{CRoom};
 
 use super::level::Level;
 use super::rooms::Room;
@@ -34,15 +34,15 @@ pub(crate) unsafe fn room_from_c(rp: *const CRoom) -> Room {
 
 /// Write one Rust [`Room`] back into a C `CRoom`.
 pub(crate) unsafe fn apply_room_to_c(state: &Room, rp: *mut CRoom) {
-    (*rp).r_pos = CCoord {
+    (*rp).r_pos = IVec2 {
         x: state.position.x,
         y: state.position.y,
     };
-    (*rp).r_max = CCoord {
+    (*rp).r_max = IVec2 {
         x: state.size.x,
         y: state.size.y,
     };
-    (*rp).r_gold = CCoord {
+    (*rp).r_gold = IVec2 {
         x: state.gold.x,
         y: state.gold.y,
     };
@@ -89,7 +89,7 @@ pub(crate) unsafe fn sync_rooms_to_c(lvl: &Level) {
             .enumerate()
         {
             let abs = *ep + room.position;
-            (*rp).r_exit[j] = CCoord { x: abs.x, y: abs.y };
+            (*rp).r_exit[j] = IVec2 { x: abs.x, y: abs.y };
         }
     }
 }
@@ -113,7 +113,7 @@ pub(crate) unsafe fn sync_passages_to_c(lvl: &Level) {
         let rp = &mut passages[i];
         rp.r_nexits = links.exits.len().min(GameConfig::MAX_EXITS) as c_int;
         for (j, exit) in links.exits.iter().take(GameConfig::MAX_EXITS).enumerate() {
-            rp.r_exit[j] = CCoord {
+            rp.r_exit[j] = IVec2 {
                 x: exit.x,
                 y: exit.y,
             };

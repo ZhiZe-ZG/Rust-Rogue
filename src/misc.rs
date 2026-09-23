@@ -12,11 +12,12 @@ use crate::options::get_str;
 use crate::rnd::rnd;
 use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, msg_str};
+use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CRoom, CThing, CThingMonster, CThingObject};
 use crate::startup::roll;
 
 const PASSAGE: c_char = b'#' as c_char;
@@ -67,7 +68,7 @@ unsafe extern "C" {
     static mut after: c_uchar;
     static mut again: c_uchar;
     static mut amulet: c_uchar;
-    static mut delta: CCoord;
+    static mut delta: IVec2;
     static mut dir_ch: c_char;
     static mut door_stop: c_uchar;
     static mut e_levels: [c_int; 21];
@@ -81,7 +82,7 @@ unsafe extern "C" {
     static mut mpos: c_int;
     static mut no_command: c_int;
     static mut no_move: c_int;
-    static mut oldpos: CCoord;
+    static mut oldpos: IVec2;
     static mut oldrp: *mut CRoom;
     static mut passgo: c_uchar;
     static mut player: CThing;
@@ -90,7 +91,7 @@ unsafe extern "C" {
     static mut running: c_uchar;
     static mut seenstairs: c_uchar;
     static mut see_floor: bool;
-    static mut stairs: CCoord;
+    static mut stairs: IVec2;
     static mut terse: c_uchar;
     static mut lvl_obj: *mut CThing;
 
@@ -127,7 +128,7 @@ unsafe fn room_flags(rp: *mut CRoom) -> c_short {
 }
 
 #[inline]
-unsafe fn hero_pos() -> CCoord {
+unsafe fn hero_pos() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 
@@ -320,7 +321,7 @@ pub unsafe fn is_current(obj: *mut CThing) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn get_dir() -> c_uchar {
     let mut gotit: bool;
-    let mut last_delt: CCoord = CCoord { x: 0, y: 0 };
+    let mut last_delt: IVec2 = IVec2 { x: 0, y: 0 };
 
     if again != 0 && last_dir != 0 {
         delta.y = last_delt.y;

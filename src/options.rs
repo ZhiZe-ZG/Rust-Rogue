@@ -5,7 +5,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::draw::{erase_lamp, look};
-use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster};
+use crate::entity::player::{CRoom, CThing, CThingMonster};
 use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::{output, Window};
 use glam::IVec2;
@@ -60,7 +60,7 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
     tp as *mut CThingMonster
 }
 
-unsafe fn hero_pos() -> CCoord {
+unsafe fn hero_pos() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 

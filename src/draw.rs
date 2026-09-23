@@ -19,7 +19,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar};
 use crate::config::GameConfig;
 use crate::entity::chase::{roomin, see_monst};
 use crate::entity::monsters::wake_monster;
-use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CRoom, CThing, CThingMonster, CThingObject};
 use crate::game;
 use crate::level::Trap;
 use crate::level::{
@@ -75,7 +75,7 @@ unsafe extern "C" {
     static mut door_stop: c_uchar;
     static mut firstmove: c_uchar;
     static mut jump: c_uchar;
-    static mut oldpos: CCoord;
+    static mut oldpos: IVec2;
     static mut oldrp: *mut CRoom;
     static mut player: CThing;
     static mut passages: [CRoom; GameConfig::MAX_PASSAGES];
@@ -83,7 +83,7 @@ unsafe extern "C" {
     static mut running: c_uchar;
     static mut see_floor: c_uchar;
     static mut seenstairs: c_uchar;
-    static mut stairs: CCoord;
+    static mut stairs: IVec2;
     static mut lvl_obj: *mut CThing;
 
 }
@@ -108,7 +108,7 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn hero_pos() -> CCoord {
+unsafe fn hero_pos() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 
@@ -556,7 +556,7 @@ pub unsafe extern "C" fn trip_ch(y: c_int, x: c_int, ch: c_int) -> c_int {
 /// erase_lamp:
 /// Clear the highlighted floor cells when a lamp fades in a dark room.
 #[no_mangle]
-pub unsafe extern "C" fn erase_lamp(pos: *mut CCoord, rp: *mut CRoom) {
+pub unsafe extern "C" fn erase_lamp(pos: *mut IVec2, rp: *mut CRoom) {
     if !((see_floor != 0)
         && !rp.is_null()
         && ((*rp).r_flags & (ISGONE as c_short | ISDARK as c_short)) == ISDARK
@@ -600,7 +600,7 @@ unsafe fn cchar_at_cursor() -> c_char {
 /// enter_room:
 /// Code that is executed whenever the hero appears in a room.
 #[no_mangle]
-pub unsafe extern "C" fn enter_room(cp: *mut CCoord) {
+pub unsafe extern "C" fn enter_room(cp: *mut IVec2) {
     if cp.is_null() {
         return;
     }
@@ -658,7 +658,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut CCoord) {
 /// leave_room:
 /// Code for when the hero exits a room.
 #[no_mangle]
-pub unsafe extern "C" fn leave_room(cp: *mut CCoord) {
+pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
     if cp.is_null() {
         return;
     }

@@ -4,9 +4,9 @@
 //! `extern.c` and `init.c`: material tables, monster state, and other globals.
 use crate::config::GameConfig;
 use crate::entity::player::{
-    CCoord as PlayerCCoord, CPlace as PlayerCPlace, CRoom as PlayerCRoom, CStats as PlayerCStats,
-    CThing as PlayerCThing,
+    CPlace as PlayerCPlace, CRoom as PlayerCRoom, CStats as PlayerCStats, CThing as PlayerCThing,
 };
+use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 const MAXSTR: usize = 1024;
@@ -54,7 +54,6 @@ pub struct CObjInfo {
     pub oi_know: c_uchar,
 }
 
-pub type CCoord = PlayerCCoord;
 pub type CStats = PlayerCStats;
 pub type CRoom = PlayerCRoom;
 pub type CThing = PlayerCThing;
@@ -232,11 +231,11 @@ pub static mut e_levels: [c_int; 21] = [
     800000, 2000000, 4000000, 8000000, 0,
 ];
 #[no_mangle]
-pub static mut delta: CCoord = CCoord { x: 0, y: 0 };
+pub static mut delta: IVec2 = IVec2 { x: 0, y: 0 };
 #[no_mangle]
-pub static mut oldpos: CCoord = CCoord { x: 0, y: 0 };
+pub static mut oldpos: IVec2 = IVec2 { x: 0, y: 0 };
 #[no_mangle]
-pub static mut stairs: CCoord = CCoord { x: 0, y: 0 };
+pub static mut stairs: IVec2 = IVec2 { x: 0, y: 0 };
 #[no_mangle]
 pub static mut l_last_pick: *mut CThing = std::ptr::null_mut();
 #[no_mangle]
@@ -248,7 +247,7 @@ pub static mut player: CThing = CThing {
     t: crate::entity::player::CThingMonster {
         l_next: std::ptr::null_mut(),
         l_prev: std::ptr::null_mut(),
-        t_pos: CCoord { x: 0, y: 0 },
+        t_pos: IVec2 { x: 0, y: 0 },
         t_turn: 0,
         t_type: 0,
         t_disguise: 0,
@@ -284,23 +283,23 @@ pub static mut max_stats: CStats = CStats {
 pub static mut oldrp: *mut CRoom = std::ptr::null_mut();
 #[no_mangle]
 pub static mut rooms: [CRoom; GameConfig::MAX_ROOMS] = [CRoom {
-    r_pos: CCoord { x: 0, y: 0 },
-    r_max: CCoord { x: 0, y: 0 },
-    r_gold: CCoord { x: 0, y: 0 },
+    r_pos: IVec2 { x: 0, y: 0 },
+    r_max: IVec2 { x: 0, y: 0 },
+    r_gold: IVec2 { x: 0, y: 0 },
     r_goldval: 0,
     r_flags: 0,
     r_nexits: 0,
-    r_exit: [CCoord { x: 0, y: 0 }; 12],
+    r_exit: [IVec2 { x: 0, y: 0 }; 12],
 }; GameConfig::MAX_ROOMS];
 #[no_mangle]
 pub static mut passages: [CRoom; GameConfig::MAX_PASSAGES] = [CRoom {
-    r_pos: CCoord { x: 0, y: 0 },
-    r_max: CCoord { x: 0, y: 0 },
-    r_gold: CCoord { x: 0, y: 0 },
+    r_pos: IVec2 { x: 0, y: 0 },
+    r_max: IVec2 { x: 0, y: 0 },
+    r_gold: IVec2 { x: 0, y: 0 },
     r_goldval: 0,
     r_flags: 0,
     r_nexits: 0,
-    r_exit: [CCoord { x: 0, y: 0 }; 12],
+    r_exit: [IVec2 { x: 0, y: 0 }; 12],
 }; GameConfig::MAX_PASSAGES];
 #[no_mangle]
 pub static mut monsters: [CMonsterState; MAXMONSTERS] = [

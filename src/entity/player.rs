@@ -38,13 +38,6 @@ const F_REAL: c_char = 0x10u8 as c_char;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct CCoord {
-    pub x: c_int,
-    pub y: c_int,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
 pub struct CStats {
     pub s_str: c_uint,
     pub s_exp: c_int,
@@ -58,13 +51,13 @@ pub struct CStats {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CRoom {
-    pub r_pos: CCoord,
-    pub r_max: CCoord,
-    pub r_gold: CCoord,
+    pub r_pos: IVec2,
+    pub r_max: IVec2,
+    pub r_gold: IVec2,
     pub r_goldval: c_int,
     pub r_flags: c_short,
     pub r_nexits: c_int,
-    pub r_exit: [CCoord; 12],
+    pub r_exit: [IVec2; 12],
 }
 
 #[repr(C)]
@@ -72,12 +65,12 @@ pub struct CRoom {
 pub struct CThingMonster {
     pub l_next: *mut CThing,
     pub l_prev: *mut CThing,
-    pub t_pos: CCoord,
+    pub t_pos: IVec2,
     pub t_turn: c_uchar,
     pub t_type: c_char,
     pub t_disguise: c_char,
     pub t_oldch: c_char,
-    pub t_dest: *mut CCoord,
+    pub t_dest: *mut IVec2,
     pub t_flags: c_short,
     pub t_stats: CStats,
     pub t_room: *mut CRoom,
@@ -91,7 +84,7 @@ pub struct CThingObject {
     pub l_next: *mut CThing,
     pub l_prev: *mut CThing,
     pub o_type: c_int,
-    pub o_pos: CCoord,
+    pub o_pos: IVec2,
     pub o_text: *mut c_char,
     pub o_launch: c_int,
     pub o_packch: c_char,
@@ -135,8 +128,8 @@ unsafe extern "C" {
     static mut seenstairs: c_uchar;
     static mut take: c_char;
     static mut to_death: c_uchar;
-    static mut oldpos: CCoord;
-    static mut delta: CCoord;
+    static mut oldpos: IVec2;
+    static mut delta: IVec2;
     static mut player: CThing;
     static mut runch: c_char;
     static mut places: [CPlace; 32 * 80];
@@ -154,12 +147,12 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn hero_ptr() -> *mut CCoord {
+unsafe fn hero_ptr() -> *mut IVec2 {
     &mut (*thing_t(&raw mut player)).t_pos
 }
 
 #[inline]
-unsafe fn hero_pos() -> CCoord {
+unsafe fn hero_pos() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 
@@ -169,7 +162,7 @@ unsafe fn player_has(flag: c_short) -> bool {
 }
 
 #[inline]
-unsafe fn coord_eq(a: CCoord, b: CCoord) -> bool {
+unsafe fn coord_eq(a: IVec2, b: IVec2) -> bool {
     a.x == b.x && a.y == b.y
 }
 
@@ -193,7 +186,7 @@ pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
 }
 
 #[inline]
-unsafe fn move_stuff(next_pos: &mut CCoord, fl: c_char) {
+unsafe fn move_stuff(next_pos: &mut IVec2, fl: c_char) {
     let hero = hero_pos();
     output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
     if (fl as u8 & F_PASS as u8) != 0 && chat_at(oldpos.y, oldpos.x) == DOOR {
@@ -254,7 +247,7 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
 
 /// Global "next hero position" used by the save/load subsystem (state.c).
 #[no_mangle]
-pub static mut nh: CCoord = CCoord { x: 0, y: 0 };
+pub static mut nh: IVec2 = IVec2 { x: 0, y: 0 };
 
 /// do_run:
 /// Start the hero running in the chosen direction.
@@ -269,7 +262,7 @@ pub unsafe extern "C" fn do_run(ch: c_char) {
 /// Check to see that a move is legal. If it is, handle the consequences.
 #[no_mangle]
 pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
-    let mut next_pos = CCoord { x: 0, y: 0 };
+    let mut next_pos = IVec2 { x: 0, y: 0 };
     let mut current_dy = dy;
     let mut current_dx = dx;
     let hero = hero_pos();

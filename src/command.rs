@@ -12,7 +12,7 @@ use crate::config::GameConfig;
 use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
-use crate::entity::player::{do_move, do_run, CCoord, CPlace, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{do_move, do_run, CPlace, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::help::{help, identify};
 use crate::item::armor::{take_off, wear};
@@ -160,7 +160,7 @@ unsafe extern "C" {
     static mut again: c_uchar;
     static mut amulet: c_uchar;
     static mut count: c_int;
-    static mut delta: CCoord;
+    static mut delta: IVec2;
     static mut dir_ch: c_char;
     static mut dnum: c_int;
     static mut door_stop: c_uchar;
@@ -233,12 +233,12 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn hero_pos() -> CCoord {
+unsafe fn hero_pos() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 
 #[inline]
-unsafe fn hero_ptr() -> *mut CCoord {
+unsafe fn hero_ptr() -> *mut IVec2 {
     &mut (*thing_t(&raw mut player)).t_pos
 }
 

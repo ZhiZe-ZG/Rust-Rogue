@@ -14,7 +14,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::draw::{self, chat_at, place_at, winat as draw_winat};
-use crate::entity::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::item::thing_list::{attach, discard};
 use crate::item::things::{dropcheck, inv_name};
 use crate::level::tile_is_walkable;
@@ -112,7 +112,7 @@ static INIT_DAM: [InitWeap; MAXWEAPONS] = [
 pub static mut group: c_int = 2;
 
 static mut NUMBUF: [c_char; 10] = [0; 10];
-static mut FALL_POS: CCoord = CCoord { x: 0, y: 0 };
+static mut FALL_POS: IVec2 = IVec2 { x: 0, y: 0 };
 
 unsafe extern "C" {
     static mut terse: c_uchar;
@@ -139,7 +139,7 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 }
 
 #[inline]
-unsafe fn hero() -> CCoord {
+unsafe fn hero() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn init_weapon(weap: *mut CThing, which: c_int) {
 /// Resolves thrown-weapon combat against the target tile.
 #[no_mangle]
 pub unsafe extern "C" fn hit_monster(y: c_int, x: c_int, obj: *mut CThing) -> c_int {
-    let mut mp = CCoord { x, y };
+    let mut mp = IVec2 { x, y };
     fight(&mut mp, obj, true as c_uchar)
 }
 
@@ -363,7 +363,7 @@ pub unsafe extern "C" fn wield() {
 
 /// Chooses a nearby floor/passage location to drop an item and returns whether one was found.
 #[no_mangle]
-pub unsafe extern "C" fn fallpos(pos: *mut CCoord, newpos: *mut CCoord) -> c_uchar {
+pub unsafe extern "C" fn fallpos(pos: *mut IVec2, newpos: *mut IVec2) -> c_uchar {
     let mut cnt = 0;
     for y in ((*pos).y - 1)..=((*pos).y + 1) {
         for x in ((*pos).x - 1)..=((*pos).x + 1) {

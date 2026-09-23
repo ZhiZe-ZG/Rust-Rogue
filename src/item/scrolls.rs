@@ -8,7 +8,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::config::GameConfig;
 use crate::draw::{chat_at as draw_chat, look, map_cell_reveal, winat as draw_winat};
 use crate::entity::monsters::{new_monster, randmonster};
-use crate::entity::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::game;
 use crate::game::EQUIPMENT;
 use crate::init::pick_color;
@@ -139,7 +139,7 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn hero() -> CCoord {
+unsafe fn hero() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 
@@ -264,7 +264,7 @@ pub unsafe extern "C" fn read_scroll() {
         }
         ScrollType::CreateMonster => {
             let mut i = 0;
-            let mut mp = CCoord { y: 0, x: 0 };
+            let mut mp = IVec2 { y: 0, x: 0 };
             let h = hero();
             for y in (h.y - 1)..=(h.y + 1) {
                 for x in (h.x - 1)..=(h.x + 1) {

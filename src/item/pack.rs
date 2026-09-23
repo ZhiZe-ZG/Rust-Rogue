@@ -104,7 +104,7 @@ unsafe fn set_pack_head(value: *mut CThing) {
     (*thing_t(&raw mut player)).t_pack = value;
 }
 
-unsafe fn hero_coord() -> crate::entity::player::CCoord {
+unsafe fn hero_coord() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 

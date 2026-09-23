@@ -21,7 +21,7 @@ use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
 use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::wanderer;
-use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CRoom, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
@@ -72,7 +72,7 @@ unsafe extern "C" {
     static mut after: c_uchar;
     static mut jump: c_uchar;
     static mut seenstairs: c_uchar;
-    static mut stairs: CCoord;
+    static mut stairs: IVec2;
 }
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────

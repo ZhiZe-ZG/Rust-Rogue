@@ -24,7 +24,7 @@ use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-use crate::entity::player::{CCoord, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CStats, CThing, CThingMonster, CThingObject};
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach, detach, discard, new_item};
 use crate::item::things::inv_name;
@@ -211,7 +211,7 @@ unsafe fn set_moat(y: c_int, x: c_int, val: *mut CThing) {
 /// fight:
 /// The player attacks the monster.
 #[no_mangle]
-pub unsafe extern "C" fn fight(mp: *mut CCoord, weap: *mut CThing, thrown: c_uchar) -> c_int {
+pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut CThing, thrown: c_uchar) -> c_int {
     let tp = moat((*mp).y, (*mp).x);
 
     // Since we are fighting, things are not quiet — no healing.
@@ -445,7 +445,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 }
                 let mp_pos = (*thing_t(mp)).t_pos;
                 remove_mon(
-                    &(*thing_t(mp)).t_pos as *const CCoord as *mut CCoord,
+                    &(*thing_t(mp)).t_pos as *const IVec2 as *mut IVec2,
                     mp,
                     false as c_uchar,
                 );
@@ -478,7 +478,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 }
                 if !steal.is_null() {
                     remove_mon(
-                        &(*thing_t(mp)).t_pos as *const CCoord as *mut CCoord,
+                        &(*thing_t(mp)).t_pos as *const IVec2 as *mut IVec2,
                         moat((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x),
                         false as c_uchar,
                     );
@@ -812,7 +812,7 @@ pub unsafe extern "C" fn bounce(weap: *mut CThing, mname: *const c_char, noend: 
 /// remove_mon:
 /// Remove a monster from the screen.
 #[no_mangle]
-pub unsafe extern "C" fn remove_mon(mp: *mut CCoord, tp: *mut CThing, waskill: c_uchar) {
+pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut CThing, waskill: c_uchar) {
     let mut obj = (*thing_t(tp)).t_pack;
     while !obj.is_null() {
         let nexti = (*thing_t(obj)).l_next;
@@ -860,7 +860,7 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
             .as_mut_ptr();
         strcpy(dmg, c"000x0".as_ptr());
     } else if mtype == b'L' as c_char {
-        let mut gold_pos = CCoord { x: 0, y: 0 };
+        let mut gold_pos = IVec2 { x: 0, y: 0 };
         let tp_room = (*thing_t(tp)).t_room;
         let level = crate::game::current_depth();
         if !tp_room.is_null()

@@ -12,7 +12,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use crate::config::GameConfig;
 use crate::draw::{terrain_chat_at, FLOOR, PASSAGE};
-use crate::entity::player::{CCoord, CRoom, CThing};
+use crate::entity::player::{CRoom, CThing};
 use crate::game;
 use crate::rnd::rnd;
 use crate::ui::output;
@@ -51,7 +51,7 @@ unsafe fn room_slot_of(rp: *mut CRoom) -> Option<usize> {
 /// (`Level::rnd_pos`), while the candidate cell is validated against the C
 /// `places` grid. Returns `true as c_uchar` and stores the chosen cell into `cp` on
 /// success; `false as c_uchar` when `limit` (if nonzero) attempts are exhausted.
-pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: bool) -> bool {
+pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut IVec2, limit: c_int, monst: bool) -> bool {
     if cp.is_null() {
         return false;
     }
@@ -104,7 +104,7 @@ pub unsafe fn find_floor(rp: *mut CRoom, cp: *mut CCoord, limit: c_int, monst: b
 
 /// Fill one treasure room with `MIN..MAX` objects and monsters.
 unsafe fn treas_room() {
-    let mut mp = CCoord { x: 0, y: 0 };
+    let mut mp = IVec2 { x: 0, y: 0 };
     let (idx, mut spots) = with_current_level_mut(|current| {
         let idx = current.rnd_room();
         let room = &current.rooms[idx];
@@ -173,7 +173,7 @@ unsafe fn treas_room() {
 /// Uses globals: amulet, level, max_level, rooms, lvl_obj, places.
 /// ```
 unsafe fn place_room_contents() {
-    let mut mp = CCoord { x: 0, y: 0 };
+    let mut mp = IVec2 { x: 0, y: 0 };
     let level = game::current_depth();
 
     for i in 0..GameConfig::MAX_ROOMS {

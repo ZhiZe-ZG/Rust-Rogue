@@ -4,7 +4,7 @@
 use crate::entity::chase::{cansee, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};
-use crate::entity::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
@@ -86,7 +86,7 @@ pub struct CObjInfo {
 unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
-    static mut delta: CCoord;
+    static mut delta: IVec2;
     static mut ws_info: [CObjInfo; MAXSTICKS];
     static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
@@ -105,7 +105,7 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 }
 
 #[inline]
-unsafe fn hero_pos() -> CCoord {
+unsafe fn hero_pos() -> IVec2 {
     unsafe { (*thing_t(&raw mut player)).t_pos }
 }
 
@@ -130,7 +130,7 @@ unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
 }
 
 #[inline]
-unsafe fn ce_coord(a: CCoord, b: CCoord) -> c_uchar {
+unsafe fn ce_coord(a: IVec2, b: IVec2) -> c_uchar {
     if a.x == b.x && a.y == b.y {
         1
     } else {
@@ -295,7 +295,7 @@ pub unsafe extern "C" fn drain() {
 /// fire_bolt:
 /// Fire a bolt in a given direction from a specific starting place.
 #[no_mangle]
-pub unsafe extern "C" fn fire_bolt(start: *mut CCoord, dir: *mut CCoord, name: *mut c_char) {
+pub unsafe extern "C" fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, name: *mut c_char) {
     let mut pos = *start;
     let mut hero = hero_pos();
     let hit_hero = start != &mut hero;

@@ -11,7 +11,7 @@ use crate::draw::look;
 use crate::draw::place_at;
 use crate::entity::chase::see_monst;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CCoord, CPlace, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
@@ -143,7 +143,7 @@ unsafe extern "C" {
     static mut places: [CPlace; 32 * 80];
     static mut pot_info: [CObjInfo; MAXPOTIONS];
     static mut max_stats: CStats;
-    static mut stairs: CCoord;
+    static mut stairs: IVec2;
     static mut e_levels: [c_int; 21];
 
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
@@ -162,7 +162,7 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn hero() -> CCoord {
+unsafe fn hero() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 

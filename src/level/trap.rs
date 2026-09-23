@@ -5,12 +5,13 @@
 //! on. This is a pure Rust API consumed by the movement code in
 //! [`crate::player`]; the legacy C ABI is intentionally not retained.
 
+use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 use crate::entity::fight::swing;
 use crate::entity::monsters::save;
-use crate::entity::player::{CCoord, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::armor::rust_armor;
 use crate::item::rings::RingType;
@@ -83,7 +84,7 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn hero_pos() -> CCoord {
+unsafe fn hero_pos() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 
@@ -104,7 +105,7 @@ unsafe fn rainbow_color() -> *const c_char {
 /// levitating, no trap effect applies. Uses the C engine helpers (`msg`,
 /// `roll`, `spread`, `teleport`, ...) exactly as the legacy `be_trapped` did,
 /// but is callable only from Rust.
-pub unsafe fn be_trapped(pos: CCoord) -> Trap {
+pub unsafe fn be_trapped(pos: IVec2) -> Trap {
     let trap =
         crate::level::with_current_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
 

@@ -3,11 +3,12 @@
 //! Ported from `src/c/monsters.c` to Rust.
 use crate::config::GameConfig;
 use crate::daemon::{fuse, lengthen};
+use glam::IVec2;
 use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CCoord, CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CPlace, CRoom, CStats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach, new_item};
@@ -175,7 +176,7 @@ pub unsafe fn randmonster(wander: bool) -> c_char {
 
 /// Initializes a freshly allocated monster thing and places it on the map.
 #[no_mangle]
-pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: *mut CCoord) {
+pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: *mut IVec2) {
     let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
@@ -237,7 +238,7 @@ pub unsafe extern "C" fn exp_add(tp: *mut CThing) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn wanderer() {
     let tp = new_item();
-    let mut cp = CCoord { x: 0, y: 0 };
+    let mut cp = IVec2 { x: 0, y: 0 };
 
     loop {
         let _ = find_floor(std::ptr::null_mut(), &mut cp, 0, true);

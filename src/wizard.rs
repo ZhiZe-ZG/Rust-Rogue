@@ -9,7 +9,7 @@ use std::ptr;
 use crate::config::GameConfig;
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
-use crate::entity::player::{CCoord, CRoom, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CRoom, CThing, CThingMonster, CThingObject};
 use crate::item::pack::{add_pack, floor_at, get_item};
 use crate::item::sticks::fix_stick;
 use crate::item::thing_list::new_item;
@@ -61,7 +61,7 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn hero() -> CCoord {
+unsafe fn hero() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
 }
 
@@ -282,7 +282,7 @@ pub unsafe extern "C" fn create_obj() {
 
 #[no_mangle]
 pub unsafe extern "C" fn teleport() {
-    let mut c = CCoord { x: 0, y: 0 };
+    let mut c = IVec2 { x: 0, y: 0 };
     let mut hero = hero();
 
     output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
@@ -369,7 +369,7 @@ mod tests {
                     l_next: ptr::null_mut(),
                     l_prev: ptr::null_mut(),
                     o_type: SCROLL,
-                    o_pos: CCoord { x: 0, y: 0 },
+                    o_pos: IVec2 { x: 0, y: 0 },
                     o_text: ptr::null_mut(),
                     o_launch: 0,
                     o_packch: 0,
