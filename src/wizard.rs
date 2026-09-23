@@ -81,7 +81,7 @@ unsafe fn chat(y: c_int, x: c_int) -> c_int {
 }
 
 #[inline]
-unsafe fn get_num(ptr: *mut c_int, _win: *mut std::ffi::c_void) {
+unsafe fn get_num(ptr: *mut c_int) {
     let mut value = 0;
     let mut ch = readchar();
     while ch == (b' ' as c_int) || ch == (b'\t' as c_int) {
@@ -107,8 +107,6 @@ unsafe extern "C" {
     static mut count: c_int;
     static mut running: c_uchar;
     static mut vf_hit: c_int;
-    static mut hw: *mut std::ffi::c_void;
-    static mut stdscr: *mut std::ffi::c_void;
     static mut monsters: [crate::entity::monsters::CMonster; 26];
     static mut player: CThing;
     static mut scr_info: [CObjInfo; 18];
@@ -276,7 +274,7 @@ pub unsafe extern "C" fn create_obj() {
     } else if (*thing_o(obj)).o_type == GOLD {
         msg_str("how much?");
         let mut amount = 0;
-        get_num(&mut amount, stdscr);
+        get_num(&mut amount);
     }
 
     add_pack(obj, false as c_uchar);
@@ -322,7 +320,7 @@ pub unsafe extern "C" fn show_map() {
         return;
     }
 
-    let window = Window::from_raw(hw);
+    let window = Window::Stdscr;
     output::clear_window(window);
     for y in 1..(GameConfig::SCREEN_LINES - 1) {
         for x in 0..GameConfig::SCREEN_COLS {

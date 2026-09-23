@@ -112,11 +112,6 @@ pub struct CFile {
 }
 
 #[repr(C)]
-pub struct CWindow {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
 pub struct CStone {
     pub st_name: *const c_char,
     pub st_value: c_int,
@@ -251,7 +246,6 @@ unsafe extern "C" {
     static mut between: c_int;
     static mut nh: CCoord;
     static mut group: c_int;
-    static mut stdscr: *mut c_void;
 
     // material arrays (defined in init.rs as rainbow/stones/wood/metal)
     static mut rainbow: [*mut c_char; 27];
@@ -269,10 +263,6 @@ unsafe extern "C" {
     fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
     fn strlen(s: *const c_char) -> usize;
     fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
-    fn getmaxx(win: *mut CWindow) -> c_int;
-    fn getmaxy(win: *mut CWindow) -> c_int;
-    fn mvwinch(win: *mut CWindow, y: c_int, x: c_int) -> c_int;
-    fn mvwaddch(win: *mut CWindow, y: c_int, x: c_int, ch: c_int) -> c_int;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -922,13 +912,16 @@ unsafe fn rs_read_coord(inf: *mut CFile, c: *mut CCoord) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_window(savef: *mut CFile, win: *mut CWindow) -> c_int {
+/// Dump the visible screen grid to the save file using the legacy window
+/// header (height, width, then one cell per position).
+unsafe fn rs_write_window(savef: *mut CFile) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let width = getmaxx(win);
-    let height = getmaxy(win);
+    let size = crate::ui::screen_size();
+    let height = size.y;
+    let width = size.x;
 
     let _ = rs_write_marker(savef, RSID_WINDOW);
     let _ = rs_write_int(savef, height);
@@ -938,7 +931,8 @@ unsafe fn rs_write_window(savef: *mut CFile, win: *mut CWindow) -> c_int {
     while row < height {
         let mut col: c_int = 0;
         while col < width {
-            if rs_write_int(savef, mvwinch(win, row, col)) != 0 {
+            let cell = crate::ui::screen_cell(row, col) as c_int;
+            if rs_write_int(savef, cell) != 0 {
                 return WRITE_ERROR;
             }
             col += 1;
@@ -949,13 +943,16 @@ unsafe fn rs_write_window(savef: *mut CFile, win: *mut CWindow) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_window(inf: *mut CFile, win: *mut CWindow) -> c_int {
+/// Reload the visible screen grid from the save file, clipping the stored
+/// dimensions to the fixed terminal size.
+unsafe fn rs_read_window(inf: *mut CFile) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
-    let width = getmaxx(win);
-    let height = getmaxy(win);
+    let size = crate::ui::screen_size();
+    let height = size.y;
+    let width = size.x;
 
     let _ = rs_read_marker(inf, RSID_WINDOW);
 
@@ -974,7 +971,7 @@ unsafe fn rs_read_window(inf: *mut CFile, win: *mut CWindow) -> c_int {
             }
 
             if row < height && col < width {
-                let _ = mvwaddch(win, row, col, value);
+                crate::ui::set_screen_cell(row, col, value as u8);
             }
             col += 1;
         }
@@ -2253,8 +2250,7 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
 /// stairs, player, equipment slots, l_last_pick,
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
-/// scr_info, weap_info, ws_info, d_list, total, between, nh, group,
-/// stdscr.
+/// scr_info, weap_info, ws_info, d_list, total, between, nh, group.
 #[no_mangle]
 pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     if WRITE_ERROR != 0 {
@@ -2441,7 +2437,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_coord(savef, nh); /* 5.4-move.c */
     let _ = rs_write_int(savef, group); /* 5.4-weapons.rs */
 
-    let _ = rs_write_window(savef, stdscr as *mut CWindow);
+    let _ = rs_write_window(savef);
 
     WRITE_ERROR
 }
@@ -2463,8 +2459,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 /// stairs, player, equipment slots, l_last_pick,
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
-/// scr_info, weap_info, ws_info, d_list, total, between, nh, group,
-/// stdscr.
+/// scr_info, weap_info, ws_info, d_list, total, between, nh, group.
 #[no_mangle]
 pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let mut dummyint: c_int = 0;
@@ -2655,7 +2650,7 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_coord(inf, &mut nh); /* 5.4-move.c */
     let _ = rs_read_int(inf, &mut group); /* 5.4-weapons.rs */
 
-    let _ = rs_read_window(inf, stdscr as *mut CWindow);
+    let _ = rs_read_window(inf);
 
     read_stat()
 }

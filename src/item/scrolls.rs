@@ -123,7 +123,6 @@ unsafe extern "C" {
     static mut places: [CPlace; 32 * 80];
     static mut player: CThing;
     static mut lvl_obj: *mut CThing;
-    static mut hw: *mut c_void;
     static mut scr_info: [CObjInfo; MAXSCROLLS];
     static mut weap_info: [CObjInfo; 10];
 
@@ -335,7 +334,7 @@ pub unsafe extern "C" fn read_scroll() {
         }
         ScrollType::FindFood => {
             let mut found = false as c_uchar;
-            let window = Window::from_raw(hw);
+            let window = Window::Stdscr;
             output::clear_window(window);
             let mut it = lvl_obj;
             while !it.is_null() {

@@ -72,8 +72,6 @@ unsafe fn c_stderr() -> *mut c_void {
 }
 
 unsafe extern "C" {
-    static mut stdscr: *mut c_void;
-
     fn fopen(path: *const c_char, mode: *const c_char) -> *mut crate::score::CFile;
     fn fclose(stream: *mut crate::score::CFile) -> c_int;
     fn fgets(buf: *mut c_char, n: c_int, stream: *mut c_void) -> *mut c_char;
@@ -178,8 +176,6 @@ pub unsafe extern "C" fn open_score() {
 
 /// setup:
 /// Get starting setup for all games.
-///
-/// Uses globals: stdscr (curses).
 #[no_mangle]
 pub unsafe extern "C" fn setup() {
     if DUMP {
@@ -194,7 +190,7 @@ pub unsafe extern "C" fn setup() {
 
     input::set_raw_mode(true);
     input::set_echo(false);
-    input::set_keypad(Window::from_raw(stdscr), true);
+    input::set_keypad(Window::Stdscr, true);
     getltchars(); /* get the local tty chars */
 }
 

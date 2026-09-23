@@ -122,11 +122,6 @@ pub struct CPlace {
     pub p_monst: *mut CThing,
 }
 
-#[repr(C)]
-pub struct CWindow {
-    _private: [u8; 0],
-}
-
 unsafe extern "C" {
     static mut after: c_uchar;
     static mut count: c_int;

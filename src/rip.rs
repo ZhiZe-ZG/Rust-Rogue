@@ -60,12 +60,9 @@ unsafe extern "C" {
     static mut monsters: [crate::entity::monsters::CMonster; 26];
     static mut scoreboard: *mut crate::score::CFile;
 
-    fn fgets(buf: *mut c_char, n: c_int, stream: *mut std::ffi::c_void) -> *mut c_char;
     fn getuid() -> c_uint;
     fn printf(fmt: *const c_char, ...) -> c_int;
     fn signal(sig: c_int, handler: usize) -> usize;
-    static mut stdscr: *mut std::ffi::c_void;
-    static mut curscr: *mut std::ffi::c_void;
 }
 
 #[inline]
@@ -428,8 +425,7 @@ pub unsafe extern "C" fn death(monst: c_char) {
     score(purse, if amulet != 0 { 3 } else { 0 }, monst);
     let msg = CString::new("[Press return to continue]").unwrap();
     printf(c"%s".as_ptr(), msg.as_ptr());
-    let mut input = [0 as c_char; 16];
-    let _ = fgets(input.as_mut_ptr(), 10, stdscr as *mut std::ffi::c_void);
+    wait_for('\n');
     my_exit(0);
 }
 
@@ -457,7 +453,7 @@ pub unsafe extern "C" fn total_winner() {
     output::write_text("\nYou have joined the elite ranks of those who have escaped the\nDungeons of Doom alive.  You journey home and sell all your loot at\na great profit and are admitted to the Fighters' Guild.\n");
     output::write_text_at(IVec2::new(0, 23), "--Press space to continue--");
     output::refresh();
-    wait_for(b' ' as c_int);
+    wait_for(' ');
     output::clear_screen();
     output::write_text_at(IVec2::new(0, 0), "   Worth  Item\n");
     let oldpurse = purse;

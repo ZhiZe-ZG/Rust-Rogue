@@ -160,7 +160,6 @@ unsafe extern "C" {
     static mut again: c_uchar;
     static mut amulet: c_uchar;
     static mut count: c_int;
-    static mut curscr: *mut c_void;
     static mut delta: CCoord;
     static mut dir_ch: c_char;
     static mut dnum: c_int;
@@ -197,7 +196,6 @@ unsafe extern "C" {
     static mut save_msg: c_uchar;
     static mut seenstairs: c_uchar;
     static mut stat_msg: c_uchar;
-    static mut stdscr: *mut c_void;
     static mut take: c_char;
     static mut terse: c_uchar;
     static mut to_death: c_uchar;
@@ -618,9 +616,8 @@ pub unsafe extern "C" fn command() {
                     }
                     CTRL_R => {
                         after = false as c_uchar;
-                        let screen = Window::from_raw(curscr);
-                        output::set_clear_on_refresh(screen, true);
-                        output::refresh_window(screen);
+                        output::set_clear_on_refresh(Window::Curscr, true);
+                        output::refresh_window(Window::Curscr);
                     }
                     b'v' => {
                         after = false as c_uchar;
@@ -1114,7 +1111,7 @@ pub unsafe extern "C" fn call() {
     } else {
         strcpy(prbuf.as_mut_ptr(), elsewise);
     }
-    if get_str(prbuf.as_mut_ptr().cast(), stdscr) == NORM {
+    if get_str(prbuf.as_mut_ptr().cast(), Window::Stdscr) == NORM {
         if !(*guess).is_null() {
             free(*guess as *mut c_void);
         }

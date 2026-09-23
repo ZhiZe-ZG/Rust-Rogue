@@ -1,7 +1,7 @@
 //! Message, status, and overlay output policy for the terminal UI.
 
-use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 use std::sync::Mutex;
 
 use crate::config::GameConfig;
@@ -12,10 +12,10 @@ use crate::ui::terminal as cur;
 use crate::ui::Window;
 use glam::IVec2;
 
-const ESCAPE: c_int = 27;
+const ESCAPE: i32 = 27;
 const MAXSTR: usize = 1024;
 const MAXMSG: usize = GameConfig::SCREEN_COLS as usize - 9;
-const STATLINE: c_int = 23;
+const STATLINE: i32 = 23;
 
 /// Result of displaying or flushing a message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,9 +46,6 @@ unsafe extern "C" {
     static mut save_msg: c_uchar;
     static mut lower_msg: c_uchar;
     static mut stat_msg: c_uchar;
-    static mut hw: *mut c_void;
-    static mut stdscr: *mut c_void;
-
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
@@ -58,162 +55,112 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 /// Move the standard-screen cursor.
 pub fn move_cursor(position: IVec2) {
     unsafe {
-        cur::move_(position.y, position.x);
+        cur::move_cursor(position);
     }
 }
 
 /// Write one glyph at the current cursor position.
 pub fn write_glyph(glyph: char) {
     unsafe {
-        cur::addch(glyph as c_uint);
+        cur::write_glyph(glyph);
     }
 }
 
 /// Move to a position and write one glyph.
 pub fn write_glyph_at(position: IVec2, glyph: char) {
     unsafe {
-        cur::mvaddch(position.y, position.x, glyph as c_uint);
+        cur::write_glyph_at(position, glyph);
     }
 }
 
 /// Read the glyph currently displayed under the standard-screen cursor.
 pub fn glyph_at_cursor() -> char {
-    unsafe { char::from_u32((cur::inch() as u32) & 0xff).unwrap_or('\0') }
+    unsafe { cur::glyph_at_cursor() }
 }
 
 /// Read the glyph displayed at a position on the standard screen.
 pub fn glyph_at(position: IVec2) -> char {
-    unsafe {
-        char::from_u32((cur::mvinch(position.y, position.x) as u32) & 0xff).unwrap_or('\0')
-    }
+    unsafe { cur::glyph_at(position) }
 }
 
 /// Enable or disable standout output on the standard screen.
 pub fn set_standout(enabled: bool) {
-    unsafe {
-        if enabled {
-            cur::standout();
-        } else {
-            cur::standend();
-        }
-    }
+    unsafe { cur::set_standout(enabled) }
 }
 
 /// Flush pending standard-screen changes to the terminal.
 pub fn refresh() {
-    unsafe {
-        cur::refresh();
-    }
+    unsafe { cur::refresh() }
 }
 
 /// Clear the standard screen.
 pub fn clear_screen() {
-    unsafe {
-        cur::clear();
-    }
+    unsafe { cur::clear() }
 }
 
 /// Clear from the cursor to the end of its line.
 pub fn clear_to_end_of_line() {
-    unsafe {
-        cur::clrtoeol();
-    }
+    unsafe { cur::clear_to_end_of_line() }
 }
 
 /// Write UTF-8 text at the current cursor position.
 pub fn write_text(text: &str) {
-    unsafe {
-        let text = CString::new(text).expect("terminal text contains a NUL byte");
-        cur::addstr(text.as_ptr());
-    }
+    unsafe { cur::write_text(text) }
 }
 
 /// Move to a position and write UTF-8 text.
 pub fn write_text_at(position: IVec2, text: &str) {
-    unsafe {
-        let text = CString::new(text).expect("terminal text contains a NUL byte");
-        cur::mvaddstr(position.y, position.x, text.as_ptr());
-    }
+    unsafe { cur::write_text_at(position, text) }
 }
 
-/// Control whether ncurses may leave the physical cursor after refresh.
-pub fn set_leave_cursor(window: Window, enabled: bool) {
-    unsafe {
-        cur::leaveok(window.as_raw(), i32::from(enabled));
-    }
+/// Control whether the terminal may leave the physical cursor after refresh.
+///
+/// The backend always leaves the cursor where it was; retained only for call
+/// sites that mirrored the legacy `leaveok`.
+pub fn set_leave_cursor(_window: Window, _enabled: bool) {}
+
+/// Return the current cursor position.
+pub fn window_cursor(_window: Window) -> IVec2 {
+    unsafe { cur::cursor_pos() }
 }
 
-/// Return the current cursor position in a window.
-pub fn window_cursor(window: Window) -> IVec2 {
-    unsafe { IVec2::new(cur::getcurx(window.as_raw()), cur::getcury(window.as_raw())) }
+/// Clear the screen for the given (aliased) window.
+pub fn clear_window(_window: Window) {
+    clear_screen();
 }
 
-/// Clear a window.
-pub fn clear_window(window: Window) {
-    unsafe {
-        cur::wclear(window.as_raw());
-    }
-}
-
-/// Move a window's cursor.
-pub fn move_window_cursor(window: Window, position: IVec2) {
-    unsafe {
-        cur::wmove(window.as_raw(), position.y, position.x);
-    }
+/// Move the (aliased) window cursor.
+pub fn move_window_cursor(_window: Window, position: IVec2) {
+    move_cursor(position);
 }
 
 /// Write one glyph to a window.
-pub fn write_window_glyph(window: Window, glyph: char) {
-    unsafe {
-        cur::waddch(window.as_raw(), glyph as c_uint);
-    }
+pub fn write_window_glyph(_window: Window, glyph: char) {
+    write_glyph(glyph);
 }
 
 /// Write text to a window.
-pub fn write_window_text(window: Window, text: &str) {
-    unsafe {
-        let text = CString::new(text).expect("window text contains a NUL byte");
-        cur::waddstr(window.as_raw(), text.as_ptr());
-    }
+pub fn write_window_text(_window: Window, text: &str) {
+    write_text(text);
 }
 
 /// Flush pending changes for a window.
-pub fn refresh_window(window: Window) {
-    unsafe {
-        cur::wrefresh(window.as_raw());
-    }
+pub fn refresh_window(_window: Window) {
+    refresh();
 }
 
-/// Mark a window for repaint during its next refresh.
-pub fn touch_window(window: Window) {
-    unsafe {
-        cur::touchwin(window.as_raw());
-    }
-}
+/// Mark a window for repaint during its next refresh (no-op; single grid).
+pub fn touch_window(_window: Window) {}
 
-/// Request a full repaint of a window on its next refresh.
-pub fn set_clear_on_refresh(window: Window, enabled: bool) {
-    unsafe {
-        cur::clearok(window.as_raw(), u8::from(enabled));
-    }
-}
+/// Request a full repaint of a window on its next refresh (no-op).
+pub fn set_clear_on_refresh(_window: Window, _enabled: bool) {}
 
-/// Enable or disable ncurses insert/delete-line optimization for a window.
-pub fn set_line_optimization(window: Window, enabled: bool) {
-    unsafe {
-        cur::idlok(window.as_raw(), i32::from(enabled));
-    }
-}
+/// Enable or disable line optimization for a window (no-op).
+pub fn set_line_optimization(_window: Window, _enabled: bool) {}
 
 /// Enable or disable standout output for a window.
-pub fn set_window_standout(window: Window, enabled: bool) {
-    unsafe {
-        if enabled {
-            cur::wstandout(window.as_raw());
-        } else {
-            cur::wstandend(window.as_raw());
-        }
-    }
+pub fn set_window_standout(_window: Window, enabled: bool) {
+    set_standout(enabled);
 }
 
 /// Render a key byte in printable caret notation.
@@ -265,10 +212,8 @@ unsafe fn display_message(text: &str) -> MessageResult {
     endmsg()
 }
 
-/// Display a Rust-formatted message, bypassing the legacy C variadic
-/// `msg()` shim. The caller is expected to build the text with `format!`.
-/// Returns the message result (useful for `--More--`
-/// escape detection when listing long inventories).
+/// Display a Rust-formatted message, bypassing the legacy variadic `msg()`
+/// shim. Returns the message result (useful for `--More--` escape detection).
 #[inline]
 pub unsafe fn msg_str(text: &str) -> MessageResult {
     #[cfg(not(test))]
@@ -282,8 +227,7 @@ pub unsafe fn msg_str(text: &str) -> MessageResult {
     }
 }
 
-/// Append a Rust-formatted message segment, bypassing the legacy C
-/// variadic `addmsg()` shim.
+/// Append a Rust-formatted message segment.
 #[inline]
 pub unsafe fn addmsg_str(text: &str) {
     #[cfg(not(test))]
@@ -297,9 +241,6 @@ pub unsafe fn addmsg_str(text: &str) {
 }
 
 /// Flush the pending message and handle pagination.
-///
-/// Callers that need current game graphics must render them before calling
-/// this function; output policy does not invoke the game renderer.
 #[cfg(not(test))]
 pub unsafe fn endmsg() -> MessageResult {
     let (mut pending, next_position) = {
@@ -321,11 +262,11 @@ pub unsafe fn endmsg() -> MessageResult {
         refresh();
 
         if msg_esc == false as c_uchar {
-            wait_for(' ' as c_int);
+            wait_for(' ');
         } else {
             loop {
                 let ch = readchar();
-                if ch == ' ' as c_int {
+                if ch == ' ' as i32 {
                     break;
                 }
                 if ch == ESCAPE {
@@ -398,7 +339,7 @@ pub unsafe fn status() {
     }
 
     s_arm = temp;
-    let old_cursor = window_cursor(Window::from_raw(stdscr));
+    let old_cursor = window_cursor(Window::Stdscr);
     if s_hp != max_hp {
         let mut temp_hp = max_hp;
         s_hp = max_hp;
@@ -457,15 +398,15 @@ pub unsafe fn status() {
 
 #[cfg(not(test))]
 pub unsafe fn show_win(message: &str) {
-    let window = Window::from_raw(hw);
+    let window = Window::Stdscr;
     move_window_cursor(window, IVec2::new(0, 0));
     write_window_text(window, message);
     touch_window(window);
     let hero = (*thing_t(&raw mut player)).t_pos;
     move_window_cursor(window, IVec2::new(hero.x, hero.y));
     refresh_window(window);
-    wait_for(' ' as c_int);
-    let standard_screen = Window::from_raw(stdscr);
+    wait_for(' ');
+    let standard_screen = Window::Stdscr;
     set_clear_on_refresh(standard_screen, true);
     touch_window(standard_screen);
 }

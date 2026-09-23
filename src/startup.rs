@@ -79,9 +79,6 @@ unsafe extern "C" {
     static mut dnum: c_int;
     static mut file_name: [c_char; MAXSTR];
     static mut home: [c_char; MAXSTR];
-    static mut LINES: c_int;
-    static mut COLS: c_int;
-    static mut hw: *mut c_void;
     static master_mode_enabled: c_uchar;
     static mut noscore: c_int;
     static mut player: CThing;
@@ -93,7 +90,6 @@ unsafe extern "C" {
     // ── Game-control globals from extern.c ────────────────────────────────
     static mut after: c_uchar;
     static mut count: c_int;
-    static mut curscr: *mut c_void;
     static mut in_shell: c_uchar;
     static mut inv_type: c_int;
     static mut jump: c_uchar;
@@ -108,7 +104,6 @@ unsafe extern "C" {
     static mut to_death: c_uchar;
 
     fn time(timer: *mut c_long) -> c_long;
-    static mut stdscr: *mut c_void;
 
     // ── Terminal, curses, and machdep functions used by game control ──────
     fn exit(status: c_int) -> !;
@@ -148,7 +143,7 @@ pub unsafe extern "C" fn endit(sig: c_int) {
 #[no_mangle]
 pub unsafe extern "C" fn fatal(s: *mut c_char) {
     output::write_text_at(
-        IVec2::new(0, LINES - 2),
+        IVec2::new(0, GameConfig::SCREEN_LINES - 2),
         &CStr::from_ptr(s).to_string_lossy(),
     );
     output::refresh();
@@ -180,8 +175,11 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
     /*
      * leave nicely
      */
-    let old_cursor = output::window_cursor(Window::from_raw(curscr));
-    runtime::move_physical_cursor(IVec2::new(COLS - 1, 0), IVec2::new(0, LINES - 1));
+    let old_cursor = output::window_cursor(Window::Curscr);
+    runtime::move_physical_cursor(
+        IVec2::new(GameConfig::SCREEN_COLS - 1, 0),
+        IVec2::new(0, GameConfig::SCREEN_LINES - 1),
+    );
     runtime::shutdown();
     resetltchars();
     fflush(c_stdout());
@@ -193,12 +191,11 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
     md_tstpresume();
     input::set_raw_mode(true);
     input::set_echo(false);
-    input::set_keypad(Window::from_raw(stdscr), true);
+    input::set_keypad(Window::Stdscr, true);
     playltchars();
-    let current_screen = Window::from_raw(curscr);
-    output::set_clear_on_refresh(current_screen, true);
-    output::refresh_window(current_screen);
-    runtime::move_physical_cursor(output::window_cursor(current_screen), old_cursor);
+    output::set_clear_on_refresh(Window::Curscr, true);
+    output::refresh_window(Window::Curscr);
+    runtime::move_physical_cursor(output::window_cursor(Window::Curscr), old_cursor);
     output::move_cursor(old_cursor);
     fflush(c_stdout());
 }
@@ -255,14 +252,14 @@ pub unsafe extern "C" fn quit(sig: c_int) {
     if q_comm == false as c_uchar {
         mpos = 0;
     }
-    let old_cursor = output::window_cursor(Window::from_raw(curscr));
+    let old_cursor = output::window_cursor(Window::Curscr);
     msg_str("really quit?");
     if readchar() == b'y' as c_int {
         signal(SIGINT, leave as usize);
         output::clear_screen();
         let line = format!("You quit with {} gold pieces", purse);
-        output::write_text_at(IVec2::new(0, LINES - 2), &line);
-        output::move_cursor(IVec2::new(0, LINES - 1));
+        output::write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), &line);
+        output::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
         output::refresh();
         score(purse, 1, 0);
         my_exit(0);
@@ -287,7 +284,10 @@ pub unsafe extern "C" fn leave(sig: c_int) {
     setbuf(c_stdout(), LEAVE_BUF.as_mut_ptr()); /* throw away pending output */
 
     if !runtime::is_shutdown() {
-        runtime::move_physical_cursor(IVec2::new(COLS - 1, 0), IVec2::new(0, LINES - 1));
+        runtime::move_physical_cursor(
+            IVec2::new(GameConfig::SCREEN_COLS - 1, 0),
+            IVec2::new(0, GameConfig::SCREEN_LINES - 1),
+        );
         runtime::shutdown();
     }
 
@@ -304,7 +304,7 @@ pub unsafe extern "C" fn shell() {
     /*
      * Set the terminal back to original mode
      */
-    output::move_cursor(IVec2::new(0, LINES - 1));
+    output::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
     output::refresh();
     runtime::shutdown();
     resetltchars();
@@ -321,11 +321,11 @@ pub unsafe extern "C" fn shell() {
     fflush(c_stdout());
     input::set_echo(false);
     input::set_raw_mode(true);
-    input::set_keypad(Window::from_raw(stdscr), true);
+    input::set_keypad(Window::Stdscr, true);
     playltchars();
     in_shell = false as c_uchar;
-    wait_for(b'\n' as c_int);
-    output::set_clear_on_refresh(Window::from_raw(stdscr), true);
+    wait_for('\n');
+    output::set_clear_on_refresh(Window::Stdscr, true);
 }
 
 /// my_exit:
@@ -335,7 +335,7 @@ pub unsafe extern "C" fn shell() {
 #[no_mangle]
 pub unsafe extern "C" fn my_exit(st: c_int) -> ! {
     resetltchars();
-    if !stdscr.is_null() {
+    if !runtime::is_shutdown() {
         input::set_echo(true);
         runtime::shutdown();
     }
@@ -448,14 +448,20 @@ pub unsafe extern "C" fn rogue_main(
         .flush()
         .expect("failed to flush startup message");
     runtime::initialize();
-    if LINES < GameConfig::SCREEN_LINES || COLS < GameConfig::SCREEN_COLS {
+    if GameConfig::SCREEN_LINES < GameConfig::SCREEN_LINES
+        || GameConfig::SCREEN_COLS < GameConfig::SCREEN_COLS
+    {
         runtime::shutdown();
         eprintln!(
             "Sorry, the screen must be at least {}x{}",
             GameConfig::SCREEN_LINES,
             GameConfig::SCREEN_COLS
         );
-        eprintln!("Current terminal size: {}x{}", COLS, LINES);
+        eprintln!(
+            "Current terminal size: {}x{}",
+            GameConfig::SCREEN_COLS,
+            GameConfig::SCREEN_LINES
+        );
         my_exit(1);
     }
 
@@ -466,9 +472,7 @@ pub unsafe extern "C" fn rogue_main(
     init_stones();
     init_materials();
     setup();
-    hw = runtime::create_window(IVec2::new(COLS, LINES), IVec2::new(0, 0)).into_raw();
-    output::set_line_optimization(Window::from_raw(stdscr), true);
-    output::set_line_optimization(Window::from_raw(hw), true);
+    output::set_line_optimization(Window::Stdscr, true);
     if master_mode_enabled != 0 {
         noscore = wizard;
     }

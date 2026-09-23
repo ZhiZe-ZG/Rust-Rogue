@@ -141,7 +141,6 @@ unsafe extern "C" {
     static mut lvl_obj: *mut CThing;
     static mut mlist: *mut CThing;
     static mut places: [CPlace; 32 * 80];
-    static mut hw: *mut c_void;
     static mut pot_info: [CObjInfo; MAXPOTIONS];
     static mut max_stats: CStats;
     static mut stairs: CCoord;
@@ -349,7 +348,7 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::TrapFind => {
             if !lvl_obj.is_null() {
-                let window = Window::from_raw(hw);
+                let window = Window::Stdscr;
                 output::clear_window(window);
                 tp = lvl_obj;
                 while !tp.is_null() {

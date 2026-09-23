@@ -90,7 +90,6 @@ unsafe extern "C" {
     static mut seenstairs: c_uchar;
     static mut see_floor: bool;
     static mut stairs: CCoord;
-    static mut stdscr: *mut c_void;
     static mut terse: c_uchar;
     static mut lvl_obj: *mut CThing;
     static mut mlist: *mut CThing;
@@ -432,7 +431,7 @@ pub unsafe extern "C" fn call_it(info: *mut CObjInfo) {
         } else {
             msg_str("what do you want to call it? ");
         }
-        if get_str(prbuf.as_mut_ptr().cast(), stdscr) == NORM {
+        if get_str(prbuf.as_mut_ptr().cast(), crate::ui::Window::Stdscr) == NORM {
             if !(*info).oi_guess.is_null() {
                 free((*info).oi_guess as *mut c_void);
             }

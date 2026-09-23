@@ -30,12 +30,7 @@ pub struct CFile {
 }
 
 extern "C" {
-    static mut LINES: c_int;
-    static mut COLS: c_int;
     static mut mpos: c_int;
-    static mut stdscr: *mut CWindow;
-    static mut curscr: *mut CWindow;
-    static mut hw: *mut CWindow;
     static mut file_name: c_char;
     static mut version: c_char;
     static mut wizard: c_int;
@@ -78,11 +73,6 @@ unsafe fn errno_location() -> *mut c_int {
     {
         __errno_location()
     }
-}
-
-#[repr(C)]
-pub struct CWindow {
-    _private: [u8; 0],
 }
 
 /// Copies a C string into a fixed-size destination buffer and always preserves a trailing NUL.
@@ -154,7 +144,7 @@ pub unsafe extern "C" fn save_game() {
             if buf[0] == 0 {
                 mpos = 0;
                 msg_str("file name: ");
-                if get_str(buf.as_mut_ptr().cast(), stdscr.cast()) == QUIT {
+                if get_str(buf.as_mut_ptr().cast(), Window::Stdscr) == QUIT {
                     msg_str("");
                     return;
                 }
@@ -204,8 +194,9 @@ pub unsafe extern "C" fn save_game() {
 #[no_mangle]
 pub unsafe extern "C" fn save_file(savef: *mut CFile) {
     let mut buf = [0u8; 80];
-    let lines = LINES;
-    let cols = COLS;
+    let size = crate::ui::screen_size();
+    let lines = size.y;
+    let cols = size.x;
     let header = format!("{} x {}\n", lines, cols);
     let version_ptr = &raw const version;
 
@@ -263,12 +254,13 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     let _ = fread(buf.as_mut_ptr() as *mut u8, 1, 80, inf);
     let _ = sscanf(buf.as_ptr(), c"%d x %d\n".as_ptr(), &mut lines, &mut cols);
 
-    if stdscr.is_null() {
+    if runtime::is_shutdown() {
         runtime::initialize();
     }
-    input::set_keypad(Window::from_raw(stdscr as *mut CWindow), true);
+    input::set_keypad(Window::Stdscr, true);
 
-    if lines > LINES {
+    let screen = crate::ui::screen_size();
+    if lines > screen.y {
         runtime::shutdown();
         msg_str(&format!(
             "Sorry, original game was played on a screen with {} lines.\n",
@@ -276,11 +268,11 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
         ));
         msg_str(&format!(
             "Current screen only has {} lines. Unable to restore game\n",
-            LINES
+            screen.y
         ));
         return 0;
     }
-    if cols > COLS {
+    if cols > screen.x {
         runtime::shutdown();
         msg_str(&format!(
             "Sorry, original game was played on a screen with {} columns.\n",
@@ -288,12 +280,11 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
         ));
         msg_str(&format!(
             "Current screen only has {} columns. Unable to restore game\n",
-            COLS
+            screen.x
         ));
         return 0;
     }
 
-    hw = runtime::create_window(IVec2::new(COLS, LINES), IVec2::new(0, 0)).into_raw();
     setup();
     let _ = rs_restore_file(inf.cast());
 
@@ -303,7 +294,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     }
 
     mpos = 0;
-    output::set_clear_on_refresh(Window::from_raw(stdscr as *mut CWindow), true);
+    output::set_clear_on_refresh(Window::Stdscr, true);
 
     if restore_player_dead() {
         runtime::shutdown();
@@ -314,7 +305,7 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     md_tstpresume();
     environ = envp;
     copy_cstr(file_name_ptr, file_ptr, MAXSTR);
-    output::set_clear_on_refresh(Window::from_raw(curscr as *mut CWindow), true);
+    output::set_clear_on_refresh(Window::Curscr, true);
     set_seed(md_getpid());
     msg_str(&format!(
         "file name: {}",

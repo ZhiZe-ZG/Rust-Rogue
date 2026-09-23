@@ -273,8 +273,6 @@ pub static mut player: CThing = CThing {
 };
 
 #[no_mangle]
-pub static mut hw: *mut std::ffi::c_void = std::ptr::null_mut();
-#[no_mangle]
 pub static mut max_stats: CStats = CStats {
     s_str: 16,
     s_exp: 0,

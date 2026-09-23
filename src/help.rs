@@ -1,9 +1,10 @@
 //! Command help and map-symbol identification.
 
 use std::ffi::CStr;
-use std::os::raw::{c_int, c_uchar, c_void};
+use std::os::raw::{c_int, c_uchar};
 
-use crate::globals::{hw, lower_msg, monsters, mpos};
+use crate::config::GameConfig;
+use crate::globals::{lower_msg, monsters, mpos};
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::output::msg_str;
 use crate::ui::{output, Window};
@@ -169,12 +170,6 @@ static IDENT_ITEMS: &[IdentItem] = &[
     },
 ];
 
-unsafe extern "C" {
-    static mut LINES: c_int;
-    static mut COLS: c_int;
-    static mut stdscr: *mut c_void;
-}
-
 /// Gives help for one command, or displays the complete printable command list.
 pub(crate) unsafe fn help() {
     msg_str("character you want help for (* for all): ");
@@ -204,9 +199,9 @@ pub(crate) unsafe fn help() {
     if numprint & 1 != 0 {
         numprint += 1;
     }
-    numprint = (numprint / 2).min(LINES - 1);
+    numprint = (numprint / 2).min(GameConfig::SCREEN_LINES - 1);
 
-    let help_window = Window::from_raw(hw);
+    let help_window = Window::Stdscr;
     output::clear_window(help_window);
     for (count, entry) in HELP_ENTRIES
         .iter()
@@ -218,7 +213,11 @@ pub(crate) unsafe fn help() {
         output::move_window_cursor(
             help_window,
             IVec2::new(
-                if count >= numprint { COLS / 2 } else { 0 },
+                if count >= numprint {
+                    GameConfig::SCREEN_COLS / 2
+                } else {
+                    0
+                },
                 count % numprint,
             ),
         );
@@ -228,15 +227,14 @@ pub(crate) unsafe fn help() {
         output::write_window_text(help_window, &entry.desc.to_string_lossy());
     }
 
-    output::move_window_cursor(help_window, IVec2::new(0, LINES - 1));
+    output::move_window_cursor(help_window, IVec2::new(0, GameConfig::SCREEN_LINES - 1));
     output::write_window_text(help_window, "--Press space to continue--");
     output::refresh_window(help_window);
-    wait_for(b' ' as c_int);
-    let standard_screen = Window::from_raw(stdscr);
-    output::set_clear_on_refresh(standard_screen, true);
+    wait_for(' ');
+    output::set_clear_on_refresh(Window::Stdscr, true);
     msg_str("");
-    output::touch_window(standard_screen);
-    output::refresh_window(standard_screen);
+    output::touch_window(Window::Stdscr);
+    output::refresh_window(Window::Stdscr);
 }
 
 /// Describes a map glyph or monster letter selected by the player.

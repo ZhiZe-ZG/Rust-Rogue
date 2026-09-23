@@ -84,7 +84,6 @@ unsafe extern "C" {
     static mut see_floor: c_uchar;
     static mut seenstairs: c_uchar;
     static mut stairs: CCoord;
-    static mut stdscr: *mut crate::entity::player::CWindow;
     static mut lvl_obj: *mut CThing;
 
 }
@@ -725,15 +724,9 @@ pub unsafe extern "C" fn turnref() {
     let hero = hero_pos();
     if (flat_at(hero.y, hero.x) as u8 & F_SEEN as u8) == 0 {
         if jump != 0 {
-            output::set_leave_cursor(
-                Window::from_raw(stdscr as *mut crate::entity::player::CWindow),
-                true,
-            );
+            output::set_leave_cursor(Window::Stdscr, true);
             output::refresh();
-            output::set_leave_cursor(
-                Window::from_raw(stdscr as *mut crate::entity::player::CWindow),
-                false,
-            );
+            output::set_leave_cursor(Window::Stdscr, false);
         }
         set_seen_at(hero.y, hero.x);
     }

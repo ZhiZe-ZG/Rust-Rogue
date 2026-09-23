@@ -1,16 +1,14 @@
 //! Keyboard input policy for the terminal UI.
 
-use std::os::raw::c_int;
-
 use crate::mdport::md_readchar;
 use crate::startup::quit;
 use crate::ui::{terminal, Window};
 
-const ESCAPE: c_int = 27;
+const ESCAPE: i32 = 27;
 
 /// Read one command character, handling an interrupt as a quit request.
 #[cfg(not(test))]
-pub unsafe fn readchar() -> c_int {
+pub unsafe fn readchar() -> i32 {
     let ch = md_readchar();
     if ch == 3 {
         quit(0);
@@ -19,30 +17,30 @@ pub unsafe fn readchar() -> c_int {
     ch
 }
 
+#[cfg(test)]
+pub unsafe fn readchar() -> i32 {
+    ESCAPE
+}
+
 /// Wait until the requested character is entered.
 ///
 /// Newline accepts either LF or CR to accommodate terminal conventions.
 #[cfg(not(test))]
-pub unsafe fn wait_for(ch: c_int) {
-    if ch == b'\n' as c_int {
+pub unsafe fn wait_for(ch: char) {
+    if ch == '\n' {
         loop {
             let input = readchar();
-            if input == b'\n' as c_int || input == b'\r' as c_int {
+            if input == '\n' as i32 || input == '\r' as i32 {
                 break;
             }
         }
     } else {
-        while readchar() != ch {}
+        while readchar() != ch as i32 {}
     }
 }
 
 #[cfg(test)]
-pub unsafe fn readchar() -> c_int {
-    ESCAPE
-}
-
-#[cfg(test)]
-pub unsafe fn wait_for(_ch: c_int) {}
+pub unsafe fn wait_for(_ch: char) {}
 
 /// Read one raw terminal key code before game-level key translation.
 pub fn read_raw_key() -> i32 {
@@ -51,7 +49,7 @@ pub fn read_raw_key() -> i32 {
 
 pub fn set_escape_delay(milliseconds: i32) {
     unsafe {
-        terminal::set_escdelay(milliseconds);
+        terminal::set_escape_delay(milliseconds);
     }
 }
 
@@ -75,11 +73,12 @@ pub fn set_echo(enabled: bool) {
     }
 }
 
-pub fn set_keypad(window: Window, enabled: bool) {
-    unsafe {
-        terminal::keypad(window.as_raw(), u8::from(enabled));
-    }
-}
+/// Enable or disable keypad translation for the given screen.
+///
+/// The terminal backend has no keypad mode, so this is a no-op retained only
+/// to keep call sites explicit.
+#[allow(clippy::unused_self)]
+pub fn set_keypad(_window: Window, _enabled: bool) {}
 
 pub fn set_input_timeout(tenths: i32) {
     unsafe {
@@ -88,11 +87,11 @@ pub fn set_input_timeout(tenths: i32) {
 }
 
 pub fn erase_key() -> u8 {
-    unsafe { terminal::erasechar() as u8 }
+    unsafe { terminal::erasechar() }
 }
 
 pub fn kill_key() -> u8 {
-    unsafe { terminal::killchar() as u8 }
+    unsafe { terminal::killchar() }
 }
 
 pub fn flush_pending() {

@@ -1,7 +1,7 @@
 //! Runtime option handling and the option screen.
 //!
 //! Ported from `src/c/options.c` to Rust.
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::draw::{erase_lamp, look};
@@ -20,13 +20,14 @@ const INV_OVER: c_int = 0;
 const INV_SLOW: c_int = 1;
 const INV_CLEAR: c_int = 2;
 
-#[repr(C)]
+/// One configurable option: its prompt, the global it edits, and the
+/// callbacks that render and read it on the option screen.
 pub struct OPTION {
     o_name: *mut c_char,
     o_prompt: *mut c_char,
     o_opt: *mut c_void,
-    o_putfunc: unsafe extern "C" fn(*mut c_void),
-    o_getfunc: unsafe extern "C" fn(*mut c_void, *mut c_void) -> c_int,
+    o_putfunc: unsafe fn(*mut c_void),
+    o_getfunc: unsafe fn(*mut c_void, Window) -> c_int,
 }
 
 unsafe extern "C" {
@@ -35,7 +36,6 @@ unsafe extern "C" {
     static mut fight_flush: c_uchar;
     static mut fruit: [c_char; MAXSTR];
     static mut home: [c_char; MAXSTR];
-    static mut hw: *mut c_void;
     static mut inv_t_name: [*mut c_char; 3];
     static mut inv_type: c_int;
     static mut jump: c_uchar;
@@ -43,7 +43,6 @@ unsafe extern "C" {
     static mut passgo: c_uchar;
     static mut player: CThing;
     static mut see_floor: c_uchar;
-    static mut stdscr: *mut c_void;
     static mut terse: c_uchar;
     static mut tombstone: c_uchar;
     static mut whoami: [c_char; MAXSTR];
@@ -67,10 +66,6 @@ unsafe fn hero_pos() -> CCoord {
 
 unsafe fn proom_ptr() -> *mut CRoom {
     (*thing_t(&raw mut player)).t_room
-}
-
-unsafe fn window(win: *mut c_void) -> Window {
-    Window::from_raw(win)
 }
 
 unsafe fn option_list() -> [OPTION; 10] {
@@ -148,15 +143,15 @@ unsafe fn option_list() -> [OPTION; 10] {
     ]
 }
 
-unsafe fn paint(win: *mut c_void, s: &str) {
-    output::write_window_text(window(win), s);
+unsafe fn paint(win: Window, s: &str) {
+    output::write_window_text(win, s);
 }
 
 unsafe fn pr_optname_slot(op: &OPTION) {
     let prompt = CStr::from_ptr(op.o_prompt).to_string_lossy();
     let name = CStr::from_ptr(op.o_name).to_string_lossy();
     let out = format!("{} (\"{}\"): ", prompt, name);
-    paint(hw, &out);
+    paint(Window::Stdscr, &out);
 }
 
 #[no_mangle]
@@ -164,7 +159,7 @@ pub unsafe extern "C" fn option() {
     let mut optlist = option_list();
     let mut retval: c_int;
 
-    let options_window = window(hw);
+    let options_window = Window::Stdscr;
     output::clear_window(options_window);
     for item in &mut optlist {
         pr_optname_slot(item);
@@ -176,7 +171,7 @@ pub unsafe extern "C" fn option() {
     for index in 0..optlist.len() {
         let item = &mut optlist[index];
         pr_optname_slot(item);
-        retval = (item.o_getfunc)(item.o_opt, hw);
+        retval = (item.o_getfunc)(item.o_opt, Window::Stdscr);
         if retval == QUIT {
             break;
         }
@@ -190,12 +185,11 @@ pub unsafe extern "C" fn option() {
     }
 
     output::move_window_cursor(options_window, IVec2::new(0, 23));
-    paint(hw, "--Press space to continue--");
+    paint(Window::Stdscr, "--Press space to continue--");
     output::refresh_window(options_window);
-    wait_for(' ' as c_int);
-    let standard_screen = window(stdscr);
-    output::set_clear_on_refresh(standard_screen, true);
-    output::touch_window(standard_screen);
+    wait_for(' ');
+    output::set_clear_on_refresh(Window::Stdscr, true);
+    output::touch_window(Window::Stdscr);
     after = false as c_uchar;
 }
 
@@ -206,41 +200,39 @@ unsafe fn pr_optname(op: *mut OPTION) {
     pr_optname_slot(&*op);
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn put_bool(vp: *mut c_void) {
+unsafe fn put_bool(vp: *mut c_void) {
     let bp = vp as *mut c_uchar;
-    output::write_window_text(window(hw), if *bp != 0 { "True" } else { "False" });
+    output::write_window_text(
+        Window::Stdscr,
+        if *bp != 0 { "True" } else { "False" },
+    );
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn put_str(vp: *mut c_void) {
+unsafe fn put_str(vp: *mut c_void) {
     let sp = vp as *mut c_char;
-    output::write_window_text(window(hw), &CStr::from_ptr(sp).to_string_lossy());
+    output::write_window_text(Window::Stdscr, &CStr::from_ptr(sp).to_string_lossy());
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn put_inv_t(vp: *mut c_void) {
+unsafe fn put_inv_t(vp: *mut c_void) {
     let ip = vp as *mut c_int;
     let idx = *ip as usize;
     if idx < unsafe { inv_t_name.len() } {
         output::write_window_text(
-            window(hw),
+            Window::Stdscr,
             &CStr::from_ptr(inv_t_name[idx]).to_string_lossy(),
         );
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn get_bool(vp: *mut c_void, win: *mut c_void) -> c_int {
+unsafe fn get_bool(vp: *mut c_void, win: Window) -> c_int {
     let bp = vp as *mut c_uchar;
     let mut bad = true;
 
-    let window = window(win);
-    let origin = output::window_cursor(window);
-    output::write_window_text(window, if *bp != 0 { "True" } else { "False" });
+    let origin = output::window_cursor(win);
+    output::write_window_text(win, if *bp != 0 { "True" } else { "False" });
     while bad {
-        output::move_window_cursor(window, origin);
-        output::refresh_window(window);
+        output::move_window_cursor(win, origin);
+        output::refresh_window(win);
         match readchar() {
             ch if ch == 't' as c_int || ch == 'T' as c_int => {
                 *bp = true as c_uchar;
@@ -256,19 +248,18 @@ pub unsafe extern "C" fn get_bool(vp: *mut c_void, win: *mut c_void) -> c_int {
             ESCAPE => return QUIT,
             ch if ch == '-' as c_int => return MINUS,
             _ => {
-                output::move_window_cursor(window, IVec2::new(origin.x + 10, origin.y));
-                output::write_window_text(window, "(T or F)");
+                output::move_window_cursor(win, IVec2::new(origin.x + 10, origin.y));
+                output::write_window_text(win, "(T or F)");
             }
         }
     }
-    output::move_window_cursor(window, origin);
-    output::write_window_text(window, if *bp != 0 { "True" } else { "False" });
-    output::write_window_glyph(window, '\n');
+    output::move_window_cursor(win, origin);
+    output::write_window_text(win, if *bp != 0 { "True" } else { "False" });
+    output::write_window_glyph(win, '\n');
     NORM
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn get_sf(vp: *mut c_void, win: *mut c_void) -> c_int {
+unsafe fn get_sf(vp: *mut c_void, win: Window) -> c_int {
     let bp = vp as *mut c_uchar;
     let was_sf = *bp != 0;
     let retval = get_bool(vp, win);
@@ -288,16 +279,15 @@ pub unsafe extern "C" fn get_sf(vp: *mut c_void, win: *mut c_void) -> c_int {
     NORM
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
+/// Read a line of text into `vopt`, editing within `win`.
+pub unsafe fn get_str(vopt: *mut c_void, win: Window) -> c_int {
     let opt = vopt as *mut c_char;
     let mut buf = [0 as c_char; MAXINP];
     let mut ptr = buf.as_mut_ptr();
     let mut c: c_int;
 
-    let window = window(win);
-    let origin = output::window_cursor(window);
-    output::refresh_window(window);
+    let origin = output::window_cursor(win);
+    output::refresh_window(win);
     loop {
         c = readchar();
         if c == '\n' as c_int || c == '\r' as c_int || c == ESCAPE {
@@ -314,7 +304,7 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
         }
         if c == input::kill_key() as c_int {
             ptr = buf.as_mut_ptr();
-            output::move_window_cursor(window, origin);
+            output::move_window_cursor(win, origin);
             continue;
         }
         if ptr >= buf.as_mut_ptr().add(MAXINP) || !(isprint(c) != 0 || c == ' ' as c_int) {
@@ -322,7 +312,7 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
         }
         *ptr = c as c_char;
         ptr = ptr.add(1);
-        output::write_window_text(window, &output::format_key(c as u8));
+        output::write_window_text(win, &output::format_key(c as u8));
     }
 
     *ptr = 0;
@@ -342,10 +332,10 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
         CStr::from_ptr(opt).to_string_lossy().to_string()
     };
     let out = format!("{}\n", msg);
-    output::move_window_cursor(window, origin);
+    output::move_window_cursor(win, origin);
     paint(win, &out);
-    output::refresh_window(window);
-    if win == stdscr {
+    output::refresh_window(win);
+    if win == Window::Stdscr {
         mpos += (ptr as usize - buf.as_ptr() as usize) as c_int;
     }
     if c == '-' as c_int {
@@ -357,22 +347,20 @@ pub unsafe extern "C" fn get_str(vopt: *mut c_void, win: *mut c_void) -> c_int {
     NORM
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn get_inv_t(vp: *mut c_void, win: *mut c_void) -> c_int {
+unsafe fn get_inv_t(vp: *mut c_void, win: Window) -> c_int {
     let ip = vp as *mut c_int;
     let mut bad = true;
 
-    let window = window(win);
-    let origin = output::window_cursor(window);
+    let origin = output::window_cursor(win);
     if *ip >= 0 && *ip < inv_t_name.len() as c_int {
         output::write_window_text(
-            window,
+            win,
             &CStr::from_ptr(inv_t_name[*ip as usize]).to_string_lossy(),
         );
     }
     while bad {
-        output::move_window_cursor(window, origin);
-        output::refresh_window(window);
+        output::move_window_cursor(win, origin);
+        output::refresh_window(win);
         match readchar() {
             ch if ch == 'o' as c_int || ch == 'O' as c_int => {
                 *ip = INV_OVER;
@@ -392,15 +380,15 @@ pub unsafe extern "C" fn get_inv_t(vp: *mut c_void, win: *mut c_void) -> c_int {
             ESCAPE => return QUIT,
             ch if ch == '-' as c_int => return MINUS,
             _ => {
-                output::move_window_cursor(window, IVec2::new(origin.x + 15, origin.y));
-                output::write_window_text(window, "(O, S, or C)");
+                output::move_window_cursor(win, IVec2::new(origin.x + 15, origin.y));
+                output::write_window_text(win, "(O, S, or C)");
             }
         }
     }
     if *ip >= 0 && *ip < inv_t_name.len() as c_int {
         let name = CStr::from_ptr(inv_t_name[*ip as usize]).to_string_lossy();
         let out = format!("{}\n", name);
-        output::move_window_cursor(window, origin);
+        output::move_window_cursor(win, origin);
         paint(win, &out);
     }
     NORM
