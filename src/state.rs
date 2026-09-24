@@ -701,15 +701,15 @@ unsafe fn rs_read_string(inf: *mut CFile, s: *mut c_char, max: c_int) -> c_int {
     read_stat()
 }
 
-/// Read a length-prefixed C string into an owned [`CString`] (`None` if the
+/// Read a length-prefixed C string into an owned Rust [`String`] (`None` if the
 /// stored length was zero).
-unsafe fn rs_read_new_cstring(inf: *mut CFile, s: &mut Option<std::ffi::CString>) -> c_int {
+unsafe fn rs_read_new_cstring(inf: *mut CFile, s: &mut Option<String>) -> c_int {
     let mut buf: *mut c_char = std::ptr::null_mut();
     let stat = rs_read_new_string(inf, &mut buf);
     if buf.is_null() {
         *s = None;
     } else {
-        *s = Some(CStr::from_ptr(buf).to_owned());
+        *s = Some(CStr::from_ptr(buf).to_string_lossy().into_owned());
         free(buf as *mut c_void);
     }
     stat
@@ -1707,10 +1707,13 @@ unsafe fn rs_write_object(savef: *mut CFile, o: *mut CThing) -> c_int {
     let _ = rs_write_int(savef, (*op).o_arm);
     let _ = rs_write_int(savef, (*op).o_flags);
     let _ = rs_write_int(savef, (*op).o_group);
+    let label_c = (*op)
+        .o_label
+        .as_ref()
+        .and_then(|label| std::ffi::CString::new(label.as_str()).ok());
     let _ = rs_write_string(
         savef,
-        (*op)
-            .o_label
+        label_c
             .as_ref()
             .map_or(std::ptr::null(), |label| label.as_ptr()),
     );

@@ -1028,7 +1028,7 @@ pub unsafe extern "C" fn call() {
             if terse == 0 {
                 addmsg_str("Was ");
             }
-            msg_str(&format!("called \"{}\"", elsewise.to_string_lossy()));
+            msg_str(&format!("called \"{}\"", elsewise));
         }
 
         if terse != 0 {
@@ -1039,14 +1039,14 @@ pub unsafe extern "C" fn call() {
 
         match (*thing_o(obj)).o_label.as_ref() {
             Some(elsewise) => {
-                strcpy(prbuf.as_mut_ptr(), elsewise.as_ptr());
+                strcpy(prbuf.as_mut_ptr(), elsewise.as_ptr().cast::<c_char>());
             }
             None => {
                 prbuf[0] = 0;
             }
         }
         if get_str(prbuf.as_mut_ptr().cast(), Window::Stdscr) == NORM {
-            let text = CStr::from_ptr(prbuf.as_ptr()).to_owned();
+            let text = CStr::from_ptr(prbuf.as_ptr()).to_string_lossy().into_owned();
             (*thing_o(obj)).o_label = Some(text);
         }
         return;

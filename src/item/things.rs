@@ -176,7 +176,7 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
             };
             if let Some(label) = (*thing_o(obj)).o_label.as_ref() {
                 text.push_str(" called ");
-                text.push_str(&label.to_string_lossy());
+                text.push_str(label);
             }
             text
         }
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
             let mut text = item_name(typ, which).to_owned();
             if let Some(label) = (*thing_o(obj)).o_label.as_ref() {
                 text.push_str(" called ");
-                text.push_str(&label.to_string_lossy());
+                text.push_str(label);
             }
             text
         }

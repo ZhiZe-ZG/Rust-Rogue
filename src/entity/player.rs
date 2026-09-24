@@ -28,7 +28,6 @@ use crate::ui::output;
 use crate::ui::output::msg_str;
 use crate::wizard::teleport;
 use glam::IVec2;
-use std::ffi::CString;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 use std::ptr::NonNull;
 
@@ -72,12 +71,12 @@ pub struct CThingMonster {
 }
 
 /// Object (item) data for a [`CThing`], using native Rust types. The `o_text`
-/// and `o_label` string fields are owned Rust strings rather than C pointers.
+/// and `o_label` string fields are owned Rust `String`s rather than C pointers.
 #[derive(Clone)]
 pub struct CThingObject {
     pub o_type: i32,
     pub o_pos: IVec2,
-    pub o_text: Option<CString>,
+    pub o_text: Option<String>,
     pub o_launch: i32,
     pub o_packch: u8,
     pub o_damage: [u8; 8],
@@ -89,7 +88,7 @@ pub struct CThingObject {
     pub o_arm: i32,
     pub o_flags: i32,
     pub o_group: i32,
-    pub o_label: Option<CString>,
+    pub o_label: Option<String>,
 }
 
 /// Intrusive doubly-linked list header shared by every [`CThing`], independent
