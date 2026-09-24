@@ -17,8 +17,7 @@ use crate::item::thing_list::free_list;
 use crate::ui::output;
 
 use super::presence::populate_level;
-use super::structure::{Room, Structure};
-use super::tile::Tile;
+use super::structure::Room;
 
 const ISHELD: c_short = 0o0000400;
 
@@ -34,26 +33,8 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
     tp as *mut CThingMonster
 }
 
-fn generate_rooms_and_connections() -> [Room; GameConfig::MAX_ROOMS] {
-    let rooms = std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO));
-    let room_size = IVec2::new(GameConfig::SCREEN_COLS / 3, GameConfig::SCREEN_LINES / 3);
-    with_current_level_mut(|current| current.generate_rooms_and_connections(rooms, room_size))
-}
-
 unsafe fn reset_level() {
-    let depth = with_current_level_mut(|current| {
-        current.map = Structure::new(
-            GameConfig::SCREEN_LINES as usize,
-            GameConfig::SCREEN_COLS as usize,
-            Tile::Empty,
-        );
-        current.rooms.clear();
-        current.room_graph.reset();
-        current.passages.clear();
-        current.passage_links.clear();
-        current.reset_flags();
-        current.depth
-    });
+    let depth = with_current_level_mut(|current| current.reset_for_new_level());
 
     (*thing_t(&raw mut player)).t_flags &= !ISHELD;
     if depth > max_level {
@@ -101,8 +82,13 @@ pub unsafe fn new_level() {
     reset_level();
     clear_previous_level_items();
 
-    let _generated = generate_rooms_and_connections();
-    with_current_level_mut(|current| current.do_passages());
+    // Lay out and dig the rooms and passages for this level.
+    let rooms = std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO));
+    let room_size = IVec2::new(GameConfig::SCREEN_COLS / 3, GameConfig::SCREEN_LINES / 3);
+    with_current_level_mut(|current| {
+        let _ = current.generate_rooms_and_connections(rooms, room_size);
+        current.do_passages();
+    });
 
     no_food += 1;
     populate_level();

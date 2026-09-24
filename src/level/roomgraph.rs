@@ -1,43 +1,24 @@
-//! Room layout and connection planning for one dungeon level.
+//! Room-connection adjacency graph.
 //!
 //! The legacy C engine kept a per-level `rdes` array describing which of the
 //! nine grid slots are geometrically adjacent and which of those connections
 //! have actually been dug. This module keeps that plan entirely in Rust:
-//!
-//! * [`generate_rooms`] places the room rectangles and assigns each slot its
-//!   per-level flags (gone/dark/maze). Placement is driven by the fixed
-//!   three-by-three grid described by [`grid_top_left`].
-//! * [`RoomGraph`] records the passage connections produced by
-//!   [`plan_connections`], which grows a spanning tree over the live rooms and
-//!   then adds a few extra links for loopiness.
+//! [`RoomGraph`] records which room pairs get passages, computed by
+//! [`plan_connections`], which grows a spanning tree over the live rooms and
+//! then adds a few extra links for loopiness.
 
 use crate::rnd::rnd;
-use glam::IVec2;
 
 use super::structure::Room;
 use crate::config::GameConfig;
 
-// ---------------------------------------------------------------------------
-// Layout constants
-// ---------------------------------------------------------------------------
-
 /// Rows in the fixed three-by-three room grid.
 const GRID_ROWS: usize = 3;
 /// Columns in the fixed three-by-three room grid.
-const GRID_COLS: usize = 3;
+pub(crate) const GRID_COLS: usize = 3;
 
-/// Upper bound for the roll that removes rooms at the start of a new level.
-const GONE_ROOM_ROLLS: i32 = 4;
-/// Roll threshold (`rnd(10) < depth - 1`) that marks a room dark.
-const DARK_ROOM_ROLL: i32 = 10;
-/// One-in-N chance that a dark room becomes a maze.
-const MAZE_ROOM_CHANCE: i32 = 15;
 /// Upper bound for the number of extra passage links beyond the spanning tree.
 const EXTRA_CONNECTION_ROLLS: i32 = 5;
-
-// ---------------------------------------------------------------------------
-// Connection plan
-// ---------------------------------------------------------------------------
 
 /// Planned room-to-room passage connections for one generation pass.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -67,7 +48,7 @@ impl RoomGraph {
     }
 }
 
-/// Plan which room pairs get connected, storing the result on this graph.
+/// Plan which room pairs get connected.
 fn plan_connections(rooms: &[Room]) -> Vec<(usize, usize)> {
     let live_rooms = non_gone_count(rooms);
     if live_rooms <= 1 {
@@ -167,113 +148,6 @@ fn pick_unconnected(
     pick
 }
 
-// ---------------------------------------------------------------------------
-// Room geometry
-// ---------------------------------------------------------------------------
-
-/// Generate the room geometry, sizes, and flags for one level in place.
-pub(crate) fn generate_rooms(rooms: &mut [Room], bsze: IVec2, depth: i32) {
-    reset_rooms(rooms);
-    mark_random_rooms_gone(rooms);
-    for slot in 0..GameConfig::MAX_ROOMS {
-        layout_room(&mut rooms[slot], slot, bsze, depth);
-    }
-}
-
-/// Reset per-room generation state before laying out a level.
-fn reset_rooms(rooms: &mut [Room]) {
-    for room in rooms {
-        room.goldval = 0;
-        room.entry_point_count = 0;
-        room.clear_flags();
-    }
-}
-
-/// Randomly mark a few room slots as removed for this level.
-fn mark_random_rooms_gone(rooms: &mut [Room]) {
-    for _ in 0..rnd(GONE_ROOM_ROLLS) {
-        rooms[pick_non_gone(rooms)].mark_gone();
-    }
-}
-
-/// Compute the geometry, size, and flags for one room slot.
-fn layout_room(room: &mut Room, slot: usize, bsze: IVec2, depth: i32) {
-    let top = grid_top_left(slot, bsze);
-
-    if room.is_gone() {
-        place_off_map_room(room, top, bsze);
-        return;
-    }
-
-    if rnd(DARK_ROOM_ROLL) < depth - 1 {
-        room.mark_dark();
-        if rnd(MAZE_ROOM_CHANCE) == 0 {
-            room.set_maze();
-        }
-    }
-
-    if room.is_maze() {
-        place_maze_room(room, top, bsze);
-    } else {
-        place_regular_room(room, top, bsze);
-    }
-}
-
-/// Randomly move a removed room's top-left corner off the visible map.
-fn place_off_map_room(room: &mut Room, top: IVec2, bsze: IVec2) {
-    // Keep rerolling until the off-map placeholder position is valid.
-    loop {
-        room.position.x = top.x + rnd(bsze.x - 2) + 1;
-        room.position.y = top.y + rnd(bsze.y - 2) + 1;
-        room.size = IVec2::new(-GameConfig::SCREEN_COLS, -GameConfig::SCREEN_LINES);
-        if room.position.y > 0 && room.position.y < GameConfig::SCREEN_LINES - 1 {
-            break;
-        }
-    }
-}
-
-/// Size a maze room to fill its grid cell.
-fn place_maze_room(room: &mut Room, top: IVec2, bsze: IVec2) {
-    room.size.x = bsze.x - 1;
-    room.size.y = bsze.y - 1;
-    room.position.x = top.x;
-    if room.position.x == 1 {
-        room.position.x = 0;
-    }
-    room.position.y = top.y;
-    if room.position.y == 0 {
-        room.position.y += 1;
-        room.size.y -= 1;
-    }
-}
-
-/// Try to fit a plain room in its grid cell, marking it `gone` if it never
-/// lands on a valid (non-top-row) position.
-fn place_regular_room(room: &mut Room, top: IVec2, bsze: IVec2) {
-    for _ in 0..GameConfig::MAX_ROOM_PLACEMENT_ATTEMPTS {
-        room.size.x = rnd(bsze.x - 4) + 4;
-        room.size.y = rnd(bsze.y - 4) + 4;
-        room.position.x = top.x + rnd(bsze.x - room.size.x);
-        room.position.y = top.y + rnd(bsze.y - room.size.y);
-        if room.position.y != 0 {
-            return;
-        }
-    }
-    room.mark_gone();
-}
-
-// ---------------------------------------------------------------------------
-// Grid helpers
-// ---------------------------------------------------------------------------
-
-/// Top-left corner of the grid cell that room `slot` belongs to.
-fn grid_top_left(slot: usize, bsze: IVec2) -> IVec2 {
-    IVec2::new(
-        (slot as i32 % GRID_COLS as i32) * bsze.x + 1,
-        (slot as i32 / GRID_COLS as i32) * bsze.y,
-    )
-}
-
 /// Indexes of the rooms orthogonally adjacent to `room`, in ascending order.
 fn neighbors(room: usize) -> Vec<usize> {
     let row = room / GRID_COLS;
@@ -304,7 +178,8 @@ fn non_gone_count(rooms: &[Room]) -> usize {
     rooms.iter().filter(|room| !room.is_gone()).count()
 }
 
-fn pick_non_gone(rooms: &[Room]) -> usize {
+/// Pick a uniformly random room slot that has not been removed for the level.
+pub(crate) fn pick_non_gone(rooms: &[Room]) -> usize {
     loop {
         let idx = random_room_index();
         if !rooms[idx].is_gone() {
@@ -319,16 +194,7 @@ mod tests {
 
     /// Nine live (non-gone) room slots with a small positive size.
     fn live_rooms() -> [Room; GameConfig::MAX_ROOMS] {
-        std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::new(4, 4)))
-    }
-
-    #[test]
-    fn grid_top_left_maps_slots_to_cells() {
-        let bsze = IVec2::new(26, 8);
-        assert_eq!(grid_top_left(0, bsze), IVec2::new(1, 0));
-        assert_eq!(grid_top_left(1, bsze), IVec2::new(27, 0));
-        assert_eq!(grid_top_left(3, bsze), IVec2::new(1, 8));
-        assert_eq!(grid_top_left(8, bsze), IVec2::new(53, 16));
+        std::array::from_fn(|_| Room::new(glam::IVec2::ZERO, glam::IVec2::new(4, 4)))
     }
 
     #[test]

@@ -14,11 +14,18 @@ use super::passages::{
     number_passages, plan_corridor, Passage, PassageLinks,
 };
 use super::monster_map::MonsterMap;
-use super::roomgraph::{generate_rooms, RoomGraph};
+use super::roomgraph::{pick_non_gone, GRID_COLS, RoomGraph};
 use super::structure::{Room, Structure};
 use super::tile::{Tile, Trap};
 use crate::config::GameConfig;
 use crate::item::item_list::ItemList;
+
+/// Upper bound for the roll that removes rooms at the start of a new level.
+const GONE_ROOM_ROLLS: i32 = 4;
+/// Roll threshold (`rnd(10) < depth - 1`) that marks a room dark.
+const DARK_ROOM_ROLL: i32 = 10;
+/// One-in-N chance that a dark room becomes a maze.
+const MAZE_ROOM_CHANCE: i32 = 15;
 
 /// Per-cell flat-flag data for the level.
 ///
@@ -103,6 +110,24 @@ impl Level {
     /// Reset every flag grid to a fresh-level state.
     pub fn reset_flags(&mut self) {
         self.flags = LevelFlags::cleared();
+    }
+
+    /// Reset this level's state for a fresh level generation pass.
+    ///
+    /// Clears the map, room records, connection plan, and passages, returning
+    /// the level depth so callers can carry it out of the mutable borrow.
+    pub fn reset_for_new_level(&mut self) -> i32 {
+        self.map = Structure::new(
+            GameConfig::SCREEN_LINES as usize,
+            GameConfig::SCREEN_COLS as usize,
+            Tile::Empty,
+        );
+        self.rooms.clear();
+        self.room_graph.reset();
+        self.passages.clear();
+        self.passage_links.clear();
+        self.reset_flags();
+        self.depth
     }
 
     /// Reveal the trap at `(y, x)` by making the cell real and seen.
@@ -366,6 +391,105 @@ impl Level {
     }
 }
 
+/// Generate the room geometry, sizes, and flags for one level in place.
+fn generate_rooms(rooms: &mut [Room], bsze: IVec2, depth: i32) {
+    reset_rooms(rooms);
+    mark_random_rooms_gone(rooms);
+    for slot in 0..GameConfig::MAX_ROOMS {
+        layout_room(&mut rooms[slot], slot, bsze, depth);
+    }
+}
+
+/// Reset per-room generation state before laying out a level.
+fn reset_rooms(rooms: &mut [Room]) {
+    for room in rooms {
+        room.goldval = 0;
+        room.entry_point_count = 0;
+        room.clear_flags();
+    }
+}
+
+/// Randomly mark a few room slots as removed for this level.
+fn mark_random_rooms_gone(rooms: &mut [Room]) {
+    for _ in 0..rnd(GONE_ROOM_ROLLS) {
+        rooms[pick_non_gone(rooms)].mark_gone();
+    }
+}
+
+/// Compute the geometry, size, and flags for one room slot.
+fn layout_room(room: &mut Room, slot: usize, bsze: IVec2, depth: i32) {
+    let top = grid_top_left(slot, bsze);
+
+    if room.is_gone() {
+        place_off_map_room(room, top, bsze);
+        return;
+    }
+
+    if rnd(DARK_ROOM_ROLL) < depth - 1 {
+        room.mark_dark();
+        if rnd(MAZE_ROOM_CHANCE) == 0 {
+            room.set_maze();
+        }
+    }
+
+    if room.is_maze() {
+        place_maze_room(room, top, bsze);
+    } else {
+        place_regular_room(room, top, bsze);
+    }
+}
+
+/// Randomly move a removed room's top-left corner off the visible map.
+fn place_off_map_room(room: &mut Room, top: IVec2, bsze: IVec2) {
+    // Keep rerolling until the off-map placeholder position is valid.
+    loop {
+        room.position.x = top.x + rnd(bsze.x - 2) + 1;
+        room.position.y = top.y + rnd(bsze.y - 2) + 1;
+        room.size = IVec2::new(-GameConfig::SCREEN_COLS, -GameConfig::SCREEN_LINES);
+        if room.position.y > 0 && room.position.y < GameConfig::SCREEN_LINES - 1 {
+            break;
+        }
+    }
+}
+
+/// Size a maze room to fill its grid cell.
+fn place_maze_room(room: &mut Room, top: IVec2, bsze: IVec2) {
+    room.size.x = bsze.x - 1;
+    room.size.y = bsze.y - 1;
+    room.position.x = top.x;
+    if room.position.x == 1 {
+        room.position.x = 0;
+    }
+    room.position.y = top.y;
+    if room.position.y == 0 {
+        room.position.y += 1;
+        room.size.y -= 1;
+    }
+}
+
+/// Try to fit a plain room in its grid cell, marking it `gone` if it never
+/// lands on a valid (non-top-row) position.
+fn place_regular_room(room: &mut Room, top: IVec2, bsze: IVec2) {
+    for _ in 0..GameConfig::MAX_ROOM_PLACEMENT_ATTEMPTS {
+        room.size.x = rnd(bsze.x - 4) + 4;
+        room.size.y = rnd(bsze.y - 4) + 4;
+        room.position.x = top.x + rnd(bsze.x - room.size.x);
+        room.position.y = top.y + rnd(bsze.y - room.size.y);
+        if room.position.y != 0 {
+            return;
+        }
+    }
+    room.mark_gone();
+}
+
+/// Top-left corner of the grid cell that room `slot` belongs to.
+fn grid_top_left(slot: usize, bsze: IVec2) -> IVec2 {
+    IVec2::new(
+        (slot as i32 % GRID_COLS as i32) * bsze.x + 1,
+        (slot as i32 / GRID_COLS as i32) * bsze.y,
+    )
+}
+
 /// Fill each active room's tile structure from its geometry/flags.
 fn build_generated_rooms(
     mut rooms: [Room; GameConfig::MAX_ROOMS],
@@ -432,6 +556,17 @@ mod tests {
         assert_eq!(room.entry_point_count, 1);
         // Open doors are stamped into the tile map.
         assert_eq!(level.map.get(11, 15), Some(Tile::Door));
+    }
+
+    /// `grid_top_left` maps room slot indexes to the top-left corner of their
+    /// grid cell.
+    #[test]
+    fn grid_top_left_maps_slots_to_cells() {
+        let bsze = IVec2::new(26, 8);
+        assert_eq!(grid_top_left(0, bsze), IVec2::new(1, 0));
+        assert_eq!(grid_top_left(1, bsze), IVec2::new(27, 0));
+        assert_eq!(grid_top_left(3, bsze), IVec2::new(1, 8));
+        assert_eq!(grid_top_left(8, bsze), IVec2::new(53, 16));
     }
 
     /// Generate a level with a fixed depth and verify that every active
