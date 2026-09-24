@@ -10,7 +10,7 @@ use crate::daemons::{come_down, land, sight, unconfuse, unsee, visuals};
 use crate::draw::look;
 
 use crate::entity::chase::see_monst;
-use crate::entity::monster_list::MLIST;
+use crate::game::MLIST;
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::game::EQUIPMENT;
 use crate::globals::pot_info;

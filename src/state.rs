@@ -36,7 +36,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
 use crate::entity::chase::runners;
-use crate::entity::monster_list::MLIST;
+use crate::game::MLIST;
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject};
 use crate::game::EQUIPMENT;
 use crate::globals::{

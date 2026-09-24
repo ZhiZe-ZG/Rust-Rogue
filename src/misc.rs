@@ -17,7 +17,7 @@ use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
-use crate::entity::monster_list::MLIST;
+use crate::game::MLIST;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::startup::roll;
 

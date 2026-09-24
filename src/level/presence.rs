@@ -13,7 +13,7 @@ use crate::config::GameConfig;
 use crate::daemons::visuals;
 use crate::draw::enter_room;
 use crate::entity::chase::roomin;
-use crate::entity::monster_list::MLIST;
+use crate::game::MLIST;
 use crate::entity::monsters::{give_pack, new_monster, randmonster};
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::game;

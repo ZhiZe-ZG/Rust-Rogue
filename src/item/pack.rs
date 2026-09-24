@@ -5,7 +5,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 
-use crate::entity::monster_list::MLIST;
+use crate::game::MLIST;
 use crate::entity::player::{Thing, MonsterFlags, ObjectFlags};
 use crate::item::scrolls::ScrollType;
 use crate::item::thing_list::{detach, discard, new_item};

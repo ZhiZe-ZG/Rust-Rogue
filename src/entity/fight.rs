@@ -11,7 +11,7 @@
 use crate::rnd::rnd;
 
 use crate::entity::chase::{runto, see_monst};
-use crate::entity::monster_list::MLIST;
+use crate::game::MLIST;
 use crate::entity::monsters::save;
 use crate::game::EQUIPMENT;
 use crate::init::pick_color;

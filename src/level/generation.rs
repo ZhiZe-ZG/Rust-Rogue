@@ -8,7 +8,7 @@ use glam::IVec2;
 
 use crate::config::GameConfig;
 use crate::draw::winat;
-use crate::entity::monster_list::MLIST;
+use crate::game::MLIST;
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::{Thing, ThingMonster, MonsterFlags};
 use crate::game::{clear_level, with_current_level_mut};

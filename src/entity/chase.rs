@@ -11,7 +11,7 @@ use std::os::raw::{c_char, c_int, c_uchar};
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
 use crate::globals::monsters;
-use crate::entity::monster_list::MLIST;
+use crate::game::MLIST;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::entity::player::{set_thing_dest, thing_dest};
 use crate::entity::rndmove::rndmove;

@@ -19,7 +19,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon};
 use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
-use crate::entity::monster_list::MLIST;
+use crate::game::MLIST;
 use crate::entity::monsters::wanderer;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::game::EQUIPMENT;

@@ -6,7 +6,7 @@ use crate::daemon::{fuse, lengthen};
 use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
-use crate::entity::monster_list::MLIST;
+use crate::game::MLIST;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
