@@ -1132,7 +1132,7 @@ pub unsafe extern "C" fn current(cur: *mut CThing, how: *const c_char, where_: *
         inv_describe = false as c_uchar;
         addmsg_str(&format!(
             "{}) {}",
-            (*thing_o(cur)).o_packch as u8 as char,
+            (*thing_o(cur)).o_packch as char,
             CStr::from_ptr(inv_name(cur, true as c_uchar)).to_string_lossy()
         ));
         inv_describe = true as c_uchar;

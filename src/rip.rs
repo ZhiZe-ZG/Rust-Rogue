@@ -466,7 +466,7 @@ pub unsafe extern "C" fn total_winner() {
         if worth < 0 {
             worth = 0;
         }
-        let packch = (*thing_o(obj)).o_packch as u8 as c_char;
+        let packch = (*thing_o(obj)).o_packch as c_char;
         let item_name = CStr::from_ptr(inv_name(obj, 0)).to_string_lossy();
         let line = format!("{} ) {:5}  {}\n", packch, worth, item_name);
         output::write_text(&line);

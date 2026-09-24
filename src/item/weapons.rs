@@ -141,10 +141,10 @@ unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
 }
 
 #[inline]
-unsafe fn copy_c_bytes(dst: &mut [c_char], src: &[u8]) {
+unsafe fn copy_c_bytes(dst: &mut [u8], src: &[u8]) {
     let mut i = 0usize;
     while i + 1 < dst.len() && i < src.len() {
-        dst[i] = src[i] as c_char;
+        dst[i] = src[i];
         if src[i] == 0 {
             return;
         }
@@ -337,7 +337,7 @@ pub unsafe extern "C" fn wield() {
     msg_str(&format!(
         "wielding {} ({})",
         CStr::from_ptr(sp).to_string_lossy(),
-        (*thing_o(obj)).o_packch as u8 as char,
+        (*thing_o(obj)).o_packch as char,
     ));
 }
 

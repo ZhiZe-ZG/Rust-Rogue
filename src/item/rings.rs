@@ -159,7 +159,7 @@ pub unsafe extern "C" fn ring_on() {
     msg_str(&format!(
         "{} ({})",
         CStr::from_ptr(inv_name(obj, 1)).to_string_lossy(),
-        (*thing_o(obj)).o_packch as u8 as char,
+        (*thing_o(obj)).o_packch as char,
     ));
 }
 
@@ -200,7 +200,7 @@ pub unsafe extern "C" fn ring_off() {
         msg_str(&format!(
             "was wearing {}({})",
             CStr::from_ptr(inv_name(obj, 1)).to_string_lossy(),
-            (*thing_o(obj)).o_packch as u8 as char,
+            (*thing_o(obj)).o_packch as char,
         ));
     }
 }

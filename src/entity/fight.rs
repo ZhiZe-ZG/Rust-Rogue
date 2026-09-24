@@ -584,7 +584,7 @@ pub unsafe extern "C" fn roll_em(
                 && !EQUIPMENT.weapon().is_null()
                 && (*thing_o(EQUIPMENT.weapon())).o_which == (*thing_o(weap)).o_launch
             {
-                let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr();
+                let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr() as *mut c_char;
                 return roll_em_inner(
                     thatt,
                     thdef,
@@ -593,11 +593,11 @@ pub unsafe extern "C" fn roll_em(
                     dp + (*thing_o(EQUIPMENT.weapon())).o_dplus,
                 );
             } else if (*thing_o(weap)).o_launch < 0 {
-                let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr();
+                let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr() as *mut c_char;
                 return roll_em_inner(thatt, thdef, hurldmg_ptr, hp, dp);
             }
         }
-        cp = (*thing_o(weap)).o_damage.as_mut_ptr();
+        cp = (*thing_o(weap)).o_damage.as_mut_ptr() as *mut c_char;
         hplus = hp;
         dplus = dp;
     }

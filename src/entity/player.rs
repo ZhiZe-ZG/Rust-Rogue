@@ -74,25 +74,30 @@ pub struct CThingMonster {
     pub t_reserved: i32,
 }
 
+/// Object (item) view of a `THING`. `#[repr(C)]` is retained because this is a
+/// member of the [`CThing`] union whose `l_next`/`l_prev` header must alias
+/// [`CThingMonster`]; the scalar fields use native Rust types. The `o_text` and
+/// `o_label` string fields must stay raw pointers (and `o_damage`/`o_hurldmg`
+/// byte buffers) because union fields have to be `Copy`.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CThingObject {
     pub l_next: *mut CThing,
     pub l_prev: *mut CThing,
-    pub o_type: c_int,
+    pub o_type: i32,
     pub o_pos: IVec2,
     pub o_text: *mut c_char,
-    pub o_launch: c_int,
-    pub o_packch: c_char,
-    pub o_damage: [c_char; 8],
-    pub o_hurldmg: [c_char; 8],
-    pub o_count: c_int,
-    pub o_which: c_int,
-    pub o_hplus: c_int,
-    pub o_dplus: c_int,
-    pub o_arm: c_int,
-    pub o_flags: c_int,
-    pub o_group: c_int,
+    pub o_launch: i32,
+    pub o_packch: u8,
+    pub o_damage: [u8; 8],
+    pub o_hurldmg: [u8; 8],
+    pub o_count: i32,
+    pub o_which: i32,
+    pub o_hplus: i32,
+    pub o_dplus: i32,
+    pub o_arm: i32,
+    pub o_flags: i32,
+    pub o_group: i32,
     pub o_label: *mut c_char,
 }
 

@@ -148,7 +148,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
 
     if pack_head().is_null() {
         set_pack_head(item);
-        (*thing_o(item)).o_packch = pack_char();
+        (*thing_o(item)).o_packch = pack_char() as u8;
         inpack += 1;
     } else {
         lp = std::ptr::null_mut();
@@ -222,7 +222,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
             if pack_room(from_floor, item) == 0 {
                 return;
             }
-            (*thing_o(item)).o_packch = pack_char();
+            (*thing_o(item)).o_packch = pack_char() as u8;
             (*thing_t(item)).l_next = next_item(lp);
             (*thing_t(item)).l_prev = lp;
             if !next_item(lp).is_null() {
@@ -253,7 +253,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         msg_str(&format!(
             "{} ({})",
             CStr::from_ptr(inv_name(item, if terse == 0 { 0 } else { 1 })).to_string_lossy(),
-            (*thing_o(item)).o_packch as u8 as char,
+            (*thing_o(item)).o_packch as char,
         ));
     }
 }
@@ -359,7 +359,7 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
             std::ptr::copy_nonoverlapping(c"%s".as_ptr(), inv_temp.as_mut_ptr(), 3);
         } else {
             let format = [
-                (*thing_o(cur)).o_packch,
+                (*thing_o(cur)).o_packch as c_char,
                 b')' as c_char,
                 b' ' as c_char,
                 b'%' as c_char,
@@ -469,7 +469,7 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
         }
         let mut obj = pack_head();
         while !obj.is_null() {
-            if (*thing_o(obj)).o_packch == ch as c_char {
+            if (*thing_o(obj)).o_packch == ch as u8 {
                 return obj;
             }
             obj = next_item(obj);
@@ -553,7 +553,7 @@ pub unsafe extern "C" fn picky_inven() {
         }
         let mut obj = pack_head();
         while !obj.is_null() {
-            if mch == (*thing_o(obj)).o_packch {
+            if mch as u8 == (*thing_o(obj)).o_packch {
                 msg_str(&format!(
                     "{}) {}",
                     mch as u8 as char,

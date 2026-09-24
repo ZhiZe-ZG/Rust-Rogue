@@ -1682,7 +1682,7 @@ unsafe fn rs_write_object(savef: *mut CFile, o: *mut CThing) -> c_int {
     let _ = rs_write_int(savef, (*op).o_type);
     let _ = rs_write_coord(savef, (*op).o_pos);
     let _ = rs_write_int(savef, (*op).o_launch);
-    let _ = rs_write_char(savef, (*op).o_packch);
+    let _ = rs_write_char(savef, (*op).o_packch as c_char);
     let _ = rs_write_chars(savef, (&raw mut (*op).o_damage) as *mut c_char, 8);
     let _ = rs_write_chars(savef, (&raw mut (*op).o_hurldmg) as *mut c_char, 8);
     let _ = rs_write_int(savef, (*op).o_count);
@@ -1708,7 +1708,9 @@ unsafe fn rs_read_object(inf: *mut CFile, o: *mut CThing) -> c_int {
     let _ = rs_read_int(inf, &mut (*op).o_type);
     let _ = rs_read_coord(inf, &mut (*op).o_pos);
     let _ = rs_read_int(inf, &mut (*op).o_launch);
-    let _ = rs_read_char(inf, &mut (*op).o_packch);
+    let mut packch_ch: c_char = 0;
+    let _ = rs_read_char(inf, &mut packch_ch);
+    (*op).o_packch = packch_ch as u8;
     let _ = rs_read_chars(inf, (&raw mut (*op).o_damage) as *mut c_char, 8);
     let _ = rs_read_chars(inf, (&raw mut (*op).o_hurldmg) as *mut c_char, 8);
     let _ = rs_read_int(inf, &mut (*op).o_count);

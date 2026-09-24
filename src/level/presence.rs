@@ -257,9 +257,9 @@ unsafe fn put_things() {
         (*og).o_hplus = 0;
         (*og).o_dplus = 0;
         (*og).o_damage = [
-            b'0' as i8,
-            b'x' as i8,
-            b'0' as i8,
+            b'0',
+            b'x',
+            b'0',
             0,
             0,
             0,
@@ -267,9 +267,9 @@ unsafe fn put_things() {
             0,
         ];
         (*og).o_hurldmg = [
-            b'0' as i8,
-            b'x' as i8,
-            b'0' as i8,
+            b'0',
+            b'x',
+            b'0',
             0,
             0,
             0,

@@ -116,11 +116,11 @@ unsafe fn ce_coord(a: IVec2, b: IVec2) -> c_uchar {
 }
 
 #[inline]
-unsafe fn set_c_string(dst: &mut [c_char], src: &str) {
+unsafe fn set_c_string(dst: &mut [u8], src: &str) {
     let bytes = src.as_bytes();
     let limit = bytes.len().min(dst.len().saturating_sub(1));
     for (idx, byte) in bytes[..limit].iter().enumerate() {
-        dst[idx] = *byte as c_char;
+        dst[idx] = *byte;
     }
     if dst.len() > limit {
         dst[limit] = 0;
@@ -310,7 +310,7 @@ pub unsafe extern "C" fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, name: *mu
 /// charge_str:
 /// Return an appropriate string for a wand charge display.
 unsafe fn charge_str(obj: *mut CThing) -> *mut c_char {
-    static mut BUF: [c_char; 20] = [0; 20];
+    static mut BUF: [u8; 20] = [0; 20];
     if (*thing_o(obj)).o_flags & ISKNOW == 0 {
         BUF[0] = 0;
     } else if terse != 0 {
@@ -320,7 +320,7 @@ unsafe fn charge_str(obj: *mut CThing) -> *mut c_char {
         let text = format!(" [{} charges]", (*thing_o(obj)).o_arm);
         set_c_string(&mut BUF, &text);
     }
-    BUF.as_mut_ptr()
+    BUF.as_mut_ptr() as *mut c_char
 }
 
 

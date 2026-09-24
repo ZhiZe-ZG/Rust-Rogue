@@ -92,7 +92,7 @@ pub unsafe extern "C" fn take_off() {
     }
     msg_str(&format!(
         " wearing {}) {}",
-        (*thing_o(obj)).o_packch as u8 as char,
+        (*thing_o(obj)).o_packch as char,
         CStr::from_ptr(inv_name(obj, true as c_uchar)).to_string_lossy()
     ));
 }
