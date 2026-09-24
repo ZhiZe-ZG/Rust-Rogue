@@ -349,7 +349,7 @@ impl Level {
         bsze: IVec2,
     ) -> [Room; GameConfig::MAX_ROOMS] {
         self.room_graph = RoomGraph::for_level(rooms, bsze, self.depth);
-        self.room_graph.generate_connections_for_rooms();
+        self.room_graph.generate_connections();
 
         let generated_rooms = build_generated_rooms(self.room_graph.clone().into_rooms());
         self.rooms = generated_rooms.to_vec();

@@ -3,8 +3,8 @@
 //! The legacy C engine kept a per-level `rdes` array describing which of the
 //! nine rooms are geometrically adjacent and which of those connections have
 //! actually been dug. This module provides a pure-Rust [`RoomGraph`] that owns
-//! room slots, fixed adjacency, and per-level connection state so level
-//! generation can run without C globals.
+//! the room slots and the per-level connection plan so level generation can run
+//! without C globals.
 
 use crate::rnd::rnd;
 use glam::IVec2;
@@ -12,33 +12,27 @@ use glam::IVec2;
 use super::structure::Room;
 use crate::config::GameConfig;
 
-type AdjacentArray = [[bool; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
+/// Rows in the fixed three-by-three room grid.
+const GRID_ROWS: usize = 3;
+/// Columns in the fixed three-by-three room grid.
+const GRID_COLS: usize = 3;
 
-/// Room grid plus adjacency and connection state for one generation pass.
+/// Owned room layout plus the planned room-to-room passage connections.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomGraph {
     rooms: [Room; GameConfig::MAX_ROOMS],
-    adjacent: AdjacentArray,
-    isconn: AdjacentArray,
-    ingraph: [bool; GameConfig::MAX_ROOMS],
     connections: Vec<(usize, usize)>,
-}
-
-impl Default for RoomGraph {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl RoomGraph {
     /// Build an empty graph with default room slots.
     pub fn new() -> Self {
-        Self::with_rooms_and_adjacency(empty_rooms(), build_base_adjacency())
+        Self::with_rooms(empty_rooms())
     }
 
     /// Build and populate room layout/flags for one level generation pass.
     pub(crate) fn for_level(rooms: [Room; GameConfig::MAX_ROOMS], bsze: IVec2, depth: i32) -> Self {
-        let mut graph = Self::with_rooms_and_adjacency(rooms, build_base_adjacency());
+        let mut graph = Self::with_rooms(rooms);
         graph.determine_room_layouts(bsze, depth);
         graph
     }
@@ -51,27 +45,20 @@ impl RoomGraph {
         &self.connections
     }
 
-    pub(crate) fn generate_connections_for_rooms(&mut self) {
-        self.connections = self.generate_for_rooms();
+    /// Plan which room pairs get connected, storing the result on this graph.
+    pub(crate) fn generate_connections(&mut self) {
+        self.connections = generate_for_rooms(&self.rooms);
     }
 
-    /// Reset per-level connection state, keeping the fixed adjacency.
+    /// Reset the per-level connection plan.
     pub fn reset(&mut self) {
-        self.isconn = [[false; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
-        self.ingraph = [false; GameConfig::MAX_ROOMS];
         self.connections.clear();
     }
 
-    /// Create a graph around pre-existing room slots and adjacency.
-    fn with_rooms_and_adjacency(
-        rooms: [Room; GameConfig::MAX_ROOMS],
-        adjacent: AdjacentArray,
-    ) -> Self {
+    /// Wrap pre-existing room slots into a graph with no connections yet.
+    fn with_rooms(rooms: [Room; GameConfig::MAX_ROOMS]) -> Self {
         Self {
             rooms,
-            adjacent,
-            isconn: [[false; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS],
-            ingraph: [false; GameConfig::MAX_ROOMS],
             connections: Vec::new(),
         }
     }
@@ -113,118 +100,129 @@ impl RoomGraph {
             }
         }
     }
+}
 
-    /// Mark `room` as part of the connected passage graph.
-    fn mark_in_graph(&mut self, room: usize) {
-        self.ingraph[room] = true;
+/// Grow a spanning tree over the live rooms, then add a few extra passages for
+/// loopiness. "Gone" rooms act as pass-through cells in the 3x3 grid, but only
+/// non-gone rooms must become reachable.
+fn generate_for_rooms(room_states: &[Room]) -> Vec<(usize, usize)> {
+    let non_gone_total = non_gone_count(room_states);
+    if non_gone_total <= 1 {
+        return Vec::new();
     }
 
-    /// Record that a passage between `a` and `b` has been dug.
-    fn connect(&mut self, a: usize, b: usize) {
-        self.isconn[a][b] = true;
-        self.isconn[b][a] = true;
-    }
+    let mut connections = Vec::new();
+    let mut in_graph = [false; GameConfig::MAX_ROOMS];
 
-    /// Pick a uniformly random adjacent room that is not yet in the graph.
-    fn next_unreached(&self, from: usize) -> Option<usize> {
-        pick_unconnected_adjacent(&self.adjacent[from], &self.ingraph)
-    }
+    // Spanning stage: grow passages until all non-gone rooms are reachable.
+    let mut reached_non_gone = 1;
+    let mut r1_idx = pick_non_gone(room_states);
+    in_graph[r1_idx] = true;
 
-    /// Pick a uniformly random adjacent room with no dug connection yet.
-    fn next_unconnected(&self, from: usize) -> Option<usize> {
-        pick_unconnected_adjacent(&self.adjacent[from], &self.isconn[from])
-    }
-
-    /// Pick a uniformly random room already part of the graph.
-    fn pick_in_graph(&self) -> usize {
-        loop {
-            let idx = random_room_index();
-            if self.ingraph[idx] {
-                return idx;
+    while reached_non_gone < non_gone_total {
+        if let Some(idx) = next_unreached(r1_idx, &in_graph) {
+            in_graph[idx] = true;
+            if !room_states[idx].is_gone() {
+                reached_non_gone += 1;
             }
+            connections.push((r1_idx, idx));
+            r1_idx = idx;
+        } else {
+            r1_idx = pick_in_graph(&in_graph);
         }
     }
 
-    /// Decide which room pairs get connected, using this graph's room layout.
-    ///
-    /// This treats "gone" rooms as pass-through cells in the 3x3 grid so
-    /// remaining rooms can still be connected through them, but only requires
-    /// non-gone rooms to be fully reachable in the spanning stage.
-    pub(crate) fn generate_for_rooms(&self) -> Vec<(usize, usize)> {
-        let mut graph = self.clone();
-        let mut connections = Vec::new();
-        let room_states = &self.rooms;
-
-        let non_gone_total = non_gone_count(room_states);
-        if non_gone_total <= 1 {
-            return connections;
+    // Add a few extra connecting passages for loopiness.
+    let mut extra = rnd(5);
+    while extra > 0 {
+        let r1_idx = pick_non_gone(room_states);
+        if let Some(idx) = next_unconnected(r1_idx, &connections) {
+            connections.push((r1_idx, idx));
         }
-
-        // Grow passages until all non-gone rooms are reachable.
-        let mut reached_non_gone = 1;
-        let mut r1_idx = pick_non_gone(room_states);
-        graph.mark_in_graph(r1_idx);
-
-        while reached_non_gone < non_gone_total {
-            if let Some(idx) = graph.next_unreached(r1_idx) {
-                graph.mark_in_graph(idx);
-                if !room_states[idx].is_gone() {
-                    reached_non_gone += 1;
-                }
-                connections.push((r1_idx, idx));
-                graph.connect(r1_idx, idx);
-                r1_idx = idx;
-            } else {
-                r1_idx = graph.pick_in_graph();
-            }
-        }
-
-        // Add a few extra connecting passages for loopiness.
-        let mut extra = rnd(5);
-        while extra > 0 {
-            let r1_idx = pick_non_gone(room_states);
-            if let Some(idx) = graph.next_unconnected(r1_idx) {
-                connections.push((r1_idx, idx));
-                graph.connect(r1_idx, idx);
-            }
-            extra -= 1;
-        }
-
-        connections
+        extra -= 1;
     }
+
+    connections
+}
+
+/// Pick a uniformly random adjacent room reachable from `from` that is not yet
+/// part of the connected graph.
+fn next_unreached(from: usize, in_graph: &[bool; GameConfig::MAX_ROOMS]) -> Option<usize> {
+    pick_unconnected(neighbors(from), |room| in_graph[room])
+}
+
+/// Pick a uniformly random adjacent room reachable from `from` that has no dug
+/// connection to `from` yet.
+fn next_unconnected(from: usize, connections: &[(usize, usize)]) -> Option<usize> {
+    pick_unconnected(neighbors(from), |room| is_connected(connections, from, room))
+}
+
+/// Pick a uniformly random room already part of the connected graph.
+fn pick_in_graph(in_graph: &[bool; GameConfig::MAX_ROOMS]) -> usize {
+    loop {
+        let idx = random_room_index();
+        if in_graph[idx] {
+            return idx;
+        }
+    }
+}
+
+fn is_connected(connections: &[(usize, usize)], a: usize, b: usize) -> bool {
+    connections.contains(&(a, b)) || connections.contains(&(b, a))
+}
+
+/// Pick a uniformly random candidate that is not blocked, or `None` when every
+/// candidate is blocked.
+fn pick_unconnected(
+    candidates: impl IntoIterator<Item = usize>,
+    is_blocked: impl Fn(usize) -> bool,
+) -> Option<usize> {
+    let mut count = 0;
+    let mut pick = None;
+    for room in candidates {
+        if is_blocked(room) {
+            continue;
+        }
+        count += 1;
+        if rnd(count) == 0 {
+            pick = Some(room);
+        }
+    }
+    pick
 }
 
 fn empty_rooms() -> [Room; GameConfig::MAX_ROOMS] {
     std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
 }
 
-/// Top-left corner of the 3x3 grid cell that room `i` belongs to.
+/// Top-left corner of the grid cell that room `i` belongs to.
 fn grid_top_left(i: usize, bsze: IVec2) -> IVec2 {
-    IVec2::new((i as i32 % 3) * bsze.x + 1, (i as i32 / 3) * bsze.y)
+    IVec2::new(
+        (i as i32 % GRID_COLS as i32) * bsze.x + 1,
+        (i as i32 / GRID_COLS as i32) * bsze.y,
+    )
 }
 
-fn build_base_adjacency() -> AdjacentArray {
-    let mut adjacent = [[false; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
+/// Indexes of the rooms orthogonally adjacent to `room`, in ascending order.
+fn neighbors(room: usize) -> Vec<usize> {
+    let row = room / GRID_COLS;
+    let col = room % GRID_COLS;
+    let mut result = Vec::with_capacity(4);
 
-    for idx in 0..GameConfig::MAX_ROOMS {
-        let row = idx / 3;
-        let col = idx % 3;
-
-        if col > 0 {
-            adjacent[idx][idx - 1] = true;
-        }
-        if col < 2 {
-            adjacent[idx][idx + 1] = true;
-        }
-        if row > 0 {
-            adjacent[idx][idx - 3] = true;
-        }
-        if row < 2 {
-            adjacent[idx][idx + 3] = true;
-        }
+    if row > 0 {
+        result.push(room - GRID_COLS);
+    }
+    if col > 0 {
+        result.push(room - 1);
+    }
+    if col + 1 < GRID_COLS {
+        result.push(room + 1);
+    }
+    if row + 1 < GRID_ROWS {
+        result.push(room + GRID_COLS);
     }
 
-    adjacent
+    result
 }
 
 /// Randomly move a removed room's top-left corner off the visible map.
@@ -240,7 +238,7 @@ fn place_off_map_room(room: &mut Room, top: IVec2, bsze: IVec2) {
     }
 }
 
-/// Size a maze room to fill its 3x3 grid cell.
+/// Size a maze room to fill its grid cell.
 fn place_maze_room(room: &mut Room, top: IVec2, bsze: IVec2) {
     room.size.x = bsze.x - 1;
     room.size.y = bsze.y - 1;
@@ -285,23 +283,4 @@ fn pick_non_gone(room_states: &[Room]) -> usize {
             return idx;
         }
     }
-}
-
-/// Pick a uniformly random index where `available` is set and `blocked` is
-/// clear, or `None` when no such index exists.
-fn pick_unconnected_adjacent(
-    available: &[bool; GameConfig::MAX_ROOMS],
-    blocked: &[bool; GameConfig::MAX_ROOMS],
-) -> Option<usize> {
-    let mut count = 0;
-    let mut pick = None;
-    for i in 0..GameConfig::MAX_ROOMS {
-        if available[i] && !blocked[i] {
-            count += 1;
-            if rnd(count) == 0 {
-                pick = Some(i);
-            }
-        }
-    }
-    pick
 }
