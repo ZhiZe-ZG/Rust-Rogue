@@ -45,12 +45,12 @@ cargo build --release
   - `src/level/rooms.rs`: Rust room model (`Room`, `Structure` layout).
   - `src/level/passages.rs`: Corridor/passage digging.
   - `src/level/structure.rs`: Generic 2D tile grid (`Structure`).
-  - `src/level/tile.rs`: Tile enum used by the level model.
+  - `src/level/tile/`: Tile and trap vocabulary (`tile/tile.rs` = `Tile`,
+    `tile/trap.rs` = `Trap`).
   - `src/level/mod.rs`: Level module root and public re-exports.
 - `src/game.rs`: Shared `CURRENT_LEVEL`, monster/object lists, and game state
   backing the legacy save format.
 - `src/rndmove.rs`: Random movement helper used by monster/player logic.
-- `src/level/trap.rs`: Trap effects and trap-side status messaging.
 - `src/rip.rs`: RIP tombstone art provider and end-of-run scoreboard.
 - `src/save.rs`: Save/restore and autosave entrypoints (`save_game`,
   `save_file`, `restore`, `auto_save`).

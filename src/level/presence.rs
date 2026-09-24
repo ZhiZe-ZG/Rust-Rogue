@@ -25,8 +25,7 @@ use crate::rnd::rnd;
 use crate::ui::output;
 
 use super::level::{with_current_level_mut, LevelFlags};
-use super::tile::Tile;
-use super::trap::Trap;
+use super::tile::{Tile, Trap};
 
 // -- Object/thing flags --
 const ISMANY: c_int = 0o0000010;

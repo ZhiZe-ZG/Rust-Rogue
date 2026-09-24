@@ -12,7 +12,6 @@ mod roomgraph;
 mod room;
 mod structure;
 mod tile;
-mod trap;
 
 pub use generation::{door_open, new_level};
 pub use level::{with_current_level, with_current_level_mut, Level, LevelFlags};
@@ -23,5 +22,4 @@ pub use passages::{Passage, PassageLinks};
 pub use roomgraph::RoomGraph;
 pub use room::Room;
 pub use structure::Structure;
-pub use tile::Tile;
-pub use trap::{Trap, TrapHit};
+pub use tile::{Tile, Trap, TrapHit};

@@ -17,8 +17,7 @@ use super::monster_map::MonsterMap;
 use super::roomgraph::RoomGraph;
 use super::room::{build_generated_rooms, Room};
 use super::structure::Structure;
-use super::tile::Tile;
-use super::trap::Trap;
+use super::tile::{Tile, Trap};
 use crate::config::GameConfig;
 use crate::item::item_list::ItemList;
 
