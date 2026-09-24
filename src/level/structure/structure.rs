@@ -1,7 +1,7 @@
 //! A rectangular grid of level [`Tile`]s used by generation.
 use glam::IVec2;
 
-use super::tile::Tile;
+use super::super::tile::Tile;
 
 /// 2D tile container used by room/passage/level generation.
 ///

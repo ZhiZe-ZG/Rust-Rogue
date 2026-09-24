@@ -6,7 +6,7 @@ use crate::rnd::rnd;
 use glam::IVec2;
 
 use super::structure::Structure;
-use super::tile::Tile;
+use super::super::tile::Tile;
 use crate::config::GameConfig;
 
 /// Logical room model used by Rust-side level generation.

@@ -17,8 +17,7 @@ use crate::item::thing_list::free_list;
 use crate::ui::output;
 
 use super::presence::populate_level;
-use super::room::Room;
-use super::structure::Structure;
+use super::structure::{Room, Structure};
 use super::tile::Tile;
 
 const ISHELD: c_short = 0o0000400;

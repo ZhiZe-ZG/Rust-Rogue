@@ -42,9 +42,9 @@ cargo build --release
 - `src/level/`: Level generation subsystem.
   - `src/level/ffi.rs`: Level creation entrypoints (`new_level`, `find_floor`)
     and internal room/passage drawing.
-  - `src/level/rooms.rs`: Rust room model (`Room`, `Structure` layout).
   - `src/level/passages.rs`: Corridor/passage digging.
-  - `src/level/structure.rs`: Generic 2D tile grid (`Structure`).
+  - `src/level/structure/`: Tile-grid container and room model
+    (`structure/structure.rs` = `Structure`, `structure/room.rs` = `Room`).
   - `src/level/tile/`: Tile and trap vocabulary (`tile/tile.rs` = `Tile`,
     `tile/trap.rs` = `Trap`).
   - `src/level/mod.rs`: Level module root and public re-exports.

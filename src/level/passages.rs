@@ -15,13 +15,12 @@ use crate::config::GameConfig;
 use crate::rnd::rnd;
 
 use super::level::LevelFlags;
-use super::room::Room;
-use super::structure::Structure;
+use super::structure::{Room, Structure};
 use super::tile::Tile;
 
 /// A corridor connecting two rooms.
 ///
-/// Mirrors the [`Room`](super::rooms::Room) abstraction: a bounding box
+/// Mirrors the [`Room`](super::structure::Room) abstraction: a bounding box
 /// (`position`/`size`) plus the relative coordinates of every passage tile
 /// and entry point.
 #[derive(Clone, Debug, PartialEq, Eq)]
