@@ -14,7 +14,7 @@ use super::passages::{
     number_passages, plan_corridor, Passage, PassageLinks,
 };
 use super::monster_map::MonsterMap;
-use super::roomgraph::{pick_non_gone, GRID_COLS, RoomGraph};
+use super::roomgraph::{GRID_COLS, RoomGraph};
 use super::structure::{Room, Structure};
 use super::tile::{Tile, Trap};
 use crate::config::GameConfig;
@@ -374,7 +374,9 @@ impl Level {
         bsze: IVec2,
     ) -> [Room; GameConfig::MAX_ROOMS] {
         generate_rooms(&mut rooms, bsze, self.depth);
-        self.room_graph.generate(&rooms);
+        let gone: [bool; GameConfig::MAX_ROOMS] =
+            std::array::from_fn(|i| rooms[i].is_gone());
+        self.room_graph.generate(&gone);
 
         let generated_rooms = build_generated_rooms(rooms);
         self.rooms = generated_rooms.to_vec();
@@ -406,6 +408,16 @@ fn reset_rooms(rooms: &mut [Room]) {
         room.goldval = 0;
         room.entry_point_count = 0;
         room.clear_flags();
+    }
+}
+
+/// Pick a uniformly random room slot that has not been removed for the level.
+fn pick_non_gone(rooms: &[Room]) -> usize {
+    loop {
+        let idx = rnd(GameConfig::MAX_ROOMS as i32) as usize;
+        if !rooms[idx].is_gone() {
+            return idx;
+        }
     }
 }
 
