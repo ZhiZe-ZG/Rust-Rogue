@@ -6,13 +6,13 @@
 //! Rust `const` values so the debug behavior is always available and there is
 //! no need for preprocessor conditionals in Rust.
 
-use std::os::raw::{c_char, c_int, c_short, c_uchar};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
 use crate::globals::monsters;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags};
 use crate::entity::player::{set_thing_dest, thing_dest};
 use crate::entity::rndmove::rndmove;
 use crate::item::scrolls::ScrollType;
@@ -28,20 +28,6 @@ const DRAGONSHOT: c_int = 5; // one chance in DRAGONSHOT that a dragon will flam
 
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_PNUM: c_char = 0x0fu8 as c_char;
-
-const ISBLIND: c_short = 0o000004;
-const ISCANC: c_short = 0o000010;
-const ISGREED: c_short = 0o000040;
-const ISHASTE: c_short = 0o000100;
-const ISTARGET: c_short = 0o000200;
-const ISHELD: c_short = 0o000400;
-const ISHUH: c_short = 0o001000;
-const ISINVIS: c_short = 0o002000;
-const ISRUN: c_short = 0o020000;
-const SEEMONST: c_short = 0o040000;
-const ISFLY: c_short = 0o004000;
-const ISSLOW: c_short = 0o010000;
-const CANSEE: c_short = 0o000002;
 
 const DOOR: c_char = b'+' as c_char;
 const FLOOR: c_char = b'.' as c_char;
@@ -100,13 +86,13 @@ unsafe fn hero_ptr() -> *mut IVec2 {
 }
 
 #[inline]
-unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
+unsafe fn player_has(flag: MonsterFlags) -> bool {
+    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
 }
 
 #[inline]
-unsafe fn monster_has(tp: *mut CThing, flag: c_short) -> bool {
-    ((*thing_t(tp)).t_flags & flag) != 0
+unsafe fn monster_has(tp: *mut CThing, flag: MonsterFlags) -> bool {
+    (*thing_t(tp)).t_flags.contains(flag)
 }
 
 #[inline]
@@ -139,18 +125,20 @@ pub unsafe extern "C" fn runners() {
     while !tp.is_null() {
         // remember this in case the monster's "next" is changed
         let next = crate::entity::player::thing_next(tp);
-        if !monster_has(tp, ISHELD) && monster_has(tp, ISRUN) {
+        if !monster_has(tp, MonsterFlags::HELD) && monster_has(tp, MonsterFlags::RUN) {
             let orig_pos = (*thing_t(tp)).t_pos;
-            let wastarget = monster_has(tp, ISTARGET);
+            let wastarget = monster_has(tp, MonsterFlags::TARGET);
             if move_monst(tp) == -1 {
                 tp = next;
                 continue;
             }
-            if monster_has(tp, ISFLY) && dist_cp(hero_ptr(), &raw mut (*thing_t(tp)).t_pos) >= 3 {
+            if monster_has(tp, MonsterFlags::FLY)
+                && dist_cp(hero_ptr(), &raw mut (*thing_t(tp)).t_pos) >= 3
+            {
                 move_monst(tp);
             }
             if wastarget && !coord_eq(orig_pos, (*thing_t(tp)).t_pos) {
-                (*thing_t(tp)).t_flags &= !ISTARGET;
+                (*thing_t(tp)).t_flags.remove(MonsterFlags::TARGET);
                 to_death = false as c_uchar;
             }
         }
@@ -166,12 +154,12 @@ pub unsafe extern "C" fn runners() {
 /// Execute a single turn of running for a monster
 #[no_mangle]
 pub unsafe extern "C" fn move_monst(tp: *mut CThing) -> c_int {
-    if !monster_has(tp, ISSLOW) || (*thing_t(tp)).t_turn {
+    if !monster_has(tp, MonsterFlags::SLOW) || (*thing_t(tp)).t_turn {
         if do_chase(tp) == -1 {
             return -1;
         }
     }
-    if monster_has(tp, ISHASTE) {
+    if monster_has(tp, MonsterFlags::HASTE) {
         if do_chase(tp) == -1 {
             return -1;
         }
@@ -213,7 +201,7 @@ pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut IVec2) {
     output::move_cursor(IVec2::new((*new_loc).x, (*new_loc).y));
     if see_monst(th) != false as c_uchar {
         output::write_glyph(((*thing_t(th)).t_disguise as u8) as char);
-    } else if player_has(SEEMONST) {
+    } else if player_has(MonsterFlags::SEEMONST) {
         output::set_standout(true);
         output::write_glyph(((*thing_t(th)).t_type as u8) as char);
         output::set_standout(false);
@@ -234,7 +222,7 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
     let mut obj: *mut CThing;
 
     let rer = (*thing_t(th)).t_room; // Find room of chaser
-    if monster_has(th, ISGREED) && crate::game::room_goldval(rer) == 0 {
+    if monster_has(th, MonsterFlags::GREED) && crate::game::room_goldval(rer) == 0 {
         set_thing_dest(th, hero_ptr()); // If gold has been taken, run after hero
     }
     let ree = if thing_dest(th) == hero_ptr() {
@@ -287,7 +275,7 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
                     || ((*thing_t(th)).t_pos.y - hero_pos().y).abs()
                         == ((*thing_t(th)).t_pos.x - hero_pos().x).abs())
                 && dist_cp(&raw mut (*thing_t(th)).t_pos, hero_ptr()) <= BOLT_LENGTH * BOLT_LENGTH
-                && !monster_has(th, ISCANC)
+                && !monster_has(th, MonsterFlags::CANCELLED)
                 && rnd(DRAGONSHOT) == 0
             {
                 let dy = hero_pos().y - (*thing_t(th)).t_pos.y;
@@ -305,7 +293,7 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
                 running = false as c_uchar;
                 count = 0;
                 quiet = 0;
-                if to_death != 0 && !monster_has(th, ISTARGET) {
+                if to_death != 0 && !monster_has(th, MonsterFlags::TARGET) {
                     to_death = false as c_uchar;
                     kamikaze = false as c_uchar;
                 }
@@ -344,7 +332,7 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
     relocate(th, &raw mut CH_RET);
     // And stop running if need be
     if stoprun && coord_eq((*thing_t(th)).t_pos, *thing_dest(th)) {
-        (*thing_t(th)).t_flags &= !ISRUN;
+        (*thing_t(th)).t_flags.remove(MonsterFlags::RUN);
     }
     0
 }
@@ -362,7 +350,7 @@ pub unsafe extern "C" fn set_oldch(tp: *mut CThing, cp: *mut IVec2) {
     let sch = (*thing_t(tp)).t_oldch;
     (*thing_t(tp)).t_oldch =
         output::glyph_at(IVec2::new((*cp).x, (*cp).y)) as u8 & 0x7f;
-    if !player_has(ISBLIND) {
+    if !player_has(MonsterFlags::BLIND) {
         if (sch == FLOOR as u8 || (*thing_t(tp)).t_oldch == FLOOR as u8)
             && crate::game::room_dark((*thing_t(tp)).t_room)
         {
@@ -379,10 +367,10 @@ pub unsafe extern "C" fn set_oldch(tp: *mut CThing, cp: *mut IVec2) {
 /// Uses globals: player, hero, proom, places (via chat).
 #[no_mangle]
 pub unsafe extern "C" fn see_monst(mp: *mut CThing) -> c_uchar {
-    if player_has(ISBLIND) {
+    if player_has(MonsterFlags::BLIND) {
         return false as c_uchar;
     }
-    if monster_has(mp, ISINVIS) && !player_has(CANSEE) {
+    if monster_has(mp, MonsterFlags::INVIS) && !player_has(MonsterFlags::CANSEE) {
         return false as c_uchar;
     }
     let y = (*thing_t(mp)).t_pos.y;
@@ -427,8 +415,8 @@ pub unsafe extern "C" fn runto(runner: *mut IVec2) {
         return;
     }
     // Start the beastie running
-    (*thing_t(tp)).t_flags |= ISRUN;
-    (*thing_t(tp)).t_flags &= !ISHELD;
+    (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
+    (*thing_t(tp)).t_flags.remove(MonsterFlags::HELD);
     set_thing_dest(tp, find_dest(tp));
 }
 
@@ -448,7 +436,7 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut IVec2) -> c_uchar {
     // If the thing is confused, let it move randomly. Invisible
     // Stalkers are slightly confused all of the time, and bats are
     // quite confused all the time.
-    if (monster_has(tp, ISHUH) && rnd(5) != 0)
+    if (monster_has(tp, MonsterFlags::HUH) && rnd(5) != 0)
         || ((*thing_t(tp)).t_type == b'P' && rnd(5) == 0)
         || ((*thing_t(tp)).t_type == b'B' && rnd(2) == 0)
     {
@@ -457,7 +445,7 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut IVec2) -> c_uchar {
         curdist = dist_cp(&raw mut CH_RET, ee);
         // Small chance that it will become un-confused
         if rnd(20) == 0 {
-            (*thing_t(tp)).t_flags &= !ISHUH;
+            (*thing_t(tp)).t_flags.remove(MonsterFlags::HUH);
         }
     }
     // Otherwise, find the empty spot next to the chaser that is
@@ -588,7 +576,7 @@ pub unsafe extern "C" fn diag_ok(sp: *mut IVec2, ep: *mut IVec2) -> c_uchar {
 /// Uses globals: player, hero, proom, places (via flat/chat).
 #[no_mangle]
 pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
-    if player_has(ISBLIND) {
+    if player_has(MonsterFlags::BLIND) {
         return false as c_uchar;
     }
     if dist(y, x, hero_pos().y, hero_pos().x) < LAMPDIST {

@@ -28,10 +28,248 @@ use crate::ui::output;
 use crate::ui::output::msg_str;
 use crate::wizard::teleport;
 use glam::IVec2;
-use std::os::raw::{c_char, c_int, c_short, c_uchar};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
+use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr::NonNull;
 
 pub use crate::entity::stats::Stats;
+
+/// Actor (monster/player) status flags — the typed replacement for the legacy
+/// `t_flags` bit field of [`CThingMonster`].
+///
+/// The original 16-bit pattern is preserved exactly so save files stay
+/// byte-compatible; callers use the named constants and bit operations below
+/// instead of raw octal literals.
+#[derive(Copy, Clone, PartialEq, Eq, Default)]
+pub struct MonsterFlags(i16);
+
+impl MonsterFlags {
+    pub const NONE: Self = Self(0);
+    pub const CANHUH: Self = Self(0o0000001);
+    pub const CANSEE: Self = Self(0o0000002);
+    pub const BLIND: Self = Self(0o0000004);
+    /// Monster "cancel" flag; shares the bit used by [`Self::LEVIT`].
+    pub const CANCELLED: Self = Self(0o0000010);
+    pub const LEVIT: Self = Self(0o0000010);
+    pub const FOUND: Self = Self(0o0000020);
+    pub const GREED: Self = Self(0o0000040);
+    pub const HASTE: Self = Self(0o0000100);
+    pub const TARGET: Self = Self(0o0000200);
+    pub const HELD: Self = Self(0o0000400);
+    pub const HUH: Self = Self(0o0001000);
+    pub const INVIS: Self = Self(0o0002000);
+    pub const MEAN: Self = Self(0o0004000);
+    pub const HALU: Self = Self(0o0004000);
+    pub const FLY: Self = Self(0o0004000);
+    pub const REGEN: Self = Self(0o0010000);
+    pub const RUN: Self = Self(0o0020000);
+    pub const SEEMONST: Self = Self(0o0040000);
+    pub const SLOW: Self = Self(0o0100000u16 as i16);
+
+    /// Build from a raw bit pattern (used by the save/load layer).
+    #[inline]
+    pub const fn from_bits(bits: i16) -> Self {
+        Self(bits)
+    }
+
+    /// The raw bit pattern (used by the save/load layer).
+    #[inline]
+    pub const fn bits(self) -> i16 {
+        self.0
+    }
+
+    #[inline]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Mirrors the legacy C test `(flags & flag) != 0` (any shared bit).
+    #[inline]
+    pub const fn contains(self, other: Self) -> bool {
+        (self.0 & other.0) != 0
+    }
+
+    #[inline]
+    pub fn insert(&mut self, other: Self) {
+        self.0 |= other.0;
+    }
+
+    #[inline]
+    pub fn remove(&mut self, other: Self) {
+        self.0 &= !other.0;
+    }
+
+    #[inline]
+    pub fn set(&mut self, other: Self, on: bool) {
+        if on {
+            self.insert(other);
+        } else {
+            self.remove(other);
+        }
+    }
+}
+
+impl BitOr for MonsterFlags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl BitOrAssign for MonsterFlags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+impl BitAnd for MonsterFlags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, rhs: Self) -> Self {
+        Self(self.0 & rhs.0)
+    }
+}
+
+impl BitAndAssign for MonsterFlags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 &= rhs.0;
+    }
+}
+
+impl Not for MonsterFlags {
+    type Output = Self;
+    #[inline]
+    fn not(self) -> Self {
+        Self(!self.0)
+    }
+}
+
+impl From<i16> for MonsterFlags {
+    #[inline]
+    fn from(bits: i16) -> Self {
+        Self(bits)
+    }
+}
+
+impl From<MonsterFlags> for i16 {
+    #[inline]
+    fn from(flags: MonsterFlags) -> Self {
+        flags.0
+    }
+}
+
+/// Object (item) flags — the typed replacement for the legacy `o_flags` bit
+/// field of [`CThingObject`]. The 32-bit pattern is preserved exactly so save
+/// files stay byte-compatible.
+#[derive(Copy, Clone, PartialEq, Eq, Default)]
+pub struct ObjectFlags(i32);
+
+impl ObjectFlags {
+    pub const NONE: Self = Self(0);
+    pub const CURSED: Self = Self(0o0000001);
+    pub const KNOW: Self = Self(0o0000002);
+    pub const MISL: Self = Self(0o0000004);
+    pub const MANY: Self = Self(0o0000010);
+    pub const FOUND: Self = Self(0o0000020);
+    pub const PROT: Self = Self(0o0000040);
+
+    /// Build from a raw bit pattern (used by the save/load layer).
+    #[inline]
+    pub const fn from_bits(bits: i32) -> Self {
+        Self(bits)
+    }
+
+    /// The raw bit pattern (used by the save/load layer).
+    #[inline]
+    pub const fn bits(self) -> i32 {
+        self.0
+    }
+
+    #[inline]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Mirrors the legacy C test `(flags & flag) != 0` (any shared bit).
+    #[inline]
+    pub const fn contains(self, other: Self) -> bool {
+        (self.0 & other.0) != 0
+    }
+
+    #[inline]
+    pub fn insert(&mut self, other: Self) {
+        self.0 |= other.0;
+    }
+
+    #[inline]
+    pub fn remove(&mut self, other: Self) {
+        self.0 &= !other.0;
+    }
+
+    #[inline]
+    pub fn set(&mut self, other: Self, on: bool) {
+        if on {
+            self.insert(other);
+        } else {
+            self.remove(other);
+        }
+    }
+}
+
+impl BitOr for ObjectFlags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl BitOrAssign for ObjectFlags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+impl BitAnd for ObjectFlags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, rhs: Self) -> Self {
+        Self(self.0 & rhs.0)
+    }
+}
+
+impl BitAndAssign for ObjectFlags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 &= rhs.0;
+    }
+}
+
+impl Not for ObjectFlags {
+    type Output = Self;
+    #[inline]
+    fn not(self) -> Self {
+        Self(!self.0)
+    }
+}
+
+impl From<i32> for ObjectFlags {
+    #[inline]
+    fn from(bits: i32) -> Self {
+        Self(bits)
+    }
+}
+
+impl From<ObjectFlags> for i32 {
+    #[inline]
+    fn from(flags: ObjectFlags) -> Self {
+        flags.0
+    }
+}
 
 const DOOR: c_char = b'+' as c_char;
 const FLOOR: c_char = b'.' as c_char;
@@ -41,12 +279,6 @@ const STAIRS: c_char = b'%' as c_char;
 const SPACE: c_char = b' ' as c_char;
 const H_WALL: c_char = b'-' as c_char;
 const V_WALL: c_char = b'|' as c_char;
-
-const ISBLIND: c_short = 0o0000004;
-const ISHELD: c_short = 0o0000400;
-const ISHUH: c_short = 0o0001000;
-const ISLEVIT: c_short = 0o0000010;
-const ISRUN: c_short = 0o020000;
 
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_REAL: c_char = 0x10u8 as c_char;
@@ -63,7 +295,7 @@ pub struct CThingMonster {
     pub t_disguise: u8,
     pub t_oldch: u8,
     pub t_dest: Option<NonNull<IVec2>>,
-    pub t_flags: i16,
+    pub t_flags: MonsterFlags,
     pub t_stats: Stats,
     pub t_room: Option<usize>,
     pub t_pack: Option<NonNull<CThing>>,
@@ -86,7 +318,7 @@ pub struct CThingObject {
     pub o_hplus: i32,
     pub o_dplus: i32,
     pub o_arm: i32,
-    pub o_flags: i32,
+    pub o_flags: ObjectFlags,
     pub o_group: i32,
     pub o_label: Option<String>,
 }
@@ -146,7 +378,7 @@ impl Default for CThingMonster {
             t_disguise: 0,
             t_oldch: 0,
             t_dest: None,
-            t_flags: 0,
+            t_flags: MonsterFlags::NONE,
             t_stats: Stats::default(),
             t_room: None,
             t_pack: None,
@@ -170,7 +402,7 @@ impl Default for CThingObject {
             o_hplus: 0,
             o_dplus: 0,
             o_arm: 0,
-            o_flags: 0,
+            o_flags: ObjectFlags::NONE,
             o_group: 0,
             o_label: None,
         }
@@ -302,8 +534,8 @@ unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
 }
 
 #[inline]
-unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
+unsafe fn player_has(flag: MonsterFlags) -> bool {
+    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
 }
 
 #[inline]
@@ -350,7 +582,10 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
     let trap =
         crate::level::with_current_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
 
-    if ((*thing_t(crate::game::player_ptr())).t_flags & ISLEVIT) != 0 {
+    if (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .contains(MonsterFlags::LEVIT)
+    {
         return Trap::Rust;
     }
 
@@ -373,7 +608,9 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
         Trap::Mystery => {}
         Trap::Sleep => {
             no_command += spread(5);
-            (*thing_t(crate::game::player_ptr())).t_flags &= !ISRUN;
+            (*thing_t(crate::game::player_ptr()))
+                .t_flags
+                .remove(MonsterFlags::RUN);
         }
         Trap::Arrow => {
             let stats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
@@ -450,7 +687,7 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
         || running == 0
         || current_room.is_none()
         || !crate::game::room_gone(current_room)
-        || player_has(ISBLIND)
+        || player_has(MonsterFlags::BLIND)
     {
         return false;
     }
@@ -524,7 +761,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         return;
     }
 
-    if player_has(ISHUH) && rnd(5) != 0 {
+    if player_has(MonsterFlags::HUH) && rnd(5) != 0 {
         next_pos = *rndmove(crate::game::player_ptr());
         if coord_eq(next_pos, hero) {
             after = false as c_uchar;
@@ -569,13 +806,13 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     ch = winat(next_pos.y, next_pos.x);
 
     if (fl as u8 & F_REAL as u8) == 0 && ch == FLOOR {
-        if !player_has(ISLEVIT) {
+        if !player_has(MonsterFlags::LEVIT) {
             crate::level::with_current_level_mut(|level| {
                 level.reveal_trap(next_pos.y as usize, next_pos.x as usize);
             });
             ch = TRAP;
         }
-    } else if player_has(ISHELD) && ch != b'F' as c_char {
+    } else if player_has(MonsterFlags::HELD) && ch != b'F' as c_char {
         msg_str("you are being held");
         return;
     }

@@ -120,7 +120,7 @@ fn default_player() -> CThing {
             t_disguise: 0,
             t_oldch: 0,
             t_dest: None,
-            t_flags: 0,
+            t_flags: crate::entity::player::MonsterFlags::NONE,
             t_stats: Stats {
                 strength: 0,
                 experience: 0,

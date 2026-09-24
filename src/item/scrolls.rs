@@ -3,12 +3,12 @@
 //! Ported from `src/c/scrolls.c` to Rust.
 use crate::rnd::rnd;
 use std::ffi::{c_void, CStr};
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use crate::config::GameConfig;
 use crate::draw::{look, map_cell_reveal};
 use crate::entity::monsters::{new_monster, randmonster};
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
 use crate::game;
 use crate::game::EQUIPMENT;
 use crate::globals::{scr_info, weap_info};
@@ -37,14 +37,6 @@ const SCROLL: c_int = '?' as c_int;
 const WEAPON: c_int = ')' as c_int;
 const ARMOR: c_int = ']' as c_int;
 const R_OR_S: c_int = -2;
-
-const ISCURSED: c_int = 0o000001;
-const ISPROT: c_int = 0o000040;
-
-const CANHUH: c_short = 0o000001;
-const ISRUN: c_short = 0o020000;
-const ISHELD: c_short = 0o000400;
-const SEEMONST: c_short = 0o040000;
 
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_SEEN: c_char = 0x40u8 as c_char;
@@ -139,13 +131,13 @@ unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
 }
 
 #[inline]
-unsafe fn on_flag(tp: *mut CThing, flag: c_short) -> bool {
-    ((*thing_t(tp)).t_flags & flag) != 0
+unsafe fn on_flag(tp: *mut CThing, flag: MonsterFlags) -> bool {
+    (*thing_t(tp)).t_flags.contains(flag)
 }
 
 #[inline]
-unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
+unsafe fn player_has(flag: MonsterFlags) -> bool {
+    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
 }
 
 // Map reveal now lives in `crate::draw::map_cell_reveal`, operating directly
@@ -180,13 +172,15 @@ pub unsafe extern "C" fn read_scroll() {
     let scroll_type = ScrollType::from_raw((*thing_o(obj)).o_which);
     match scroll_type {
         ScrollType::Confuse => {
-            (*thing_t(crate::game::player_ptr())).t_flags |= CANHUH;
+            (*thing_t(crate::game::player_ptr()))
+                .t_flags
+                .insert(MonsterFlags::CANHUH);
             msg_str(&format!("your hands begin to glow {}", pick_color("red")));
         }
         ScrollType::Armor => {
             if !EQUIPMENT.armor().is_null() {
                 (*thing_o(EQUIPMENT.armor())).o_arm -= 1;
-                (*thing_o(EQUIPMENT.armor())).o_flags &= !ISCURSED;
+                (*thing_o(EQUIPMENT.armor())).o_flags.remove(ObjectFlags::CURSED);
                 msg_str(&format!(
                     "your armor glows {} for a moment",
                     pick_color("silver")
@@ -205,9 +199,9 @@ pub unsafe extern "C" fn read_scroll() {
                         continue;
                     }
                     let tp = moat(y, x);
-                    if !tp.is_null() && on_flag(tp, ISRUN) {
-                        (*thing_t(tp)).t_flags &= !ISRUN;
-                        (*thing_t(tp)).t_flags |= ISHELD;
+                    if !tp.is_null() && on_flag(tp, MonsterFlags::RUN) {
+                        (*thing_t(tp)).t_flags.remove(MonsterFlags::RUN);
+                        (*thing_t(tp)).t_flags.insert(MonsterFlags::HELD);
                         ch += 1;
                     }
                 }
@@ -231,7 +225,9 @@ pub unsafe extern "C" fn read_scroll() {
         ScrollType::Sleep => {
             scr_info[ScrollType::Sleep.index()].oi_know = true;
             no_command += rnd(SLEEPTIME) + 4;
-            (*thing_t(crate::game::player_ptr())).t_flags &= !ISRUN;
+            (*thing_t(crate::game::player_ptr()))
+                .t_flags
+                .remove(MonsterFlags::RUN);
             msg_str("you fall asleep");
         }
         ScrollType::CreateMonster => {
@@ -294,7 +290,7 @@ pub unsafe extern "C" fn read_scroll() {
                         if !tp.is_null() {
                             (*thing_t(tp)).t_oldch = ch as u8;
                         }
-                        if tp.is_null() || !player_has(SEEMONST) {
+                        if tp.is_null() || !player_has(MonsterFlags::SEEMONST) {
                             output::write_glyph_at(IVec2::new(x, y), (ch as u8) as char);
                         }
                     }
@@ -335,7 +331,7 @@ pub unsafe extern "C" fn read_scroll() {
             if EQUIPMENT.weapon().is_null() || (*thing_o(EQUIPMENT.weapon())).o_type != WEAPON {
                 msg_str("you feel a strange sense of loss");
             } else {
-                (*thing_o(EQUIPMENT.weapon())).o_flags &= !ISCURSED;
+                (*thing_o(EQUIPMENT.weapon())).o_flags.remove(ObjectFlags::CURSED);
                 if rnd(2) == 0 {
                     (*thing_o(EQUIPMENT.weapon())).o_hplus += 1;
                 } else {
@@ -370,7 +366,7 @@ pub unsafe extern "C" fn read_scroll() {
         }
         ScrollType::Protect => {
             if !EQUIPMENT.armor().is_null() {
-                (*thing_o(EQUIPMENT.armor())).o_flags |= ISPROT;
+                (*thing_o(EQUIPMENT.armor())).o_flags.insert(ObjectFlags::PROT);
                 msg_str(&format!(
                     "your armor is covered by a shimmering {} shield",
                     pick_color("gold")
@@ -397,6 +393,6 @@ pub unsafe extern "C" fn read_scroll() {
 #[no_mangle]
 pub unsafe extern "C" fn uncurse(obj: *mut CThing) {
     if !obj.is_null() {
-        (*thing_o(obj)).o_flags &= !ISCURSED;
+        (*thing_o(obj)).o_flags.remove(ObjectFlags::CURSED);
     }
 }

@@ -4,7 +4,7 @@
 use crate::entity::chase::{cansee, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};
-use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject, ObjectFlags};
 use crate::game::EQUIPMENT;
 use crate::globals::ws_info;
 use crate::item::pack::get_item;
@@ -20,8 +20,6 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 const STICK: c_int = '/' as c_int;
 const WEAPON: c_int = ')' as c_int;
 const FLAME: c_int = 9;
-const ISKNOW: c_int = 0o000002;
-const ISMISL: c_int = 0o000004;
 const VS_MAGIC: c_int = 3;
 
 #[repr(i32)]
@@ -209,7 +207,7 @@ pub unsafe extern "C" fn do_zap() {
             set_c_string(&mut (*thing_o(&mut bolt)).o_hurldmg, "1x4");
             (*thing_o(&mut bolt)).o_hplus = 100;
             (*thing_o(&mut bolt)).o_dplus = 1;
-            (*thing_o(&mut bolt)).o_flags = ISMISL;
+            (*thing_o(&mut bolt)).o_flags = ObjectFlags::MISL;
             if !EQUIPMENT.weapon().is_null() {
                 (*thing_o(&mut bolt)).o_launch = (*thing_o(EQUIPMENT.weapon())).o_which;
             }
@@ -310,7 +308,7 @@ pub unsafe extern "C" fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, name: *mu
 /// Return an appropriate string for a wand charge display.
 unsafe fn charge_str(obj: *mut CThing) -> *mut c_char {
     static mut BUF: [u8; 20] = [0; 20];
-    if (*thing_o(obj)).o_flags & ISKNOW == 0 {
+    if !(*thing_o(obj)).o_flags.contains(ObjectFlags::KNOW) {
         BUF[0] = 0;
     } else if terse != 0 {
         let text = format!(" [{}]", (*thing_o(obj)).o_arm);

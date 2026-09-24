@@ -1,7 +1,7 @@
 //! Rings: putting them on, taking them off, and their magical effects.
 //!
 //! Ported from `src/c/rings.c` to Rust.
-use crate::entity::player::{CThing, CThingObject};
+use crate::entity::player::{CThing, CThingObject, ObjectFlags};
 use crate::item::potions::invis_on;
 use crate::rnd::rnd;
 use std::ffi::CStr;
@@ -19,7 +19,6 @@ const LEFT: usize = 0;
 const RIGHT: usize = 1;
 const RING_TYPE: c_int = '=' as c_int;
 const ESCAPE: u8 = 27;
-const ISKNOW: c_int = 0o000002;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -273,7 +272,7 @@ unsafe fn ring_num(obj: *mut CThing) -> *mut c_char {
     if obj.is_null() {
         return c"".as_ptr() as *mut c_char;
     }
-    if ((*thing_o(obj)).o_flags & ISKNOW) == 0 {
+    if !(*thing_o(obj)).o_flags.contains(ObjectFlags::KNOW) {
         return c"".as_ptr() as *mut c_char;
     }
 

@@ -16,7 +16,7 @@ use crate::rnd::rnd;
 
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 
-use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
 use crate::item::pack::add_pack;
 use crate::item::thing_list::new_item;
 use crate::item::weapons::init_weapon;
@@ -46,12 +46,6 @@ const RING_MAIL: c_int = 1;
 const MACE: c_int = 0;
 const BOW: c_int = 2;
 const ARROW: c_int = 3;
-
-// Object flags
-const ISKNOW: c_int = 0o000200;
-
-// Player flags
-const ISHALU: c_short = 0o004000;
 
 use std::os::raw::c_short;
 
@@ -337,7 +331,7 @@ pub unsafe extern "C" fn init_player() {
     (*thing_o(obj)).o_type = ARMOR;
     (*thing_o(obj)).o_which = RING_MAIL;
     (*thing_o(obj)).o_arm = a_class[RING_MAIL as usize] - 1;
-    (*thing_o(obj)).o_flags |= ISKNOW;
+    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     (*thing_o(obj)).o_count = 1;
     EQUIPMENT.set_armor(obj);
     add_pack(obj, true as c_uchar);
@@ -347,7 +341,7 @@ pub unsafe extern "C" fn init_player() {
     init_weapon(obj, MACE);
     (*thing_o(obj)).o_hplus = 1;
     (*thing_o(obj)).o_dplus = 1;
-    (*thing_o(obj)).o_flags |= ISKNOW;
+    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     add_pack(obj, true as c_uchar);
     EQUIPMENT.set_weapon(obj);
 
@@ -355,14 +349,14 @@ pub unsafe extern "C" fn init_player() {
     let obj = new_item();
     init_weapon(obj, BOW);
     (*thing_o(obj)).o_hplus = 1;
-    (*thing_o(obj)).o_flags |= ISKNOW;
+    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     add_pack(obj, true as c_uchar);
 
     // Arrows
     let obj = new_item();
     init_weapon(obj, ARROW);
     (*thing_o(obj)).o_count = rnd(15) + 25;
-    (*thing_o(obj)).o_flags |= ISKNOW;
+    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     add_pack(obj, true as c_uchar);
 }
 
@@ -501,7 +495,10 @@ pub unsafe extern "C" fn init_probs() {
 /// Return a random colour if the player is hallucinating, otherwise
 /// return the supplied colour unchanged.
 pub unsafe fn pick_color(col: &'static str) -> &'static str {
-    if (*thing_t(crate::game::player_ptr())).t_flags & ISHALU != 0 {
+    if (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .contains(MonsterFlags::HALU)
+    {
         crate::colors::random_color()
     } else {
         col

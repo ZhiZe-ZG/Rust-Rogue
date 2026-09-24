@@ -15,7 +15,7 @@ use crate::draw::enter_room;
 use crate::entity::chase::roomin;
 use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::{give_pack, new_monster, randmonster};
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
 use crate::game;
 use crate::globals::{amulet, max_level, ntraps, seenstairs};
 use crate::item::potions::turn_see;
@@ -26,12 +26,6 @@ use crate::ui::output;
 
 use super::level::{with_current_level_mut, LevelFlags};
 use super::tile::{Tile, Trap};
-
-// -- Object/thing flags --
-const ISMANY: i32 = 0o0000010;
-const ISMEAN: i16 = 0o0004000;
-const SEEMONST: i16 = 0o040000;
-const ISHALU: i16 = 0o0004000;
 
 // -- Glyphs --
 const AMULET: u8 = b',';
@@ -165,7 +159,7 @@ unsafe fn treas_room() {
         if find_floor(Some(idx), &mut mp, GameConfig::MAX_PLACEMENT_ATTEMPTS, true) {
             let tp = new_actor();
             new_monster(tp, randmonster(false), &mut mp);
-            (*thing_t(tp)).t_flags |= ISMEAN;
+            (*thing_t(tp)).t_flags.insert(MonsterFlags::MEAN);
             give_pack(tp);
         }
         nm -= 1;
@@ -201,7 +195,7 @@ unsafe fn place_room_contents() {
                     current.rooms[i].goldval = (*og).o_arm;
                 });
                 (*og).o_pos = gold_pos;
-                (*og).o_flags = ISMANY;
+                (*og).o_flags = ObjectFlags::MANY;
                 (*og).o_group = GOLDGRP;
                 (*og).o_type = GOLD as i32;
                 with_current_level_mut(|current| current.items.attach(gold));
@@ -353,10 +347,16 @@ unsafe fn place_hero() {
             ),
         PLAYER as char,
     );
-    if ((*thing_t(crate::game::player_ptr())).t_flags & SEEMONST) != 0 {
+    if (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .contains(MonsterFlags::SEEMONST)
+    {
         turn_see(false as u8);
     }
-    if ((*thing_t(crate::game::player_ptr())).t_flags & ISHALU) != 0 {
+    if (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .contains(MonsterFlags::HALU)
+    {
         visuals();
     }
 }

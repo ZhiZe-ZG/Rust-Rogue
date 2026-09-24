@@ -14,14 +14,14 @@ use glam::IVec2;
 
 use crate::ui::output::{addmsg_str, msg_str};
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon};
 use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
 use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::wanderer;
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags};
 use crate::game::EQUIPMENT;
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
@@ -33,17 +33,6 @@ use crate::startup::roll;
 // d_type flags (BEFORE/AFTER)
 const BEFORE: c_int = 1; // spread(1) == 1 always
 const AFTER: c_int = 2; // spread(2) == 2 always
-
-// Player-flags
-const ISBLIND: c_short = 0o0000004;
-const ISHASTE: c_short = 0o0000100;
-const ISHUH: c_short = 0o0001000;
-const ISINVIS: c_short = 0o0002000;
-const ISHALU: c_short = 0o0004000;
-const ISRUN: c_short = 0o0020000;
-const SEEMONST: c_short = 0o0040000;
-const CANSEE: c_short = 0o0000002;
-const ISLEVIT: c_short = 0o0000010;
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
@@ -151,7 +140,9 @@ pub unsafe extern "C" fn rollwand() {
 /// Release the poor player from his confusion.
 #[no_mangle]
 pub unsafe extern "C" fn unconfuse() {
-    (*thing_t(crate::game::player_ptr())).t_flags &= !ISHUH;
+    (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .remove(MonsterFlags::HUH);
     msg_str(&format!(
         "you feel less {} now",
         CStr::from_ptr(choose_str(c"trippy".as_ptr(), c"confused".as_ptr())).to_string_lossy()
@@ -164,7 +155,11 @@ pub unsafe extern "C" fn unconfuse() {
 pub unsafe extern "C" fn unsee() {
     let mut th = MLIST.head();
     while !th.is_null() {
-        if ((*thing_t(th)).t_flags & ISINVIS) != 0 && see_monst(th) != 0 {
+        if (*thing_t(th))
+            .t_flags
+            .contains(MonsterFlags::INVIS)
+            && see_monst(th) != 0
+        {
             output::write_glyph_at(
                 IVec2::new((*thing_t(th)).t_pos.x, (*thing_t(th)).t_pos.y),
                 ((*thing_t(th)).t_oldch as u8) as char,
@@ -172,16 +167,23 @@ pub unsafe extern "C" fn unsee() {
         }
         th = crate::entity::player::thing_next(th);
     }
-    (*thing_t(crate::game::player_ptr())).t_flags &= !CANSEE;
+    (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .remove(MonsterFlags::CANSEE);
 }
 
 /// sight:
 /// He gets his sight back.
 #[no_mangle]
 pub unsafe extern "C" fn sight() {
-    if ((*thing_t(crate::game::player_ptr())).t_flags & ISBLIND) != 0 {
+    if (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .contains(MonsterFlags::BLIND)
+    {
         extinguish(sight as *const c_void);
-        (*thing_t(crate::game::player_ptr())).t_flags &= !ISBLIND;
+        (*thing_t(crate::game::player_ptr()))
+            .t_flags
+            .remove(MonsterFlags::BLIND);
         let proom = (*thing_t(crate::game::player_ptr())).t_room;
         if !crate::game::room_gone(proom) {
             enter_room(&mut (*thing_t(crate::game::player_ptr())).t_pos);
@@ -200,7 +202,9 @@ pub unsafe extern "C" fn sight() {
 /// End the hasting.
 #[no_mangle]
 pub unsafe extern "C" fn nohaste() {
-    (*thing_t(crate::game::player_ptr())).t_flags &= !ISHASTE;
+    (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .remove(MonsterFlags::HASTE);
     msg_str("you feel yourself slowing down");
 }
 
@@ -272,7 +276,9 @@ pub unsafe extern "C" fn stomach() {
     }
 
     if hungry_state != orig_hungry {
-        (*thing_t(crate::game::player_ptr())).t_flags &= !ISRUN;
+        (*thing_t(crate::game::player_ptr()))
+            .t_flags
+            .remove(MonsterFlags::RUN);
         running = false as c_uchar;
         to_death = false as c_uchar;
         count = 0;
@@ -283,14 +289,22 @@ pub unsafe extern "C" fn stomach() {
 /// Take the hero down off her acid trip.
 #[no_mangle]
 pub unsafe extern "C" fn come_down() {
-    if ((*thing_t(crate::game::player_ptr())).t_flags & ISHALU) == 0 {
+    if !(*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .contains(MonsterFlags::HALU)
+    {
         return;
     }
 
     kill_daemon(visuals as *const c_void);
-    (*thing_t(crate::game::player_ptr())).t_flags &= !ISHALU;
+    (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .remove(MonsterFlags::HALU);
 
-    if ((*thing_t(crate::game::player_ptr())).t_flags & ISBLIND) != 0 {
+    if (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .contains(MonsterFlags::BLIND)
+    {
         return;
     }
 
@@ -308,13 +322,17 @@ pub unsafe extern "C" fn come_down() {
     }
 
     // Undo the monsters.
-    let seemonst = ((*thing_t(crate::game::player_ptr())).t_flags & SEEMONST) != 0;
+    let seemonst = (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .contains(MonsterFlags::SEEMONST);
     let mut tp = MLIST.head();
     while !tp.is_null() {
         output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
         if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
-            if ((*thing_t(tp)).t_flags & ISINVIS) == 0
-                || ((*thing_t(crate::game::player_ptr())).t_flags & CANSEE) != 0
+            if !(*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS)
+                || (*thing_t(crate::game::player_ptr()))
+                    .t_flags
+                    .contains(MonsterFlags::CANSEE)
             {
                 output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
             }
@@ -360,7 +378,9 @@ pub unsafe extern "C" fn visuals() {
     }
 
     // Change the monsters.
-    let seemonst = ((*thing_t(crate::game::player_ptr())).t_flags & SEEMONST) != 0;
+    let seemonst = (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .contains(MonsterFlags::SEEMONST);
     let mut tp = MLIST.head();
     while !tp.is_null() {
         output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
@@ -385,7 +405,9 @@ pub unsafe extern "C" fn visuals() {
 /// Land from a levitation potion.
 #[no_mangle]
 pub unsafe extern "C" fn land() {
-    (*thing_t(crate::game::player_ptr())).t_flags &= !ISLEVIT;
+    (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .remove(MonsterFlags::LEVIT);
     msg_str(
         &CStr::from_ptr(choose_str(
             c"bummer!  You've hit the ground".as_ptr(),

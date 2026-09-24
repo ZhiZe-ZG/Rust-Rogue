@@ -10,15 +10,13 @@ use crate::config::GameConfig;
 use crate::draw::winat;
 use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::wake_monster;
-use crate::entity::player::{CThing, CThingMonster};
+use crate::entity::player::{CThing, CThingMonster, MonsterFlags};
 use crate::game::{clear_level, with_current_level_mut};
 use crate::globals::{max_level, no_food};
 use crate::ui::output;
 
 use super::presence::populate_level;
 use super::structure::Room;
-
-const ISHELD: i16 = 0o0000400;
 
 /// Interpret `tp` as a monster (`CThingMonster`).
 #[inline]
@@ -29,7 +27,9 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 unsafe fn reset_level() {
     let depth = with_current_level_mut(|current| current.reset_for_new_level());
 
-    (*thing_t(crate::game::player_ptr())).t_flags &= !ISHELD;
+    (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .remove(MonsterFlags::HELD);
     if depth > max_level {
         max_level = depth;
     }

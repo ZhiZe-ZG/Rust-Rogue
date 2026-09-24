@@ -11,7 +11,7 @@ use crate::draw::look;
 
 use crate::entity::chase::see_monst;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
 use crate::game::EQUIPMENT;
 use crate::globals::pot_info;
 use crate::item::pack::{get_item, leave_pack};
@@ -43,17 +43,6 @@ const SPACE: c_int = ' ' as c_int;
 const H_WALL: c_int = '-' as c_int;
 const V_WALL: c_int = '|' as c_int;
 const TRAP: c_int = '^' as c_int;
-
-const ISHUH: c_short = 0o0001000;
-const ISHALU: c_short = 0o0004000;
-const CANSEE: c_short = 0o0000002;
-const ISBLIND: c_short = 0o0000004;
-const ISLEVIT: c_short = 0o0000010;
-const ISRUN: c_short = 0o020000;
-const ISINVIS: c_short = 0o0002000;
-const SEEMONST: c_short = 0o040000;
-const ISCURSED: c_int = 0o000001;
-const ISPROT: c_int = 0o000040;
 
 const MAXPOTIONS: usize = 14;
 
@@ -151,13 +140,13 @@ unsafe fn hero() -> IVec2 {
 }
 
 #[inline]
-unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
+unsafe fn player_has(flag: MonsterFlags) -> bool {
+    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
 }
 
 #[inline]
-unsafe fn thing_has(tp: *mut CThing, flag: c_short) -> bool {
-    ((*thing_t(tp)).t_flags & flag) != 0
+unsafe fn thing_has(tp: *mut CThing, flag: MonsterFlags) -> bool {
+    (*thing_t(tp)).t_flags.contains(flag)
 }
 
 #[inline]
@@ -178,7 +167,7 @@ unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
 #[inline]
 unsafe fn is_magic_local(obj: *mut CThing) -> bool {
     match (*thing_o(obj)).o_type {
-        ARMOR => (((*thing_o(obj)).o_flags & ISPROT) != 0) || (*thing_o(obj)).o_arm != 0,
+        ARMOR => (*thing_o(obj)).o_flags.contains(ObjectFlags::PROT) || (*thing_o(obj)).o_arm != 0,
         WEAPON => (*thing_o(obj)).o_hplus != 0 || (*thing_o(obj)).o_dplus != 0,
         POTION | SCROLL | STICK | RING | AMULET => true,
         _ => false,
@@ -192,53 +181,59 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
         let taste_ptr = (&raw mut prbuf) as *mut [c_char; 2048] as *mut c_char as *const c_char;
         match potion {
             PotionType::Confuse => (
-                ISHUH,
+                MonsterFlags::HUH,
                 unconfuse as *const c_void,
                 HUHDURATION,
                 c"what a tripy feeling!".as_ptr(),
                 c"wait, what's going on here. Huh? What? Who?".as_ptr(),
             ),
             PotionType::Lsd => (
-                ISHALU,
+                MonsterFlags::HALU,
                 come_down as *const c_void,
                 SEEDURATION,
                 c"Oh, wow!  Everything seems so cosmic!".as_ptr(),
                 c"Oh, wow!  Everything seems so cosmic!".as_ptr(),
             ),
             PotionType::SeeInvisible => (
-                CANSEE,
+                MonsterFlags::CANSEE,
                 unsee as *const c_void,
                 SEEDURATION,
                 taste_ptr,
                 taste_ptr,
             ),
             PotionType::Blind => (
-                ISBLIND,
+                MonsterFlags::BLIND,
                 sight as *const c_void,
                 SEEDURATION,
                 c"oh, bummer!  Everything is dark!  Help!".as_ptr(),
                 c"a cloak of darkness falls around you".as_ptr(),
             ),
             PotionType::Levitate => (
-                ISLEVIT,
+                MonsterFlags::LEVIT,
                 land as *const c_void,
                 HEALTIME,
                 c"oh, wow!  You're floating in the air!".as_ptr(),
                 c"you start to float in the air".as_ptr(),
             ),
-            _ => (0, ptr::null(), 0, ptr::null(), ptr::null()),
+            _ => (
+                MonsterFlags::NONE,
+                ptr::null(),
+                0,
+                ptr::null(),
+                ptr::null(),
+            ),
         }
     };
 
     (*pot_info.as_mut_ptr().add(potion.index())).oi_know = knowit;
 
-    if flags == 0 || daemon.is_null() {
+    if flags.is_empty() || daemon.is_null() {
         return;
     }
 
     let t = spread(base_time);
     if !player_has(flags) {
-        (*thing_t(crate::game::player_ptr())).t_flags |= flags;
+        (*thing_t(crate::game::player_ptr())).t_flags.insert(flags);
         fuse(daemon, 0, t, AFTER);
         look(false as c_uchar);
     } else {
@@ -256,7 +251,7 @@ pub unsafe extern "C" fn quaff() {
     let mut mp: *mut CThing;
     let discardit;
     let mut show = false;
-    let trip = player_has(ISHALU);
+    let trip = player_has(MonsterFlags::HALU);
 
     if obj.is_null() {
         return;
@@ -315,7 +310,9 @@ pub unsafe extern "C" fn quaff() {
             msg_str("you feel stronger, now.  What bulging muscles!");
         }
         PotionType::MonsterFind => {
-            (*thing_t(crate::game::player_ptr())).t_flags |= SEEMONST;
+            (*thing_t(crate::game::player_ptr()))
+                .t_flags
+                .insert(MonsterFlags::SEEMONST);
             fuse(
                 turn_see as *const c_void,
                 true as c_uchar as c_int,
@@ -380,7 +377,7 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::Lsd => {
             if !trip {
-                if player_has(SEEMONST) {
+                if player_has(MonsterFlags::SEEMONST) {
                     turn_see(false as c_uchar);
                 }
                 start_daemon(visuals as *const c_void, 0, BEFORE);
@@ -395,7 +392,7 @@ pub unsafe extern "C" fn quaff() {
                 c"this potion tastes like %s juice".as_ptr(),
                 fruit.as_ptr(),
             );
-            show = player_has(CANSEE);
+            show = player_has(MonsterFlags::CANSEE);
             do_pot_impl(PotionType::SeeInvisible, false);
             if !show {
                 invis_on();
@@ -495,9 +492,12 @@ pub unsafe extern "C" fn is_magic(obj: *mut CThing) -> c_uchar {
 #[no_mangle]
 pub unsafe extern "C" fn invis_on() {
     let mut mp = MLIST.head();
-    (*thing_t(crate::game::player_ptr())).t_flags |= CANSEE;
+    (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .insert(MonsterFlags::CANSEE);
     while !mp.is_null() {
-        if thing_has(mp, ISINVIS) && see_monst(mp) != 0 && !player_has(ISHALU) {
+        if thing_has(mp, MonsterFlags::INVIS) && see_monst(mp) != 0 && !player_has(MonsterFlags::HALU)
+        {
             output::write_glyph_at(
                 IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
                 ((*thing_t(mp)).t_disguise as u8) as char,
@@ -525,7 +525,7 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
             if !can_see {
                 output::set_standout(true);
             }
-            if !player_has(ISHALU) {
+            if !player_has(MonsterFlags::HALU) {
                 output::write_glyph(((*thing_t(mp)).t_type as u8) as char);
             } else {
                 output::write_glyph((rnd(26) as u8 + b'A') as char);
@@ -539,9 +539,13 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
     }
 
     if turn_off != 0 {
-        (*thing_t(crate::game::player_ptr())).t_flags &= !SEEMONST;
+        (*thing_t(crate::game::player_ptr()))
+            .t_flags
+            .remove(MonsterFlags::SEEMONST);
     } else {
-        (*thing_t(crate::game::player_ptr())).t_flags |= SEEMONST;
+        (*thing_t(crate::game::player_ptr()))
+            .t_flags
+            .insert(MonsterFlags::SEEMONST);
     }
 
     if add_new != 0 {
@@ -568,10 +572,10 @@ pub unsafe extern "C" fn seen_stairs() -> c_uchar {
 
     tp = moat(stairs.y, stairs.x);
     if !tp.is_null() {
-        if see_monst(tp) != 0 && thing_has(tp, ISRUN) {
+        if see_monst(tp) != 0 && thing_has(tp, MonsterFlags::RUN) {
             return 1;
         }
-        if player_has(SEEMONST) && (*thing_t(tp)).t_oldch as c_int == STAIRS {
+        if player_has(MonsterFlags::SEEMONST) && (*thing_t(tp)).t_oldch as c_int == STAIRS {
             return 1;
         }
     }

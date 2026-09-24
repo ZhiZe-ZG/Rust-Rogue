@@ -7,7 +7,7 @@ use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach_pack, new_actor};
@@ -21,7 +21,7 @@ use crate::ui::output::{addmsg_str, msg_str};
 use crate::ui::runtime;
 use glam::IVec2;
 use std::ffi::{c_void, CStr};
-use std::os::raw::{c_char, c_int, c_short, c_uchar};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::globals::monsters;
 
@@ -29,19 +29,6 @@ const LAMPDIST: c_int = 3;
 const HUHDURATION: c_int = 20;
 const AFTER: c_int = 2;
 const VS_MAGIC: c_int = 0o03;
-
-const ISBLIND: c_short = 0o000004;
-const ISCANC: c_short = 0o000010;
-const ISLEVIT: c_short = 0o000010;
-const ISFOUND: c_short = 0o000020;
-const ISGREED: c_short = 0o000040;
-const ISHASTE: c_short = 0o000100;
-const ISHELD: c_short = 0o000400;
-const ISHUH: c_short = 0o001000;
-const ISMEAN: c_short = 0o004000;
-const ISHALU: c_short = 0o004000;
-const ISRUN: c_short = 0o020000;
-const SEEMONST: c_short = 0o040000;
 
 pub use crate::globals::CMonster;
 
@@ -127,13 +114,13 @@ unsafe fn player_t() -> *mut CThingMonster {
 }
 
 #[inline]
-unsafe fn has_flag(tp: *mut CThing, flag: c_short) -> bool {
-    ((*thing_t(tp)).t_flags & flag) != 0
+unsafe fn has_flag(tp: *mut CThing, flag: MonsterFlags) -> bool {
+    (*thing_t(tp)).t_flags.contains(flag)
 }
 
 #[inline]
-unsafe fn player_has(flag: c_short) -> bool {
-    ((*player_t()).t_flags & flag) != 0
+unsafe fn player_has(flag: MonsterFlags) -> bool {
+    (*player_t()).t_flags.contains(flag)
 }
 
 #[inline]
@@ -192,9 +179,9 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
     (*thing_t(tp)).t_stats.damage = mp.m_stats.damage;
     (*thing_t(tp)).t_stats.strength = mp.m_stats.strength;
     (*thing_t(tp)).t_stats.experience = mp.m_stats.experience + lev_add * 10 + exp_add(tp);
-    (*thing_t(tp)).t_flags = mp.m_flags;
+    (*thing_t(tp)).t_flags = MonsterFlags::from_bits(mp.m_flags);
     if level > 29 {
-        (*thing_t(tp)).t_flags |= ISHASTE;
+        (*thing_t(tp)).t_flags.insert(MonsterFlags::HASTE);
     }
     (*thing_t(tp)).t_turn = true;
     crate::entity::player::set_thing_pack(tp, std::ptr::null_mut());
@@ -239,9 +226,9 @@ pub unsafe extern "C" fn wanderer() {
 
     new_monster(tp, randmonster(true), &mut cp);
 
-    if player_has(SEEMONST) {
+    if player_has(MonsterFlags::SEEMONST) {
         output::set_standout(true);
-        if !player_has(ISHALU) {
+        if !player_has(MonsterFlags::HALU) {
             output::write_glyph(((*thing_t(tp)).t_type as u8) as char);
         } else {
             output::write_glyph((rnd(26) as u8 + b'A') as char);
@@ -270,36 +257,36 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
 
     let ch = (*thing_t(tp)).t_type;
 
-    if !has_flag(tp, ISRUN)
+    if !has_flag(tp, MonsterFlags::RUN)
         && rnd(3) != 0
-        && has_flag(tp, ISMEAN)
-        && !has_flag(tp, ISHELD)
+        && has_flag(tp, MonsterFlags::MEAN)
+        && !has_flag(tp, MonsterFlags::HELD)
         && !iswearing(RingType::Stealth)
-        && !player_has(ISLEVIT)
+        && !player_has(MonsterFlags::LEVIT)
     {
         crate::entity::player::set_thing_dest(tp, &mut (*player_t()).t_pos);
-        (*thing_t(tp)).t_flags |= ISRUN;
+        (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
     }
 
     if ch == b'M'
-        && !player_has(ISBLIND)
-        && !player_has(ISHALU)
-        && !has_flag(tp, ISFOUND)
-        && !has_flag(tp, ISCANC)
-        && has_flag(tp, ISRUN)
+        && !player_has(MonsterFlags::BLIND)
+        && !player_has(MonsterFlags::HALU)
+        && !has_flag(tp, MonsterFlags::FOUND)
+        && !has_flag(tp, MonsterFlags::CANCELLED)
+        && has_flag(tp, MonsterFlags::RUN)
     {
         let rp = (*player_t()).t_room;
         if (rp.is_some() && !crate::game::room_dark(rp))
             || dist(y, x, (*player_t()).t_pos.y, (*player_t()).t_pos.x) < LAMPDIST
         {
-            (*thing_t(tp)).t_flags |= ISFOUND;
+            (*thing_t(tp)).t_flags.insert(MonsterFlags::FOUND);
             if save(VS_MAGIC) == 0 {
-                if player_has(ISHUH) {
+                if player_has(MonsterFlags::HUH) {
                     lengthen(unconfuse as *const c_void, spread(HUHDURATION));
                 } else {
                     fuse(unconfuse as *const c_void, 0, spread(HUHDURATION), AFTER);
                 }
-                (*player_t()).t_flags |= ISHUH;
+                (*player_t()).t_flags.insert(MonsterFlags::HUH);
                 let mname = set_mname(tp);
                 addmsg_str(&CStr::from_ptr(mname).to_string_lossy());
                 if strcmp(mname, c"it".as_ptr()) != 0 {
@@ -310,8 +297,8 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
         }
     }
 
-    if has_flag(tp, ISGREED) && !has_flag(tp, ISRUN) {
-        (*thing_t(tp)).t_flags |= ISRUN;
+    if has_flag(tp, MonsterFlags::GREED) && !has_flag(tp, MonsterFlags::RUN) {
+        (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
         let pr = (*player_t()).t_room;
         if pr.is_some() && crate::game::room_goldval(pr) != 0 {
             crate::entity::player::set_thing_dest(tp, crate::game::room_gold_ptr(pr));

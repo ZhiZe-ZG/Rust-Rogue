@@ -15,10 +15,10 @@ use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, msg_str};
 use glam::IVec2;
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags};
 use crate::startup::roll;
 
 const PASSAGE: c_char = b'#' as c_char;
@@ -38,13 +38,6 @@ const AMULET: c_char = b',' as c_char;
 const RING: c_char = b'=' as c_char;
 const STICK: c_char = b'/' as c_char;
 
-const ISHALU: c_short = 0o0004000;
-const ISBLIND: c_short = 0o0000004;
-const ISHASTE: c_short = 0o0000100;
-const ISHUH: c_short = 0o0001000;
-const ISINVIS: c_short = 0o0002000;
-const ISRUN: c_short = 0o020000;
-const SEEMONST: c_short = 0o040000;
 const F_PASS: c_char = 0x80u8 as c_char;
 const MAXSTR: usize = 1024;
 const HUNGERTIME: c_int = 1300;
@@ -98,8 +91,8 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn on(thing: *mut CThing, flag: c_short) -> bool {
-    ((*thing_t(thing)).t_flags & flag) != 0
+unsafe fn on(thing: *mut CThing, flag: MonsterFlags) -> bool {
+    (*thing_t(thing)).t_flags.contains(flag)
 }
 
 #[inline]
@@ -126,7 +119,7 @@ pub unsafe fn show_floor() -> bool {
     let player_room = (*thing_t(crate::game::player_ptr())).t_room;
     if crate::game::room_dark(player_room)
         && !crate::game::room_gone(player_room)
-        && !on(crate::game::player_ptr(), ISBLIND)
+        && !on(crate::game::player_ptr(), MonsterFlags::BLIND)
     {
         return see_floor;
     }
@@ -251,15 +244,19 @@ pub unsafe extern "C" fn add_str(sp: *mut c_uint, amt: c_int) {
 
 #[no_mangle]
 pub unsafe fn add_haste(potion: bool) -> bool {
-    if on(crate::game::player_ptr(), ISHASTE) {
+    if on(crate::game::player_ptr(), MonsterFlags::HASTE) {
         no_command += rnd(8);
-        (*thing_t(crate::game::player_ptr())).t_flags &= !(ISRUN as c_short | ISHASTE as c_short) as c_short;
+        (*thing_t(crate::game::player_ptr()))
+            .t_flags
+            .remove(MonsterFlags::RUN | MonsterFlags::HASTE);
         extinguish(nohaste as *const c_void);
         msg_str("you faint from exhaustion");
         return false;
     }
 
-    (*thing_t(crate::game::player_ptr())).t_flags |= ISHASTE as c_short;
+    (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .insert(MonsterFlags::HASTE);
     if potion {
         fuse(nohaste as *const c_void, 0, rnd(4) + 4, AFTER);
     }
@@ -366,7 +363,7 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
         last_delt.x = delta.x;
     }
 
-    if on(crate::game::player_ptr(), ISHUH) && rnd(5) == 0 {
+    if on(crate::game::player_ptr(), MonsterFlags::HUH) && rnd(5) == 0 {
         loop {
             delta.y = rnd(3) - 1;
             delta.x = rnd(3) - 1;
@@ -427,7 +424,7 @@ pub unsafe extern "C" fn rnd_thing() -> c_char {
 
 #[no_mangle]
 pub unsafe extern "C" fn choose_str(ts: *const c_char, ns: *const c_char) -> *mut c_char {
-    if on(crate::game::player_ptr(), ISHALU) {
+    if on(crate::game::player_ptr(), MonsterFlags::HALU) {
         ts as *mut c_char
     } else {
         ns as *mut c_char

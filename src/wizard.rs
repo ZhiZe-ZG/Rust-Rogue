@@ -3,14 +3,14 @@
 //! Ported from `src/c/wizard.c` to Rust.
 use crate::rnd::rnd;
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 use std::ptr;
 
 use crate::config::GameConfig;
 use crate::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
 use crate::item::pack::{add_pack, floor_at, get_item};
 use crate::item::sticks::fix_stick;
 use crate::item::thing_list::new_item;
@@ -33,9 +33,6 @@ const WEAPON: c_int = b')' as c_int;
 const ARMOR: c_int = b']' as c_int;
 const GOLD: c_int = b'*' as c_int;
 
-const ISCURSED: c_int = 0o000001;
-const ISKNOW: c_int = 0o000200;
-const ISHELD: c_short = 0o000400;
 const F_REAL: c_char = 0x10u8 as c_char;
 
 static mut master_mode_enabled: c_uchar = 1;
@@ -144,7 +141,7 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
         SCROLL => set_know(obj, scr_info.as_mut_ptr()),
         POTION => set_know(obj, pot_info.as_mut_ptr()),
         STICK => set_know(obj, ws_info.as_mut_ptr()),
-        WEAPON | ARMOR => (*thing_o(obj)).o_flags |= ISKNOW,
+        WEAPON | ARMOR => (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW),
         RING => set_know(obj, ring_info.as_mut_ptr()),
         _ => {}
     }
@@ -161,7 +158,7 @@ pub unsafe extern "C" fn set_know(obj: *mut CThing, info: *mut CObjInfo) {
     let idx = (*thing_o(obj)).o_which as usize;
     let item = &mut *info.add(idx);
     item.oi_know = true;
-    (*thing_o(obj)).o_flags |= ISKNOW;
+    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     item.oi_guess = None;
 }
 
@@ -212,7 +209,7 @@ pub unsafe extern "C" fn create_obj() {
         let bless = readchar() as c_char;
         mpos = 0;
         if bless == ('-' as c_char) {
-            (*thing_o(obj)).o_flags |= ISCURSED;
+            (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
         }
         if (*thing_o(obj)).o_type == WEAPON {
             init_weapon(obj, (*thing_o(obj)).o_which);
@@ -238,7 +235,7 @@ pub unsafe extern "C" fn create_obj() {
                 let bless = readchar() as c_char;
                 mpos = 0;
                 if bless == ('-' as c_char) {
-                    (*thing_o(obj)).o_flags |= ISCURSED;
+                    (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
                 }
                 (*thing_o(obj)).o_arm = if bless == ('-' as c_char) {
                     -1
@@ -247,7 +244,7 @@ pub unsafe extern "C" fn create_obj() {
                 };
             }
             _ => {
-                (*thing_o(obj)).o_flags |= ISCURSED;
+                (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
             }
         }
     } else if (*thing_o(obj)).o_type == STICK {
@@ -279,8 +276,13 @@ pub unsafe extern "C" fn teleport() {
     (*thing_t(crate::game::player_ptr())).t_pos = hero;
     output::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
 
-    if ((*thing_t(crate::game::player_ptr())).t_flags & ISHELD) != 0 {
-        (*thing_t(crate::game::player_ptr())).t_flags &= !ISHELD;
+    if (*thing_t(crate::game::player_ptr()))
+        .t_flags
+        .contains(MonsterFlags::HELD)
+    {
+        (*thing_t(crate::game::player_ptr()))
+            .t_flags
+            .remove(MonsterFlags::HELD);
         vf_hit = 0;
         let dmg = b"000x0\0";
         std::ptr::copy_nonoverlapping(
@@ -360,7 +362,7 @@ mod tests {
                     o_hplus: 0,
                     o_dplus: 0,
                     o_arm: 0,
-                    o_flags: 0,
+                    o_flags: ObjectFlags::NONE,
                     o_group: 0,
                     o_label: None,
                 },
@@ -376,7 +378,7 @@ mod tests {
 
             set_know(&mut obj, info.as_mut_ptr());
             assert_eq!(info[0].oi_know, true);
-            assert!(((*thing_o(&mut obj)).o_flags & ISKNOW) != 0);
+            assert!((*thing_o(&mut obj)).o_flags.contains(ObjectFlags::KNOW));
         }
     }
 }

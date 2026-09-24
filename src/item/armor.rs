@@ -2,7 +2,7 @@
 //!
 //! Ported from `src/c/armor.c` to Rust.
 use crate::daemon::{do_daemons, do_fuses};
-use crate::entity::player::{CThing, CThingObject};
+use crate::entity::player::{CThing, CThingObject, ObjectFlags};
 use crate::game::EQUIPMENT;
 use crate::item::pack::get_item;
 use crate::item::rings::RingType;
@@ -13,8 +13,6 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 const ARMOR: c_int = ']' as c_int;
-const ISKNOW: c_int = 0o000002;
-const ISPROT: c_int = 0o000040;
 
 unsafe extern "C" {
     static mut terse: c_uchar;
@@ -57,7 +55,7 @@ pub unsafe extern "C" fn wear() {
     }
 
     waste_time();
-    (*thing_o(obj)).o_flags |= ISKNOW;
+    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     let sp = inv_name(obj, true as c_uchar);
     EQUIPMENT.set_armor(obj);
     if terse == 0 {
@@ -118,7 +116,7 @@ pub unsafe extern "C" fn rust_armor(arm: *mut CThing) {
         return;
     }
 
-    if ((*thing_o(arm)).o_flags & ISPROT) != 0
+    if (*thing_o(arm)).o_flags.contains(ObjectFlags::PROT)
         || ring_is(EQUIPMENT.left_ring(), RingType::SustainArmor)
         || ring_is(EQUIPMENT.right_ring(), RingType::SustainArmor)
     {

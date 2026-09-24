@@ -2,11 +2,11 @@
 //!
 //! Ported from `src/c/pack.c` to Rust.
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::CThing;
+use crate::entity::player::{CThing, MonsterFlags, ObjectFlags};
 use crate::item::scrolls::ScrollType;
 use crate::item::thing_list::{detach, discard, new_item};
 use crate::item::things::{add_line, inv_name};
@@ -32,8 +32,6 @@ const STICK: c_int = b'/' as c_int;
 const CALLABLE: c_int = -1;
 const R_OR_S: c_int = -2;
 const ESCAPE: c_int = 27;
-const ISFOUND: c_int = 0o0000020;
-const ISLEVIT: c_short = 0o0000010;
 
 unsafe extern "C" {
     static mut after: c_uchar;
@@ -100,8 +98,8 @@ unsafe fn proom() -> Option<usize> {
     (*thing_t(crate::game::player_ptr())).t_room
 }
 
-unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
+unsafe fn player_has(flag: MonsterFlags) -> bool {
+    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
 }
 
 unsafe fn floor_char_for_room() -> c_char {
@@ -131,7 +129,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
 
     if (*thing_o(item)).o_type == SCROLL as c_int
         && (*thing_o(item)).o_which == ScrollType::Scare as c_int
-        && ((*thing_o(item)).o_flags & ISFOUND) != 0
+        && (*thing_o(item)).o_flags.contains(ObjectFlags::FOUND)
     {
         crate::game::with_current_level_mut(|level| level.items.detach(item));
         // The object is removed from `lvl_obj`, so the terrain glyph shows
@@ -231,7 +229,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
         }
     }
 
-    (*thing_o(item)).o_flags |= ISFOUND as c_int;
+    (*thing_o(item)).o_flags.insert(ObjectFlags::FOUND);
 
     op = MLIST.head();
     while !op.is_null() {
@@ -392,7 +390,7 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
 #[no_mangle]
 pub unsafe extern "C" fn pick_up(ch: c_char) {
     let obj = find_obj(hero_coord().y, hero_coord().x);
-    if player_has(ISLEVIT) {
+    if player_has(MonsterFlags::LEVIT) {
         return;
     }
     if move_on != 0 {

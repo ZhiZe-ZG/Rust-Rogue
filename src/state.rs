@@ -1704,7 +1704,7 @@ unsafe fn rs_write_object(savef: *mut CFile, o: *mut CThing) -> c_int {
     let _ = rs_write_int(savef, (*op).o_hplus);
     let _ = rs_write_int(savef, (*op).o_dplus);
     let _ = rs_write_int(savef, (*op).o_arm);
-    let _ = rs_write_int(savef, (*op).o_flags);
+    let _ = rs_write_int(savef, (*op).o_flags.bits());
     let _ = rs_write_int(savef, (*op).o_group);
     let label_c = (*op)
         .o_label
@@ -1741,7 +1741,9 @@ unsafe fn rs_read_object(inf: *mut CFile, o: *mut CThing) -> c_int {
     let _ = rs_read_int(inf, &mut (*op).o_hplus);
     let _ = rs_read_int(inf, &mut (*op).o_dplus);
     let _ = rs_read_int(inf, &mut (*op).o_arm);
-    let _ = rs_read_int(inf, &mut (*op).o_flags);
+    let mut o_flags_bits: c_int = 0;
+    let _ = rs_read_int(inf, &mut o_flags_bits);
+    (*op).o_flags = crate::entity::player::ObjectFlags::from_bits(o_flags_bits);
     let _ = rs_read_int(inf, &mut (*op).o_group);
     let _ = rs_read_new_cstring(inf, &mut (*op).o_label);
 
@@ -1956,7 +1958,7 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
         let _ = rs_write_int(savef, 0);
     }
 
-    let _ = rs_write_short(savef, (*thing_t(t)).t_flags);
+    let _ = rs_write_short(savef, (*thing_t(t)).t_flags.bits());
     let _ = rs_write_stats(savef, &raw mut (*thing_t(t)).t_stats);
     let _ = rs_write_room_reference(savef, (*thing_t(t)).t_room);
     let _ = rs_write_object_list(savef, crate::entity::player::thing_pack(t));
@@ -2045,7 +2047,9 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
         crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
     }
 
-    let _ = rs_read_short(inf, &mut (*thing_t(t)).t_flags);
+    let mut t_flags_bits: c_short = 0;
+    let _ = rs_read_short(inf, &mut t_flags_bits);
+    (*thing_t(t)).t_flags = crate::entity::player::MonsterFlags::from_bits(t_flags_bits);
     let _ = rs_read_stats(inf, &raw mut (*thing_t(t)).t_stats);
     let _ = rs_read_room_reference(inf, &mut (*thing_t(t)).t_room);
     let mut pack_head: *mut CThing = std::ptr::null_mut();

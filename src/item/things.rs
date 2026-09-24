@@ -10,7 +10,7 @@ use crate::ui::output::msg_str;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::entity::player::{CThing, CThingObject};
+use crate::entity::player::{CThing, CThingObject, ObjectFlags};
 use crate::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
 };
@@ -37,8 +37,6 @@ const RING: c_int = b'=' as c_int;
 const STICK: c_int = b'/' as c_int;
 const GOLD: c_int = b'*' as c_int;
 const AMULET: c_int = b',' as c_int;
-
-const ISCURSED: c_int = 0o000001;
 
 unsafe extern "C" {
     static mut a_class: [c_int; 26];
@@ -223,7 +221,7 @@ pub unsafe extern "C" fn dropcheck(obj: *mut CThing) -> c_uchar {
     {
         return true as c_uchar;
     }
-    if ((*thing_o(obj)).o_flags & ISCURSED) != 0 {
+    if (*thing_o(obj)).o_flags.contains(ObjectFlags::CURSED) {
         msg_str("you can't.  It appears to be cursed");
         return false as c_uchar;
     }
@@ -256,7 +254,7 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
     (*thing_o(cur)).o_arm = 11;
     (*thing_o(cur)).o_count = 1;
     (*thing_o(cur)).o_group = 0;
-    (*thing_o(cur)).o_flags = 0;
+    (*thing_o(cur)).o_flags = ObjectFlags::NONE;
 
     let choice = if no_food > 3 {
         2
@@ -291,7 +289,7 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
             );
             let r = rnd(100);
             if r < 10 {
-                (*thing_o(cur)).o_flags |= ISCURSED;
+                (*thing_o(cur)).o_flags.insert(ObjectFlags::CURSED);
                 (*thing_o(cur)).o_hplus -= rnd(3) + 1;
             } else if r < 15 {
                 (*thing_o(cur)).o_hplus += rnd(3) + 1;
@@ -304,7 +302,7 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
             (*thing_o(cur)).o_arm = a_class[(*thing_o(cur)).o_which as usize];
             let r = rnd(100);
             if r < 20 {
-                (*thing_o(cur)).o_flags |= ISCURSED;
+                (*thing_o(cur)).o_flags.insert(ObjectFlags::CURSED);
                 (*thing_o(cur)).o_arm += rnd(3) + 1;
             } else if r < 28 {
                 (*thing_o(cur)).o_arm -= rnd(3) + 1;
@@ -326,12 +324,12 @@ pub unsafe extern "C" fn new_thing() -> *mut CThing {
                     let mut arm = rnd(3);
                     if arm == 0 {
                         arm = -1;
-                        (*thing_o(cur)).o_flags |= ISCURSED;
+                        (*thing_o(cur)).o_flags.insert(ObjectFlags::CURSED);
                     }
                     (*thing_o(cur)).o_arm = arm;
                 }
                 RingType::Adornment | RingType::Aggravate => {
-                    (*thing_o(cur)).o_flags |= ISCURSED;
+                    (*thing_o(cur)).o_flags.insert(ObjectFlags::CURSED);
                 }
                 _ => {}
             }

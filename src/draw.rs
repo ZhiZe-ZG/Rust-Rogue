@@ -14,12 +14,12 @@
 //! C ABI symbols the C engine has always called, now driven entirely by
 //! `CURRENT_LEVEL`.
 
-use std::os::raw::{c_char, c_int, c_short, c_uchar};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::config::GameConfig;
 use crate::entity::chase::{roomin, see_monst};
 use crate::entity::monsters::wake_monster;
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags};
 use crate::game;
 use crate::level::Trap;
 use crate::level::{door_open, with_current_level, with_current_level_mut, Tile};
@@ -54,10 +54,6 @@ pub const F_TMASK: c_char = 0x07u8 as c_char;
 
 // ─── Player/monster flags ─────────────────────────────────────────────────────
 
-const ISBLIND: c_short = 0o0000004;
-const ISHALU: c_short = 0o0004000;
-const ISRUN: c_short = 0o020000;
-const SEEMONST: c_short = 0o040000;
 
 // ─── Screen geometry ───────────────────────────────────────────────────────────
 
@@ -97,8 +93,8 @@ unsafe fn hero_pos() -> IVec2 {
 }
 
 #[inline]
-unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
+unsafe fn player_has(flag: MonsterFlags) -> bool {
+    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
 }
 
 #[inline]
@@ -397,7 +393,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             if x < 0 || x >= GameConfig::SCREEN_COLS {
                 continue;
             }
-            if !player_has(ISBLIND) && y == hero.y && x == hero.x {
+            if !player_has(MonsterFlags::BLIND) && y == hero.y && x == hero.x {
                 continue;
             }
 
@@ -429,8 +425,8 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             if tp.is_null() {
                 ch = trip_ch(y, x, ch);
             } else {
-                if player_has(SEEMONST) && ((*thing_t(tp)).t_flags & 0o002000) != 0
-                /* ISINVIS */
+                if player_has(MonsterFlags::SEEMONST)
+                    && (*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS)
                 {
                     if door_stop != 0 && firstmove == 0 {
                         running = false as c_uchar;
@@ -441,7 +437,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
                     wake_monster(y, x);
                 }
                 if see_monst(tp) != 0 {
-                    if player_has(ISHALU) {
+                    if player_has(MonsterFlags::HALU) {
                         ch = rnd(26) + b'A' as c_int;
                     } else {
                         ch = (*thing_t(tp)).t_disguise as c_int;
@@ -449,7 +445,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
                 }
             }
 
-            if player_has(ISBLIND) && (y != hero.y || x != hero.x) {
+            if player_has(MonsterFlags::BLIND) && (y != hero.y || x != hero.x) {
                 continue;
             }
 
@@ -527,7 +523,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
 /// Maybe trip on a hallucination — randomize a visible glyph.
 #[no_mangle]
 pub unsafe extern "C" fn trip_ch(y: c_int, x: c_int, ch: c_int) -> c_int {
-    if player_has(ISHALU) && after != 0 {
+    if player_has(MonsterFlags::HALU) && after != 0 {
         let tile = ch as c_char;
         if tile != FLOOR
             && tile != PASSAGE
@@ -552,7 +548,7 @@ pub unsafe extern "C" fn erase_lamp(pos: *mut IVec2, rp: Option<usize>) {
         && rp.is_some()
         && crate::game::room_dark(rp)
         && !crate::game::room_gone(rp)
-        && !player_has(ISBLIND))
+        && !player_has(MonsterFlags::BLIND))
     {
         return;
     }
@@ -605,7 +601,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut IVec2) {
     (*thing_t(crate::game::player_ptr())).t_room = rp;
     door_open(rp);
 
-    if crate::game::room_dark(rp) || player_has(ISBLIND) {
+    if crate::game::room_dark(rp) || player_has(MonsterFlags::BLIND) {
         return;
     }
 
@@ -634,7 +630,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut IVec2) {
             } else {
                 (*thing_t(tp)).t_oldch = ch as u8;
                 if see_monst(tp) == 0 {
-                    if player_has(SEEMONST) {
+                    if player_has(MonsterFlags::SEEMONST) {
                         output::set_standout(true);
                         output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
                         output::set_standout(false);
@@ -670,7 +666,7 @@ pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
 
     let floor = if crate::game::room_gone(rp) {
         PASSAGE
-    } else if !crate::game::room_dark(rp) || player_has(ISBLIND) {
+    } else if !crate::game::room_dark(rp) || player_has(MonsterFlags::BLIND) {
         FLOOR
     } else {
         SPACE
@@ -700,7 +696,7 @@ pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
                     output::write_glyph((SPACE as u8) as char);
                 }
             } else if is_upper(ch) {
-                if player_has(SEEMONST) {
+                if player_has(MonsterFlags::SEEMONST) {
                     output::set_standout(true);
                     output::write_glyph((ch as u8) as char);
                     output::set_standout(false);

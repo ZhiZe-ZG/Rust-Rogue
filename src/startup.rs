@@ -9,7 +9,7 @@ use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon};
 use crate::daemons::{doctor, stomach, swander};
 use crate::entity::chase::{roomin, runners};
-use crate::entity::player::{CThing, CThingMonster};
+use crate::entity::player::{CThing, CThingMonster, MonsterFlags};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
@@ -30,8 +30,6 @@ use glam::IVec2;
 const MAXSTR: usize = 1024;
 const AFTER: c_int = 2;
 const WANDERTIME: c_int = 70;
-const SEEMONST: i16 = 0o040000;
-
 const INV_CLEAR: c_int = 2;
 const BUFSIZ: usize = 8192;
 const SIGINT: c_int = 2;
@@ -356,7 +354,9 @@ pub unsafe extern "C" fn rogue_main(
 
     if master_mode_enabled != 0 && argc >= 2 && *arg_at(argv, 1) == 0 {
         wizard = 1;
-        (*crate::entity::player::thing_t(crate::game::player_ptr())).t_flags |= SEEMONST;
+        (*crate::entity::player::thing_t(crate::game::player_ptr()))
+            .t_flags
+            .insert(MonsterFlags::SEEMONST);
         argv = argv.add(1);
         argc -= 1;
     }

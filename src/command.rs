@@ -12,7 +12,9 @@ use crate::config::GameConfig;
 use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
-use crate::entity::player::{do_move, do_run, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{
+    do_move, do_run, CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags,
+};
 use crate::game::EQUIPMENT;
 use crate::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::help::{help, identify};
@@ -38,7 +40,7 @@ use crate::ui::Window;
 use crate::wizard::{create_obj, show_map, teleport, whatis};
 use glam::IVec2;
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -63,21 +65,6 @@ const STICK: c_char = b'/' as c_char;
 // Object "types" used by get_item()
 const CALLABLE: c_int = -1;
 
-// Player flags
-const ISBLIND: c_short = 0o0000004;
-const ISGREED: c_short = 0o0000040;
-const ISHASTE: c_short = 0o0000100;
-const ISTARGET: c_short = 0o000200;
-const ISHALU: c_short = 0o0004000;
-const ISINVIS: c_short = 0o002000;
-const ISLEVIT: c_short = 0o0000010;
-const ISREGEN: c_short = 0o010000;
-const ISRUN: c_short = 0o020000;
-// C's `#define ISSLOW 0100000` == 0o100000 (32768) overflows a signed short;
-// the Rust port stores the wrapped bit pattern like the C engine does.
-const ISSLOW: c_short = 0o100000u16 as c_short;
-const SEEMONST: c_short = 0o040000;
-
 // Map flags
 const F_REAL: c_char = 0x10u8 as c_char;
 const F_SEEN: c_char = 0x40u8 as c_char;
@@ -92,7 +79,6 @@ const NORM: c_int = 0;
 // Weapon/armor kinds for the wizard ('^I' = CTRL-I) cheat
 const TWOSWORD: c_int = 5;
 const PLATE_MAIL: c_int = 7;
-const ISKNOW: c_int = 0o0000002;
 
 // Delayed-action phases
 const BEFORE: c_int = 1;
@@ -224,8 +210,8 @@ unsafe fn hero_ptr() -> *mut IVec2 {
 }
 
 #[inline]
-unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
+unsafe fn player_has(flag: MonsterFlags) -> bool {
+    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
 }
 
 #[inline]
@@ -256,7 +242,7 @@ pub unsafe extern "C" fn command() {
     let mut ntimes: c_int = 1; // Number of player moves
     let mut mp: *mut CThing;
 
-    if player_has(ISHASTE) {
+    if player_has(MonsterFlags::HASTE) {
         ntimes += 1;
     }
 
@@ -279,7 +265,13 @@ pub unsafe extern "C" fn command() {
          * these are illegal things for the player to be, so if any are
          * set, someone's been poking in memory
          */
-        if player_has(ISSLOW | ISGREED | ISINVIS | ISREGEN | ISTARGET) {
+        if player_has(
+            MonsterFlags::SLOW
+                | MonsterFlags::GREED
+                | MonsterFlags::INVIS
+                | MonsterFlags::REGEN
+                | MonsterFlags::TARGET,
+        ) {
             std::process::exit(1);
         }
 
@@ -325,7 +317,7 @@ pub unsafe extern "C" fn command() {
             no_command -= 1;
             if no_command == 0 {
                 let tp = thing_t(crate::game::player_ptr());
-                (*tp).t_flags = (((*tp).t_flags as c_short) | ISRUN as c_short) as c_short;
+                (*tp).t_flags.insert(MonsterFlags::RUN);
                 msg_str("you can move again");
             }
         } else {
@@ -468,7 +460,7 @@ pub unsafe extern "C" fn command() {
                         || v == ctrl(b'B')
                         || v == ctrl(b'N') =>
                     {
-                        if !player_has(ISBLIND) {
+                        if !player_has(MonsterFlags::BLIND) {
                             door_stop = true as c_uchar;
                             firstmove = true as c_uchar;
                         }
@@ -492,7 +484,8 @@ pub unsafe extern "C" fn command() {
                             delta.y += hero.y;
                             delta.x += hero.x;
                             mp = moat_at(delta.y, delta.x);
-                            if mp.is_null() || (see_monst(mp) == 0 && !player_has(SEEMONST)) {
+                            if mp.is_null() || (see_monst(mp) == 0 && !player_has(MonsterFlags::SEEMONST))
+                            {
                                 if terse == 0 {
                                     addmsg_str("I see ");
                                 }
@@ -501,9 +494,7 @@ pub unsafe extern "C" fn command() {
                             } else if diag_ok(hero_ptr(), &raw mut delta) != 0 {
                                 to_death = true as c_uchar;
                                 max_hit = 0;
-                                (*thing_t(mp)).t_flags = ((*thing_t(mp)).t_flags as c_short
-                                    | ISTARGET as c_short)
-                                    as c_short;
+                                (*thing_t(mp)).t_flags.insert(MonsterFlags::TARGET);
                                 runch = dir_ch;
                                 ch = dir_ch as u8;
                                 continue 'dispatch;
@@ -623,7 +614,7 @@ pub unsafe extern "C" fn command() {
                             }
                             if !crate::draw::is_trap_cell(delta.y, delta.x) {
                                 msg_str("no trap there");
-                            } else if player_has(ISHALU) {
+                            } else if player_has(MonsterFlags::HALU) {
                                 msg_str(
                                     &CStr::from_ptr(
                                         tr_name[rnd(GameConfig::TRAP_KIND_COUNT) as usize],
@@ -748,7 +739,7 @@ pub unsafe extern "C" fn command() {
                                 }
                                 CTRL_C => add_pass(),
                                 CTRL_X => {
-                                    turn_see(if player_has(SEEMONST) {
+                                    turn_see(if player_has(MonsterFlags::SEEMONST) {
                                         true as c_uchar
                                     } else {
                                         false as c_uchar
@@ -782,7 +773,7 @@ pub unsafe extern "C" fn command() {
                                     (*thing_o(obj)).o_type = ARMOR as c_int;
                                     (*thing_o(obj)).o_which = PLATE_MAIL;
                                     (*thing_o(obj)).o_arm = -5;
-                                    (*thing_o(obj)).o_flags = (*thing_o(obj)).o_flags | ISKNOW;
+                                    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
                                     (*thing_o(obj)).o_count = 1;
                                     (*thing_o(obj)).o_group = 0;
                                     EQUIPMENT.set_armor(obj);
@@ -860,10 +851,10 @@ pub unsafe extern "C" fn search() {
     let mut probinc: c_int = 0;
     let mut found = false;
 
-    if player_has(ISHALU) {
+    if player_has(MonsterFlags::HALU) {
         probinc += 3;
     }
-    if player_has(ISBLIND) {
+    if player_has(MonsterFlags::BLIND) {
         probinc += 2;
     }
 
@@ -895,7 +886,7 @@ pub unsafe extern "C" fn search() {
                             if terse == 0 {
                                 addmsg_str("you found ");
                             }
-                            if player_has(ISHALU) {
+                            if player_has(MonsterFlags::HALU) {
                                 msg_str(
                                     &CStr::from_ptr(
                                         tr_name[rnd(GameConfig::TRAP_KIND_COUNT) as usize],
@@ -990,7 +981,7 @@ pub unsafe extern "C" fn u_level() {
 /// Uses globals: player.
 #[no_mangle]
 pub unsafe extern "C" fn levit_check() -> c_uchar {
-    if !player_has(ISLEVIT) {
+    if !player_has(MonsterFlags::LEVIT) {
         return false as c_uchar;
     }
     msg_str("You can't.  You're floating off the ground!");

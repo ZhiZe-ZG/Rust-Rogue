@@ -13,7 +13,7 @@ use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject, ObjectFlags};
 use crate::globals::weap_info;
 use crate::item::thing_list::discard;
 use crate::item::things::{dropcheck, inv_name};
@@ -260,7 +260,7 @@ pub unsafe extern "C" fn init_weapon(weap: *mut CThing, which: c_int) {
     copy_c_bytes(&mut (*o).o_damage, iwp.iw_dam);
     copy_c_bytes(&mut (*o).o_hurldmg, iwp.iw_hrl);
     (*o).o_launch = iwp.iw_launch;
-    (*o).o_flags = iwp.iw_flags;
+    (*o).o_flags = ObjectFlags::from_bits(iwp.iw_flags);
     (*o).o_hplus = 0;
     (*o).o_dplus = 0;
 
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn init_weapon(weap: *mut CThing, which: c_int) {
         (*o).o_count = rnd(4) + 2;
         (*o).o_group = group;
         group += 1;
-    } else if ((*o).o_flags & ISMANY) != 0 {
+    } else if (*o).o_flags.contains(ObjectFlags::MANY) {
         (*o).o_count = rnd(8) + 8;
         (*o).o_group = group;
         group += 1;
