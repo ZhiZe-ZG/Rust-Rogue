@@ -14,7 +14,7 @@ use super::passages::{
     number_passages, plan_corridor, Passage, PassageLinks,
 };
 use super::monster_map::MonsterMap;
-use super::roomgraph::RoomGraph;
+use super::roomgraph::{generate_rooms, RoomGraph};
 use super::structure::{Room, Structure};
 use super::tile::{Tile, Trap};
 use crate::config::GameConfig;
@@ -345,13 +345,13 @@ impl Level {
 
     pub fn generate_rooms_and_connections(
         &mut self,
-        rooms: [Room; GameConfig::MAX_ROOMS],
+        mut rooms: [Room; GameConfig::MAX_ROOMS],
         bsze: IVec2,
     ) -> [Room; GameConfig::MAX_ROOMS] {
-        self.room_graph = RoomGraph::for_level(rooms, bsze, self.depth);
-        self.room_graph.generate_connections();
+        generate_rooms(&mut rooms, bsze, self.depth);
+        self.room_graph.generate_connections(&rooms);
 
-        let generated_rooms = build_generated_rooms(self.room_graph.clone().into_rooms());
+        let generated_rooms = build_generated_rooms(rooms);
         self.rooms = generated_rooms.to_vec();
 
         // Stamp every active room's tile model onto the level map.

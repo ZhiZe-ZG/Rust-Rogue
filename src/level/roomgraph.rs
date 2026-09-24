@@ -2,9 +2,9 @@
 //!
 //! The legacy C engine kept a per-level `rdes` array describing which of the
 //! nine rooms are geometrically adjacent and which of those connections have
-//! actually been dug. This module provides a pure-Rust [`RoomGraph`] that owns
-//! the room slots and the per-level connection plan so level generation can run
-//! without C globals.
+//! actually been dug. This module provides pure-Rust room-layout generation and
+//! the [`RoomGraph`] connection plan so level generation can run without C
+//! globals.
 
 use crate::rnd::rnd;
 use glam::IVec2;
@@ -17,28 +17,16 @@ const GRID_ROWS: usize = 3;
 /// Columns in the fixed three-by-three room grid.
 const GRID_COLS: usize = 3;
 
-/// Owned room layout plus the planned room-to-room passage connections.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Planned room-to-room passage connections for one generation pass.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RoomGraph {
-    rooms: [Room; GameConfig::MAX_ROOMS],
     connections: Vec<(usize, usize)>,
 }
 
 impl RoomGraph {
-    /// Build an empty graph with default room slots.
+    /// Build an empty connection plan.
     pub fn new() -> Self {
-        Self::with_rooms(empty_rooms())
-    }
-
-    /// Build and populate room layout/flags for one level generation pass.
-    pub(crate) fn for_level(rooms: [Room; GameConfig::MAX_ROOMS], bsze: IVec2, depth: i32) -> Self {
-        let mut graph = Self::with_rooms(rooms);
-        graph.determine_room_layouts(bsze, depth);
-        graph
-    }
-
-    pub(crate) fn into_rooms(self) -> [Room; GameConfig::MAX_ROOMS] {
-        self.rooms
+        Self::default()
     }
 
     pub(crate) fn connections(&self) -> &[(usize, usize)] {
@@ -46,58 +34,51 @@ impl RoomGraph {
     }
 
     /// Plan which room pairs get connected, storing the result on this graph.
-    pub(crate) fn generate_connections(&mut self) {
-        self.connections = generate_for_rooms(&self.rooms);
+    pub(crate) fn generate_connections(&mut self, rooms: &[Room]) {
+        self.connections = generate_for_rooms(rooms);
     }
 
     /// Reset the per-level connection plan.
     pub fn reset(&mut self) {
         self.connections.clear();
     }
+}
 
-    /// Wrap pre-existing room slots into a graph with no connections yet.
-    fn with_rooms(rooms: [Room; GameConfig::MAX_ROOMS]) -> Self {
-        Self {
-            rooms,
-            connections: Vec::new(),
-        }
+/// Generate the room geometry, sizes, and flags for one level in place.
+pub(crate) fn generate_rooms(rooms: &mut [Room], bsze: IVec2, depth: i32) {
+    // Reset per-room state before generating the level layout.
+    for room in rooms.iter_mut() {
+        room.goldval = 0;
+        room.entry_point_count = 0;
+        room.clear_flags();
     }
 
-    fn determine_room_layouts(&mut self, bsze: IVec2, depth: i32) {
-        // Reset per-room state before generating the level layout.
-        for room in &mut self.rooms {
-            room.goldval = 0;
-            room.entry_point_count = 0;
-            room.clear_flags();
+    // Randomly mark a few rooms as removed for this level.
+    for _ in 0..rnd(4) {
+        rooms[pick_non_gone(rooms)].mark_gone();
+    }
+
+    // Compute geometry, sizes, and flags for every room slot.
+    for i in 0..GameConfig::MAX_ROOMS {
+        let top = grid_top_left(i, bsze);
+        let room = &mut rooms[i];
+
+        if room.is_gone() {
+            place_off_map_room(room, top, bsze);
+            continue;
         }
 
-        // Randomly mark a few rooms as removed for this level.
-        for _ in 0..rnd(4) {
-            self.rooms[pick_non_gone(&self.rooms)].mark_gone();
+        if rnd(10) < depth - 1 {
+            room.mark_dark();
+            if rnd(15) == 0 {
+                room.set_maze();
+            }
         }
 
-        // Compute geometry, sizes, and flags for every room slot.
-        for i in 0..GameConfig::MAX_ROOMS {
-            let top = grid_top_left(i, bsze);
-            let room = &mut self.rooms[i];
-
-            if room.is_gone() {
-                place_off_map_room(room, top, bsze);
-                continue;
-            }
-
-            if rnd(10) < depth - 1 {
-                room.mark_dark();
-                if rnd(15) == 0 {
-                    room.set_maze();
-                }
-            }
-
-            if room.is_maze() {
-                place_maze_room(room, top, bsze);
-            } else {
-                place_regular_room(room, top, bsze);
-            }
+        if room.is_maze() {
+            place_maze_room(room, top, bsze);
+        } else {
+            place_regular_room(room, top, bsze);
         }
     }
 }
@@ -189,10 +170,6 @@ fn pick_unconnected(
         }
     }
     pick
-}
-
-fn empty_rooms() -> [Room; GameConfig::MAX_ROOMS] {
-    std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
 }
 
 /// Top-left corner of the grid cell that room `i` belongs to.
