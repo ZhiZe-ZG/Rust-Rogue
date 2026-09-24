@@ -9,17 +9,6 @@ use super::structure::Structure;
 use super::tile::Tile;
 use crate::config::GameConfig;
 
-/// How a door placed on a room boundary is rendered.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DoorKind {
-    /// An open door, rendered as `+`.
-    Open,
-    /// A wall segment on a horizontal boundary, rendered as `-`.
-    WallH,
-    /// A wall segment on a vertical boundary, rendered as `|`.
-    WallV,
-}
-
 /// A door placed on a room boundary while digging corridors.
 ///
 /// `position` is relative to the room's top-left corner, matching the
@@ -27,7 +16,9 @@ pub enum DoorKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Door {
     pub position: IVec2,
-    pub kind: DoorKind,
+    /// Whether this door is hidden: it renders as the wall segment it replaces
+    /// (see [`Tile::HiddenDoor`]) until revealed.
+    pub secret: bool,
 }
 
 /// Logical room model used by Rust-side level generation.
@@ -135,7 +126,7 @@ impl Room {
     /// Place a door on one of this room's walls.
     ///
     /// `local` is a map coordinate relative to this room's top-left corner
-    /// (i.e. `pos - position` of an absolute position); `kind` is chosen by
+    /// (i.e. `pos - position` of an absolute position); `secret` is chosen by
     /// the caller and decides whether the door renders as an open `+` or as a
     /// wall segment cleared of `F_REAL` (a secret door). Returns `true` when
     /// `local` lands exactly on this room's outer wall row/column: the door is
@@ -143,7 +134,7 @@ impl Room {
     /// coordinate is registered as an entry point. Returns `false` when
     /// `local` lies outside the room or in its interior, leaving the room
     /// unchanged.
-    pub fn place_door(&mut self, local: IVec2, kind: DoorKind) -> bool {
+    pub fn place_door(&mut self, local: IVec2, secret: bool) -> bool {
         let (local_y, local_x) = (local.y, local.x);
         if local_y < 0 || local_x < 0 || local_y >= self.size.y || local_x >= self.size.x {
             return false;
@@ -157,14 +148,14 @@ impl Room {
             return false;
         }
 
-        if kind == DoorKind::Open {
+        if !secret {
             let _ = self
                 .structure
                 .set(local_y as usize, local_x as usize, Tile::Door);
         }
         self.doors.push(Door {
             position: local,
-            kind,
+            secret,
         });
         self.add_entry_point(local);
         true
@@ -201,13 +192,13 @@ mod tests {
         let mut room = test_room();
 
         // Top wall (y = 0).
-        assert!(room.place_door(IVec2::new(1, 0), DoorKind::Open));
+        assert!(room.place_door(IVec2::new(1, 0), false));
         // Right wall (x = size.x - 1).
-        assert!(room.place_door(IVec2::new(5, 1), DoorKind::WallV));
+        assert!(room.place_door(IVec2::new(5, 1), true));
         // Bottom wall (y = size.y - 1).
-        assert!(room.place_door(IVec2::new(2, 3), DoorKind::Open));
+        assert!(room.place_door(IVec2::new(2, 3), false));
         // Left wall (x = 0).
-        assert!(room.place_door(IVec2::new(0, 2), DoorKind::Open));
+        assert!(room.place_door(IVec2::new(0, 2), false));
 
         assert_eq!(room.entry_points.len(), 4);
         assert_eq!(room.entry_point_count, 4);
@@ -223,10 +214,9 @@ mod tests {
         for (door, exp) in room.doors.iter().zip(expected) {
             assert_eq!(door.position, exp);
         }
-        assert_eq!(
-            room.doors[1].kind,
-            DoorKind::WallV,
-            "right wall door keeps its kind"
+        assert!(
+            room.doors[1].secret,
+            "right wall door keeps its secret flag"
         );
 
         // Open doors replace the wall cell; wall-segment doors do not.
@@ -241,15 +231,15 @@ mod tests {
         let mut room = test_room();
 
         // Interior floor cell (2, 2).
-        assert!(!room.place_door(IVec2::new(2, 2), DoorKind::Open));
+        assert!(!room.place_door(IVec2::new(2, 2), false));
         // Out of bounds: left of the room.
-        assert!(!room.place_door(IVec2::new(-1, 1), DoorKind::Open));
+        assert!(!room.place_door(IVec2::new(-1, 1), false));
         // Out of bounds: right of the room.
-        assert!(!room.place_door(IVec2::new(6, 1), DoorKind::Open));
+        assert!(!room.place_door(IVec2::new(6, 1), false));
         // Out of bounds: above the room.
-        assert!(!room.place_door(IVec2::new(1, -1), DoorKind::Open));
+        assert!(!room.place_door(IVec2::new(1, -1), false));
         // Out of bounds: below the room.
-        assert!(!room.place_door(IVec2::new(1, 4), DoorKind::Open));
+        assert!(!room.place_door(IVec2::new(1, 4), false));
 
         assert!(room.entry_points.is_empty());
         assert!(room.entry_point_count == 0);

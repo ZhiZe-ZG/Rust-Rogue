@@ -15,7 +15,7 @@ use crate::config::GameConfig;
 use crate::rnd::rnd;
 
 use super::level::LevelFlags;
-use super::room::{DoorKind, Room};
+use super::room::Room;
 use super::structure::Structure;
 use super::tile::Tile;
 
@@ -323,10 +323,11 @@ pub(crate) fn stamp_passage(map: &mut Structure, flags: &mut LevelFlags, pos: IV
 /// Place a door at `pos` on the boundary of `rooms[room_index]`.
 ///
 /// Registers `pos` as an exit of the room and, unless the room is a maze,
-/// places a door on the room itself (see [`Room::place_door`]). The door's
-/// kind (open `+` or a wall segment depending on depth and randomness) is
-/// decided here. Returns `pos` so the caller can record it both as a passage
-/// tile and as an entry point of the current corridor.
+/// places a door on the room itself (see [`Room::place_door`]). Whether the
+/// door is secret (a hidden wall segment instead of an open `+`, chosen by
+/// depth and randomness) is decided here. Returns `pos` so the caller can
+/// record it both as a passage tile and as an entry point of the current
+/// corridor.
 pub(crate) fn stamp_door(
     map: &mut Structure,
     flags: &mut LevelFlags,
@@ -335,9 +336,9 @@ pub(crate) fn stamp_door(
     pos: IVec2,
     depth: i32,
 ) -> IVec2 {
-    let (is_maze, position, size) = {
+    let (is_maze, position) = {
         let room = &rooms[room_index];
-        (room.is_maze(), room.position, room.size)
+        (room.is_maze(), room.position)
     };
 
     if is_maze {
@@ -345,29 +346,21 @@ pub(crate) fn stamp_door(
         return pos;
     }
 
-    let kind = if rnd(10) + 1 < depth && rnd(5) == 0 {
-        if pos.y == position.y || pos.y == position.y + size.y - 1 {
-            DoorKind::WallH
-        } else {
-            DoorKind::WallV
-        }
-    } else {
-        DoorKind::Open
-    };
+    let secret = rnd(10) + 1 < depth && rnd(5) == 0;
 
     let local = pos - position;
     if let Some(idx) = cell_index(pos.y, pos.x) {
-        if kind == DoorKind::Open {
-            map.set(pos.y as usize, pos.x as usize, Tile::Door);
-        } else {
-            // A wall-segment door stays disguised as a wall in the tile map
+        if secret {
+            // A secret door stays disguised as a wall in the tile map
             // (rendered `-`/`|` like the wall it replaces) and is marked
             // non-real so the C side can reveal it as `+`.
             map.set(pos.y as usize, pos.x as usize, Tile::HiddenDoor);
             flags.real[idx] = false;
+        } else {
+            map.set(pos.y as usize, pos.x as usize, Tile::Door);
         }
     }
-    rooms[room_index].place_door(local, kind);
+    rooms[room_index].place_door(local, secret);
 
     pos
 }
