@@ -11,14 +11,6 @@ use crate::rnd::rnd;
 
 use crate::config::GameConfig;
 
-/// Rows in the fixed three-by-three room grid.
-const GRID_ROWS: usize = 3;
-/// Columns in the fixed three-by-three room grid.
-pub(crate) const GRID_COLS: usize = 3;
-
-/// Upper bound for the number of extra passage links beyond the spanning tree.
-const EXTRA_CONNECTION_ROLLS: i32 = 5;
-
 /// Planned room-to-room passage connections for one generation pass.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RoomGraph {
@@ -92,7 +84,7 @@ fn build_spanning_tree(
 
 /// Add a few extra connecting passages for loopiness.
 fn add_extra_connections(gone: &[bool], connections: &mut Vec<(usize, usize)>) {
-    let mut extra = rnd(EXTRA_CONNECTION_ROLLS);
+    let mut extra = rnd(GameConfig::EXTRA_CONNECTION_ROLLS);
     while extra > 0 {
         let from = pick_non_gone(gone);
         if let Some(to) = next_unconnected(from, connections) {
@@ -150,21 +142,21 @@ fn pick_unconnected(
 
 /// Indexes of the rooms orthogonally adjacent to `room`, in ascending order.
 fn neighbors(room: usize) -> Vec<usize> {
-    let row = room / GRID_COLS;
-    let col = room % GRID_COLS;
+    let row = room / GameConfig::GRID_COLS;
+    let col = room % GameConfig::GRID_COLS;
     let mut result = Vec::with_capacity(4);
 
     if row > 0 {
-        result.push(room - GRID_COLS);
+        result.push(room - GameConfig::GRID_COLS);
     }
     if col > 0 {
         result.push(room - 1);
     }
-    if col + 1 < GRID_COLS {
+    if col + 1 < GameConfig::GRID_COLS {
         result.push(room + 1);
     }
-    if row + 1 < GRID_ROWS {
-        result.push(room + GRID_COLS);
+    if row + 1 < GameConfig::GRID_ROWS {
+        result.push(room + GameConfig::GRID_COLS);
     }
 
     result
@@ -220,7 +212,7 @@ mod tests {
         // Spanning tree yields exactly |V| - 1 links; extra links are added on
         // top, bounded by EXTRA_CONNECTION_ROLLS.
         assert!(connections.len() >= live - 1);
-        assert!(connections.len() <= live - 1 + EXTRA_CONNECTION_ROLLS as usize);
+        assert!(connections.len() <= live - 1 + GameConfig::EXTRA_CONNECTION_ROLLS as usize);
 
         // Every link joins orthogonally adjacent slots.
         for &(a, b) in &connections {

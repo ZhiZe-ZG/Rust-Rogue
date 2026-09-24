@@ -14,7 +14,7 @@ use super::passages::{
     number_passages, plan_corridor, Passage, PassageLinks,
 };
 use super::monster_map::MonsterMap;
-use super::roomgraph::{GRID_COLS, RoomGraph};
+use super::roomgraph::RoomGraph;
 use super::structure::{Room, Structure};
 use super::tile::{Tile, Trap};
 use crate::config::GameConfig;
@@ -497,8 +497,8 @@ fn place_regular_room(room: &mut Room, top: IVec2, bsze: IVec2) {
 /// Top-left corner of the grid cell that room `slot` belongs to.
 fn grid_top_left(slot: usize, bsze: IVec2) -> IVec2 {
     IVec2::new(
-        (slot as i32 % GRID_COLS as i32) * bsze.x + 1,
-        (slot as i32 / GRID_COLS as i32) * bsze.y,
+        (slot as i32 % GameConfig::GRID_COLS as i32) * bsze.x + 1,
+        (slot as i32 / GameConfig::GRID_COLS as i32) * bsze.y,
     )
 }
 

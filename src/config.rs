@@ -18,6 +18,13 @@ impl GameConfig {
     pub const SCREEN_COLS: i32 = 80;
     /// Room slots in the fixed three-by-three room grid.
     pub const MAX_ROOMS: usize = 9;
+    /// Rows in the fixed three-by-three room grid.
+    pub const GRID_ROWS: usize = 3;
+    /// Columns in the fixed three-by-three room grid.
+    pub const GRID_COLS: usize = 3;
+    /// Upper bound for the number of extra passage links beyond the spanning
+    /// tree in a connection plan.
+    pub const EXTRA_CONNECTION_ROLLS: i32 = 5;
     /// Maximum number of numbered passage components.
     pub const MAX_PASSAGES: usize = 13;
     /// Maximum exits retained for one room or passage component.
