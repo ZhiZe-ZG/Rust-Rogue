@@ -110,6 +110,17 @@ static mut MNAME_INIT: bool = false;
 // Static name buffer for prname
 static mut PRNAME_BUF: [c_char; MAXSTR] = [0; MAXSTR];
 
+unsafe fn copy_str_to_c_buffer(dst: *mut c_char, capacity: usize, text: &str) {
+    if capacity == 0 {
+        return;
+    }
+
+    let bytes = text.as_bytes();
+    let copy_len = bytes.len().min(capacity - 1);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), dst, copy_len);
+    *dst.add(copy_len) = 0;
+}
+
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
 unsafe extern "C" {
@@ -530,12 +541,9 @@ pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
         mname = monsters[idx].m_name;
     }
 
-    // Copy into static buffer starting at offset 4 ("the ").
-    strcpy(
-        MNAME_BUF[4..].as_mut_ptr(),
-        mname.as_ptr().cast(),
-    );
-    MNAME_BUF.as_mut_ptr()
+    let buffer = std::ptr::addr_of_mut!(MNAME_BUF).cast::<c_char>();
+    copy_str_to_c_buffer(buffer.add(4), MAXSTR - 4, mname);
+    buffer
 }
 
 /// swing:
@@ -872,5 +880,27 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
     check_level();
     if fight_flush != 0 {
         flush_type();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{copy_str_to_c_buffer, MAXSTR};
+    use std::ffi::CStr;
+    use std::os::raw::c_char;
+
+    #[test]
+    fn monster_name_copy_is_nul_terminated() {
+        let mut buffer = [b'x' as c_char; MAXSTR];
+        buffer[0] = b't' as c_char;
+        buffer[1] = b'h' as c_char;
+        buffer[2] = b'e' as c_char;
+        buffer[3] = b' ' as c_char;
+
+        unsafe {
+            copy_str_to_c_buffer(buffer[4..].as_mut_ptr(), MAXSTR - 4, "emu");
+            assert_eq!(CStr::from_ptr(buffer.as_ptr()).to_str().unwrap(), "the emu");
+        }
+        assert_eq!(buffer[7], 0);
     }
 }

@@ -47,7 +47,7 @@ unsafe extern "C" {
     static mut last_pick: *mut CThing;
     static mut l_last_pick: *mut CThing;
     static mut move_on: c_uchar;
-    static mut msg_esc: c_uchar;
+    static mut msg_esc: bool;
     static mut mpos: c_int;
     static mut n_objs: c_int;
     static mut pack_used: [c_uchar; 26];
@@ -350,7 +350,7 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
         }
 
         n_objs += 1;
-        msg_esc = true as c_uchar;
+        msg_esc = true;
         let mut inv_temp = [0 as c_char; MAXSTR];
         if (*thing_o(cur)).o_packch == 0 {
             std::ptr::copy_nonoverlapping(c"%s".as_ptr(), inv_temp.as_mut_ptr(), 3);
@@ -366,7 +366,7 @@ pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
             std::ptr::copy_nonoverlapping(format.as_ptr(), inv_temp.as_mut_ptr(), format.len());
         }
         let _ = add_line(inv_temp.as_mut_ptr(), inv_name(cur, false as c_uchar));
-        msg_esc = false as c_uchar;
+        msg_esc = false;
         cur = next_item(cur);
     }
 

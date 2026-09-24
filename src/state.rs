@@ -147,7 +147,7 @@ unsafe extern "C" {
     static mut kamikaze: c_uchar;
     static mut lower_msg: c_uchar;
     static mut move_on: c_uchar;
-    static mut msg_esc: c_uchar;
+    static mut msg_esc: bool;
     static mut passgo: c_uchar;
     static mut playing: c_uchar;
     static mut q_comm: c_uchar;
@@ -2556,7 +2556,9 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_boolean(inf, &mut kamikaze); /* 14 */
     let _ = rs_read_boolean(inf, &mut lower_msg); /* 15 */
     let _ = rs_read_boolean(inf, &mut move_on); /* 16 */
-    let _ = rs_read_boolean(inf, &mut msg_esc); /* 17 */
+    let mut msg_esc_byte = msg_esc as c_uchar;
+    let _ = rs_read_boolean(inf, &mut msg_esc_byte); /* 17 */
+    msg_esc = msg_esc_byte != 0;
     let _ = rs_read_boolean(inf, &mut passgo); /* 18 */
     let _ = rs_read_boolean(inf, &mut playing); /* 19 */
     let _ = rs_read_boolean(inf, &mut q_comm); /* 20 */

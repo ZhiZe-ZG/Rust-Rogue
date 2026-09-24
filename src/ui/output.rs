@@ -35,12 +35,26 @@ static MESSAGE_STATE: Mutex<MessageState> = Mutex::new(MessageState {
     next_position: 0,
 });
 
+#[cfg(not(test))]
+fn split_message_at(text: &str, limit: usize) -> usize {
+    if text.len() <= limit {
+        return text.len();
+    }
+
+    text.char_indices()
+        .map(|(idx, _)| idx)
+        .take_while(|idx| *idx <= limit)
+        .last()
+        .filter(|idx| *idx > 0)
+        .unwrap_or_else(|| text.chars().next().map_or(0, char::len_utf8))
+}
+
 unsafe extern "C" {
     static mut hungry_state: c_int;
     static mut huh: [c_char; MAXSTR];
     static mut max_stats: Stats;
     static mut mpos: c_int;
-    static mut msg_esc: c_uchar;
+    static mut msg_esc: bool;
     static mut player: CThing;
     static mut purse: c_int;
     static mut save_msg: c_uchar;
@@ -182,21 +196,35 @@ pub fn format_key(key: u8) -> String {
 
 #[cfg(not(test))]
 unsafe fn append_message(text: &str) {
-    let should_flush = {
-        let state = MESSAGE_STATE
-            .lock()
-            .unwrap_or_else(|lock| lock.into_inner());
-        state.pending.len() + text.len() >= MAXMSG
-    };
-    if should_flush {
-        endmsg();
-    }
+    let mut remaining = text;
+    while !remaining.is_empty() {
+        let available = {
+            let state = MESSAGE_STATE
+                .lock()
+                .unwrap_or_else(|lock| lock.into_inner());
+            MAXMSG.saturating_sub(state.pending.len())
+        };
 
-    let mut state = MESSAGE_STATE
-        .lock()
-        .unwrap_or_else(|lock| lock.into_inner());
-    state.pending.push_str(text);
-    state.next_position = state.pending.len() as i32;
+        if available == 0 {
+            endmsg();
+            continue;
+        }
+
+        let split = split_message_at(remaining, available);
+        let (chunk, rest) = remaining.split_at(split);
+        {
+            let mut state = MESSAGE_STATE
+                .lock()
+                .unwrap_or_else(|lock| lock.into_inner());
+            state.pending.push_str(chunk);
+            state.next_position = state.pending.len() as i32;
+        }
+
+        remaining = rest;
+        if !remaining.is_empty() {
+            endmsg();
+        }
+    }
 }
 
 #[cfg(not(test))]
@@ -261,7 +289,7 @@ pub unsafe fn endmsg() -> MessageResult {
         write_text_at(IVec2::new(mpos, 0), "--More--");
         refresh();
 
-        if msg_esc == false as c_uchar {
+        if !msg_esc {
             wait_for(' ');
         } else {
             loop {
