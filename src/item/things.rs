@@ -1,8 +1,6 @@
 //! Object information tables and object naming/inventory helpers.
 //!
 //! Ported from `src/c/things.c` to Rust.
-use crate::daemon::extinguish;
-use crate::daemons::unsee;
 use crate::game::EQUIPMENT;
 use crate::item::armor::waste_time;
 use crate::item::pack::{get_item, leave_pack};
@@ -10,7 +8,7 @@ use crate::misc::chg_str;
 use crate::rnd::rnd;
 use crate::ui::output::msg_str;
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{CThing, CThingObject};
 use crate::globals::{
@@ -41,25 +39,12 @@ const GOLD: c_int = b'*' as c_int;
 const AMULET: c_int = b',' as c_int;
 
 const ISCURSED: c_int = 0o000001;
-const ISKNOW: c_int = 0o000200;
 
 unsafe extern "C" {
-    static mut after: c_uchar;
     static mut a_class: [c_int; 26];
-    static mut amulet: c_uchar;
-    static mut fruit: [c_char; MAXSTR];
     static mut inv_describe: c_uchar;
     static mut no_food: c_int;
-    static mut player: CThing;
     static mut prbuf: [c_char; MAXSTR];
-    static mut terse: c_uchar;
-
-    fn isupper(ch: c_int) -> c_int;
-    fn sprintf(buf: *mut c_char, fmt: *const c_char, ...) -> c_int;
-    fn strcat(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-    fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-    fn strlen(s: *const c_char) -> usize;
-    fn tolower(ch: c_int) -> c_int;
 }
 
 #[inline]
@@ -68,35 +53,54 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 }
 
 #[inline]
-unsafe fn is_vowel(ch: c_char) -> bool {
-    matches!(
-        ch as u8,
-        b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U'
-    )
-}
-
-#[inline]
-unsafe fn starts_with_article(name: *const c_char) -> *mut c_char {
-    if !name.is_null() && is_vowel(*name) {
-        c"an ".as_ptr() as *mut c_char
+fn starts_with_article(name: &str) -> &'static str {
+    if name
+        .as_bytes()
+        .first()
+        .is_some_and(|ch| matches!(*ch, b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U'))
+    {
+        "an "
     } else {
-        c"a ".as_ptr() as *mut c_char
+        "a "
     }
 }
 
 #[inline]
-unsafe fn item_name(typ: c_int, which: c_int) -> *const c_char {
+unsafe fn item_name(typ: c_int, which: c_int) -> &'static str {
     match typ {
-        POTION => pot_info[which as usize].oi_name.as_ptr().cast(),
-        SCROLL => scr_info[which as usize].oi_name.as_ptr().cast(),
-        RING => ring_info[which as usize].oi_name.as_ptr().cast(),
-        STICK => ws_info[which as usize].oi_name.as_ptr().cast(),
-        WEAPON => weap_info[which as usize].oi_name.as_ptr().cast(),
-        ARMOR => arm_info[which as usize].oi_name.as_ptr().cast(),
-        FOOD => c"food".as_ptr(),
-        GOLD => c"gold".as_ptr(),
-        AMULET => c"the Amulet of Yendor".as_ptr(),
-        _ => c"item".as_ptr(),
+        POTION => pot_info[which as usize].oi_name,
+        SCROLL => scr_info[which as usize].oi_name,
+        RING => ring_info[which as usize].oi_name,
+        STICK => ws_info[which as usize].oi_name,
+        WEAPON => weap_info[which as usize].oi_name,
+        ARMOR => arm_info[which as usize].oi_name,
+        FOOD => "food",
+        GOLD => "gold",
+        AMULET => "the Amulet of Yendor",
+        _ => "item",
+    }
+}
+
+unsafe fn copy_to_prbuf(text: &str) -> *mut c_char {
+    let bytes = text.as_bytes();
+    let copy_len = bytes.len().min(MAXSTR - 1);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), prbuf.as_mut_ptr(), copy_len);
+    prbuf[copy_len] = 0;
+    prbuf.as_mut_ptr()
+}
+
+fn adjust_inventory_case(name: &mut String, drop: c_uchar) {
+    if name.is_empty() {
+        return;
+    }
+
+    let first = name.as_bytes()[0];
+    if drop != 0 {
+        if first.is_ascii_uppercase() {
+            name.replace_range(0..1, &(first as char).to_ascii_lowercase().to_string());
+        }
+    } else if !first.is_ascii_uppercase() {
+        name.replace_range(0..1, &(first as char).to_ascii_uppercase().to_string());
     }
 }
 
@@ -123,131 +127,88 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
     let which = (*thing_o(obj)).o_which;
     let typ = (*thing_o(obj)).o_type;
     let count = (*thing_o(obj)).o_count;
-    let mut empty = prbuf.as_mut_ptr();
-    *empty = 0;
-
-    match typ {
+    let mut name = match typ {
         POTION => {
+            let item = item_name(typ, which);
             if count == 1 {
-                sprintf(empty, c"A %s".as_ptr(), pot_info[which as usize].oi_name.as_ptr().cast::<c_char>());
+                format!("A {item}")
             } else {
-                sprintf(
-                    empty,
-                    c"%d %ss".as_ptr(),
-                    count,
-                    pot_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
-                );
+                format!("{count} {item}s")
             }
         }
         RING => {
+            let item = item_name(typ, which);
             if count == 1 {
-                sprintf(
-                    empty,
-                    c"A %s ring".as_ptr(),
-                    ring_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
-                );
+                format!("A {item} ring")
             } else {
-                sprintf(
-                    empty,
-                    c"%d %s rings".as_ptr(),
-                    count,
-                    ring_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
-                );
+                format!("{count} {item} rings")
             }
         }
         STICK => {
+            let item = item_name(typ, which);
             if count == 1 {
-                sprintf(empty, c"A %s".as_ptr(), ws_info[which as usize].oi_name.as_ptr().cast::<c_char>());
+                format!("A {item}")
             } else {
-                sprintf(
-                    empty,
-                    c"%d %ss".as_ptr(),
-                    count,
-                    ws_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
-                );
+                format!("{count} {item}s")
             }
         }
         SCROLL => {
+            let item = item_name(typ, which);
             if count == 1 {
-                sprintf(
-                    empty,
-                    c"A scroll of %s".as_ptr(),
-                    scr_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
-                );
+                format!("A scroll of {item}")
             } else {
-                sprintf(
-                    empty,
-                    c"%d scrolls of %s".as_ptr(),
-                    count,
-                    scr_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
-                );
+                format!("{count} scrolls of {item}")
             }
         }
         FOOD => {
             if count == 1 {
-                sprintf(empty, c"Some food".as_ptr());
+                "Some food".to_owned()
             } else {
-                sprintf(empty, c"%d rations of food".as_ptr(), count);
+                format!("{count} rations of food")
             }
         }
         WEAPON => {
-            let name = weap_info[which as usize].oi_name.as_ptr().cast::<c_char>();
-            if (*thing_o(obj)).o_count > 1 {
-                sprintf(empty, c"%d %ss".as_ptr(), count, name);
+            let item = item_name(typ, which);
+            let mut text = if count > 1 {
+                format!("{count} {item}s")
             } else {
-                let article = starts_with_article(name);
-                sprintf(empty, c"%s%s".as_ptr(), article, name);
-            }
+                format!("{}{item}", starts_with_article(item))
+            };
             if !(*thing_o(obj)).o_label.is_null() {
-                let label = (*thing_o(obj)).o_label;
-                strcat(empty, c" called ".as_ptr());
-                strcat(empty, label);
+                text.push_str(" called ");
+                text.push_str(&CStr::from_ptr((*thing_o(obj)).o_label).to_string_lossy());
             }
+            text
         }
         ARMOR => {
-            let name = arm_info[which as usize].oi_name.as_ptr().cast::<c_char>();
-            sprintf(empty, c"%s".as_ptr(), name);
+            let mut text = item_name(typ, which).to_owned();
             if !(*thing_o(obj)).o_label.is_null() {
-                let label = (*thing_o(obj)).o_label;
-                strcat(empty, c" called ".as_ptr());
-                strcat(empty, label);
+                text.push_str(" called ");
+                text.push_str(&CStr::from_ptr((*thing_o(obj)).o_label).to_string_lossy());
             }
+            text
         }
-        AMULET => {
-            strcpy(empty, c"The Amulet of Yendor".as_ptr());
-        }
-        GOLD => {
-            sprintf(empty, c"%d Gold pieces".as_ptr(), (*thing_o(obj)).o_group);
-        }
-        _ => {
-            strcpy(empty, c"something".as_ptr());
-        }
-    }
+        AMULET => "The Amulet of Yendor".to_owned(),
+        GOLD => format!("{} Gold pieces", (*thing_o(obj)).o_group),
+        _ => "something".to_owned(),
+    };
 
     if inv_describe != 0 {
         if obj == EQUIPMENT.armor() {
-            strcat(empty, c" (being worn)".as_ptr());
+            name.push_str(" (being worn)");
         }
         if obj == EQUIPMENT.weapon() {
-            strcat(empty, c" (weapon in hand)".as_ptr());
+            name.push_str(" (weapon in hand)");
         }
         if obj == EQUIPMENT.left_ring() {
-            strcat(empty, c" (on left hand)".as_ptr());
+            name.push_str(" (on left hand)");
         } else if obj == EQUIPMENT.right_ring() {
-            strcat(empty, c" (on right hand)".as_ptr());
+            name.push_str(" (on right hand)");
         }
     }
 
-    if drop != 0 {
-        let first = *empty as c_int;
-        if first != 0 && isupper(first) != 0 {
-            *empty = tolower(first) as c_char;
-        }
-    } else if *empty as c_int != 0 && isupper(*empty as c_int) == 0 {
-        *empty = toupper(*empty as c_int) as c_char;
-    }
-    prbuf[MAXSTR - 1] = 0;
-    prbuf.as_mut_ptr()
+    adjust_inventory_case(&mut name, drop);
+    copy_to_prbuf(&name)
 }
 
 #[no_mangle]
@@ -435,8 +396,7 @@ pub unsafe extern "C" fn add_line(fmt: *mut c_char, arg: *mut c_char) -> c_char 
 unsafe fn end_line() {}
 
 unsafe fn nothing(_type: c_char) -> *mut c_char {
-    strcpy(prbuf.as_mut_ptr(), c"Nothing found".as_ptr());
-    prbuf.as_mut_ptr()
+    copy_to_prbuf("Nothing found")
 }
 
 #[no_mangle]
@@ -450,42 +410,31 @@ pub unsafe extern "C" fn nameit(
     if op.is_null() || obj.is_null() {
         return;
     }
-    if (*op).oi_know || (*op).oi_guess.is_some() {
-        let mut buf = prbuf.as_mut_ptr();
-        if (*thing_o(obj)).o_count == 1 {
-            sprintf(buf, c"A %s ".as_ptr(), typ);
+    let typ = CStr::from_ptr(typ).to_string_lossy();
+    let which = CStr::from_ptr(which).to_string_lossy();
+    let pr_text = CStr::from_ptr(prfunc(obj)).to_string_lossy();
+    let count = (*thing_o(obj)).o_count;
+
+    let text = if (*op).oi_know || (*op).oi_guess.is_some() {
+        let prefix = if count == 1 {
+            format!("A {typ} ")
         } else {
-            sprintf(buf, c"%d %ss ".as_ptr(), (*thing_o(obj)).o_count, typ);
-        }
-        let tail = buf.add(strlen(buf));
+            format!("{count} {typ}s ")
+        };
         if (*op).oi_know {
-            sprintf(
-                tail,
-                c"of %s%s(%s)".as_ptr(),
-                (*op).oi_name.as_ptr().cast::<c_char>(),
-                prfunc(obj),
-                which,
-            );
+            format!("{prefix}of {}{}({which})", (*op).oi_name, pr_text)
         } else if let Some(guess) = &(*op).oi_guess {
-            sprintf(
-                tail,
-                c"called %s%s(%s)".as_ptr(),
-                guess.as_ptr().cast::<c_char>(),
-                prfunc(obj),
-                which,
-            );
+            format!("{prefix}called {guess}{pr_text}({which})")
+        } else {
+            prefix
         }
-    } else if (*thing_o(obj)).o_count == 1 {
-        sprintf(prbuf.as_mut_ptr(), c"A%s %s %s".as_ptr(), which, which, typ);
+    } else if count == 1 {
+        format!("A{which} {which} {typ}")
     } else {
-        sprintf(
-            prbuf.as_mut_ptr(),
-            c"%d %s %ss".as_ptr(),
-            (*thing_o(obj)).o_count,
-            which,
-            typ,
-        );
-    }
+        format!("{count} {which} {typ}s")
+    };
+
+    copy_to_prbuf(&text);
 }
 
 unsafe fn nullstr(_: *mut CThing) -> *mut c_char {
@@ -508,6 +457,3 @@ unsafe fn set_order(order: *mut c_int, numthings: c_int) {
     }
 }
 
-extern "C" {
-    fn toupper(ch: c_int) -> c_int;
-}
