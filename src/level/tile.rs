@@ -1,7 +1,8 @@
 //! Tile vocabulary for the Rust-side level representation.
 //!
-//! A [`Tile`] describes logical map content; its on-screen glyph is chosen at
-//! draw time.
+//! A [`Tile`] describes logical map content. Its on-screen glyph is chosen at
+//! draw time, and [`Tile::is_walkable`] reports whether a cell can be entered
+//! or crossed.
 
 /// Semantic tile kinds for the level map.
 ///
@@ -45,7 +46,8 @@ impl Tile {
         }
     }
 
-    /// Inverse of [`Tile::to_u8`].
+    /// Inverse of [`Tile::to_u8`], returning [`None`] for unknown
+    /// discriminants.
     pub const fn from_u8(v: u8) -> Option<Tile> {
         match v {
             0 => Some(Tile::Empty),
@@ -63,8 +65,11 @@ impl Tile {
     /// Whether this [`Tile`] can be entered or crossed.
     ///
     /// Blank cells, walls, and hidden doors block movement; floors, passages,
-    /// doors, stairs, and traps are traversable. Monsters are not part of a
-    /// tile — occupancy is checked separately against the per-cell monster map.
+    /// doors, stairs, and traps are traversable. Monster occupancy is not
+    /// encoded in a tile — it is checked separately against the per-cell
+    /// monster map.
+    ///
+    /// This is a `const fn`, so it can also be evaluated at compile time.
     pub const fn is_walkable(self) -> bool {
         !matches!(self, Tile::Empty | Tile::Wall | Tile::HiddenDoor)
     }
