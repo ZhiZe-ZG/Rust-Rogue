@@ -156,7 +156,7 @@ pub(crate) unsafe fn terrain_chat_at(y: c_int, x: c_int) -> c_char {
             Tile::Door => DOOR,
             Tile::Passage => PASSAGE,
             Tile::Stairs => STAIRS,
-            Tile::Trap => {
+            Tile::Trap(_) => {
                 if lvl.flags.seen[idx] {
                     TRAP
                 } else {
@@ -223,7 +223,7 @@ pub(crate) unsafe fn trap_kind_at(y: c_int, x: c_int) -> Trap {
 
 /// Whether the tile at `(y, x)` is a hidden trap.
 pub(crate) unsafe fn is_trap_cell(y: c_int, x: c_int) -> bool {
-    with_current_level(|lvl| matches!(lvl.map.get(y as usize, x as usize), Some(Tile::Trap)))
+    with_current_level(|lvl| matches!(lvl.map.get(y as usize, x as usize), Some(Tile::Trap(_))))
 }
 
 /// Mark `(y, x)` seen (drawn/identified).

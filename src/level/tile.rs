@@ -4,6 +4,8 @@
 //! draw time, and [`Tile::is_walkable`] reports whether a cell can be entered
 //! or crossed.
 
+use super::trap::Trap;
+
 /// Semantic tile kinds for the level map.
 ///
 /// Orientation-sensitive tiles such as [`Tile::Wall`] have their on-screen
@@ -27,8 +29,8 @@ pub enum Tile {
     /// Down staircase to the next dungeon level.
     Stairs,
     /// Hidden trap that can trigger gameplay effects; renders as floor until
-    /// seen.
-    Trap,
+    /// seen. The payload identifies the [`Trap`] kind.
+    Trap(Trap),
 }
 
 impl Tile {
@@ -42,7 +44,7 @@ impl Tile {
             Tile::Wall => 4,
             Tile::HiddenDoor => 5,
             Tile::Stairs => 6,
-            Tile::Trap => 7,
+            Tile::Trap(_) => 7,
         }
     }
 
@@ -57,7 +59,7 @@ impl Tile {
             4 => Some(Tile::Wall),
             5 => Some(Tile::HiddenDoor),
             6 => Some(Tile::Stairs),
-            7 => Some(Tile::Trap),
+            7 => Some(Tile::Trap(Trap::Door)),
             _ => None,
         }
     }
@@ -77,7 +79,7 @@ impl Tile {
 
 #[cfg(test)]
 mod tests {
-    use super::Tile;
+    use super::{Tile, Trap};
 
     #[test]
     fn tile_walkability_matches_map_semantics() {
@@ -90,7 +92,7 @@ mod tests {
             Tile::Passage,
             Tile::Door,
             Tile::Stairs,
-            Tile::Trap,
+            Tile::Trap(Trap::Door),
         ] {
             assert!(walkable.is_walkable());
         }

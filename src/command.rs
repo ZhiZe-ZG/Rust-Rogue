@@ -904,7 +904,7 @@ pub unsafe extern "C" fn search() {
                             running = false as c_uchar;
                         }
                     }
-                    crate::level::Tile::Trap => {
+                    crate::level::Tile::Trap(_) => {
                         if rnd(2 + probinc) == 0 {
                             crate::level::with_current_level_mut(|current| {
                                 current.reveal_trap(y as usize, x as usize);

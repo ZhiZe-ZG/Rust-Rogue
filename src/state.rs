@@ -2267,14 +2267,19 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
             let _ = rs_read_char(inf, &mut trap_kind);
             let _ = rs_read_thing_reference(inf, MLIST.head(), &mut monst);
 
+            let trap = crate::level::Trap::from_raw(trap_kind as u8);
             let tile =
                 crate::level::Tile::from_u8(tile_disc as u8).unwrap_or(crate::level::Tile::Empty);
+            let tile = match tile {
+                crate::level::Tile::Trap(_) => crate::level::Tile::Trap(trap),
+                other => other,
+            };
             let _ = lvl.map.set(y as usize, x as usize, tile);
             lvl.flags.real[idx] = real != 0;
             lvl.flags.passage[idx] = passage != 0;
             lvl.flags.seen[idx] = seen != 0;
             lvl.flags.passnum[idx] = passnum as u8;
-            lvl.flags.trap[idx] = crate::level::Trap::from_raw(trap_kind as u8);
+            lvl.flags.trap[idx] = trap;
 
             // Per-cell monster occupancy.
             lvl.monsters.set(y as usize, x as usize, monst);

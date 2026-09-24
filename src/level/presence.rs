@@ -316,12 +316,13 @@ unsafe fn place_traps() {
         }
 
         with_current_level_mut(|current| {
+            let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
+            let trap = Trap::from_raw(rnd(GameConfig::TRAP_KIND_COUNT) as u8);
             current
                 .map
-                .set(stairs.y as usize, stairs.x as usize, Tile::Trap);
-            let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
+                .set(stairs.y as usize, stairs.x as usize, Tile::Trap(trap));
             current.flags.real[idx] = false;
-            current.flags.trap[idx] = Trap::from_raw(rnd(GameConfig::TRAP_KIND_COUNT) as u8);
+            current.flags.trap[idx] = trap;
         });
         i -= 1;
     }
