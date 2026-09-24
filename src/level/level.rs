@@ -15,7 +15,7 @@ use super::passages::{
 };
 use super::monster_map::MonsterMap;
 use super::roomgraph::RoomGraph;
-use super::rooms::{build_generated_rooms, Room};
+use super::room::{build_generated_rooms, Room};
 use super::structure::Structure;
 use super::tile::Tile;
 use super::trap::Trap;
@@ -396,7 +396,7 @@ mod tests {
         let room = &level.rooms[0];
         assert_eq!(room.doors.len(), 1);
         assert_eq!(room.doors[0].position, IVec2::new(5, 1));
-        assert_eq!(room.doors[0].kind, crate::level::rooms::DoorKind::Open);
+        assert_eq!(room.doors[0].kind, crate::level::room::DoorKind::Open);
         assert_eq!(room.entry_point_count, 1);
         // Open doors are stamped into the tile map.
         assert_eq!(level.map.get(11, 15), Some(Tile::Door));

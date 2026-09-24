@@ -15,7 +15,7 @@ use crate::config::GameConfig;
 use crate::rnd::rnd;
 
 use super::level::LevelFlags;
-use super::rooms::{DoorKind, Room};
+use super::room::{DoorKind, Room};
 use super::structure::Structure;
 use super::tile::Tile;
 

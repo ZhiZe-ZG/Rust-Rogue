@@ -17,7 +17,7 @@ use crate::item::thing_list::free_list;
 use crate::ui::output;
 
 use super::presence::populate_level;
-use super::rooms::Room;
+use super::room::Room;
 use super::structure::Structure;
 use super::tile::Tile;
 

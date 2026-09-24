@@ -9,7 +9,7 @@ mod monster_map;
 mod passages;
 mod presence;
 mod roomgraph;
-mod rooms;
+mod room;
 mod structure;
 mod tile;
 mod trap;
@@ -21,7 +21,7 @@ pub(crate) use presence::find_floor;
 
 pub use passages::{Passage, PassageLinks};
 pub use roomgraph::RoomGraph;
-pub use rooms::{Door, DoorKind, Room};
+pub use room::{Door, DoorKind, Room};
 pub use structure::Structure;
 pub use tile::Tile;
 pub use trap::{Trap, TrapHit};
