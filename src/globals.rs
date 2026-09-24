@@ -242,7 +242,7 @@ pub static mut player: CThing = CThing {
         l_next: std::ptr::null_mut(),
         l_prev: std::ptr::null_mut(),
         t_pos: IVec2 { x: 0, y: 0 },
-        t_turn: 0,
+        t_turn: false,
         t_type: 0,
         t_disguise: 0,
         t_oldch: 0,

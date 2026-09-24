@@ -1880,9 +1880,9 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
     let _ = rs_write_int(savef, 1);
     let _ = rs_write_coord(savef, (*thing_t(t)).t_pos);
     let _ = rs_write_boolean(savef, (*thing_t(t)).t_turn as c_int);
-    let _ = rs_write_char(savef, (*thing_t(t)).t_type);
-    let _ = rs_write_char(savef, (*thing_t(t)).t_disguise);
-    let _ = rs_write_char(savef, (*thing_t(t)).t_oldch);
+    let _ = rs_write_char(savef, (*thing_t(t)).t_type as c_char);
+    let _ = rs_write_char(savef, (*thing_t(t)).t_disguise as c_char);
+    let _ = rs_write_char(savef, (*thing_t(t)).t_oldch as c_char);
 
     /*
         t_dest can be:
@@ -1959,10 +1959,18 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
     }
 
     let _ = rs_read_coord(inf, &mut (*thing_t(t)).t_pos);
-    let _ = rs_read_boolean(inf, &mut (*thing_t(t)).t_turn);
-    let _ = rs_read_char(inf, &mut (*thing_t(t)).t_type);
-    let _ = rs_read_char(inf, &mut (*thing_t(t)).t_disguise);
-    let _ = rs_read_char(inf, &mut (*thing_t(t)).t_oldch);
+    let mut turn_byte: c_uchar = 0;
+    let _ = rs_read_boolean(inf, &mut turn_byte);
+    (*thing_t(t)).t_turn = turn_byte != 0;
+    let mut type_ch: c_char = 0;
+    let _ = rs_read_char(inf, &mut type_ch);
+    (*thing_t(t)).t_type = type_ch as u8;
+    let mut disguise_ch: c_char = 0;
+    let _ = rs_read_char(inf, &mut disguise_ch);
+    (*thing_t(t)).t_disguise = disguise_ch as u8;
+    let mut oldch_ch: c_char = 0;
+    let _ = rs_read_char(inf, &mut oldch_ch);
+    (*thing_t(t)).t_oldch = oldch_ch as u8;
 
     /*
         t_dest can be (listid,index):

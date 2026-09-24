@@ -176,11 +176,11 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
 
     MLIST.attach(tp);
 
-    (*thing_t(tp)).t_type = monster_type;
-    (*thing_t(tp)).t_disguise = monster_type;
+    (*thing_t(tp)).t_type = monster_type as u8;
+    (*thing_t(tp)).t_disguise = monster_type as u8;
     (*thing_t(tp)).t_pos = *cp;
 
-    (*thing_t(tp)).t_oldch = crate::draw::cell_glyph((*cp).y, (*cp).x);
+    (*thing_t(tp)).t_oldch = crate::draw::cell_glyph((*cp).y, (*cp).x) as u8;
     (*thing_t(tp)).t_room = roomin(cp);
     // Record the monster in the per-cell occupancy map.
     crate::game::set_monster((*cp).y, (*cp).x, tp);
@@ -197,14 +197,14 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
     if level > 29 {
         (*thing_t(tp)).t_flags |= ISHASTE;
     }
-    (*thing_t(tp)).t_turn = true as c_uchar;
+    (*thing_t(tp)).t_turn = true;
     (*thing_t(tp)).t_pack = std::ptr::null_mut();
 
     if iswearing(RingType::Aggravate) {
         runto(cp);
     }
     if monster_type == 'X' as c_char {
-        (*thing_t(tp)).t_disguise = rnd_thing();
+        (*thing_t(tp)).t_disguise = rnd_thing() as u8;
     }
 }
 
@@ -282,7 +282,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
         (*thing_t(tp)).t_flags |= ISRUN;
     }
 
-    if ch == 'M' as c_char
+    if ch == b'M'
         && !player_has(ISBLIND)
         && !player_has(ISHALU)
         && !has_flag(tp, ISFOUND)

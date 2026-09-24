@@ -223,7 +223,7 @@ pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
         if cansee(FALL_POS.y, FALL_POS.x) != 0 {
             let m = moat(FALL_POS.y, FALL_POS.x);
             if !m.is_null() {
-                (*thing_t(m)).t_oldch = (*thing_o(obj)).o_type as c_char;
+                (*thing_t(m)).t_oldch = (*thing_o(obj)).o_type as u8;
             } else {
                 output::write_glyph_at(
                     IVec2::new(FALL_POS.x, FALL_POS.y),

@@ -53,22 +53,25 @@ const F_REAL: c_char = 0x10u8 as c_char;
 const ARROW: c_int = 3;
 const VS_POISON: c_int = 0;
 
+/// Monster/player view of a `THING`. `#[repr(C)]` is retained because this is
+/// a member of the [`CThing`] union whose `l_next`/`l_prev` header must alias
+/// [`CThingObject`]; the scalar fields use native Rust types.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CThingMonster {
     pub l_next: *mut CThing,
     pub l_prev: *mut CThing,
     pub t_pos: IVec2,
-    pub t_turn: c_uchar,
-    pub t_type: c_char,
-    pub t_disguise: c_char,
-    pub t_oldch: c_char,
+    pub t_turn: bool,
+    pub t_type: u8,
+    pub t_disguise: u8,
+    pub t_oldch: u8,
     pub t_dest: *mut IVec2,
-    pub t_flags: c_short,
+    pub t_flags: i16,
     pub t_stats: Stats,
     pub t_room: Option<usize>,
     pub t_pack: *mut CThing,
-    pub t_reserved: c_int,
+    pub t_reserved: i32,
 }
 
 #[repr(C)]

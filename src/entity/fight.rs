@@ -196,11 +196,11 @@ pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut CThing, thrown: c_ucha
 
     // Let him know it was really a xeroc (if it was one).
     let mut ch: c_char = b'\0' as c_char;
-    if (*thing_t(tp)).t_type == b'X' as c_char
-        && (*thing_t(tp)).t_disguise != b'X' as c_char
+    if (*thing_t(tp)).t_type == b'X'
+        && (*thing_t(tp)).t_disguise != b'X'
         && !on_p(&raw mut player, ISBLIND)
     {
-        (*thing_t(tp)).t_disguise = b'X' as c_char;
+        (*thing_t(tp)).t_disguise = b'X';
         if on_p(&raw mut player, ISHALU) {
             ch = (rnd(26) + b'A' as c_int) as c_char;
             output::write_glyph_at(
@@ -274,11 +274,11 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
         kamikaze = false as c_uchar;
     }
 
-    if (*thing_t(mp)).t_type == b'X' as c_char
-        && (*thing_t(mp)).t_disguise != b'X' as c_char
+    if (*thing_t(mp)).t_type == b'X'
+        && (*thing_t(mp)).t_disguise != b'X'
         && !on_p(&raw mut player, ISBLIND)
     {
-        (*thing_t(mp)).t_disguise = b'X' as c_char;
+        (*thing_t(mp)).t_disguise = b'X';
         if on_p(&raw mut player, ISHALU) {
             output::write_glyph_at(
                 IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
@@ -291,7 +291,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
     let oldhp = (*thing_t(&raw mut player)).t_stats.hit_points;
 
     if roll_em(mp, &raw mut player, std::ptr::null_mut(), false as c_uchar) != 0 {
-        if (*thing_t(mp)).t_type != b'I' as c_char {
+        if (*thing_t(mp)).t_type != b'I' {
             if has_hit != 0 {
                 addmsg_str(".  ");
             }
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
         has_hit = false as c_uchar;
 
         if (*thing_t(&raw mut player)).t_stats.hit_points <= 0 {
-            death((*thing_t(mp)).t_type);
+            death((*thing_t(mp)).t_type as c_char);
         } else if kamikaze == 0 {
             let damage_dealt = oldhp - (*thing_t(&raw mut player)).t_stats.hit_points;
             if damage_dealt > max_hit {
@@ -315,10 +315,10 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
 
         if !on_p(mp, ISCANC) {
             let mtype = (*thing_t(mp)).t_type;
-            if mtype == b'A' as c_char {
+            if mtype == b'A' {
                 // Aquator: corrode armor
                 rust_armor(EQUIPMENT.armor());
-            } else if mtype == b'I' as c_char {
+            } else if mtype == b'I' {
                 // Ice monster: freeze player
                 (*thing_t(&raw mut player)).t_flags &= !ISRUN;
                 if no_command == 0 {
@@ -335,7 +335,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 if no_command > BORE_LEVEL {
                     death(b'h' as c_char);
                 }
-            } else if mtype == b'R' as c_char {
+            } else if mtype == b'R' {
                 // Rattlesnake: poisonous bite
                 if save(VS_POISON) == 0 {
                     if !iswearing(RingType::SustainStrength) {
@@ -353,12 +353,12 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                         }
                     }
                 }
-            } else if mtype == b'W' as c_char || mtype == b'V' as c_char {
+            } else if mtype == b'W' || mtype == b'V' {
                 // Wraith / Vampire: drain energy or max HP
-                let threshold = if mtype == b'W' as c_char { 15 } else { 30 };
+                let threshold = if mtype == b'W' { 15 } else { 30 };
                 if rnd(100) < threshold {
                     let fewer;
-                    if mtype == b'W' as c_char {
+                    if mtype == b'W' {
                         let pstats = &mut (*thing_t(&raw mut player)).t_stats;
                         if pstats.experience == 0 {
                             death(b'W' as c_char);
@@ -382,12 +382,12 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                             pstats.hit_points = 1;
                         }
                         if pstats.max_hit_points <= 0 {
-                            death(mtype);
+                            death(mtype as c_char);
                         }
                     }
                     msg_str("you suddenly feel weaker");
                 }
-            } else if mtype == b'F' as c_char {
+            } else if mtype == b'F' {
                 // Venus flytrap: holds the player, deals ongoing damage
                 (*thing_t(&raw mut player)).t_flags |= ISHELD;
                 vf_hit += 1;
@@ -403,7 +403,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 if (*thing_t(&raw mut player)).t_stats.hit_points <= 0 {
                     death(b'F' as c_char);
                 }
-            } else if mtype == b'L' as c_char {
+            } else if mtype == b'L' {
                 // Leprechaun: steals gold
                 let level = crate::game::current_depth();
                 let lastpurse = purse;
@@ -428,7 +428,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 count = 0;
                 status();
                 return -1;
-            } else if mtype == b'N' as c_char {
+            } else if mtype == b'N' {
                 // Nymph: steals a magic item
                 let mut steal: *mut CThing = std::ptr::null_mut();
                 let mut nobj: c_int = 0;
@@ -466,16 +466,16 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 }
             }
         }
-    } else if (*thing_t(mp)).t_type != b'I' as c_char {
+    } else if (*thing_t(mp)).t_type != b'I' {
         // Miss branch
         if has_hit != 0 {
             addmsg_str(".  ");
             has_hit = false as c_uchar;
         }
-        if (*thing_t(mp)).t_type == b'F' as c_char {
+        if (*thing_t(mp)).t_type == b'F' {
             (*thing_t(&raw mut player)).t_stats.hit_points -= vf_hit;
             if (*thing_t(&raw mut player)).t_stats.hit_points <= 0 {
-                death((*thing_t(mp)).t_type);
+                death((*thing_t(mp)).t_type as c_char);
             }
         }
         miss(mname, std::ptr::null_mut(), false as c_uchar);
@@ -526,7 +526,7 @@ pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
         };
         mname = monsters[idx].m_name;
     } else {
-        let idx = ((*thing_t(tp)).t_type as u8).wrapping_sub(b'A') as usize;
+        let idx = (*thing_t(tp)).t_type.wrapping_sub(b'A') as usize;
         mname = monsters[idx].m_name;
     }
 
@@ -822,7 +822,7 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
 
     let mtype = (*thing_t(tp)).t_type;
 
-    if mtype == b'F' as c_char {
+    if mtype == b'F' {
         (*thing_t(&raw mut player)).t_flags &= !ISHELD;
         vf_hit = 0;
         // Reset damage string to "000x0"
@@ -831,7 +831,7 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
             .damage
             .as_mut_ptr();
         strcpy(dmg, c"000x0".as_ptr());
-    } else if mtype == b'L' as c_char {
+    } else if mtype == b'L' {
         let tp_room = (*thing_t(tp)).t_room;
         let level = crate::game::current_depth();
         if tp_room.is_some()

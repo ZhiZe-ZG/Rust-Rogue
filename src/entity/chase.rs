@@ -166,7 +166,7 @@ pub unsafe extern "C" fn runners() {
 /// Execute a single turn of running for a monster
 #[no_mangle]
 pub unsafe extern "C" fn move_monst(tp: *mut CThing) -> c_int {
-    if !monster_has(tp, ISSLOW) || (*thing_t(tp)).t_turn != 0 {
+    if !monster_has(tp, ISSLOW) || (*thing_t(tp)).t_turn {
         if do_chase(tp) == -1 {
             return -1;
         }
@@ -176,7 +176,7 @@ pub unsafe extern "C" fn move_monst(tp: *mut CThing) -> c_int {
             return -1;
         }
     }
-    (*thing_t(tp)).t_turn ^= true as c_uchar;
+    (*thing_t(tp)).t_turn = !(*thing_t(tp)).t_turn;
     0
 }
 
@@ -281,7 +281,7 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
             // For dragons check and see if (a) the hero is on a straight
             // line from it, and (b) that it is within shooting distance,
             // but outside of striking range.
-            if (*thing_t(th)).t_type == 'D' as c_char
+            if (*thing_t(th)).t_type == b'D'
                 && ((*thing_t(th)).t_pos.y == hero_pos().y
                     || (*thing_t(th)).t_pos.x == hero_pos().x
                     || ((*thing_t(th)).t_pos.y - hero_pos().y).abs()
@@ -334,11 +334,11 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
                 }
                 obj = (*thing_o(obj)).l_next;
             }
-            if (*thing_t(th)).t_type != 'F' as c_char {
+            if (*thing_t(th)).t_type != b'F' {
                 stoprun = true;
             }
         }
-    } else if (*thing_t(th)).t_type == 'F' as c_char {
+    } else if (*thing_t(th)).t_type == b'F' {
         return 0;
     }
     relocate(th, &raw mut CH_RET);
@@ -361,14 +361,14 @@ pub unsafe extern "C" fn set_oldch(tp: *mut CThing, cp: *mut IVec2) {
 
     let sch = (*thing_t(tp)).t_oldch;
     (*thing_t(tp)).t_oldch =
-        (output::glyph_at(IVec2::new((*cp).x, (*cp).y)) as u8 & 0x7f) as c_char;
+        output::glyph_at(IVec2::new((*cp).x, (*cp).y)) as u8 & 0x7f;
     if !player_has(ISBLIND) {
-        if (sch == FLOOR || (*thing_t(tp)).t_oldch == FLOOR)
+        if (sch == FLOOR as u8 || (*thing_t(tp)).t_oldch == FLOOR as u8)
             && crate::game::room_dark((*thing_t(tp)).t_room)
         {
-            (*thing_t(tp)).t_oldch = b' ' as c_char;
+            (*thing_t(tp)).t_oldch = b' ';
         } else if dist_cp(cp, hero_ptr()) <= LAMPDIST && see_floor != 0 {
-            (*thing_t(tp)).t_oldch = crate::draw::cell_glyph((*cp).y, (*cp).x);
+            (*thing_t(tp)).t_oldch = crate::draw::cell_glyph((*cp).y, (*cp).x) as u8;
         }
     }
 }
@@ -449,8 +449,8 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut IVec2) -> c_uchar {
     // Stalkers are slightly confused all of the time, and bats are
     // quite confused all the time.
     if (monster_has(tp, ISHUH) && rnd(5) != 0)
-        || ((*thing_t(tp)).t_type == 'P' as c_char && rnd(5) == 0)
-        || ((*thing_t(tp)).t_type == 'B' as c_char && rnd(2) == 0)
+        || ((*thing_t(tp)).t_type == b'P' && rnd(5) == 0)
+        || ((*thing_t(tp)).t_type == b'B' && rnd(2) == 0)
     {
         // get a valid random move
         CH_RET = *rndmove(tp);
@@ -504,7 +504,7 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut IVec2) -> c_uchar {
                         }
                         // It can also be a Xeroc, which we shouldn't step on.
                         let obj = moat_at(y, x);
-                        if !obj.is_null() && (*thing_t(obj)).t_type == 'X' as c_char {
+                        if !obj.is_null() && (*thing_t(obj)).t_type == b'X' {
                             y += 1;
                             continue;
                         }

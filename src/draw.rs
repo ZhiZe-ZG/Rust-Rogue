@@ -191,7 +191,7 @@ pub(crate) unsafe fn winat(y: c_int, x: c_int) -> c_char {
     if tp.is_null() {
         cell_glyph(y, x)
     } else {
-        (*thing_t(tp)).t_disguise
+        (*thing_t(tp)).t_disguise as c_char
     }
 }
 
@@ -337,7 +337,7 @@ pub unsafe extern "C" fn add_pass() {
                 output::move_cursor(IVec2::new(x, y));
                 let monst = game::monster_at(y, x);
                 if !monst.is_null() {
-                    (*thing_t(monst)).t_oldch = ch;
+                    (*thing_t(monst)).t_oldch = ch as u8;
                 } else if (flags as u8 & F_REAL as u8) != 0 {
                     output::write_glyph((out_ch as u8) as char);
                 } else {
@@ -633,7 +633,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut IVec2) {
                     output::move_cursor(IVec2::new(x + 1, y));
                 }
             } else {
-                (*thing_t(tp)).t_oldch = ch;
+                (*thing_t(tp)).t_oldch = ch as u8;
                 if see_monst(tp) == 0 {
                     if player_has(SEEMONST) {
                         output::set_standout(true);

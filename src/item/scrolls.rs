@@ -293,7 +293,7 @@ pub unsafe extern "C" fn read_scroll() {
                     if ch != SPACE {
                         let tp = moat(y, x);
                         if !tp.is_null() {
-                            (*thing_t(tp)).t_oldch = ch as c_char;
+                            (*thing_t(tp)).t_oldch = ch as u8;
                         }
                         if tp.is_null() || !player_has(SEEMONST) {
                             output::write_glyph_at(IVec2::new(x, y), (ch as u8) as char);

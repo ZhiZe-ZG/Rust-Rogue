@@ -366,8 +366,8 @@ pub unsafe extern "C" fn visuals() {
     while !tp.is_null() {
         output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
         if see_monst(tp) != 0 {
-            if (*thing_t(tp)).t_type == b'X' as c_char
-                && (*thing_t(tp)).t_disguise != b'X' as c_char
+            if (*thing_t(tp)).t_type == b'X'
+                && (*thing_t(tp)).t_disguise != b'X'
             {
                 output::write_glyph((rnd_thing() as u8) as char);
             } else {
