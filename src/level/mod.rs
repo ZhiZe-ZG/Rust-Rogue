@@ -23,5 +23,5 @@ pub use passages::{Passage, PassageLinks};
 pub use roomgraph::RoomGraph;
 pub use rooms::{Door, DoorKind, Room};
 pub use structure::Structure;
-pub use tile::{tile_is_walkable, Tile};
+pub use tile::Tile;
 pub use trap::{be_trapped, Trap};

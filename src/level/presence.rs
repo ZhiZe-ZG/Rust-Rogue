@@ -117,7 +117,7 @@ pub unsafe fn find_floor(
         let tile = game::tile_at((*cp).y, (*cp).x);
 
         if monst {
-            if game::monster_at((*cp).y, (*cp).x).is_null() && super::tile_is_walkable(tile) {
+            if game::monster_at((*cp).y, (*cp).x).is_null() && tile.is_walkable() {
                 return true;
             }
         } else if tile == expected_tile {

@@ -22,7 +22,7 @@ use crate::entity::monsters::wake_monster;
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game;
 use crate::level::Trap;
-use crate::level::{door_open, tile_is_walkable, with_current_level, with_current_level_mut, Tile};
+use crate::level::{door_open, with_current_level, with_current_level_mut, Tile};
 use crate::misc::find_obj;
 use crate::rnd::rnd;
 use crate::ui::{output, Window};
@@ -413,8 +413,8 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             {
                 if hero.x != x
                     && hero.y != y
-                    && !tile_is_walkable(game::tile_at(y, hero.x))
-                    && !tile_is_walkable(game::tile_at(hero.y, x))
+                    && !game::tile_at(y, hero.x).is_walkable()
+                    && !game::tile_at(hero.y, x).is_walkable()
                 {
                     continue;
                 }

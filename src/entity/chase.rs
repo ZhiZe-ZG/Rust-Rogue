@@ -16,7 +16,6 @@ use crate::entity::rndmove::rndmove;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
 use crate::item::thing_list::attach;
-use crate::level::tile_is_walkable;
 use crate::misc::sign;
 use crate::rnd::rnd;
 use crate::ui::output;
@@ -391,8 +390,8 @@ pub unsafe extern "C" fn see_monst(mp: *mut CThing) -> c_uchar {
     if dist(y, x, hero_pos().y, hero_pos().x) < LAMPDIST {
         if y != hero_pos().y
             && x != hero_pos().x
-            && !tile_is_walkable(crate::game::tile_at(y, hero_pos().x))
-            && !tile_is_walkable(crate::game::tile_at(hero_pos().y, x))
+            && !crate::game::tile_at(y, hero_pos().x).is_walkable()
+            && !crate::game::tile_at(hero_pos().y, x).is_walkable()
         {
             return false as c_uchar;
         }
@@ -574,8 +573,8 @@ pub unsafe extern "C" fn diag_ok(sp: *mut IVec2, ep: *mut IVec2) -> c_uchar {
     if (*ep).x == (*sp).x || (*ep).y == (*sp).y {
         return true as c_uchar;
     }
-    if tile_is_walkable(crate::game::tile_at((*ep).y, (*sp).x))
-        && tile_is_walkable(crate::game::tile_at((*sp).y, (*ep).x))
+    if crate::game::tile_at((*ep).y, (*sp).x).is_walkable()
+        && crate::game::tile_at((*sp).y, (*ep).x).is_walkable()
     {
         true as c_uchar
     } else {
@@ -596,8 +595,8 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
         if (flat_at(y, x) & F_PASS) != 0 {
             if y != hero_pos().y
                 && x != hero_pos().x
-                && !tile_is_walkable(crate::game::tile_at(y, hero_pos().x))
-                && !tile_is_walkable(crate::game::tile_at(hero_pos().y, x))
+                && !crate::game::tile_at(y, hero_pos().x).is_walkable()
+                && !crate::game::tile_at(hero_pos().y, x).is_walkable()
             {
                 return false as c_uchar;
             }

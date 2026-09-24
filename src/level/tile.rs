@@ -59,25 +59,25 @@ impl Tile {
             _ => None,
         }
     }
-}
 
-/// Whether a [`Tile`] can be entered or crossed.
-///
-/// Blank cells, walls, and hidden doors block movement; floors, passages,
-/// doors, stairs, and traps are traversable. Monsters are not part of a tile —
-/// occupancy is checked separately against the per-cell monster map.
-pub const fn tile_is_walkable(tile: Tile) -> bool {
-    !matches!(tile, Tile::Empty | Tile::Wall | Tile::HiddenDoor)
+    /// Whether this [`Tile`] can be entered or crossed.
+    ///
+    /// Blank cells, walls, and hidden doors block movement; floors, passages,
+    /// doors, stairs, and traps are traversable. Monsters are not part of a
+    /// tile — occupancy is checked separately against the per-cell monster map.
+    pub const fn is_walkable(self) -> bool {
+        !matches!(self, Tile::Empty | Tile::Wall | Tile::HiddenDoor)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{tile_is_walkable, Tile};
+    use super::Tile;
 
     #[test]
     fn tile_walkability_matches_map_semantics() {
         for blocked in [Tile::Empty, Tile::Wall, Tile::HiddenDoor] {
-            assert!(!tile_is_walkable(blocked));
+            assert!(!blocked.is_walkable());
         }
 
         for walkable in [
@@ -87,7 +87,7 @@ mod tests {
             Tile::Stairs,
             Tile::Trap,
         ] {
-            assert!(tile_is_walkable(walkable));
+            assert!(walkable.is_walkable());
         }
     }
 }

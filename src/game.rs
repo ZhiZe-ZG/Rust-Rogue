@@ -19,7 +19,7 @@ use std::sync::RwLock;
 
 use crate::config::GameConfig;
 use crate::entity::player::CThing;
-use crate::level::{tile_is_walkable, Level, Tile};
+use crate::level::{Level, Tile};
 use glam::IVec2;
 
 /// A non-owning, interior-mutable cell for a raw [`CThing`] pointer.
@@ -187,7 +187,7 @@ pub unsafe fn cell_is_walkable(y: c_int, x: c_int) -> bool {
     if !monster_at(y, x).is_null() {
         return false;
     }
-    with_current_level(|level| tile_is_walkable(level.tile_at(y as usize, x as usize)))
+    with_current_level(|level| level.tile_at(y as usize, x as usize).is_walkable())
 }
 
 /// The tile at `(y, x)`, defaulting to [`Tile::Empty`] outside the map.
