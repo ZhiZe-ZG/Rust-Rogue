@@ -375,15 +375,16 @@ pub use crate::game::{with_current_level, with_current_level_mut};
 mod tests {
     use super::*;
 
-    /// A door placed through [`stamp_door`] is recorded on the room and both
-    /// the entry point and the tile map reflect it.
+    /// A door placed through [`stamp_door`] registers an entry point on the
+    /// room and stamps the tile map.
     #[test]
-    fn door_records_on_room_and_stamps_tile_map() {
+    fn stamp_door_stamps_tile_map_and_registers_entry_point() {
         let mut level = Level::new();
         level.depth = 1;
         level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
 
-        // `stamp_door` decides the kind randomly (depth 1 → always open).
+        // `stamp_door` decides whether the door is secret randomly
+        // (depth 1 → always open).
         super::stamp_door(
             &mut level.map,
             &mut level.flags,
@@ -394,9 +395,8 @@ mod tests {
         );
 
         let room = &level.rooms[0];
-        assert_eq!(room.doors.len(), 1);
-        assert_eq!(room.doors[0].position, IVec2::new(5, 1));
-        assert!(!room.doors[0].secret);
+        assert_eq!(room.entry_points.len(), 1);
+        assert_eq!(room.entry_points[0], IVec2::new(5, 1));
         assert_eq!(room.entry_point_count, 1);
         // Open doors are stamped into the tile map.
         assert_eq!(level.map.get(11, 15), Some(Tile::Door));
@@ -609,8 +609,8 @@ mod tests {
         assert_eq!(passage.entry_points.len(), 2);
 
         // Doors were registered on both rooms' boundaries.
-        assert_eq!(level.rooms[0].doors.len(), 1);
-        assert_eq!(level.rooms[1].doors.len(), 1);
+        assert_eq!(level.rooms[0].entry_points.len(), 1);
+        assert_eq!(level.rooms[1].entry_points.len(), 1);
         assert_eq!(level.rooms[0].entry_point_count, 1);
         assert_eq!(level.rooms[1].entry_point_count, 1);
 

@@ -9,22 +9,10 @@ use super::structure::Structure;
 use super::tile::Tile;
 use crate::config::GameConfig;
 
-/// A door placed on a room boundary while digging corridors.
-///
-/// `position` is relative to the room's top-left corner, matching the
-/// room-local coordinates of [`Room::entry_points`] and `structure`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Door {
-    pub position: IVec2,
-    /// Whether this door is hidden: it renders as the wall segment it replaces
-    /// (see [`Tile::HiddenDoor`]) until revealed.
-    pub secret: bool,
-}
-
 /// Logical room model used by Rust-side level generation.
 ///
-/// Coordinates are absolute map positions; `structure`, `entry_points`, and
-/// `doors` store room-local tiles/coordinates.
+/// Coordinates are absolute map positions; `structure` stores room-local
+/// tiles and `entry_points` stores room-local doorway coordinates.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Room {
     /// Absolute map position of the room's top-left corner.
@@ -33,8 +21,6 @@ pub struct Room {
     pub size: IVec2,
     /// Room-local tile model (walled room or maze passages).
     pub structure: Structure,
-    /// Doors placed on this room's boundary, relative to `position`.
-    pub doors: Vec<Door>,
     /// Doorway positions relative to `position`.
     pub entry_points: Vec<IVec2>,
     /// Absolute map position of the room's gold stash.
@@ -72,7 +58,6 @@ impl Room {
             position,
             size,
             structure,
-            doors: Vec::new(),
             entry_points: Vec::new(),
             gold: IVec2::ZERO,
             goldval: 0,
@@ -129,11 +114,10 @@ impl Room {
     /// (i.e. `pos - position` of an absolute position); `secret` is chosen by
     /// the caller and decides whether the door renders as an open `+` or as a
     /// wall segment cleared of `F_REAL` (a secret door). Returns `true` when
-    /// `local` lands exactly on this room's outer wall row/column: the door is
-    /// recorded, `Tile::Door` replaces the wall cell for open doors, and the
-    /// coordinate is registered as an entry point. Returns `false` when
-    /// `local` lies outside the room or in its interior, leaving the room
-    /// unchanged.
+    /// `local` lands exactly on this room's outer wall row/column: `Tile::Door`
+    /// replaces the wall cell for open doors, and the coordinate is registered
+    /// as an entry point. Returns `false` when `local` lies outside the room or
+    /// in its interior, leaving the room unchanged.
     pub fn place_door(&mut self, local: IVec2, secret: bool) -> bool {
         let (local_y, local_x) = (local.y, local.x);
         if local_y < 0 || local_x < 0 || local_y >= self.size.y || local_x >= self.size.x {
@@ -153,10 +137,6 @@ impl Room {
                 .structure
                 .set(local_y as usize, local_x as usize, Tile::Door);
         }
-        self.doors.push(Door {
-            position: local,
-            secret,
-        });
         self.add_entry_point(local);
         true
     }
@@ -188,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn place_door_records_door_and_registers_entry_point() {
+    fn place_door_registers_entry_point_and_stamps_open_door() {
         let mut room = test_room();
 
         // Top wall (y = 0).
@@ -202,24 +182,17 @@ mod tests {
 
         assert_eq!(room.entry_points.len(), 4);
         assert_eq!(room.entry_point_count, 4);
-        assert_eq!(room.doors.len(), 4);
 
         // Door positions are stored relative to the room's top-left corner.
-        let expected: [IVec2; 4] = [
+        let expected = [
             IVec2::new(1, 0),
             IVec2::new(5, 1),
             IVec2::new(2, 3),
             IVec2::new(0, 2),
         ];
-        for (door, exp) in room.doors.iter().zip(expected) {
-            assert_eq!(door.position, exp);
-        }
-        assert!(
-            room.doors[1].secret,
-            "right wall door keeps its secret flag"
-        );
+        assert_eq!(room.entry_points, expected.to_vec());
 
-        // Open doors replace the wall cell; wall-segment doors do not.
+        // Open doors replace the wall cell; secret doors keep the wall cell.
         assert_eq!(room.structure.get(0, 1), Some(Tile::Door));
         assert_eq!(room.structure.get(1, 5), Some(Tile::Wall));
         assert_eq!(room.structure.get(3, 2), Some(Tile::Door));
@@ -243,7 +216,6 @@ mod tests {
 
         assert!(room.entry_points.is_empty());
         assert!(room.entry_point_count == 0);
-        assert!(room.doors.is_empty());
         assert_eq!(room.structure.get(2, 2), Some(Tile::Floor));
     }
 }
