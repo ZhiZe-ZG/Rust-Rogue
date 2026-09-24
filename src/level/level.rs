@@ -405,6 +405,7 @@ pub use crate::game::{with_current_level, with_current_level_mut};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::passages::{stamp_door, stamp_passage};
 
     /// A door placed through [`stamp_door`] registers an entry point on the
     /// room and stamps the tile map.
@@ -416,7 +417,7 @@ mod tests {
 
         // `stamp_door` decides whether the door is secret randomly
         // (depth 1 → always open).
-        super::stamp_door(
+        stamp_door(
             &mut level.map,
             &mut level.flags,
             &mut level.rooms,
@@ -472,7 +473,7 @@ mod tests {
     #[test]
     fn putpass_stamps_passage_into_map() {
         let mut level = Level::new();
-        super::stamp_passage(&mut level.map, &mut level.flags, IVec2::new(5, 7));
+        stamp_passage(&mut level.map, &mut level.flags, IVec2::new(5, 7));
 
         assert_eq!(level.map.get(7, 5), Some(Tile::Passage));
         assert!(level.flags.passage[7 * GameConfig::LEVEL_WIDTH + 5]);
@@ -485,10 +486,10 @@ mod tests {
     fn putpass_ignores_out_of_bounds_positions() {
         let mut level = Level::new();
 
-        super::stamp_passage(&mut level.map, &mut level.flags, IVec2::new(-1, 7));
+        stamp_passage(&mut level.map, &mut level.flags, IVec2::new(-1, 7));
         assert_eq!(level.map.get(7, 0), Some(Tile::Empty));
 
-        super::stamp_passage(&mut level.map, &mut level.flags, IVec2::new(5, -3));
+        stamp_passage(&mut level.map, &mut level.flags, IVec2::new(5, -3));
         assert_eq!(level.map.get(0, 5), Some(Tile::Empty));
     }
 
