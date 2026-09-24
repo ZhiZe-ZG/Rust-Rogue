@@ -238,6 +238,7 @@ unsafe extern "C" {
 
     // libc / curses
     fn malloc(size: usize) -> *mut c_void;
+    fn free(ptr: *mut c_void);
     fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
     fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
     fn strlen(s: *const c_char) -> usize;
@@ -698,6 +699,20 @@ unsafe fn rs_read_string(inf: *mut CFile, s: *mut c_char, max: c_int) -> c_int {
     let _ = rs_read_chars(inf, s, len);
 
     read_stat()
+}
+
+/// Read a length-prefixed C string into an owned [`CString`] (`None` if the
+/// stored length was zero).
+unsafe fn rs_read_new_cstring(inf: *mut CFile, s: &mut Option<std::ffi::CString>) -> c_int {
+    let mut buf: *mut c_char = std::ptr::null_mut();
+    let stat = rs_read_new_string(inf, &mut buf);
+    if buf.is_null() {
+        *s = None;
+    } else {
+        *s = Some(CStr::from_ptr(buf).to_owned());
+        free(buf as *mut c_void);
+    }
+    stat
 }
 
 unsafe fn rs_read_new_string(inf: *mut CFile, s: *mut *mut c_char) -> c_int {
@@ -1692,7 +1707,13 @@ unsafe fn rs_write_object(savef: *mut CFile, o: *mut CThing) -> c_int {
     let _ = rs_write_int(savef, (*op).o_arm);
     let _ = rs_write_int(savef, (*op).o_flags);
     let _ = rs_write_int(savef, (*op).o_group);
-    let _ = rs_write_string(savef, (*op).o_label);
+    let _ = rs_write_string(
+        savef,
+        (*op)
+            .o_label
+            .as_ref()
+            .map_or(std::ptr::null(), |label| label.as_ptr()),
+    );
 
     WRITE_ERROR
 }
@@ -1720,7 +1741,7 @@ unsafe fn rs_read_object(inf: *mut CFile, o: *mut CThing) -> c_int {
     let _ = rs_read_int(inf, &mut (*op).o_arm);
     let _ = rs_read_int(inf, &mut (*op).o_flags);
     let _ = rs_read_int(inf, &mut (*op).o_group);
-    let _ = rs_read_new_string(inf, &mut (*op).o_label);
+    let _ = rs_read_new_cstring(inf, &mut (*op).o_label);
 
     read_stat()
 }
@@ -1899,7 +1920,7 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
     */
 
     let hero_pos_ptr = (&raw mut (*thing_t(&raw mut player)).t_pos) as *mut IVec2;
-    let t_dest = (*thing_t(t)).t_dest;
+    let t_dest = crate::entity::player::thing_dest(t);
 
     if t_dest == hero_pos_ptr {
         let _ = rs_write_int(savef, 0);
@@ -1936,7 +1957,7 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
     let _ = rs_write_short(savef, (*thing_t(t)).t_flags);
     let _ = rs_write_stats(savef, &raw mut (*thing_t(t)).t_stats);
     let _ = rs_write_room_reference(savef, (*thing_t(t)).t_room);
-    let _ = rs_write_object_list(savef, (*thing_t(t)).t_pack);
+    let _ = rs_write_object_list(savef, crate::entity::player::thing_pack(t));
 
     WRITE_ERROR
 }
@@ -1993,36 +2014,41 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
     if listid == 0 {
         /* hero or NULL */
         if index == 1 {
-            (*thing_t(t)).t_dest = (&raw mut (*thing_t(&raw mut player)).t_pos) as *mut IVec2;
+            crate::entity::player::set_thing_dest(
+                t,
+                (&raw mut (*thing_t(&raw mut player)).t_pos) as *mut IVec2,
+            );
         } else {
-            (*thing_t(t)).t_dest = std::ptr::null_mut();
+            crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
         }
     } else if listid == 1 {
         /* monster/thing */
-        (*thing_t(t)).t_dest = std::ptr::null_mut();
+        crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
         (*thing_t(t)).t_reserved = index;
     } else if listid == 2 {
         /* object */
         let item = get_list_item(crate::game::with_current_level(|level| level.items.head()), index);
 
         if !item.is_null() {
-            (*thing_t(t)).t_dest = (&raw mut (*thing_o(item)).o_pos) as *mut IVec2;
+            crate::entity::player::set_thing_dest(t, (&raw mut (*thing_o(item)).o_pos) as *mut IVec2);
         }
     } else if listid == 3 {
         /* gold */
         if (index as usize) < crate::config::GameConfig::MAX_ROOMS {
-            (*thing_t(t)).t_dest = crate::game::room_gold_ptr(Some(index as usize));
+            crate::entity::player::set_thing_dest(t, crate::game::room_gold_ptr(Some(index as usize)));
         } else {
-            (*thing_t(t)).t_dest = std::ptr::null_mut();
+            crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
         }
     } else {
-        (*thing_t(t)).t_dest = std::ptr::null_mut();
+        crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
     }
 
     let _ = rs_read_short(inf, &mut (*thing_t(t)).t_flags);
     let _ = rs_read_stats(inf, &raw mut (*thing_t(t)).t_stats);
     let _ = rs_read_room_reference(inf, &mut (*thing_t(t)).t_room);
-    let _ = rs_read_object_list(inf, &mut (*thing_t(t)).t_pack);
+    let mut pack_head: *mut CThing = std::ptr::null_mut();
+    let _ = rs_read_object_list(inf, &mut pack_head);
+    crate::entity::player::set_thing_pack(t, pack_head);
 
     read_stat()
 }
@@ -2038,7 +2064,7 @@ unsafe fn rs_fix_thing(t: *mut CThing) {
     let item = get_list_item(MLIST.head(), (*thing_t(t)).t_reserved);
 
     if !item.is_null() {
-        (*thing_t(t)).t_dest = (&raw mut (*thing_t(item)).t_pos) as *mut IVec2;
+        crate::entity::player::set_thing_dest(t, (&raw mut (*thing_t(item)).t_pos) as *mut IVec2);
     }
 }
 
@@ -2403,24 +2429,13 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_coord(savef, crate::game::stairs());
 
     let _ = rs_write_thing(savef, &raw mut player);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, EQUIPMENT.armor());
-    let _ = rs_write_object_reference(
-        savef,
-        (*thing_t(&raw mut player)).t_pack,
-        EQUIPMENT.left_ring(),
-    );
-    let _ = rs_write_object_reference(
-        savef,
-        (*thing_t(&raw mut player)).t_pack,
-        EQUIPMENT.right_ring(),
-    );
-    let _ = rs_write_object_reference(
-        savef,
-        (*thing_t(&raw mut player)).t_pack,
-        EQUIPMENT.weapon(),
-    );
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, l_last_pick);
-    let _ = rs_write_object_reference(savef, (*thing_t(&raw mut player)).t_pack, last_pick);
+    let player_pack = crate::entity::player::thing_pack(&raw mut player);
+    let _ = rs_write_object_reference(savef, player_pack, EQUIPMENT.armor());
+    let _ = rs_write_object_reference(savef, player_pack, EQUIPMENT.left_ring());
+    let _ = rs_write_object_reference(savef, player_pack, EQUIPMENT.right_ring());
+    let _ = rs_write_object_reference(savef, player_pack, EQUIPMENT.weapon());
+    let _ = rs_write_object_reference(savef, player_pack, l_last_pick);
+    let _ = rs_write_object_reference(savef, player_pack, last_pick);
 
     let _ = rs_write_object_list(savef, crate::game::with_current_level(|level| level.items.head()));
     let _ = rs_write_thing_list(savef, MLIST.head());
@@ -2608,37 +2623,18 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     crate::game::set_stairs(stairs);
 
     let _ = rs_read_thing(inf, &raw mut player);
+    let player_pack = crate::entity::player::thing_pack(&raw mut player);
     let mut equipment_item = std::ptr::null_mut();
-    let _ = rs_read_object_reference(
-        inf,
-        (*thing_t(&raw mut player)).t_pack,
-        &raw mut equipment_item,
-    );
+    let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
     EQUIPMENT.set_armor(equipment_item);
-    let _ = rs_read_object_reference(
-        inf,
-        (*thing_t(&raw mut player)).t_pack,
-        &raw mut equipment_item,
-    );
+    let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
     EQUIPMENT.set_left_ring(equipment_item);
-    let _ = rs_read_object_reference(
-        inf,
-        (*thing_t(&raw mut player)).t_pack,
-        &raw mut equipment_item,
-    );
+    let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
     EQUIPMENT.set_right_ring(equipment_item);
-    let _ = rs_read_object_reference(
-        inf,
-        (*thing_t(&raw mut player)).t_pack,
-        &raw mut equipment_item,
-    );
+    let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
     EQUIPMENT.set_weapon(equipment_item);
-    let _ = rs_read_object_reference(
-        inf,
-        (*thing_t(&raw mut player)).t_pack,
-        &raw mut l_last_pick,
-    );
-    let _ = rs_read_object_reference(inf, (*thing_t(&raw mut player)).t_pack, &raw mut last_pick);
+    let _ = rs_read_object_reference(inf, player_pack, &raw mut l_last_pick);
+    let _ = rs_read_object_reference(inf, player_pack, &raw mut last_pick);
 
     let mut items_head: *mut CThing = std::ptr::null_mut();
     let _ = rs_read_object_list(inf, &raw mut items_head);

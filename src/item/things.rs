@@ -174,17 +174,17 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
             } else {
                 format!("{}{item}", starts_with_article(item))
             };
-            if !(*thing_o(obj)).o_label.is_null() {
+            if let Some(label) = (*thing_o(obj)).o_label.as_ref() {
                 text.push_str(" called ");
-                text.push_str(&CStr::from_ptr((*thing_o(obj)).o_label).to_string_lossy());
+                text.push_str(&label.to_string_lossy());
             }
             text
         }
         ARMOR => {
             let mut text = item_name(typ, which).to_owned();
-            if !(*thing_o(obj)).o_label.is_null() {
+            if let Some(label) = (*thing_o(obj)).o_label.as_ref() {
                 text.push_str(" called ");
-                text.push_str(&CStr::from_ptr((*thing_o(obj)).o_label).to_string_lossy());
+                text.push_str(&label.to_string_lossy());
             }
             text
         }

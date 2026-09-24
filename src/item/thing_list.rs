@@ -21,6 +21,46 @@ fn things() -> &'static Mutex<Vec<OwnedThing>> {
     THINGS.get_or_init(|| Mutex::new(Vec::new()))
 }
 
+/// Prepend `item` to the actor `owner`'s pack list.
+pub unsafe fn attach_pack(owner: *mut CThing, item: *mut CThing) {
+    let head = crate::entity::player::thing_pack(owner);
+    crate::entity::player::set_thing_next(item, head);
+    crate::entity::player::set_thing_prev(item, std::ptr::null_mut());
+    if !head.is_null() {
+        crate::entity::player::set_thing_prev(head, item);
+    }
+    crate::entity::player::set_thing_pack(owner, item);
+}
+
+/// Unlink `item` from the actor `owner`'s pack list.
+pub unsafe fn detach_pack(owner: *mut CThing, item: *mut CThing) {
+    let prev = crate::entity::player::thing_prev(item);
+    let next = crate::entity::player::thing_next(item);
+
+    if crate::entity::player::thing_pack(owner) == item {
+        crate::entity::player::set_thing_pack(owner, next);
+    }
+    if !prev.is_null() {
+        crate::entity::player::set_thing_next(prev, next);
+    }
+    if !next.is_null() {
+        crate::entity::player::set_thing_prev(next, prev);
+    }
+    crate::entity::player::set_thing_next(item, std::ptr::null_mut());
+    crate::entity::player::set_thing_prev(item, std::ptr::null_mut());
+}
+
+/// Drop every item in the actor `owner`'s pack list.
+pub unsafe fn free_pack(owner: *mut CThing) {
+    let mut item = crate::entity::player::thing_pack(owner);
+    while !item.is_null() {
+        let next = crate::entity::player::thing_next(item);
+        discard(item);
+        item = next;
+    }
+    crate::entity::player::set_thing_pack(owner, std::ptr::null_mut());
+}
+
 /// Unlink `item` from a doubly-linked list, patching its neighbours and
 /// clearing its own header.
 pub unsafe fn detach(list: *mut *mut CThing, item: *mut CThing) {

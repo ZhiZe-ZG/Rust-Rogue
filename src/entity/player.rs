@@ -28,7 +28,9 @@ use crate::ui::output;
 use crate::ui::output::msg_str;
 use crate::wizard::teleport;
 use glam::IVec2;
+use std::ffi::CString;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
+use std::ptr::NonNull;
 
 pub use crate::entity::stats::Stats;
 
@@ -61,22 +63,21 @@ pub struct CThingMonster {
     pub t_type: u8,
     pub t_disguise: u8,
     pub t_oldch: u8,
-    pub t_dest: *mut IVec2,
+    pub t_dest: Option<NonNull<IVec2>>,
     pub t_flags: i16,
     pub t_stats: Stats,
     pub t_room: Option<usize>,
-    pub t_pack: *mut CThing,
+    pub t_pack: Option<NonNull<CThing>>,
     pub t_reserved: i32,
 }
 
 /// Object (item) data for a [`CThing`], using native Rust types. The `o_text`
-/// and `o_label` string fields stay raw pointers because objects are still
-/// referenced through raw pointers that alias the owning arena.
-#[derive(Copy, Clone)]
+/// and `o_label` string fields are owned Rust strings rather than C pointers.
+#[derive(Clone)]
 pub struct CThingObject {
     pub o_type: i32,
     pub o_pos: IVec2,
-    pub o_text: *mut c_char,
+    pub o_text: Option<CString>,
     pub o_launch: i32,
     pub o_packch: u8,
     pub o_damage: [u8; 8],
@@ -88,30 +89,32 @@ pub struct CThingObject {
     pub o_arm: i32,
     pub o_flags: i32,
     pub o_group: i32,
-    pub o_label: *mut c_char,
+    pub o_label: Option<CString>,
 }
 
 /// Intrusive doubly-linked list header shared by every [`CThing`], independent
-/// of whether the thing is an actor (monster/player) or an object (item).
+/// of whether the thing is an actor (monster/player) or an object (item). The
+/// links use Rust `NonNull` pointers with a null niche instead of raw `*mut`.
 #[derive(Copy, Clone)]
 pub struct ThingLink {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
+    pub l_next: Option<NonNull<CThing>>,
+    pub l_prev: Option<NonNull<CThing>>,
 }
 
 impl ThingLink {
     pub const fn empty() -> Self {
         ThingLink {
-            l_next: std::ptr::null_mut(),
-            l_prev: std::ptr::null_mut(),
+            l_next: None,
+            l_prev: None,
         }
     }
 }
 
 /// A game thing: either an actor (monster/player) or an object (item), carrying
 /// a shared intrusive list header. This is a pure Rust enum (`union`/C ABI has
-/// been removed).
-#[derive(Copy, Clone)]
+/// been removed). It is `Clone` but not `Copy` because object string fields are
+/// owned values.
+#[derive(Clone)]
 pub enum CThing {
     Monster { link: ThingLink, data: CThingMonster },
     Object { link: ThingLink, data: CThingObject },
@@ -143,11 +146,11 @@ impl Default for CThingMonster {
             t_type: 0,
             t_disguise: 0,
             t_oldch: 0,
-            t_dest: std::ptr::null_mut(),
+            t_dest: None,
             t_flags: 0,
             t_stats: Stats::default(),
             t_room: None,
-            t_pack: std::ptr::null_mut(),
+            t_pack: None,
             t_reserved: 0,
         }
     }
@@ -158,7 +161,7 @@ impl Default for CThingObject {
         CThingObject {
             o_type: 0,
             o_pos: IVec2 { x: 0, y: 0 },
-            o_text: std::ptr::null_mut(),
+            o_text: None,
             o_launch: 0,
             o_packch: 0,
             o_damage: [0; 8],
@@ -170,7 +173,7 @@ impl Default for CThingObject {
             o_arm: 0,
             o_flags: 0,
             o_group: 0,
-            o_label: std::ptr::null_mut(),
+            o_label: None,
         }
     }
 }
@@ -181,14 +184,16 @@ pub unsafe fn thing_next(tp: *mut CThing) -> *mut CThing {
     if tp.is_null() {
         std::ptr::null_mut()
     } else {
-        (*thing_link(tp)).l_next
+        (*thing_link(tp))
+            .l_next
+            .map_or(std::ptr::null_mut(), |p| p.as_ptr())
     }
 }
 
 /// Set the next-list pointer of `tp`.
 #[inline]
 pub unsafe fn set_thing_next(tp: *mut CThing, value: *mut CThing) {
-    (*thing_link(tp)).l_next = value;
+    (*thing_link(tp)).l_next = NonNull::new(value);
 }
 
 /// Read the prev-list pointer of `tp` (null if `tp` is null).
@@ -197,14 +202,42 @@ pub unsafe fn thing_prev(tp: *mut CThing) -> *mut CThing {
     if tp.is_null() {
         std::ptr::null_mut()
     } else {
-        (*thing_link(tp)).l_prev
+        (*thing_link(tp))
+            .l_prev
+            .map_or(std::ptr::null_mut(), |p| p.as_ptr())
     }
 }
 
 /// Set the prev-list pointer of `tp`.
 #[inline]
 pub unsafe fn set_thing_prev(tp: *mut CThing, value: *mut CThing) {
-    (*thing_link(tp)).l_prev = value;
+    (*thing_link(tp)).l_prev = NonNull::new(value);
+}
+
+/// Read the actor's chase destination as a raw pointer (null when unset).
+#[inline]
+pub unsafe fn thing_dest(tp: *mut CThing) -> *mut IVec2 {
+    (*thing_t(tp))
+        .t_dest
+        .map_or(std::ptr::null_mut(), |p| p.as_ptr())
+}
+
+/// Set the actor's chase destination from a raw pointer.
+#[inline]
+pub unsafe fn set_thing_dest(tp: *mut CThing, value: *mut IVec2) {
+    (*thing_t(tp)).t_dest = NonNull::new(value);
+}
+
+/// Read the actor's pack head as a raw pointer (null when empty).
+#[inline]
+pub unsafe fn thing_pack(tp: *mut CThing) -> *mut CThing {
+    (*thing_t(tp)).t_pack.map_or(std::ptr::null_mut(), |p| p.as_ptr())
+}
+
+/// Set the actor's pack head from a raw pointer.
+#[inline]
+pub unsafe fn set_thing_pack(tp: *mut CThing, value: *mut CThing) {
+    (*thing_t(tp)).t_pack = NonNull::new(value);
 }
 
 unsafe extern "C" {

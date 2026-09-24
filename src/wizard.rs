@@ -106,7 +106,7 @@ unsafe extern "C" {
 
 #[no_mangle]
 pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
-    let pack = (*thing_t(&mut player)).t_pack;
+    let pack = crate::entity::player::thing_pack(&raw mut player);
     if pack.is_null() {
         msg_str("you don't have anything in your pack to identify");
         return;
@@ -351,7 +351,7 @@ mod tests {
                 data: CThingObject {
                     o_type: SCROLL,
                     o_pos: IVec2 { x: 0, y: 0 },
-                    o_text: ptr::null_mut(),
+                    o_text: None,
                     o_launch: 0,
                     o_packch: 0,
                     o_damage: [0; 8],
@@ -363,7 +363,7 @@ mod tests {
                     o_arm: 0,
                     o_flags: 0,
                     o_group: 0,
-                    o_label: ptr::null_mut(),
+                    o_label: None,
                 },
             };
 

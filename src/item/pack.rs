@@ -86,11 +86,11 @@ unsafe fn alloc_item() -> *mut CThing {
 }
 
 unsafe fn pack_head() -> *mut CThing {
-    (*thing_t(&raw mut player)).t_pack
+    crate::entity::player::thing_pack(&raw mut player)
 }
 
 unsafe fn set_pack_head(value: *mut CThing) {
-    (*thing_t(&raw mut player)).t_pack = value;
+    crate::entity::player::set_thing_pack(&raw mut player, value);
 }
 
 unsafe fn hero_coord() -> IVec2 {
@@ -236,8 +236,8 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
 
     op = MLIST.head();
     while !op.is_null() {
-        if (*thing_t(op)).t_dest == &raw mut (*thing_o(item)).o_pos {
-            (*thing_t(op)).t_dest = &raw mut (*thing_t(&raw mut player)).t_pos;
+        if crate::entity::player::thing_dest(op) == &raw mut (*thing_o(item)).o_pos {
+            crate::entity::player::set_thing_dest(op, &raw mut (*thing_t(&raw mut player)).t_pos);
         }
         op = next_item(op);
     }
@@ -307,7 +307,7 @@ pub unsafe extern "C" fn leave_pack(
         }
         if newobj != 0 {
             nobj = alloc_item();
-            std::ptr::copy_nonoverlapping(obj, nobj, 1);
+            *nobj = (*obj).clone();
             crate::entity::player::set_thing_next(nobj, std::ptr::null_mut());
             crate::entity::player::set_thing_prev(nobj, std::ptr::null_mut());
             (*thing_o(nobj)).o_count = 1;
@@ -315,10 +315,7 @@ pub unsafe extern "C" fn leave_pack(
     } else {
         last_pick = std::ptr::null_mut();
         pack_used[(*thing_o(obj)).o_packch as usize - 'a' as usize] = false as c_uchar;
-        {
-            let head = &raw mut (*thing_t(&raw mut player)).t_pack as *mut *mut CThing;
-            detach_list(head, obj);
-        }
+        crate::item::thing_list::detach_pack(&raw mut player, obj);
     }
     nobj
 }

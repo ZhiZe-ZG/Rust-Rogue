@@ -27,7 +27,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::globals::{monsters, weap_info};
 use crate::item::rings::RingType;
-use crate::item::thing_list::{attach, detach, discard, new_item};
+use crate::item::thing_list::{attach_pack, detach_pack, discard, new_item};
 use crate::item::things::inv_name;
 use crate::item::weapons::{fall, fallpos};
 use crate::machdep::flush_type;
@@ -432,7 +432,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 // Nymph: steals a magic item
                 let mut steal: *mut CThing = std::ptr::null_mut();
                 let mut nobj: c_int = 0;
-                let mut obj = (*thing_t(&raw mut player)).t_pack;
+                let mut obj = crate::entity::player::thing_pack(&raw mut player);
                 while !obj.is_null() {
                     let obj_next = crate::entity::player::thing_next(obj);
                     if obj != EQUIPMENT.armor()
@@ -785,11 +785,11 @@ pub unsafe extern "C" fn bounce(weap: *mut CThing, mname: *const c_char, noend: 
 /// Remove a monster from the screen.
 #[no_mangle]
 pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut CThing, waskill: c_uchar) {
-    let mut obj = (*thing_t(tp)).t_pack;
+    let mut obj = crate::entity::player::thing_pack(tp);
     while !obj.is_null() {
         let nexti = crate::entity::player::thing_next(obj);
         (*thing_o(obj)).o_pos = (*thing_t(tp)).t_pos;
-        detach(&mut (*thing_t(tp)).t_pack as *mut *mut CThing, obj);
+        detach_pack(tp, obj);
         if waskill != 0 {
             fall(obj, false as c_uchar);
         } else {
@@ -849,7 +849,7 @@ pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
                 let extra = rnd(50 + 10 * level) + 2;
                 (*thing_o(gold)).o_arm += extra + extra + extra + extra;
             }
-            attach(&mut (*thing_t(tp)).t_pack as *mut *mut CThing, gold);
+            attach_pack(tp, gold);
         }
     }
 

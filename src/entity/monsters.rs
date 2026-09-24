@@ -10,7 +10,7 @@ use crate::entity::monster_list::MLIST;
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
-use crate::item::thing_list::{attach, new_actor};
+use crate::item::thing_list::{attach_pack, new_actor};
 use crate::item::things::new_thing;
 use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
@@ -198,7 +198,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
         (*thing_t(tp)).t_flags |= ISHASTE;
     }
     (*thing_t(tp)).t_turn = true;
-    (*thing_t(tp)).t_pack = std::ptr::null_mut();
+    crate::entity::player::set_thing_pack(tp, std::ptr::null_mut());
 
     if iswearing(RingType::Aggravate) {
         runto(cp);
@@ -278,7 +278,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
         && !iswearing(RingType::Stealth)
         && !player_has(ISLEVIT)
     {
-        (*thing_t(tp)).t_dest = &mut (*player_t()).t_pos;
+        crate::entity::player::set_thing_dest(tp, &mut (*player_t()).t_pos);
         (*thing_t(tp)).t_flags |= ISRUN;
     }
 
@@ -315,9 +315,9 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
         (*thing_t(tp)).t_flags |= ISRUN;
         let pr = (*player_t()).t_room;
         if pr.is_some() && crate::game::room_goldval(pr) != 0 {
-            (*thing_t(tp)).t_dest = crate::game::room_gold_ptr(pr);
+            crate::entity::player::set_thing_dest(tp, crate::game::room_gold_ptr(pr));
         } else {
-            (*thing_t(tp)).t_dest = &mut (*player_t()).t_pos;
+            crate::entity::player::set_thing_dest(tp, &mut (*player_t()).t_pos);
         }
     }
 
@@ -330,7 +330,7 @@ pub unsafe extern "C" fn give_pack(tp: *mut CThing) {
     if crate::game::current_depth() >= max_level
         && rnd(100) < monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry
     {
-        attach(&mut (*thing_t(tp)).t_pack, new_thing());
+        attach_pack(tp, new_thing());
     }
 }
 

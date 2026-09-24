@@ -537,7 +537,7 @@ pub unsafe extern "C" fn command() {
                     }
                     b'i' => {
                         after = false as c_uchar;
-                        inventory((*thing_t(&raw mut player)).t_pack, 0);
+                        inventory(crate::entity::player::thing_pack(&raw mut player), 0);
                     }
                     b'I' => {
                         after = false as c_uchar;
@@ -1024,17 +1024,11 @@ pub unsafe extern "C" fn call() {
     // Weapons and armor store their player-assigned name directly in `o_label`.
     if otype != RING as u8 && otype != POTION as u8 && otype != SCROLL as u8 && otype != STICK as u8
     {
-        let label = &mut (*thing_o(obj)).o_label;
-        let elsewise = *label;
-
-        if !elsewise.is_null() {
+        if let Some(elsewise) = (*thing_o(obj)).o_label.as_ref() {
             if terse == 0 {
                 addmsg_str("Was ");
             }
-            msg_str(&format!(
-                "called \"{}\"",
-                CStr::from_ptr(elsewise).to_string_lossy()
-            ));
+            msg_str(&format!("called \"{}\"", elsewise.to_string_lossy()));
         }
 
         if terse != 0 {
@@ -1043,21 +1037,17 @@ pub unsafe extern "C" fn call() {
             msg_str("what do you want to call it? ");
         }
 
-        if elsewise.is_null() {
-            prbuf[0] = 0;
-        } else {
-            strcpy(prbuf.as_mut_ptr(), elsewise);
+        match (*thing_o(obj)).o_label.as_ref() {
+            Some(elsewise) => {
+                strcpy(prbuf.as_mut_ptr(), elsewise.as_ptr());
+            }
+            None => {
+                prbuf[0] = 0;
+            }
         }
         if get_str(prbuf.as_mut_ptr().cast(), Window::Stdscr) == NORM {
-            if !(*label).is_null() {
-                free(*label as *mut c_void);
-            }
-            let len = strlen(prbuf.as_ptr()) + 1;
-            let buf = malloc(len) as *mut c_char;
-            if !buf.is_null() {
-                strcpy(buf, prbuf.as_ptr());
-                *label = buf;
-            }
+            let text = CStr::from_ptr(prbuf.as_ptr()).to_owned();
+            (*thing_o(obj)).o_label = Some(text);
         }
         return;
     }

@@ -352,7 +352,7 @@ pub unsafe extern "C" fn quaff() {
                 }
                 mp = MLIST.head();
                 while !mp.is_null() {
-                    tp = (*thing_t(mp)).t_pack;
+                    tp = crate::entity::player::thing_pack(mp);
                     while !tp.is_null() {
                         if is_magic_local(tp) {
                             show = true;

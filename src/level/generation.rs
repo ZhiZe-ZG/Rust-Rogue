@@ -13,7 +13,6 @@ use crate::entity::monsters::wake_monster;
 use crate::entity::player::{CThing, CThingMonster};
 use crate::game::{clear_level, with_current_level_mut};
 use crate::globals::{max_level, no_food, player};
-use crate::item::thing_list::free_list;
 use crate::ui::output;
 
 use super::presence::populate_level;
@@ -43,7 +42,7 @@ unsafe fn clear_previous_level_items() {
     let mut monster = MLIST.head();
     while !monster.is_null() {
         let next = crate::entity::player::thing_next(monster);
-        free_list((&raw mut (*thing_t(monster)).t_pack) as *mut *mut CThing);
+        crate::item::thing_list::free_pack(monster);
         monster = next;
     }
     MLIST.free_list();

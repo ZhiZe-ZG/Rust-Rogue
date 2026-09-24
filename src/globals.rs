@@ -245,7 +245,7 @@ pub static mut player: CThing = CThing::Monster {
         t_type: 0,
         t_disguise: 0,
         t_oldch: 0,
-        t_dest: std::ptr::null_mut(),
+        t_dest: None,
         t_flags: 0,
         t_stats: Stats {
             strength: 0,
@@ -257,7 +257,7 @@ pub static mut player: CThing = CThing::Monster {
             max_hit_points: 0,
         },
         t_room: None,
-        t_pack: std::ptr::null_mut(),
+        t_pack: None,
         t_reserved: 0,
     },
 };
