@@ -6,5 +6,5 @@
 mod room;
 mod structure;
 
-pub use room::{build_generated_rooms, Room};
+pub use room::Room;
 pub use structure::Structure;

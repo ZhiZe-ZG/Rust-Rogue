@@ -7,7 +7,6 @@ use glam::IVec2;
 
 use super::structure::Structure;
 use super::super::tile::Tile;
-use crate::config::GameConfig;
 
 /// Logical room model used by Rust-side level generation.
 ///
@@ -45,7 +44,17 @@ impl Room {
     /// supplied via [`Room::with_structure`].
     pub fn new(position: IVec2, size: IVec2) -> Self {
         let structure = if size.x > 0 && size.y > 0 {
-            build_room_structure(size.y as usize, size.x as usize)
+            Self::build_room_structure(size.y as usize, size.x as usize)
+        } else {
+            Structure::new(0, 0, Tile::Empty)
+        };
+        Self::with_structure(position, size, structure)
+    }
+
+    /// Create a maze room with a procedurally carved corridor structure.
+    pub fn new_maze(position: IVec2, size: IVec2) -> Self {
+        let structure = if size.x > 0 && size.y > 0 {
+            Self::build_maze_structure(size.y as usize, size.x as usize)
         } else {
             Structure::new(0, 0, Tile::Empty)
         };
@@ -66,6 +75,100 @@ impl Room {
             maze: false,
             entry_point_count: 0,
         }
+    }
+
+    /// Build a walled room structure: a border of [`Tile::Wall`] cells around
+    /// a [`Tile::Floor`] interior.
+    fn build_room_structure(height: usize, width: usize) -> Structure {
+        let mut structure = Structure::new(height, width, Tile::Empty);
+
+        for y in 0..height {
+            for x in 0..width {
+                let tile = if y == 0 || y + 1 == height || x == 0 || x + 1 == width {
+                    Tile::Wall
+                } else {
+                    Tile::Floor
+                };
+                let _ = structure.set(y, x, tile);
+            }
+        }
+
+        structure
+    }
+
+    /// Build a maze structure by carving corridors into a passage grid.
+    fn build_maze_structure(height: usize, width: usize) -> Structure {
+        let mut structure = Structure::new(height, width, Tile::Empty);
+
+        if height == 0 || width == 0 {
+            return structure;
+        }
+
+        fn is_passage(structure: &Structure, y: i32, x: i32) -> bool {
+            match structure.get(y as usize, x as usize) {
+                Some(Tile::Passage) => true,
+                _ => false,
+            }
+        }
+
+        fn dig_local(structure: &mut Structure, y: i32, x: i32, max_y: i32, max_x: i32) {
+            let deltas: [(i32, i32); 4] = [(2, 0), (-2, 0), (0, 2), (0, -2)];
+
+            loop {
+                let mut cnt: i32 = 0;
+                let mut next_y: i32 = 0;
+                let mut next_x: i32 = 0;
+
+                for (dy, dx) in deltas {
+                    let new_y = y + dy;
+                    let new_x = x + dx;
+                    if new_y < 0 || new_y > max_y || new_x < 0 || new_x > max_x {
+                        continue;
+                    }
+                    if is_passage(structure, new_y, new_x) {
+                        continue;
+                    }
+
+                    cnt += 1;
+                    if rnd(cnt) == 0 {
+                        next_y = new_y;
+                        next_x = new_x;
+                    }
+                }
+
+                if cnt == 0 {
+                    return;
+                }
+
+                if next_y == y {
+                    let mid_x = (x + next_x) / 2;
+                    let _ = structure.set(y as usize, mid_x as usize, Tile::Passage);
+                } else {
+                    let mid_y = (y + next_y) / 2;
+                    let _ = structure.set(mid_y as usize, x as usize, Tile::Passage);
+                }
+
+                let _ = structure.set(next_y as usize, next_x as usize, Tile::Passage);
+                dig_local(structure, next_y, next_x, max_y, max_x);
+            }
+        }
+
+        let max_y = height as i32 - 1;
+        let max_x = width as i32 - 1;
+        let start_y = if height > 1 {
+            (rnd(height as i32) / 2) * 2
+        } else {
+            0
+        };
+        let start_x = if width > 1 {
+            (rnd(width as i32) / 2) * 2
+        } else {
+            0
+        };
+
+        let _ = structure.set(start_y as usize, start_x as usize, Tile::Passage);
+        dig_local(&mut structure, start_y, start_x, max_y, max_x);
+        structure
     }
 
     /// Whether this room slot is removed for the level.
@@ -142,23 +245,6 @@ impl Room {
     }
 }
 
-/// Fill each active room's tile structure from its geometry/flags.
-pub fn build_generated_rooms(
-    mut rooms: [Room; GameConfig::MAX_ROOMS],
-) -> [Room; GameConfig::MAX_ROOMS] {
-    for room in &mut rooms {
-        if room.is_gone() {
-            continue;
-        }
-
-        if let Some(model) = build_room_model(room.position, room.size, room.is_maze()) {
-            room.structure = model.structure;
-        }
-    }
-
-    rooms
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -220,112 +306,3 @@ mod tests {
     }
 }
 
-/// Build a [`Room`] model from Rust-native geometry.
-///
-/// Pure-Rust half of the FFI `build_room_model` split: given a room's
-/// position, size, and whether it is a maze, construct the tile structure
-/// and wrap everything in a [`Room`]. No C types are involved here.
-pub fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room> {
-    if size.x <= 0 || size.y <= 0 {
-        return None;
-    }
-
-    let structure = if is_maze {
-        build_maze_structure(size.y as usize, size.x as usize)
-    } else {
-        build_room_structure(size.y as usize, size.x as usize)
-    };
-
-    Some(Room::with_structure(position, size, structure))
-}
-
-pub fn build_room_structure(height: usize, width: usize) -> Structure {
-    let mut structure = Structure::new(height, width, Tile::Empty);
-
-    for y in 0..height {
-        for x in 0..width {
-            let tile = if y == 0 || y + 1 == height || x == 0 || x + 1 == width {
-                Tile::Wall
-            } else {
-                Tile::Floor
-            };
-            let _ = structure.set(y, x, tile);
-        }
-    }
-
-    structure
-}
-
-pub fn build_maze_structure(height: usize, width: usize) -> Structure {
-    let mut structure = Structure::new(height, width, Tile::Empty);
-
-    if height == 0 || width == 0 {
-        return structure;
-    }
-
-    fn is_passage(structure: &Structure, y: i32, x: i32) -> bool {
-        match structure.get(y as usize, x as usize) {
-            Some(Tile::Passage) => true,
-            _ => false,
-        }
-    }
-
-    fn dig_local(structure: &mut Structure, y: i32, x: i32, max_y: i32, max_x: i32) {
-        let deltas: [(i32, i32); 4] = [(2, 0), (-2, 0), (0, 2), (0, -2)];
-
-        loop {
-            let mut cnt: i32 = 0;
-            let mut next_y: i32 = 0;
-            let mut next_x: i32 = 0;
-
-            for (dy, dx) in deltas {
-                let new_y = y + dy;
-                let new_x = x + dx;
-                if new_y < 0 || new_y > max_y || new_x < 0 || new_x > max_x {
-                    continue;
-                }
-                if is_passage(structure, new_y, new_x) {
-                    continue;
-                }
-
-                cnt += 1;
-                if rnd(cnt) == 0 {
-                    next_y = new_y;
-                    next_x = new_x;
-                }
-            }
-
-            if cnt == 0 {
-                return;
-            }
-
-            if next_y == y {
-                let mid_x = (x + next_x) / 2;
-                let _ = structure.set(y as usize, mid_x as usize, Tile::Passage);
-            } else {
-                let mid_y = (y + next_y) / 2;
-                let _ = structure.set(mid_y as usize, x as usize, Tile::Passage);
-            }
-
-            let _ = structure.set(next_y as usize, next_x as usize, Tile::Passage);
-            dig_local(structure, next_y, next_x, max_y, max_x);
-        }
-    }
-
-    let max_y = height as i32 - 1;
-    let max_x = width as i32 - 1;
-    let start_y = if height > 1 {
-        (rnd(height as i32) / 2) * 2
-    } else {
-        0
-    };
-    let start_x = if width > 1 {
-        (rnd(width as i32) / 2) * 2
-    } else {
-        0
-    };
-
-    let _ = structure.set(start_y as usize, start_x as usize, Tile::Passage);
-    dig_local(&mut structure, start_y, start_x, max_y, max_x);
-    structure
-}

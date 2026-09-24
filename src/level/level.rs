@@ -15,7 +15,7 @@ use super::passages::{
 };
 use super::monster_map::MonsterMap;
 use super::roomgraph::RoomGraph;
-use super::structure::{build_generated_rooms, Room, Structure};
+use super::structure::{Room, Structure};
 use super::tile::{Tile, Trap};
 use crate::config::GameConfig;
 use crate::item::item_list::ItemList;
@@ -363,6 +363,39 @@ impl Level {
         }
 
         generated_rooms
+    }
+}
+
+/// Fill each active room's tile structure from its geometry/flags.
+fn build_generated_rooms(
+    mut rooms: [Room; GameConfig::MAX_ROOMS],
+) -> [Room; GameConfig::MAX_ROOMS] {
+    for room in &mut rooms {
+        if room.is_gone() {
+            continue;
+        }
+
+        if let Some(model) = build_room_model(room.position, room.size, room.maze) {
+            room.structure = model.structure;
+        }
+    }
+
+    rooms
+}
+
+/// Build a [`Room`] model from Rust-native geometry.
+///
+/// Given a room's position, size, and whether it is a maze, construct the
+/// tile structure and wrap everything in a [`Room`].
+fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room> {
+    if size.x <= 0 || size.y <= 0 {
+        return None;
+    }
+
+    if is_maze {
+        Some(Room::new_maze(position, size))
+    } else {
+        Some(Room::new(position, size))
     }
 }
 
