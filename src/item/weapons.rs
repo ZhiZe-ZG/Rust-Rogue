@@ -117,12 +117,12 @@ use std::os::raw::{c_short, c_uint};
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]

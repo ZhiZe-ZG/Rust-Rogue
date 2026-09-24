@@ -16,12 +16,12 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 /// Persistent return coordinate, mirroring C's `static coord ret`.
@@ -57,7 +57,7 @@ pub unsafe extern "C" fn rndmove(who: *mut CThing) -> *mut IVec2 {
         if RET.y == (*thing_o(obj)).o_pos.y && RET.x == (*thing_o(obj)).o_pos.x {
             break;
         }
-        obj = (*thing_o(obj)).l_next;
+        obj = crate::entity::player::thing_next(obj);
     }
     if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
         RET = pos;

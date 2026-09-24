@@ -19,7 +19,7 @@ use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game;
 use crate::globals::{amulet, max_level, ntraps, player, seenstairs};
 use crate::item::potions::turn_see;
-use crate::item::thing_list::new_item;
+use crate::item::thing_list::{new_actor, new_item};
 use crate::item::things::new_thing;
 use crate::rnd::rnd;
 use crate::ui::output;
@@ -43,13 +43,13 @@ const GOLDGRP: i32 = 1;
 /// Interpret `tp` as an object (`CThingObject`).
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 /// Interpret `tp` as a monster (`CThingMonster`).
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 /// Find a floor cell to place something, optionally avoiding monsters.
@@ -163,7 +163,7 @@ unsafe fn treas_room() {
     game::set_current_depth(depth + 1);
     while nm > 0 {
         if find_floor(Some(idx), &mut mp, GameConfig::MAX_PLACEMENT_ATTEMPTS, true) {
-            let tp = new_item();
+            let tp = new_actor();
             new_monster(tp, randmonster(false), &mut mp);
             (*thing_t(tp)).t_flags |= ISMEAN;
             give_pack(tp);
@@ -210,7 +210,7 @@ unsafe fn place_room_contents() {
 
         let goldval = with_current_level_mut(|current| current.rooms[i].goldval);
         if rnd(100) < if goldval > 0 { 80 } else { 25 } {
-            let tp = new_item();
+            let tp = new_actor();
             if !tp.is_null() {
                 find_floor(Some(i), &mut mp, 0, true);
                 new_monster(tp, randmonster(false), &mut mp);
@@ -338,7 +338,7 @@ pub(crate) unsafe fn link_monsters_to_rooms() {
     while !tp.is_null() {
         let t = thing_t(tp);
         (*t).t_room = roomin(&raw mut (*t).t_pos);
-        tp = (*t).l_next;
+        tp = crate::entity::player::thing_next(tp);
     }
 }
 

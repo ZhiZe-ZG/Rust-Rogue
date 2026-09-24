@@ -24,7 +24,7 @@ const ISHELD: i16 = 0o0000400;
 /// Interpret `tp` as a monster (`CThingMonster`).
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 unsafe fn reset_level() {
@@ -42,7 +42,7 @@ unsafe fn reset_level() {
 unsafe fn clear_previous_level_items() {
     let mut monster = MLIST.head();
     while !monster.is_null() {
-        let next = (*thing_t(monster)).l_next;
+        let next = crate::entity::player::thing_next(monster);
         free_list((&raw mut (*thing_t(monster)).t_pack) as *mut *mut CThing);
         monster = next;
     }

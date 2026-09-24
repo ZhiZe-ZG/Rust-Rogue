@@ -137,13 +137,13 @@ unsafe extern "C" {
 /// Cast a generic thing pointer to the monster portion of the union.
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 /// Cast a generic thing pointer to the object portion of the union.
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
@@ -168,7 +168,7 @@ unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
 
 #[inline]
 unsafe fn next_thing(tp: *mut CThing) -> *mut CThing {
-    (*thing_o(tp)).l_next
+    crate::entity::player::thing_next(tp)
 }
 
 #[inline]

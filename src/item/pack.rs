@@ -58,15 +58,15 @@ unsafe extern "C" {
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut crate::entity::player::CThingMonster {
-    tp as *mut crate::entity::player::CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 unsafe fn thing_o(tp: *mut CThing) -> *mut crate::entity::player::CThingObject {
-    tp as *mut crate::entity::player::CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 unsafe fn next_item(item: *mut CThing) -> *mut CThing {
-    (*thing_t(item)).l_next
+    crate::entity::player::thing_next(item)
 }
 
 unsafe fn detach_list(head: *mut *mut CThing, item: *mut CThing) {
@@ -74,7 +74,7 @@ unsafe fn detach_list(head: *mut *mut CThing, item: *mut CThing) {
 }
 
 unsafe fn prev_item(item: *mut CThing) -> *mut CThing {
-    (*thing_t(item)).l_prev
+    crate::entity::player::thing_prev(item)
 }
 
 unsafe fn discard_item(item: *mut CThing) {
@@ -223,12 +223,12 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
                 return;
             }
             (*thing_o(item)).o_packch = pack_char() as u8;
-            (*thing_t(item)).l_next = next_item(lp);
-            (*thing_t(item)).l_prev = lp;
+            crate::entity::player::set_thing_next(item, next_item(lp));
+            crate::entity::player::set_thing_prev(item, lp);
             if !next_item(lp).is_null() {
-                (*thing_t(next_item(lp))).l_prev = item;
+                crate::entity::player::set_thing_prev(next_item(lp), item);
             }
-            (*thing_t(lp)).l_next = item;
+            crate::entity::player::set_thing_next(lp, item);
         }
     }
 
@@ -308,8 +308,8 @@ pub unsafe extern "C" fn leave_pack(
         if newobj != 0 {
             nobj = alloc_item();
             std::ptr::copy_nonoverlapping(obj, nobj, 1);
-            (*thing_t(nobj)).l_next = std::ptr::null_mut();
-            (*thing_t(nobj)).l_prev = std::ptr::null_mut();
+            crate::entity::player::set_thing_next(nobj, std::ptr::null_mut());
+            crate::entity::player::set_thing_prev(nobj, std::ptr::null_mut());
             (*thing_o(nobj)).o_count = 1;
         }
     } else {

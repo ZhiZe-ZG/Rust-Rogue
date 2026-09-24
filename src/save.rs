@@ -1,7 +1,7 @@
 //! Game save, restore, and shell-escape handling.
 //!
 //! Ported from `src/c/save.c` to Rust.
-use crate::entity::player::{CThing, CThingMonster};
+use crate::entity::player::CThing;
 use crate::machdep::{resetltchars, setup};
 use crate::mdport::{
     md_chmod, md_getpid, md_ignoreallsignals, md_tstphold, md_tstpresume, md_unlink,
@@ -91,7 +91,7 @@ unsafe fn copy_cstr(dst: *mut c_char, src: *const c_char, max: usize) {
 
 /// Checks the restored player state and reports whether the saved game is already dead.
 unsafe fn restore_player_dead() -> bool {
-    (*(std::ptr::addr_of_mut!(player) as *mut CThingMonster))
+    (*crate::entity::player::thing_t(std::ptr::addr_of_mut!(player)))
         .t_stats
         .hit_points
         <= 0

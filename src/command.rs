@@ -206,12 +206,12 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
@@ -423,7 +423,7 @@ pub unsafe extern "C" fn command() {
                                 found = true;
                                 break;
                             }
-                            obj = (*thing_t(obj)).l_next;
+                            obj = crate::entity::player::thing_next(obj);
                         }
 
                         if found {
@@ -1170,6 +1170,6 @@ pub unsafe extern "C" fn pr_list() {
             (*thing_o(obj)).o_type as u8 as char,
             CStr::from_ptr(inv_name(obj, false as c_uchar)).to_string_lossy()
         ));
-        obj = (*thing_t(obj)).l_next;
+        obj = crate::entity::player::thing_next(obj);
     }
 }

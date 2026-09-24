@@ -90,12 +90,12 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn find_obj(y: c_int, x: c_int) -> *mut CThing {
         if (*thing_o(obj)).o_pos.y == y && (*thing_o(obj)).o_pos.x == x {
             return obj;
         }
-        obj = (*thing_t(obj)).l_next;
+        obj = crate::entity::player::thing_next(obj);
     }
     std::ptr::null_mut()
 }
@@ -272,7 +272,7 @@ pub unsafe extern "C" fn aggravate() {
     let mut mp = MLIST.head();
     while !mp.is_null() {
         runto(&mut (*thing_t(mp)).t_pos);
-        mp = (*thing_t(mp)).l_next;
+        mp = crate::entity::player::thing_next(mp);
     }
 }
 

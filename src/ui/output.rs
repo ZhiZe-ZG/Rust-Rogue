@@ -49,7 +49,7 @@ unsafe extern "C" {
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 /// Move the standard-screen cursor.
@@ -305,7 +305,7 @@ pub unsafe fn status() {
     let level = crate::game::current_depth();
     let max_hp = pstats.max_hit_points;
     let mut temp = if !EQUIPMENT.armor().is_null() {
-        (*EQUIPMENT.armor()).o.o_arm
+        (*crate::entity::player::thing_o(EQUIPMENT.armor())).o_arm
     } else {
         pstats.armor
     };

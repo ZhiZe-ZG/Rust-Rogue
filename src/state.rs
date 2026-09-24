@@ -43,7 +43,7 @@ use crate::globals::{
     arm_info, monsters, pot_info, ring_info, scr_info, things, weap_info, ws_info, CMonster,
     CObjInfo,
 };
-use crate::item::thing_list::{allocated_count, new_item};
+use crate::item::thing_list::{allocated_count, new_actor, new_item};
 use crate::level::{PassageLinks, Room};
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -248,12 +248,12 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 /// Wrap a daemon callback in the nullable function-pointer representation.
@@ -970,7 +970,7 @@ unsafe fn get_list_item(mut l: *mut CThing, i: c_int) -> *mut CThing {
             return l;
         }
         count += 1;
-        l = (*thing_t(l)).l_next;
+        l = crate::entity::player::thing_next(l);
     }
 
     std::ptr::null_mut()
@@ -984,7 +984,7 @@ unsafe fn find_list_ptr(mut l: *mut CThing, ptr: *const c_void) -> c_int {
             return count;
         }
         count += 1;
-        l = (*thing_t(l)).l_next;
+        l = crate::entity::player::thing_next(l);
     }
 
     -1
@@ -995,7 +995,7 @@ unsafe fn list_size(mut l: *mut CThing) -> c_int {
 
     while !l.is_null() {
         count += 1;
-        l = (*thing_t(l)).l_next;
+        l = crate::entity::player::thing_next(l);
     }
 
     count
@@ -1735,7 +1735,7 @@ unsafe fn rs_write_object_list(savef: *mut CFile, mut l: *mut CThing) -> c_int {
 
     while !l.is_null() {
         let _ = rs_write_object(savef, l);
-        l = (*thing_t(l)).l_next;
+        l = crate::entity::player::thing_next(l);
     }
 
     WRITE_ERROR
@@ -1759,10 +1759,10 @@ unsafe fn rs_read_object_list(inf: *mut CFile, list: *mut *mut CThing) -> c_int 
         // new_item() zero-allocates, matching the C memset(l, 0, sizeof(THING)).
         l = new_item();
 
-        (*thing_t(l)).l_prev = previous;
+        crate::entity::player::set_thing_prev(l, previous);
 
         if !previous.is_null() {
-            (*thing_t(previous)).l_next = l;
+            crate::entity::player::set_thing_next(previous, l);
         }
 
         let _ = rs_read_object(inf, l);
@@ -1776,7 +1776,7 @@ unsafe fn rs_read_object_list(inf: *mut CFile, list: *mut *mut CThing) -> c_int 
     }
 
     if !l.is_null() {
-        (*thing_t(l)).l_next = std::ptr::null_mut();
+        crate::entity::player::set_thing_next(l, std::ptr::null_mut());
     }
 
     *list = head;
@@ -1840,7 +1840,7 @@ unsafe fn find_thing_coord(monlist: *mut CThing, c: *mut IVec2) -> c_int {
             return i;
         }
         i += 1;
-        mitem = (*thing_t(mitem)).l_next;
+        mitem = crate::entity::player::thing_next(mitem);
     }
 
     -1
@@ -1855,7 +1855,7 @@ unsafe fn find_object_coord(objlist: *mut CThing, c: *mut IVec2) -> c_int {
             return i;
         }
         i += 1;
-        oitem = (*thing_t(oitem)).l_next;
+        oitem = crate::entity::player::thing_next(oitem);
     }
 
     -1
@@ -2059,7 +2059,7 @@ unsafe fn rs_write_thing_list(savef: *mut CFile, mut l: *mut CThing) -> c_int {
 
     while !l.is_null() {
         let _ = rs_write_thing(savef, l);
-        l = (*thing_t(l)).l_next;
+        l = crate::entity::player::thing_next(l);
     }
 
     WRITE_ERROR
@@ -2080,12 +2080,12 @@ unsafe fn rs_read_thing_list(inf: *mut CFile, list: *mut *mut CThing) -> c_int {
 
     let mut i: c_int = 0;
     while i < cnt {
-        l = new_item();
+        l = new_actor();
 
-        (*thing_t(l)).l_prev = previous;
+        crate::entity::player::set_thing_prev(l, previous);
 
         if !previous.is_null() {
-            (*thing_t(previous)).l_next = l;
+            crate::entity::player::set_thing_next(previous, l);
         }
 
         let _ = rs_read_thing(inf, l);
@@ -2099,7 +2099,7 @@ unsafe fn rs_read_thing_list(inf: *mut CFile, list: *mut *mut CThing) -> c_int {
     }
 
     if !l.is_null() {
-        (*thing_t(l)).l_next = std::ptr::null_mut();
+        crate::entity::player::set_thing_next(l, std::ptr::null_mut());
     }
 
     *list = head;
@@ -2112,7 +2112,7 @@ unsafe fn rs_fix_thing_list(list: *mut CThing) {
 
     while !item.is_null() {
         rs_fix_thing(item);
-        item = (*thing_t(item)).l_next;
+        item = crate::entity::player::thing_next(item);
     }
 }
 

@@ -68,14 +68,14 @@ unsafe extern "C" {
 unsafe fn thing_t(
     tp: *mut crate::entity::player::CThing,
 ) -> *mut crate::entity::player::CThingMonster {
-    tp as *mut crate::entity::player::CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(
     tp: *mut crate::entity::player::CThing,
 ) -> *mut crate::entity::player::CThingObject {
-    tp as *mut crate::entity::player::CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
@@ -85,7 +85,7 @@ unsafe fn pack_ptr() -> *mut crate::entity::player::CThing {
 
 #[inline]
 unsafe fn next_ptr(tp: *mut crate::entity::player::CThing) -> *mut crate::entity::player::CThing {
-    (*thing_t(tp)).l_next
+    crate::entity::player::thing_next(tp)
 }
 
 #[inline]

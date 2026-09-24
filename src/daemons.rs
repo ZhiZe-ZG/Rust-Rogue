@@ -74,12 +74,12 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 /// ISRING(hand, ring_type): true when the player wears ring_type on hand.
@@ -171,7 +171,7 @@ pub unsafe extern "C" fn unsee() {
                 ((*thing_t(th)).t_oldch as u8) as char,
             );
         }
-        th = (*thing_t(th)).l_next;
+        th = crate::entity::player::thing_next(th);
     }
     (*thing_t(&raw mut player)).t_flags &= !CANSEE;
 }
@@ -305,7 +305,7 @@ pub unsafe extern "C" fn come_down() {
                 ((*op).o_type as u8) as char,
             );
         }
-        tp = (*thing_t(tp)).l_next;
+        tp = crate::entity::player::thing_next(tp);
     }
 
     // Undo the monsters.
@@ -327,7 +327,7 @@ pub unsafe extern "C" fn come_down() {
             output::write_glyph(((*thing_t(tp)).t_type as u8) as char);
             output::set_standout(false);
         }
-        tp = (*thing_t(tp)).l_next;
+        tp = crate::entity::player::thing_next(tp);
     }
 
     msg_str("Everything looks SO boring now.");
@@ -351,7 +351,7 @@ pub unsafe extern "C" fn visuals() {
                 (rnd_thing() as u8) as char,
             );
         }
-        tp = (*thing_t(tp)).l_next;
+        tp = crate::entity::player::thing_next(tp);
     }
 
     // Change the stairs.
@@ -378,7 +378,7 @@ pub unsafe extern "C" fn visuals() {
             output::write_glyph((rnd(26) as u8 + b'A') as char);
             output::set_standout(false);
         }
-        tp = (*thing_t(tp)).l_next;
+        tp = crate::entity::player::thing_next(tp);
     }
 }
 

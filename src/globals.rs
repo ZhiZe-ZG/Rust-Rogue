@@ -237,10 +237,9 @@ pub static mut l_last_pick: *mut CThing = std::ptr::null_mut();
 #[no_mangle]
 pub static mut last_pick: *mut CThing = std::ptr::null_mut();
 #[no_mangle]
-pub static mut player: CThing = CThing {
-    t: crate::entity::player::CThingMonster {
-        l_next: std::ptr::null_mut(),
-        l_prev: std::ptr::null_mut(),
+pub static mut player: CThing = CThing::Monster {
+    link: crate::entity::player::ThingLink::empty(),
+    data: crate::entity::player::CThingMonster {
         t_pos: IVec2 { x: 0, y: 0 },
         t_turn: false,
         t_type: 0,

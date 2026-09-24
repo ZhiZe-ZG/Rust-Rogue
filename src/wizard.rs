@@ -43,12 +43,12 @@ static mut wizard: c_int = 0;
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
@@ -346,10 +346,9 @@ mod tests {
     #[test]
     fn set_know_marks_object_known() {
         unsafe {
-            let mut obj = CThing {
-                o: CThingObject {
-                    l_next: ptr::null_mut(),
-                    l_prev: ptr::null_mut(),
+            let mut obj = CThing::Object {
+                link: crate::entity::player::ThingLink::empty(),
+                data: CThingObject {
                     o_type: SCROLL,
                     o_pos: IVec2 { x: 0, y: 0 },
                     o_text: ptr::null_mut(),

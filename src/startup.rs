@@ -116,7 +116,7 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
@@ -357,7 +357,7 @@ pub unsafe extern "C" fn rogue_main(
 
     if master_mode_enabled != 0 && argc >= 2 && *arg_at(argv, 1) == 0 {
         wizard = 1;
-        player.t.t_flags |= SEEMONST;
+        (*crate::entity::player::thing_t(&raw mut player)).t_flags |= SEEMONST;
         argv = argv.add(1);
         argc -= 1;
     }

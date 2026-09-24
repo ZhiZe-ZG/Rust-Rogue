@@ -81,12 +81,12 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn runners() {
     let mut tp = MLIST.head();
     while !tp.is_null() {
         // remember this in case the monster's "next" is changed
-        let next = (*thing_t(tp)).l_next;
+        let next = crate::entity::player::thing_next(tp);
         if !monster_has(tp, ISHELD) && monster_has(tp, ISRUN) {
             let orig_pos = (*thing_t(tp)).t_pos;
             let wastarget = monster_has(tp, ISTARGET);
@@ -332,7 +332,7 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
                     (*thing_t(th)).t_dest = find_dest(th);
                     break;
                 }
-                obj = (*thing_o(obj)).l_next;
+                obj = crate::entity::player::thing_next(obj);
             }
             if (*thing_t(th)).t_type != b'F' {
                 stoprun = true;
@@ -496,7 +496,7 @@ pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut IVec2) -> c_uchar {
                             if y == (*thing_o(obj)).o_pos.y && x == (*thing_o(obj)).o_pos.x {
                                 break;
                             }
-                            obj = (*thing_o(obj)).l_next;
+                            obj = crate::entity::player::thing_next(obj);
                         }
                         if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
                             y += 1;
@@ -633,7 +633,7 @@ pub unsafe extern "C" fn find_dest(tp: *mut CThing) -> *mut IVec2 {
         if (*thing_o(obj)).o_type == SCROLL as c_int
             && (*thing_o(obj)).o_which == ScrollType::Scare as c_int
         {
-            obj = (*thing_o(obj)).l_next;
+            obj = crate::entity::player::thing_next(obj);
             continue;
         }
         if roomin(&raw mut (*thing_o(obj)).o_pos) == (*thing_t(tp)).t_room && rnd(100) < prob {
@@ -642,13 +642,13 @@ pub unsafe extern "C" fn find_dest(tp: *mut CThing) -> *mut IVec2 {
                 if (*thing_t(m)).t_dest == &raw mut (*thing_o(obj)).o_pos {
                     break;
                 }
-                m = (*thing_t(m)).l_next;
+                m = crate::entity::player::thing_next(m);
             }
             if m.is_null() {
                 return &raw mut (*thing_o(obj)).o_pos;
             }
         }
-        obj = (*thing_o(obj)).l_next;
+        obj = crate::entity::player::thing_next(obj);
     }
     hero_ptr()
 }

@@ -98,7 +98,7 @@ static mut RING_NUM_BUF: [c_char; 10] = [0; 10];
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 /// Prompts for a ring and equips it on an available hand, applying immediate ring effects.

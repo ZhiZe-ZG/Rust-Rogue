@@ -14,7 +14,7 @@ use crate::game::EQUIPMENT;
 use crate::globals::{scr_info, weap_info};
 use crate::init::pick_color;
 use crate::item::pack::{get_item, leave_pack};
-use crate::item::thing_list::{discard, new_item};
+use crate::item::thing_list::{discard, new_actor};
 use crate::misc::{aggravate, call_it, choose_str, find_obj};
 use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win, status};
 use crate::ui::{output, Window};
@@ -116,12 +116,12 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
@@ -265,7 +265,7 @@ pub unsafe extern "C" fn read_scroll() {
             if i == 0 {
                 msg_str("you hear a faint cry of anguish in the distance");
             } else {
-                obj = new_item();
+                obj = new_actor();
                 new_monster(obj, randmonster(false), &mut mp);
             }
         }
@@ -316,7 +316,7 @@ pub unsafe extern "C" fn read_scroll() {
                     );
                     output::write_window_glyph(window, (FOOD as u8) as char);
                 }
-                it = (*thing_o(it)).l_next;
+                it = crate::entity::player::thing_next(it);
             }
             if found != 0 {
                 scr_info[ScrollType::FindFood.index()].oi_know = true;

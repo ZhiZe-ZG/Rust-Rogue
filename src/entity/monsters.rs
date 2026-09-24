@@ -10,7 +10,7 @@ use crate::entity::monster_list::MLIST;
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
-use crate::item::thing_list::{attach, new_item};
+use crate::item::thing_list::{attach, new_actor};
 use crate::item::things::new_thing;
 use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
@@ -114,17 +114,17 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
 unsafe fn player_t() -> *mut CThingMonster {
-    (&raw mut player) as *mut CThing as *mut CThingMonster
+    crate::entity::player::thing_t(&raw mut player)
 }
 
 #[inline]
@@ -228,7 +228,7 @@ pub unsafe extern "C" fn exp_add(tp: *mut CThing) -> c_int {
 /// Spawns a wandering monster in a different room and sets it running toward the hero.
 #[no_mangle]
 pub unsafe extern "C" fn wanderer() {
-    let tp = new_item();
+    let tp = new_actor();
     let mut cp = IVec2 { x: 0, y: 0 };
 
     loop {

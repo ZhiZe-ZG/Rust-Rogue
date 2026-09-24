@@ -57,7 +57,7 @@ unsafe extern "C" {
 }
 
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 unsafe fn hero_pos() -> IVec2 {

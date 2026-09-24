@@ -53,14 +53,9 @@ const F_REAL: c_char = 0x10u8 as c_char;
 const ARROW: c_int = 3;
 const VS_POISON: c_int = 0;
 
-/// Monster/player view of a `THING`. `#[repr(C)]` is retained because this is
-/// a member of the [`CThing`] union whose `l_next`/`l_prev` header must alias
-/// [`CThingObject`]; the scalar fields use native Rust types.
-#[repr(C)]
+/// Monster/player (actor) data for a [`CThing`], using native Rust types.
 #[derive(Copy, Clone)]
 pub struct CThingMonster {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
     pub t_pos: IVec2,
     pub t_turn: bool,
     pub t_type: u8,
@@ -74,16 +69,11 @@ pub struct CThingMonster {
     pub t_reserved: i32,
 }
 
-/// Object (item) view of a `THING`. `#[repr(C)]` is retained because this is a
-/// member of the [`CThing`] union whose `l_next`/`l_prev` header must alias
-/// [`CThingMonster`]; the scalar fields use native Rust types. The `o_text` and
-/// `o_label` string fields must stay raw pointers (and `o_damage`/`o_hurldmg`
-/// byte buffers) because union fields have to be `Copy`.
-#[repr(C)]
+/// Object (item) data for a [`CThing`], using native Rust types. The `o_text`
+/// and `o_label` string fields stay raw pointers because objects are still
+/// referenced through raw pointers that alias the owning arena.
 #[derive(Copy, Clone)]
 pub struct CThingObject {
-    pub l_next: *mut CThing,
-    pub l_prev: *mut CThing,
     pub o_type: i32,
     pub o_pos: IVec2,
     pub o_text: *mut c_char,
@@ -101,10 +91,120 @@ pub struct CThingObject {
     pub o_label: *mut c_char,
 }
 
-#[repr(C)]
-pub union CThing {
-    pub t: CThingMonster,
-    pub o: CThingObject,
+/// Intrusive doubly-linked list header shared by every [`CThing`], independent
+/// of whether the thing is an actor (monster/player) or an object (item).
+#[derive(Copy, Clone)]
+pub struct ThingLink {
+    pub l_next: *mut CThing,
+    pub l_prev: *mut CThing,
+}
+
+impl ThingLink {
+    pub const fn empty() -> Self {
+        ThingLink {
+            l_next: std::ptr::null_mut(),
+            l_prev: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// A game thing: either an actor (monster/player) or an object (item), carrying
+/// a shared intrusive list header. This is a pure Rust enum (`union`/C ABI has
+/// been removed).
+#[derive(Copy, Clone)]
+pub enum CThing {
+    Monster { link: ThingLink, data: CThingMonster },
+    Object { link: ThingLink, data: CThingObject },
+}
+
+impl CThing {
+    /// Build an actor thing with an empty list header.
+    pub const fn actor(data: CThingMonster) -> Self {
+        CThing::Monster {
+            link: ThingLink::empty(),
+            data,
+        }
+    }
+
+    /// Build an object thing with an empty list header.
+    pub const fn object(data: CThingObject) -> Self {
+        CThing::Object {
+            link: ThingLink::empty(),
+            data,
+        }
+    }
+}
+
+impl Default for CThingMonster {
+    fn default() -> Self {
+        CThingMonster {
+            t_pos: IVec2 { x: 0, y: 0 },
+            t_turn: false,
+            t_type: 0,
+            t_disguise: 0,
+            t_oldch: 0,
+            t_dest: std::ptr::null_mut(),
+            t_flags: 0,
+            t_stats: Stats::default(),
+            t_room: None,
+            t_pack: std::ptr::null_mut(),
+            t_reserved: 0,
+        }
+    }
+}
+
+impl Default for CThingObject {
+    fn default() -> Self {
+        CThingObject {
+            o_type: 0,
+            o_pos: IVec2 { x: 0, y: 0 },
+            o_text: std::ptr::null_mut(),
+            o_launch: 0,
+            o_packch: 0,
+            o_damage: [0; 8],
+            o_hurldmg: [0; 8],
+            o_count: 0,
+            o_which: 0,
+            o_hplus: 0,
+            o_dplus: 0,
+            o_arm: 0,
+            o_flags: 0,
+            o_group: 0,
+            o_label: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// Read the next-list pointer of `tp` (null if `tp` is null).
+#[inline]
+pub unsafe fn thing_next(tp: *mut CThing) -> *mut CThing {
+    if tp.is_null() {
+        std::ptr::null_mut()
+    } else {
+        (*thing_link(tp)).l_next
+    }
+}
+
+/// Set the next-list pointer of `tp`.
+#[inline]
+pub unsafe fn set_thing_next(tp: *mut CThing, value: *mut CThing) {
+    (*thing_link(tp)).l_next = value;
+}
+
+/// Read the prev-list pointer of `tp` (null if `tp` is null).
+#[inline]
+pub unsafe fn thing_prev(tp: *mut CThing) -> *mut CThing {
+    if tp.is_null() {
+        std::ptr::null_mut()
+    } else {
+        (*thing_link(tp)).l_prev
+    }
+}
+
+/// Set the prev-list pointer of `tp`.
+#[inline]
+pub unsafe fn set_thing_prev(tp: *mut CThing, value: *mut CThing) {
+    (*thing_link(tp)).l_prev = value;
 }
 
 unsafe extern "C" {
@@ -128,14 +228,31 @@ unsafe extern "C" {
 
 }
 
+/// Borrow the actor payload of `tp` (null when `tp` is an object).
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+pub unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+    match &mut *tp {
+        CThing::Monster { data, .. } => data as *mut CThingMonster,
+        CThing::Object { .. } => std::ptr::null_mut(),
+    }
 }
 
+/// Borrow the object payload of `tp` (null when `tp` is an actor).
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+pub unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+    match &mut *tp {
+        CThing::Object { data, .. } => data as *mut CThingObject,
+        CThing::Monster { .. } => std::ptr::null_mut(),
+    }
+}
+
+/// Borrow the shared list header of `tp`.
+#[inline]
+pub unsafe fn thing_link(tp: *mut CThing) -> *mut ThingLink {
+    match &mut *tp {
+        CThing::Monster { link, .. } => link as *mut ThingLink,
+        CThing::Object { link, .. } => link as *mut ThingLink,
+    }
 }
 
 #[inline]

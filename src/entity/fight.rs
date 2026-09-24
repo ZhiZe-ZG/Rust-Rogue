@@ -148,12 +148,12 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
@@ -434,7 +434,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 let mut nobj: c_int = 0;
                 let mut obj = (*thing_t(&raw mut player)).t_pack;
                 while !obj.is_null() {
-                    let obj_next = (*thing_t(obj)).l_next;
+                    let obj_next = crate::entity::player::thing_next(obj);
                     if obj != EQUIPMENT.armor()
                         && obj != EQUIPMENT.weapon()
                         && obj != EQUIPMENT.left_ring()
@@ -787,7 +787,7 @@ pub unsafe extern "C" fn bounce(weap: *mut CThing, mname: *const c_char, noend: 
 pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut CThing, waskill: c_uchar) {
     let mut obj = (*thing_t(tp)).t_pack;
     while !obj.is_null() {
-        let nexti = (*thing_t(obj)).l_next;
+        let nexti = crate::entity::player::thing_next(obj);
         (*thing_o(obj)).o_pos = (*thing_t(tp)).t_pos;
         detach(&mut (*thing_t(tp)).t_pack as *mut *mut CThing, obj);
         if waskill != 0 {

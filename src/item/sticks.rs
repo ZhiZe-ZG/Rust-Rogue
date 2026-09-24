@@ -83,12 +83,12 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
+    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
+    crate::entity::player::thing_t(tp)
 }
 
 #[inline]
@@ -204,7 +204,7 @@ pub unsafe extern "C" fn do_zap() {
         }
         Some(StickType::Missile) => {
             ws_info[StickType::Missile.index()].oi_know = true;
-            let mut bolt = std::mem::zeroed::<CThing>();
+            let mut bolt = CThing::object(CThingObject::default());
             (*thing_o(&mut bolt)).o_type = WEAPON;
             (*thing_o(&mut bolt)).o_which = FLAME;
             set_c_string(&mut (*thing_o(&mut bolt)).o_hurldmg, "1x4");
@@ -276,7 +276,7 @@ pub unsafe extern "C" fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, name: *mu
     let mut pos = *start;
     let mut hero = hero_pos();
     let hit_hero = start != &mut hero;
-    let mut bolt = std::mem::zeroed::<CThing>();
+    let mut bolt = CThing::object(CThingObject::default());
 
     (*thing_o(&mut bolt)).o_type = WEAPON;
     (*thing_o(&mut bolt)).o_which = FLAME;
