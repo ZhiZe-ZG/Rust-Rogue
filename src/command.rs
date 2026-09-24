@@ -172,7 +172,6 @@ unsafe extern "C" {
     static mut mpos: c_int;
     static mut no_command: c_int;
     static mut noscore: c_int;
-    static mut player: CThing;
     static mut prbuf: [c_char; 2 * MAXSTR];
     static mut purse: c_int;
     static mut q_comm: c_uchar;
@@ -216,17 +215,17 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 #[inline]
 unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
+    (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
 unsafe fn hero_ptr() -> *mut IVec2 {
-    &mut (*thing_t(&raw mut player)).t_pos
+    &mut (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
 unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(&raw mut player)).t_flags & flag) != 0
+    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
 }
 
 #[inline]
@@ -325,7 +324,7 @@ pub unsafe extern "C" fn command() {
         if no_command != 0 {
             no_command -= 1;
             if no_command == 0 {
-                let tp = thing_t(&raw mut player);
+                let tp = thing_t(crate::game::player_ptr());
                 (*tp).t_flags = (((*tp).t_flags as c_short) | ISRUN as c_short) as c_short;
                 msg_str("you can move again");
             }
@@ -537,7 +536,7 @@ pub unsafe extern "C" fn command() {
                     }
                     b'i' => {
                         after = false as c_uchar;
-                        inventory(crate::entity::player::thing_pack(&raw mut player), 0);
+                        inventory(crate::entity::player::thing_pack(crate::game::player_ptr()), 0);
                     }
                     b'I' => {
                         after = false as c_uchar;

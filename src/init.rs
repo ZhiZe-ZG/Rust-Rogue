@@ -283,7 +283,6 @@ static mut USED: [c_uchar; 33] = [false as c_uchar; 33];
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
 unsafe extern "C" {
-    static mut player: CThing;
     static mut max_stats: Stats;
     static mut food_left: c_int;
     static mut a_class: [c_int; 26];
@@ -324,7 +323,7 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 /// Roll up the starting player: give food, armor, weapons, and arrows.
 #[no_mangle]
 pub unsafe extern "C" fn init_player() {
-    (*thing_t(&raw mut player)).t_stats = max_stats;
+    (*thing_t(crate::game::player_ptr())).t_stats = max_stats;
     food_left = HUNGERTIME;
 
     // Give her some food
@@ -502,7 +501,7 @@ pub unsafe extern "C" fn init_probs() {
 /// Return a random colour if the player is hallucinating, otherwise
 /// return the supplied colour unchanged.
 pub unsafe fn pick_color(col: &'static str) -> &'static str {
-    if (*thing_t(&raw mut player)).t_flags & ISHALU != 0 {
+    if (*thing_t(crate::game::player_ptr())).t_flags & ISHALU != 0 {
         crate::colors::random_color()
     } else {
         col

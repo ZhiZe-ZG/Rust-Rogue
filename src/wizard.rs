@@ -53,12 +53,12 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 #[inline]
 unsafe fn hero() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
+    (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
 unsafe fn proom() -> Option<usize> {
-    (*thing_t(&raw mut player)).t_room
+    (*thing_t(crate::game::player_ptr())).t_room
 }
 
 #[inline]
@@ -98,7 +98,6 @@ unsafe extern "C" {
     static mut count: c_int;
     static mut running: c_uchar;
     static mut vf_hit: c_int;
-    static mut player: CThing;
 
     fn isdigit(ch: c_int) -> c_int;
     fn free(ptr: *mut std::ffi::c_void);
@@ -106,7 +105,7 @@ unsafe extern "C" {
 
 #[no_mangle]
 pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
-    let pack = crate::entity::player::thing_pack(&raw mut player);
+    let pack = crate::entity::player::thing_pack(crate::game::player_ptr());
     if pack.is_null() {
         msg_str("you don't have anything in your pack to identify");
         return;
@@ -277,11 +276,11 @@ pub unsafe extern "C" fn teleport() {
         hero = c;
         look(true as c_uchar);
     }
-    (*thing_t(&raw mut player)).t_pos = hero;
+    (*thing_t(crate::game::player_ptr())).t_pos = hero;
     output::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
 
-    if ((*thing_t(&raw mut player)).t_flags & ISHELD) != 0 {
-        (*thing_t(&raw mut player)).t_flags &= !ISHELD;
+    if ((*thing_t(crate::game::player_ptr())).t_flags & ISHELD) != 0 {
+        (*thing_t(crate::game::player_ptr())).t_flags &= !ISHELD;
         vf_hit = 0;
         let dmg = b"000x0\0";
         std::ptr::copy_nonoverlapping(

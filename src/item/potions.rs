@@ -127,7 +127,6 @@ unsafe extern "C" {
     static mut seenstairs: c_uchar;
     static mut fruit: [c_char; 1024];
     static mut prbuf: [c_char; 2048];
-    static mut player: CThing;
     static mut max_stats: Stats;
     static mut e_levels: [c_int; 21];
 
@@ -148,12 +147,12 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 #[inline]
 unsafe fn hero() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
+    (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
 unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(&raw mut player)).t_flags & flag) != 0
+    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
 }
 
 #[inline]
@@ -239,7 +238,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
 
     let t = spread(base_time);
     if !player_has(flags) {
-        (*thing_t(&raw mut player)).t_flags |= flags;
+        (*thing_t(crate::game::player_ptr())).t_flags |= flags;
         fuse(daemon, 0, t, AFTER);
         look(false as c_uchar);
     } else {
@@ -300,7 +299,7 @@ pub unsafe extern "C" fn quaff() {
             }
         }
         PotionType::Healing => {
-            let stats = thing_t(&raw mut player);
+            let stats = thing_t(crate::game::player_ptr());
             (*pot_info.as_mut_ptr().add(PotionType::Healing.index())).oi_know = true;
             (*stats).t_stats.hit_points += roll((*stats).t_stats.level, 4);
             if (*stats).t_stats.hit_points > (*stats).t_stats.max_hit_points {
@@ -316,7 +315,7 @@ pub unsafe extern "C" fn quaff() {
             msg_str("you feel stronger, now.  What bulging muscles!");
         }
         PotionType::MonsterFind => {
-            (*thing_t(&raw mut player)).t_flags |= SEEMONST;
+            (*thing_t(crate::game::player_ptr())).t_flags |= SEEMONST;
             fuse(
                 turn_see as *const c_void,
                 true as c_uchar as c_int,
@@ -409,7 +408,7 @@ pub unsafe extern "C" fn quaff() {
             raise_level();
         }
         PotionType::ExtraHealing => {
-            let stats = thing_t(&raw mut player);
+            let stats = thing_t(crate::game::player_ptr());
             (*pot_info.as_mut_ptr().add(PotionType::ExtraHealing.index())).oi_know =
                 true;
             (*stats).t_stats.hit_points += roll((*stats).t_stats.level, 8);
@@ -432,7 +431,7 @@ pub unsafe extern "C" fn quaff() {
             }
         }
         PotionType::Restore => {
-            let stats = thing_t(&raw mut player);
+            let stats = thing_t(crate::game::player_ptr());
             if ring_is(EQUIPMENT.left_ring(), RingType::AddStrength) {
                 add_str(
                     &mut (*stats).t_stats.strength,
@@ -496,7 +495,7 @@ pub unsafe extern "C" fn is_magic(obj: *mut CThing) -> c_uchar {
 #[no_mangle]
 pub unsafe extern "C" fn invis_on() {
     let mut mp = MLIST.head();
-    (*thing_t(&raw mut player)).t_flags |= CANSEE;
+    (*thing_t(crate::game::player_ptr())).t_flags |= CANSEE;
     while !mp.is_null() {
         if thing_has(mp, ISINVIS) && see_monst(mp) != 0 && !player_has(ISHALU) {
             output::write_glyph_at(
@@ -540,9 +539,9 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
     }
 
     if turn_off != 0 {
-        (*thing_t(&raw mut player)).t_flags &= !SEEMONST;
+        (*thing_t(crate::game::player_ptr())).t_flags &= !SEEMONST;
     } else {
-        (*thing_t(&raw mut player)).t_flags |= SEEMONST;
+        (*thing_t(crate::game::player_ptr())).t_flags |= SEEMONST;
     }
 
     if add_new != 0 {
@@ -584,8 +583,8 @@ pub unsafe extern "C" fn seen_stairs() -> c_uchar {
 /// The player just magically went up a level.
 #[no_mangle]
 pub unsafe extern "C" fn raise_level() {
-    (*thing_t(&raw mut player)).t_stats.experience =
-        e_levels[(*thing_t(&raw mut player)).t_stats.level as usize - 1] + 1;
+    (*thing_t(crate::game::player_ptr())).t_stats.experience =
+        e_levels[(*thing_t(crate::game::player_ptr())).t_stats.level as usize - 1] + 1;
     check_level();
 }
 

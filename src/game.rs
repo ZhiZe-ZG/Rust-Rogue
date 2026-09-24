@@ -15,10 +15,10 @@
 //! grids on the fly.
 
 use std::os::raw::c_int;
-use std::sync::RwLock;
+use std::sync::{OnceLock, RwLock};
 
 use crate::config::GameConfig;
-use crate::entity::player::CThing;
+use crate::entity::player::{CThing, CThingMonster, Stats};
 use crate::level::{Level, Tile};
 use glam::IVec2;
 
@@ -108,6 +108,80 @@ impl Equipment {
 
 /// Current player equipment. Items remain owned by the player's pack.
 pub static EQUIPMENT: Equipment = Equipment::EMPTY;
+
+/// The zero-valued actor [`CThing`] used to seed the global player.
+fn default_player() -> CThing {
+    CThing::Monster {
+        link: crate::entity::player::ThingLink::empty(),
+        data: CThingMonster {
+            t_pos: IVec2 { x: 0, y: 0 },
+            t_turn: false,
+            t_type: 0,
+            t_disguise: 0,
+            t_oldch: 0,
+            t_dest: None,
+            t_flags: 0,
+            t_stats: Stats {
+                strength: 0,
+                experience: 0,
+                level: 0,
+                armor: 0,
+                hit_points: 0,
+                damage: [0; 13],
+                max_hit_points: 0,
+            },
+            t_room: None,
+            t_pack: None,
+            t_reserved: 0,
+        },
+    }
+}
+
+/// A safe, process-wide holder for the player's actor [`CThing`].
+///
+/// The game is single-threaded, but the player must be reachable from many
+/// modules as one stable, process-lifetime object whose address never changes
+/// (chase targets and save code keep raw pointers to `t_pos`/`t_stats`). The
+/// `CThing` is boxed and initialized exactly once, so its heap address is
+/// stable and [`Player::ptr`] always hands back the same `*mut CThing`. It
+/// replaces the legacy `#[no_mangle] static mut player` global.
+pub struct Player {
+    thing: OnceLock<Box<CThing>>,
+}
+
+// SAFETY: the game runs on a single thread, and the boxed `CThing` is only ever
+// reached through the stable raw pointer returned by `ptr`.
+unsafe impl Sync for Player {}
+
+impl Player {
+    const EMPTY: Self = Self {
+        thing: OnceLock::new(),
+    };
+
+    #[inline]
+    fn get(&self) -> &CThing {
+        self.thing.get_or_init(|| Box::new(default_player()))
+    }
+
+    /// A stable, process-lifetime pointer to the player `CThing`.
+    #[inline]
+    pub fn ptr(&self) -> *mut CThing {
+        self.get() as *const CThing as *mut CThing
+    }
+}
+
+/// Process-wide owner of the player's actor [`CThing`].
+pub static PLAYER: Player = Player::EMPTY;
+
+/// A stable, process-lifetime pointer to the global player [`CThing`].
+///
+/// This is the safe replacement for the legacy `&raw mut player` accesses: the
+/// `CThing` is boxed once inside [`PLAYER`], so the returned address never
+/// changes.
+#[inline]
+pub fn player_ptr() -> *mut CThing {
+    PLAYER.ptr()
+}
 
 /// Lazily initialized owner of the live dungeon level.
 pub struct CurrentLevel {

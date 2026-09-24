@@ -51,7 +51,6 @@ unsafe extern "C" {
     static mut mpos: c_int;
     static mut n_objs: c_int;
     static mut pack_used: [c_uchar; 26];
-    static mut player: CThing;
     static mut purse: c_int;
     static mut terse: c_uchar;
 
@@ -86,23 +85,23 @@ unsafe fn alloc_item() -> *mut CThing {
 }
 
 unsafe fn pack_head() -> *mut CThing {
-    crate::entity::player::thing_pack(&raw mut player)
+    crate::entity::player::thing_pack(crate::game::player_ptr())
 }
 
 unsafe fn set_pack_head(value: *mut CThing) {
-    crate::entity::player::set_thing_pack(&raw mut player, value);
+    crate::entity::player::set_thing_pack(crate::game::player_ptr(), value);
 }
 
 unsafe fn hero_coord() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
+    (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 unsafe fn proom() -> Option<usize> {
-    (*thing_t(&raw mut player)).t_room
+    (*thing_t(crate::game::player_ptr())).t_room
 }
 
 unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(&raw mut player)).t_flags & flag) != 0
+    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
 }
 
 unsafe fn floor_char_for_room() -> c_char {
@@ -237,7 +236,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
     op = MLIST.head();
     while !op.is_null() {
         if crate::entity::player::thing_dest(op) == &raw mut (*thing_o(item)).o_pos {
-            crate::entity::player::set_thing_dest(op, &raw mut (*thing_t(&raw mut player)).t_pos);
+            crate::entity::player::set_thing_dest(op, &raw mut (*thing_t(crate::game::player_ptr())).t_pos);
         }
         op = next_item(op);
     }
@@ -315,7 +314,7 @@ pub unsafe extern "C" fn leave_pack(
     } else {
         last_pick = std::ptr::null_mut();
         pack_used[(*thing_o(obj)).o_packch as usize - 'a' as usize] = false as c_uchar;
-        crate::item::thing_list::detach_pack(&raw mut player, obj);
+        crate::item::thing_list::detach_pack(crate::game::player_ptr(), obj);
     }
     nobj
 }

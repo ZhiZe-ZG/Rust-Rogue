@@ -124,7 +124,6 @@ unsafe fn copy_str_to_c_buffer(dst: *mut c_char, capacity: usize, text: &str) {
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
 unsafe extern "C" {
-    static mut player: CThing;
     static mut e_levels: [c_int; 21];
 
     static mut count: c_int;
@@ -209,10 +208,10 @@ pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut CThing, thrown: c_ucha
     let mut ch: c_char = b'\0' as c_char;
     if (*thing_t(tp)).t_type == b'X'
         && (*thing_t(tp)).t_disguise != b'X'
-        && !on_p(&raw mut player, ISBLIND)
+        && !on_p(crate::game::player_ptr(), ISBLIND)
     {
         (*thing_t(tp)).t_disguise = b'X';
-        if on_p(&raw mut player, ISHALU) {
+        if on_p(crate::game::player_ptr(), ISHALU) {
             ch = (rnd(26) + b'A' as c_int) as c_char;
             output::write_glyph_at(
                 IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y),
@@ -239,24 +238,24 @@ pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut CThing, thrown: c_ucha
         false as c_uchar
     };
 
-    if roll_em(&raw mut player, tp, weap, thrown) != 0 {
+    if roll_em(crate::game::player_ptr(), tp, weap, thrown) != 0 {
         did_hit = false as c_uchar;
         if thrown != 0 {
             thunk(weap, mname, terse);
         } else {
             hit(std::ptr::null_mut(), mname, terse);
         }
-        if on_p(&raw mut player, CANHUH) {
+        if on_p(crate::game::player_ptr(), CANHUH) {
             did_hit = true as c_uchar;
             (*thing_t(tp)).t_flags |= ISHUH;
-            (*thing_t(&raw mut player)).t_flags &= !CANHUH;
+            (*thing_t(crate::game::player_ptr())).t_flags &= !CANHUH;
             endmsg();
             has_hit = false as c_uchar;
             msg_str(&format!("your hands stop glowing {}", pick_color("red")));
         }
         if (*thing_t(tp)).t_stats.hit_points <= 0 {
             killed(tp, true as c_uchar);
-        } else if did_hit != 0 && !on_p(&raw mut player, ISBLIND) {
+        } else if did_hit != 0 && !on_p(crate::game::player_ptr(), ISBLIND) {
             msg_str(&format!(
                 "{} appears confused",
                 CStr::from_ptr(mname).to_string_lossy()
@@ -287,10 +286,10 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
 
     if (*thing_t(mp)).t_type == b'X'
         && (*thing_t(mp)).t_disguise != b'X'
-        && !on_p(&raw mut player, ISBLIND)
+        && !on_p(crate::game::player_ptr(), ISBLIND)
     {
         (*thing_t(mp)).t_disguise = b'X';
-        if on_p(&raw mut player, ISHALU) {
+        if on_p(crate::game::player_ptr(), ISHALU) {
             output::write_glyph_at(
                 IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
                 (rnd(26) as u8 + b'A') as char,
@@ -299,9 +298,9 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
     }
 
     let mname = set_mname(mp);
-    let oldhp = (*thing_t(&raw mut player)).t_stats.hit_points;
+    let oldhp = (*thing_t(crate::game::player_ptr())).t_stats.hit_points;
 
-    if roll_em(mp, &raw mut player, std::ptr::null_mut(), false as c_uchar) != 0 {
+    if roll_em(mp, crate::game::player_ptr(), std::ptr::null_mut(), false as c_uchar) != 0 {
         if (*thing_t(mp)).t_type != b'I' {
             if has_hit != 0 {
                 addmsg_str(".  ");
@@ -312,14 +311,14 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
         }
         has_hit = false as c_uchar;
 
-        if (*thing_t(&raw mut player)).t_stats.hit_points <= 0 {
+        if (*thing_t(crate::game::player_ptr())).t_stats.hit_points <= 0 {
             death((*thing_t(mp)).t_type as c_char);
         } else if kamikaze == 0 {
-            let damage_dealt = oldhp - (*thing_t(&raw mut player)).t_stats.hit_points;
+            let damage_dealt = oldhp - (*thing_t(crate::game::player_ptr())).t_stats.hit_points;
             if damage_dealt > max_hit {
                 max_hit = damage_dealt;
             }
-            if (*thing_t(&raw mut player)).t_stats.hit_points <= max_hit {
+            if (*thing_t(crate::game::player_ptr())).t_stats.hit_points <= max_hit {
                 to_death = false as c_uchar;
             }
         }
@@ -331,7 +330,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 rust_armor(EQUIPMENT.armor());
             } else if mtype == b'I' {
                 // Ice monster: freeze player
-                (*thing_t(&raw mut player)).t_flags &= !ISRUN;
+                (*thing_t(crate::game::player_ptr())).t_flags &= !ISRUN;
                 if no_command == 0 {
                     addmsg_str("you are frozen");
                     if terse == 0 {
@@ -370,7 +369,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 if rnd(100) < threshold {
                     let fewer;
                     if mtype == b'W' {
-                        let pstats = &mut (*thing_t(&raw mut player)).t_stats;
+                        let pstats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
                         if pstats.experience == 0 {
                             death(b'W' as c_char);
                         }
@@ -386,7 +385,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                         fewer = roll(1, 3);
                     }
                     {
-                        let pstats = &mut (*thing_t(&raw mut player)).t_stats;
+                        let pstats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
                         pstats.hit_points -= fewer;
                         pstats.max_hit_points -= fewer;
                         if pstats.hit_points <= 0 {
@@ -400,7 +399,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 }
             } else if mtype == b'F' {
                 // Venus flytrap: holds the player, deals ongoing damage
-                (*thing_t(&raw mut player)).t_flags |= ISHELD;
+                (*thing_t(crate::game::player_ptr())).t_flags |= ISHELD;
                 vf_hit += 1;
                 sprintf(
                     monsters[(b'F' as usize) - (b'A' as usize)]
@@ -410,8 +409,8 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                     c"%dx1".as_ptr(),
                     vf_hit,
                 );
-                (*thing_t(&raw mut player)).t_stats.hit_points -= 1;
-                if (*thing_t(&raw mut player)).t_stats.hit_points <= 0 {
+                (*thing_t(crate::game::player_ptr())).t_stats.hit_points -= 1;
+                if (*thing_t(crate::game::player_ptr())).t_stats.hit_points <= 0 {
                     death(b'F' as c_char);
                 }
             } else if mtype == b'L' {
@@ -443,7 +442,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 // Nymph: steals a magic item
                 let mut steal: *mut CThing = std::ptr::null_mut();
                 let mut nobj: c_int = 0;
-                let mut obj = crate::entity::player::thing_pack(&raw mut player);
+                let mut obj = crate::entity::player::thing_pack(crate::game::player_ptr());
                 while !obj.is_null() {
                     let obj_next = crate::entity::player::thing_next(obj);
                     if obj != EQUIPMENT.armor()
@@ -484,8 +483,8 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
             has_hit = false as c_uchar;
         }
         if (*thing_t(mp)).t_type == b'F' {
-            (*thing_t(&raw mut player)).t_stats.hit_points -= vf_hit;
-            if (*thing_t(&raw mut player)).t_stats.hit_points <= 0 {
+            (*thing_t(crate::game::player_ptr())).t_stats.hit_points -= vf_hit;
+            if (*thing_t(crate::game::player_ptr())).t_stats.hit_points <= 0 {
                 death((*thing_t(mp)).t_type as c_char);
             }
         }
@@ -509,7 +508,7 @@ unsafe fn is_magic_item(obj: *mut CThing) -> c_uchar {
 /// Return the monster name for the given monster.
 #[no_mangle]
 pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
-    if see_monst(tp) == 0 && !on_p(&raw mut player, SEEMONST) {
+    if see_monst(tp) == 0 && !on_p(crate::game::player_ptr(), SEEMONST) {
         return if terse != 0 {
             c"it".as_ptr() as *mut c_char
         } else {
@@ -527,7 +526,7 @@ pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
     }
 
     let mname: &'static str;
-    if on_p(&raw mut player, ISHALU) {
+    if on_p(crate::game::player_ptr(), ISHALU) {
         output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
         let ch = toascii(output::glyph_at_cursor() as c_int);
         let idx = if isupper(ch) != 0 {
@@ -626,7 +625,7 @@ unsafe fn roll_em_inner(
 
     // Defender's armor class
     let def_arm_base = (*thing_t(thdef)).t_stats.armor;
-    let player_is_def = thdef as *const u8 == (&raw const player) as *const u8;
+    let player_is_def = thdef as *const u8 == (crate::game::player_ptr()) as *const u8;
     let mut def_arm = def_arm_base;
     if player_is_def {
         if !EQUIPMENT.armor().is_null() {
@@ -826,12 +825,12 @@ pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut CThing, waskill: c_
 /// Called to put a monster to death.
 #[no_mangle]
 pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
-    (*thing_t(&raw mut player)).t_stats.experience += (*thing_t(tp)).t_stats.experience;
+    (*thing_t(crate::game::player_ptr())).t_stats.experience += (*thing_t(tp)).t_stats.experience;
 
     let mtype = (*thing_t(tp)).t_type;
 
     if mtype == b'F' {
-        (*thing_t(&raw mut player)).t_flags &= !ISHELD;
+        (*thing_t(crate::game::player_ptr())).t_flags &= !ISHELD;
         vf_hit = 0;
         // Reset damage string to "000x0"
         let dmg = monsters[(b'F' as usize) - (b'A' as usize)]

@@ -255,7 +255,6 @@ unsafe extern "C" {
     static mut to_death: c_uchar;
     static mut oldpos: IVec2;
     static mut delta: IVec2;
-    static mut player: CThing;
     static mut runch: c_char;
 
 }
@@ -289,12 +288,12 @@ pub unsafe fn thing_link(tp: *mut CThing) -> *mut ThingLink {
 
 #[inline]
 unsafe fn hero_ptr() -> *mut IVec2 {
-    &mut (*thing_t(&raw mut player)).t_pos
+    &mut (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
 unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
+    (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
@@ -304,7 +303,7 @@ unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
 
 #[inline]
 unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(&raw mut player)).t_flags & flag) != 0
+    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
 }
 
 #[inline]
@@ -351,7 +350,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
     let trap =
         crate::level::with_current_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
 
-    if ((*thing_t(&raw mut player)).t_flags & ISLEVIT) != 0 {
+    if ((*thing_t(crate::game::player_ptr())).t_flags & ISLEVIT) != 0 {
         return Trap::Rust;
     }
 
@@ -374,10 +373,10 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
         Trap::Mystery => {}
         Trap::Sleep => {
             no_command += spread(5);
-            (*thing_t(&raw mut player)).t_flags &= !ISRUN;
+            (*thing_t(crate::game::player_ptr())).t_flags &= !ISRUN;
         }
         Trap::Arrow => {
-            let stats = &mut (*thing_t(&raw mut player)).t_stats;
+            let stats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
             if swing(stats.level - 1, stats.armor, 1) != 0 {
                 stats.hit_points -= roll(1, 6);
                 hit = if stats.hit_points <= 0 {
@@ -398,7 +397,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
             teleport();
         }
         Trap::Dart => {
-            let stats = &mut (*thing_t(&raw mut player)).t_stats;
+            let stats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
             if swing(stats.level + 1, stats.armor, 1) == 0 {
                 hit = TrapHit::Miss;
             } else {
@@ -446,7 +445,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
 
 #[inline]
 unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
-    let current_room = (*thing_t(&raw mut player)).t_room;
+    let current_room = (*thing_t(crate::game::player_ptr())).t_room;
     if passgo == 0
         || running == 0
         || current_room.is_none()
@@ -526,7 +525,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     }
 
     if player_has(ISHUH) && rnd(5) != 0 {
-        next_pos = *rndmove(&raw mut player);
+        next_pos = *rndmove(crate::game::player_ptr());
         if coord_eq(next_pos, hero) {
             after = false as c_uchar;
             running = false as c_uchar;
@@ -600,7 +599,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
             move_stuff(&mut next_pos, fl);
         }
         PASSAGE => {
-            (*thing_t(&raw mut player)).t_room = roomin(hero_ptr());
+            (*thing_t(crate::game::player_ptr())).t_room = roomin(hero_ptr());
             move_stuff(&mut next_pos, fl);
         }
         FLOOR => {

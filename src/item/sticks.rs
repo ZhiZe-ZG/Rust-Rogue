@@ -77,7 +77,6 @@ unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
     static mut delta: IVec2;
-    static mut player: CThing;
 
 }
 
@@ -93,12 +92,12 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 
 #[inline]
 unsafe fn hero_pos() -> IVec2 {
-    unsafe { (*thing_t(&raw mut player)).t_pos }
+    unsafe { (*thing_t(crate::game::player_ptr())).t_pos }
 }
 
 #[inline]
 unsafe fn hero_stats_mut() -> *mut Stats {
-    &mut (*thing_t(&raw mut player)).t_stats
+    &mut (*thing_t(crate::game::player_ptr())).t_stats
 }
 
 #[inline]

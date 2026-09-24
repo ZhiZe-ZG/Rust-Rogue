@@ -74,7 +74,6 @@ unsafe extern "C" {
     static mut no_move: c_int;
     static mut oldpos: IVec2;
     static mut passgo: c_uchar;
-    static mut player: CThing;
     static mut prbuf: [c_char; MAXSTR];
     static mut runch: c_char;
     static mut running: c_uchar;
@@ -105,7 +104,7 @@ unsafe fn on(thing: *mut CThing, flag: c_short) -> bool {
 
 #[inline]
 unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
+    (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
@@ -124,10 +123,10 @@ unsafe fn first_is_vowel(s: *const c_char) -> bool {
 /// Returns whether the floor of the player's room should be displayed.
 #[no_mangle]
 pub unsafe fn show_floor() -> bool {
-    let player_room = (*thing_t(&raw mut player)).t_room;
+    let player_room = (*thing_t(crate::game::player_ptr())).t_room;
     if crate::game::room_dark(player_room)
         && !crate::game::room_gone(player_room)
-        && !on(&raw mut player, ISBLIND)
+        && !on(crate::game::player_ptr(), ISBLIND)
     {
         return see_floor;
     }
@@ -178,7 +177,7 @@ pub unsafe extern "C" fn eat() {
             CStr::from_ptr(fruit.as_ptr()).to_string_lossy()
         ));
     } else if rnd(100) > 70 {
-        (*thing_t(&raw mut player)).t_stats.experience += 1;
+        (*thing_t(crate::game::player_ptr())).t_stats.experience += 1;
         msg_str("bummer, this food tastes awful");
     } else {
         msg_str("yum, that tasted good");
@@ -190,18 +189,18 @@ pub unsafe extern "C" fn eat() {
 pub unsafe extern "C" fn check_level() {
     let mut i: c_int = 0;
     while e_levels[i as usize] != 0 {
-        if e_levels[i as usize] > (*thing_t(&raw mut player)).t_stats.experience {
+        if e_levels[i as usize] > (*thing_t(crate::game::player_ptr())).t_stats.experience {
             break;
         }
         i += 1;
     }
     i += 1;
-    let olevel = (*thing_t(&raw mut player)).t_stats.level;
-    (*thing_t(&raw mut player)).t_stats.level = i;
+    let olevel = (*thing_t(crate::game::player_ptr())).t_stats.level;
+    (*thing_t(crate::game::player_ptr())).t_stats.level = i;
     if i > olevel {
         let add = roll(i - olevel, 10);
-        (*thing_t(&raw mut player)).t_stats.max_hit_points += add;
-        (*thing_t(&raw mut player)).t_stats.hit_points += add;
+        (*thing_t(crate::game::player_ptr())).t_stats.max_hit_points += add;
+        (*thing_t(crate::game::player_ptr())).t_stats.hit_points += add;
         msg_str(&format!("welcome to level {}", i));
     }
 }
@@ -211,7 +210,7 @@ pub unsafe extern "C" fn chg_str(amt: c_int) {
     if amt == 0 {
         return;
     }
-    let stats = &mut (*thing_t(&raw mut player)).t_stats;
+    let stats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
     let mut new_strength = stats.strength as c_int + amt;
     if new_strength < 3 {
         new_strength = 3;
@@ -252,15 +251,15 @@ pub unsafe extern "C" fn add_str(sp: *mut c_uint, amt: c_int) {
 
 #[no_mangle]
 pub unsafe fn add_haste(potion: bool) -> bool {
-    if on(&raw mut player, ISHASTE) {
+    if on(crate::game::player_ptr(), ISHASTE) {
         no_command += rnd(8);
-        (*thing_t(&raw mut player)).t_flags &= !(ISRUN as c_short | ISHASTE as c_short) as c_short;
+        (*thing_t(crate::game::player_ptr())).t_flags &= !(ISRUN as c_short | ISHASTE as c_short) as c_short;
         extinguish(nohaste as *const c_void);
         msg_str("you faint from exhaustion");
         return false;
     }
 
-    (*thing_t(&raw mut player)).t_flags |= ISHASTE as c_short;
+    (*thing_t(crate::game::player_ptr())).t_flags |= ISHASTE as c_short;
     if potion {
         fuse(nohaste as *const c_void, 0, rnd(4) + 4, AFTER);
     }
@@ -367,7 +366,7 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
         last_delt.x = delta.x;
     }
 
-    if on(&raw mut player, ISHUH) && rnd(5) == 0 {
+    if on(crate::game::player_ptr(), ISHUH) && rnd(5) == 0 {
         loop {
             delta.y = rnd(3) - 1;
             delta.x = rnd(3) - 1;
@@ -428,7 +427,7 @@ pub unsafe extern "C" fn rnd_thing() -> c_char {
 
 #[no_mangle]
 pub unsafe extern "C" fn choose_str(ts: *const c_char, ns: *const c_char) -> *mut c_char {
-    if on(&raw mut player, ISHALU) {
+    if on(crate::game::player_ptr(), ISHALU) {
         ts as *mut c_char
     } else {
         ns as *mut c_char

@@ -236,31 +236,6 @@ pub static mut oldpos: IVec2 = IVec2 { x: 0, y: 0 };
 pub static mut l_last_pick: *mut CThing = std::ptr::null_mut();
 #[no_mangle]
 pub static mut last_pick: *mut CThing = std::ptr::null_mut();
-#[no_mangle]
-pub static mut player: CThing = CThing::Monster {
-    link: crate::entity::player::ThingLink::empty(),
-    data: crate::entity::player::CThingMonster {
-        t_pos: IVec2 { x: 0, y: 0 },
-        t_turn: false,
-        t_type: 0,
-        t_disguise: 0,
-        t_oldch: 0,
-        t_dest: None,
-        t_flags: 0,
-        t_stats: Stats {
-            strength: 0,
-            experience: 0,
-            level: 0,
-            armor: 0,
-            hit_points: 0,
-            damage: [0; 13],
-            max_hit_points: 0,
-        },
-        t_room: None,
-        t_pack: None,
-        t_reserved: 0,
-    },
-};
 
 #[no_mangle]
 pub static mut max_stats: Stats = Stats {

@@ -72,7 +72,6 @@ unsafe extern "C" {
     static mut jump: c_uchar;
     static mut oldpos: IVec2;
     static mut oldrp: Option<usize>;
-    static mut player: CThing;
     static mut runch: c_char;
     static mut running: c_uchar;
     static mut see_floor: c_uchar;
@@ -94,12 +93,12 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 #[inline]
 unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
+    (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
 unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(&raw mut player)).t_flags & flag) != 0
+    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
 }
 
 #[inline]
@@ -375,7 +374,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
     if !(oldpos.x == hero.x && oldpos.y == hero.y) {
         erase_lamp(&raw mut oldpos, oldrp);
         oldpos = hero;
-        oldrp = (*thing_t(&raw mut player)).t_room;
+        oldrp = (*thing_t(crate::game::player_ptr())).t_room;
     }
 
     ey = hero.y + 1;
@@ -455,7 +454,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             }
 
             output::move_cursor(IVec2::new(x, y));
-            let player_room = (*thing_t(&raw mut player)).t_room;
+            let player_room = (*thing_t(crate::game::player_ptr())).t_room;
             if player_room.is_some()
                 && crate::game::room_dark(player_room)
                 && !crate::game::room_gone(player_room)
@@ -603,7 +602,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut IVec2) {
         return;
     }
 
-    (*thing_t(&raw mut player)).t_room = rp;
+    (*thing_t(crate::game::player_ptr())).t_room = rp;
     door_open(rp);
 
     if crate::game::room_dark(rp) || player_has(ISBLIND) {
@@ -660,7 +659,7 @@ pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
         return;
     }
 
-    let rp = (*thing_t(&raw mut player)).t_room;
+    let rp = (*thing_t(crate::game::player_ptr())).t_room;
     if rp.is_none() {
         return;
     }
@@ -679,7 +678,7 @@ pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
 
     let pnum = (flat_at((*cp).y, (*cp).x) as u8 & F_PNUM as u8) as usize;
     if pnum < GameConfig::MAX_PASSAGES {
-        (*thing_t(&raw mut player)).t_room = None;
+        (*thing_t(crate::game::player_ptr())).t_room = None;
     }
 
     let (pos, size) = match crate::game::room_bounds(rp) {

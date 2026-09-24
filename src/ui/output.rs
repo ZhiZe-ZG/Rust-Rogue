@@ -55,7 +55,6 @@ unsafe extern "C" {
     static mut max_stats: Stats;
     static mut mpos: c_int;
     static mut msg_esc: bool;
-    static mut player: CThing;
     static mut purse: c_int;
     static mut save_msg: c_uchar;
     static mut lower_msg: c_uchar;
@@ -329,7 +328,7 @@ pub unsafe fn endmsg() -> MessageResult {
 
 #[cfg(not(test))]
 pub unsafe fn status() {
-    let pstats = &mut (*thing_t(&raw mut player)).t_stats;
+    let pstats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
     let level = crate::game::current_depth();
     let max_hp = pstats.max_hit_points;
     let mut temp = if !EQUIPMENT.armor().is_null() {
@@ -430,7 +429,7 @@ pub unsafe fn show_win(message: &str) {
     move_window_cursor(window, IVec2::new(0, 0));
     write_window_text(window, message);
     touch_window(window);
-    let hero = (*thing_t(&raw mut player)).t_pos;
+    let hero = (*thing_t(crate::game::player_ptr())).t_pos;
     move_window_cursor(window, IVec2::new(hero.x, hero.y));
     refresh_window(window);
     wait_for(' ');

@@ -17,7 +17,7 @@ use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::{give_pack, new_monster, randmonster};
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game;
-use crate::globals::{amulet, max_level, ntraps, player, seenstairs};
+use crate::globals::{amulet, max_level, ntraps, seenstairs};
 use crate::item::potions::turn_see;
 use crate::item::thing_list::{new_actor, new_item};
 use crate::item::things::new_thing;
@@ -344,19 +344,19 @@ pub(crate) unsafe fn link_monsters_to_rooms() {
 
 /// Place the hero on an open floor cell and finalize the screen.
 unsafe fn place_hero() {
-    find_floor(None, &raw mut (*thing_t(&raw mut player)).t_pos, 0, true);
-    enter_room(&raw mut (*thing_t(&raw mut player)).t_pos);
+    find_floor(None, &raw mut (*thing_t(crate::game::player_ptr())).t_pos, 0, true);
+    enter_room(&raw mut (*thing_t(crate::game::player_ptr())).t_pos);
     output::write_glyph_at(
             IVec2::new(
-                (*thing_t(&raw mut player)).t_pos.x,
-                (*thing_t(&raw mut player)).t_pos.y,
+                (*thing_t(crate::game::player_ptr())).t_pos.x,
+                (*thing_t(crate::game::player_ptr())).t_pos.y,
             ),
         PLAYER as char,
     );
-    if ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0 {
+    if ((*thing_t(crate::game::player_ptr())).t_flags & SEEMONST) != 0 {
         turn_see(false as u8);
     }
-    if ((*thing_t(&raw mut player)).t_flags & ISHALU) != 0 {
+    if ((*thing_t(crate::game::player_ptr())).t_flags & ISHALU) != 0 {
         visuals();
     }
 }

@@ -81,7 +81,6 @@ unsafe extern "C" {
     static mut home: [c_char; MAXSTR];
     static master_mode_enabled: c_uchar;
     static mut noscore: c_int;
-    static mut player: CThing;
     static mut purse: c_int;
     static mut seed: c_int;
     static mut whoami: [c_char; MAXSTR];
@@ -230,8 +229,8 @@ pub unsafe extern "C" fn playit() {
         parse_opts(options.as_ptr() as *mut c_char);
     }
 
-    oldpos = (*thing_t(&raw mut player)).t_pos;
-    oldrp = roomin(&raw mut (*thing_t(&raw mut player)).t_pos);
+    oldpos = (*thing_t(crate::game::player_ptr())).t_pos;
+    oldrp = roomin(&raw mut (*thing_t(crate::game::player_ptr())).t_pos);
     while playing != false as c_uchar {
         command(); /* Command execution */
     }
@@ -357,7 +356,7 @@ pub unsafe extern "C" fn rogue_main(
 
     if master_mode_enabled != 0 && argc >= 2 && *arg_at(argv, 1) == 0 {
         wizard = 1;
-        (*crate::entity::player::thing_t(&raw mut player)).t_flags |= SEEMONST;
+        (*crate::entity::player::thing_t(crate::game::player_ptr())).t_flags |= SEEMONST;
         argv = argv.add(1);
         argc -= 1;
     }

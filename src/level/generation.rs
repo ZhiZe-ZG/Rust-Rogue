@@ -12,7 +12,7 @@ use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::{CThing, CThingMonster};
 use crate::game::{clear_level, with_current_level_mut};
-use crate::globals::{max_level, no_food, player};
+use crate::globals::{max_level, no_food};
 use crate::ui::output;
 
 use super::presence::populate_level;
@@ -29,7 +29,7 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 unsafe fn reset_level() {
     let depth = with_current_level_mut(|current| current.reset_for_new_level());
 
-    (*thing_t(&raw mut player)).t_flags &= !ISHELD;
+    (*thing_t(crate::game::player_ptr())).t_flags &= !ISHELD;
     if depth > max_level {
         max_level = depth;
     }

@@ -108,7 +108,6 @@ unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
     static mut has_hit: c_uchar;
-    static mut player: CThing;
 
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
@@ -127,7 +126,7 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 
 #[inline]
 unsafe fn hero() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
+    (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]

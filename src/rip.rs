@@ -51,7 +51,6 @@ unsafe extern "C" {
     static mut max_level: c_int;
     static mut noscore: c_int;
     static mut pack: *mut crate::entity::player::CThing;
-    static mut player: crate::entity::player::CThing;
     static mut purse: c_int;
     static mut prbuf: [c_char; MAXSTR];
     static mut tombstone: c_uchar;
@@ -80,7 +79,7 @@ unsafe fn thing_o(
 
 #[inline]
 unsafe fn pack_ptr() -> *mut crate::entity::player::CThing {
-    crate::entity::player::thing_pack(&raw mut player)
+    crate::entity::player::thing_pack(crate::game::player_ptr())
 }
 
 #[inline]

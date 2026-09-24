@@ -55,7 +55,6 @@ const STARVETIME: c_int = 850;
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
 unsafe extern "C" {
-    static mut player: CThing;
     static mut quiet: c_int;
     static mut hungry_state: c_int;
     static mut food_left: c_int;
@@ -101,26 +100,26 @@ pub static mut between: c_int = 0;
 /// A healing daemon that restores hit points after rest.
 #[no_mangle]
 pub unsafe extern "C" fn doctor() {
-    let lv = (*thing_t(&raw mut player)).t_stats.level;
-    let ohp = (*thing_t(&raw mut player)).t_stats.hit_points;
+    let lv = (*thing_t(crate::game::player_ptr())).t_stats.level;
+    let ohp = (*thing_t(crate::game::player_ptr())).t_stats.hit_points;
     quiet += 1;
     if lv < 8 {
         if quiet + (lv << 1) > 20 {
-            (*thing_t(&raw mut player)).t_stats.hit_points += 1;
+            (*thing_t(crate::game::player_ptr())).t_stats.hit_points += 1;
         }
     } else if quiet >= 3 {
-        (*thing_t(&raw mut player)).t_stats.hit_points += rnd(lv - 7) + 1;
+        (*thing_t(crate::game::player_ptr())).t_stats.hit_points += rnd(lv - 7) + 1;
     }
     if isring(EQUIPMENT.left_ring(), RingType::Regeneration) {
-        (*thing_t(&raw mut player)).t_stats.hit_points += 1;
+        (*thing_t(crate::game::player_ptr())).t_stats.hit_points += 1;
     }
     if isring(EQUIPMENT.right_ring(), RingType::Regeneration) {
-        (*thing_t(&raw mut player)).t_stats.hit_points += 1;
+        (*thing_t(crate::game::player_ptr())).t_stats.hit_points += 1;
     }
-    if ohp != (*thing_t(&raw mut player)).t_stats.hit_points {
-        let max = (*thing_t(&raw mut player)).t_stats.max_hit_points;
-        if (*thing_t(&raw mut player)).t_stats.hit_points > max {
-            (*thing_t(&raw mut player)).t_stats.hit_points = max;
+    if ohp != (*thing_t(crate::game::player_ptr())).t_stats.hit_points {
+        let max = (*thing_t(crate::game::player_ptr())).t_stats.max_hit_points;
+        if (*thing_t(crate::game::player_ptr())).t_stats.hit_points > max {
+            (*thing_t(crate::game::player_ptr())).t_stats.hit_points = max;
         }
         quiet = 0;
     }
@@ -152,7 +151,7 @@ pub unsafe extern "C" fn rollwand() {
 /// Release the poor player from his confusion.
 #[no_mangle]
 pub unsafe extern "C" fn unconfuse() {
-    (*thing_t(&raw mut player)).t_flags &= !ISHUH;
+    (*thing_t(crate::game::player_ptr())).t_flags &= !ISHUH;
     msg_str(&format!(
         "you feel less {} now",
         CStr::from_ptr(choose_str(c"trippy".as_ptr(), c"confused".as_ptr())).to_string_lossy()
@@ -173,19 +172,19 @@ pub unsafe extern "C" fn unsee() {
         }
         th = crate::entity::player::thing_next(th);
     }
-    (*thing_t(&raw mut player)).t_flags &= !CANSEE;
+    (*thing_t(crate::game::player_ptr())).t_flags &= !CANSEE;
 }
 
 /// sight:
 /// He gets his sight back.
 #[no_mangle]
 pub unsafe extern "C" fn sight() {
-    if ((*thing_t(&raw mut player)).t_flags & ISBLIND) != 0 {
+    if ((*thing_t(crate::game::player_ptr())).t_flags & ISBLIND) != 0 {
         extinguish(sight as *const c_void);
-        (*thing_t(&raw mut player)).t_flags &= !ISBLIND;
-        let proom = (*thing_t(&raw mut player)).t_room;
+        (*thing_t(crate::game::player_ptr())).t_flags &= !ISBLIND;
+        let proom = (*thing_t(crate::game::player_ptr())).t_room;
         if !crate::game::room_gone(proom) {
-            enter_room(&mut (*thing_t(&raw mut player)).t_pos);
+            enter_room(&mut (*thing_t(crate::game::player_ptr())).t_pos);
         }
         msg_str(
             &CStr::from_ptr(choose_str(
@@ -201,7 +200,7 @@ pub unsafe extern "C" fn sight() {
 /// End the hasting.
 #[no_mangle]
 pub unsafe extern "C" fn nohaste() {
-    (*thing_t(&raw mut player)).t_flags &= !ISHASTE;
+    (*thing_t(crate::game::player_ptr())).t_flags &= !ISHASTE;
     msg_str("you feel yourself slowing down");
 }
 
@@ -273,7 +272,7 @@ pub unsafe extern "C" fn stomach() {
     }
 
     if hungry_state != orig_hungry {
-        (*thing_t(&raw mut player)).t_flags &= !ISRUN;
+        (*thing_t(crate::game::player_ptr())).t_flags &= !ISRUN;
         running = false as c_uchar;
         to_death = false as c_uchar;
         count = 0;
@@ -284,14 +283,14 @@ pub unsafe extern "C" fn stomach() {
 /// Take the hero down off her acid trip.
 #[no_mangle]
 pub unsafe extern "C" fn come_down() {
-    if ((*thing_t(&raw mut player)).t_flags & ISHALU) == 0 {
+    if ((*thing_t(crate::game::player_ptr())).t_flags & ISHALU) == 0 {
         return;
     }
 
     kill_daemon(visuals as *const c_void);
-    (*thing_t(&raw mut player)).t_flags &= !ISHALU;
+    (*thing_t(crate::game::player_ptr())).t_flags &= !ISHALU;
 
-    if ((*thing_t(&raw mut player)).t_flags & ISBLIND) != 0 {
+    if ((*thing_t(crate::game::player_ptr())).t_flags & ISBLIND) != 0 {
         return;
     }
 
@@ -309,13 +308,13 @@ pub unsafe extern "C" fn come_down() {
     }
 
     // Undo the monsters.
-    let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
+    let seemonst = ((*thing_t(crate::game::player_ptr())).t_flags & SEEMONST) != 0;
     let mut tp = MLIST.head();
     while !tp.is_null() {
         output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
         if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
             if ((*thing_t(tp)).t_flags & ISINVIS) == 0
-                || ((*thing_t(&raw mut player)).t_flags & CANSEE) != 0
+                || ((*thing_t(crate::game::player_ptr())).t_flags & CANSEE) != 0
             {
                 output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
             }
@@ -361,7 +360,7 @@ pub unsafe extern "C" fn visuals() {
     }
 
     // Change the monsters.
-    let seemonst = ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0;
+    let seemonst = ((*thing_t(crate::game::player_ptr())).t_flags & SEEMONST) != 0;
     let mut tp = MLIST.head();
     while !tp.is_null() {
         output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
@@ -386,7 +385,7 @@ pub unsafe extern "C" fn visuals() {
 /// Land from a levitation potion.
 #[no_mangle]
 pub unsafe extern "C" fn land() {
-    (*thing_t(&raw mut player)).t_flags &= !ISLEVIT;
+    (*thing_t(crate::game::player_ptr())).t_flags &= !ISLEVIT;
     msg_str(
         &CStr::from_ptr(choose_str(
             c"bummer!  You've hit the ground".as_ptr(),

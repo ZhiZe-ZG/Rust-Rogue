@@ -110,7 +110,6 @@ impl ScrollType {
 unsafe extern "C" {
     static mut terse: c_uchar;
     static mut no_command: c_int;
-    static mut player: CThing;
 
 }
 
@@ -126,12 +125,12 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 #[inline]
 unsafe fn hero() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
+    (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
 unsafe fn proom() -> Option<usize> {
-    (*thing_t(&raw mut player)).t_room
+    (*thing_t(crate::game::player_ptr())).t_room
 }
 
 #[inline]
@@ -146,7 +145,7 @@ unsafe fn on_flag(tp: *mut CThing, flag: c_short) -> bool {
 
 #[inline]
 unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(&raw mut player)).t_flags & flag) != 0
+    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
 }
 
 // Map reveal now lives in `crate::draw::map_cell_reveal`, operating directly
@@ -181,7 +180,7 @@ pub unsafe extern "C" fn read_scroll() {
     let scroll_type = ScrollType::from_raw((*thing_o(obj)).o_which);
     match scroll_type {
         ScrollType::Confuse => {
-            (*thing_t(&raw mut player)).t_flags |= CANHUH;
+            (*thing_t(crate::game::player_ptr())).t_flags |= CANHUH;
             msg_str(&format!("your hands begin to glow {}", pick_color("red")));
         }
         ScrollType::Armor => {
@@ -232,7 +231,7 @@ pub unsafe extern "C" fn read_scroll() {
         ScrollType::Sleep => {
             scr_info[ScrollType::Sleep.index()].oi_know = true;
             no_command += rnd(SLEEPTIME) + 4;
-            (*thing_t(&raw mut player)).t_flags &= !ISRUN;
+            (*thing_t(crate::game::player_ptr())).t_flags &= !ISRUN;
             msg_str("you fall asleep");
         }
         ScrollType::CreateMonster => {

@@ -66,7 +66,6 @@ static mut TRYP: IVec2 = IVec2 { x: 0, y: 0 };
 static mut CANSEE_TP: IVec2 = IVec2 { x: 0, y: 0 };
 
 unsafe extern "C" {
-    static mut player: CThing;
 
     static mut has_hit: c_uchar;
     static mut to_death: c_uchar;
@@ -92,17 +91,17 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 #[inline]
 unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
+    (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
 unsafe fn hero_ptr() -> *mut IVec2 {
-    &mut (*thing_t(&raw mut player)).t_pos
+    &mut (*thing_t(crate::game::player_ptr())).t_pos
 }
 
 #[inline]
 unsafe fn player_has(flag: c_short) -> bool {
-    ((*thing_t(&raw mut player)).t_flags & flag) != 0
+    ((*thing_t(crate::game::player_ptr())).t_flags & flag) != 0
 }
 
 #[inline]
@@ -240,7 +239,7 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
     }
     let ree = if thing_dest(th) == hero_ptr() {
         // Find room of chasee
-        (*thing_t(&raw mut player)).t_room
+        (*thing_t(crate::game::player_ptr())).t_room
     } else {
         roomin(thing_dest(th))
     };
@@ -398,7 +397,7 @@ pub unsafe extern "C" fn see_monst(mp: *mut CThing) -> c_uchar {
         }
         return true as c_uchar;
     }
-    if (*thing_t(mp)).t_room != (*thing_t(&raw mut player)).t_room {
+    if (*thing_t(mp)).t_room != (*thing_t(crate::game::player_ptr())).t_room {
         return false as c_uchar;
     }
     if crate::game::room_dark((*thing_t(mp)).t_room) {
@@ -609,7 +608,7 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
     CANSEE_TP.y = y;
     CANSEE_TP.x = x;
     let rer = roomin(&raw mut CANSEE_TP);
-    if rer == (*thing_t(&raw mut player)).t_room && !crate::game::room_dark(rer) {
+    if rer == (*thing_t(crate::game::player_ptr())).t_room && !crate::game::room_dark(rer) {
         true as c_uchar
     } else {
         false as c_uchar
@@ -624,7 +623,7 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
 pub unsafe extern "C" fn find_dest(tp: *mut CThing) -> *mut IVec2 {
     let prob = monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry;
     if prob <= 0
-        || (*thing_t(tp)).t_room == (*thing_t(&raw mut player)).t_room
+        || (*thing_t(tp)).t_room == (*thing_t(crate::game::player_ptr())).t_room
         || see_monst(tp) != false as c_uchar
     {
         return hero_ptr();

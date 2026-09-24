@@ -105,7 +105,6 @@ static WAND_MONS: [c_char; 26] = [
 
 unsafe extern "C" {
     static mut max_level: c_int;
-    static mut player: CThing;
     static mut wizard: c_int;
 
     fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
@@ -124,7 +123,7 @@ unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
 
 #[inline]
 unsafe fn player_t() -> *mut CThingMonster {
-    crate::entity::player::thing_t(&raw mut player)
+    crate::entity::player::thing_t(crate::game::player_ptr())
 }
 
 #[inline]
@@ -363,5 +362,5 @@ pub unsafe extern "C" fn save(which: c_int) -> c_int {
             adj -= (*thing_o(EQUIPMENT.right_ring())).o_arm;
         }
     }
-    save_throw(adj, &raw mut player)
+    save_throw(adj, crate::game::player_ptr())
 }
