@@ -1,3 +1,5 @@
+// No need to port this file to Rust
+
 /*
     mdport.c - Machine Dependent
 
