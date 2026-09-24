@@ -5,7 +5,7 @@ use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::chase::diag_ok;
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Thing, ThingMonster, ThingObject};
 use crate::item::scrolls::ScrollType;
 use crate::rnd::rnd;
 
@@ -15,12 +15,12 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
@@ -30,7 +30,7 @@ static mut RET: IVec2 = IVec2 { x: 0, y: 0 };
 /// rndmove:
 /// Move in a random direction if the monster/person is confused.
 #[no_mangle]
-pub unsafe extern "C" fn rndmove(who: *mut CThing) -> *mut IVec2 {
+pub unsafe extern "C" fn rndmove(who: *mut Thing) -> *mut IVec2 {
     let pos = (*thing_t(who)).t_pos;
     RET.y = pos.y + rnd(3) - 1;
     RET.x = pos.x + rnd(3) - 1;

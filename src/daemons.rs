@@ -21,7 +21,7 @@ use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
 use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::wanderer;
-use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags};
+use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::game::EQUIPMENT;
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
@@ -61,18 +61,18 @@ unsafe extern "C" {
 // ─── Module-local helpers ─────────────────────────────────────────────────────
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
 /// ISRING(hand, ring_type): true when the player wears ring_type on hand.
 #[inline]
-unsafe fn isring(ring: *mut CThing, ring_type: RingType) -> bool {
+unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 

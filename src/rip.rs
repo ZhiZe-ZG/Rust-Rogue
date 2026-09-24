@@ -50,7 +50,7 @@ unsafe extern "C" {
     static mut amulet: c_uchar;
     static mut max_level: c_int;
     static mut noscore: c_int;
-    static mut pack: *mut crate::entity::player::CThing;
+    static mut pack: *mut crate::entity::player::Thing;
     static mut purse: c_int;
     static mut prbuf: [c_char; MAXSTR];
     static mut tombstone: c_uchar;
@@ -65,25 +65,25 @@ unsafe extern "C" {
 
 #[inline]
 unsafe fn thing_t(
-    tp: *mut crate::entity::player::CThing,
-) -> *mut crate::entity::player::CThingMonster {
+    tp: *mut crate::entity::player::Thing,
+) -> *mut crate::entity::player::ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
 unsafe fn thing_o(
-    tp: *mut crate::entity::player::CThing,
-) -> *mut crate::entity::player::CThingObject {
+    tp: *mut crate::entity::player::Thing,
+) -> *mut crate::entity::player::ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
 #[inline]
-unsafe fn pack_ptr() -> *mut crate::entity::player::CThing {
+unsafe fn pack_ptr() -> *mut crate::entity::player::Thing {
     crate::entity::player::thing_pack(crate::game::player_ptr())
 }
 
 #[inline]
-unsafe fn next_ptr(tp: *mut crate::entity::player::CThing) -> *mut crate::entity::player::CThing {
+unsafe fn next_ptr(tp: *mut crate::entity::player::Thing) -> *mut crate::entity::player::Thing {
     crate::entity::player::thing_next(tp)
 }
 

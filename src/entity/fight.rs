@@ -24,7 +24,7 @@ use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
-use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::globals::{monsters, weap_info};
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach_pack, detach_pack, discard, new_item};
@@ -143,22 +143,22 @@ unsafe extern "C" {
 // ─── Inline helpers ───────────────────────────────────────────────────────────
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
 #[inline]
-unsafe fn on_p(tp: *mut CThing, flag: MonsterFlags) -> bool {
+unsafe fn on_p(tp: *mut Thing, flag: MonsterFlags) -> bool {
     (*thing_t(tp)).t_flags.contains(flag)
 }
 
 #[inline]
-unsafe fn isring(ring: *mut CThing, ring_type: RingType) -> bool {
+unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
@@ -168,12 +168,12 @@ unsafe fn iswearing(ring_type: RingType) -> bool {
 }
 
 #[inline]
-unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
+unsafe fn moat(y: c_int, x: c_int) -> *mut Thing {
     crate::game::monster_at(y, x)
 }
 
 #[inline]
-unsafe fn set_moat(y: c_int, x: c_int, val: *mut CThing) {
+unsafe fn set_moat(y: c_int, x: c_int, val: *mut Thing) {
     crate::game::set_monster(y, x, val);
 }
 
@@ -182,7 +182,7 @@ unsafe fn set_moat(y: c_int, x: c_int, val: *mut CThing) {
 /// fight:
 /// The player attacks the monster.
 #[no_mangle]
-pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut CThing, thrown: c_uchar) -> c_int {
+pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: c_uchar) -> c_int {
     let tp = moat((*mp).y, (*mp).x);
 
     // Since we are fighting, things are not quiet — no healing.
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut CThing, thrown: c_ucha
 /// attack:
 /// The monster attacks the player.
 #[no_mangle]
-pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
+pub unsafe extern "C" fn attack(mp: *mut Thing) -> c_int {
     // Stop running / healing.
     running = false as c_uchar;
     count = 0;
@@ -432,7 +432,7 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
                 return -1;
             } else if mtype == b'N' {
                 // Nymph: steals a magic item
-                let mut steal: *mut CThing = std::ptr::null_mut();
+                let mut steal: *mut Thing = std::ptr::null_mut();
                 let mut nobj: c_int = 0;
                 let mut obj = crate::entity::player::thing_pack(crate::game::player_ptr());
                 while !obj.is_null() {
@@ -492,14 +492,14 @@ pub unsafe extern "C" fn attack(mp: *mut CThing) -> c_int {
 }
 
 /// Helper: forward to is_magic C function (from potions.rs).
-unsafe fn is_magic_item(obj: *mut CThing) -> c_uchar {
+unsafe fn is_magic_item(obj: *mut Thing) -> c_uchar {
     is_magic(obj)
 }
 
 /// set_mname:
 /// Return the monster name for the given monster.
 #[no_mangle]
-pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
+pub unsafe extern "C" fn set_mname(tp: *mut Thing) -> *mut c_char {
     if see_monst(tp) == 0 && !on_p(crate::game::player_ptr(), MonsterFlags::SEEMONST) {
         return if terse != 0 {
             c"it".as_ptr() as *mut c_char
@@ -550,9 +550,9 @@ pub unsafe extern "C" fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_
 /// Roll several attacks and apply damage.
 #[no_mangle]
 pub unsafe extern "C" fn roll_em(
-    thatt: *mut CThing,
-    thdef: *mut CThing,
-    weap: *mut CThing,
+    thatt: *mut Thing,
+    thdef: *mut Thing,
+    weap: *mut Thing,
     hurl: c_uchar,
 ) -> c_int {
     let cp: *mut c_char;
@@ -606,8 +606,8 @@ pub unsafe extern "C" fn roll_em(
 
 /// Inner roll loop, factored out to handle the hurldmg shortcut cleanly.
 unsafe fn roll_em_inner(
-    thatt: *mut CThing,
-    thdef: *mut CThing,
+    thatt: *mut Thing,
+    thdef: *mut Thing,
     mut cp: *mut c_char,
     hplus: c_int,
     dplus: c_int,
@@ -681,7 +681,7 @@ pub unsafe extern "C" fn prname(mname: *const c_char, upper: c_uchar) -> *mut c_
 /// thunk:
 /// A missile hits a monster.
 #[no_mangle]
-pub unsafe extern "C" fn thunk(weap: *mut CThing, mname: *const c_char, noend: c_uchar) {
+pub unsafe extern "C" fn thunk(weap: *mut Thing, mname: *const c_char, noend: c_uchar) {
     if to_death != 0 {
         return;
     }
@@ -762,7 +762,7 @@ pub unsafe extern "C" fn miss(er: *const c_char, ee: *const c_char, noend: c_uch
 /// bounce:
 /// A missile misses a monster.
 #[no_mangle]
-pub unsafe extern "C" fn bounce(weap: *mut CThing, mname: *const c_char, noend: c_uchar) {
+pub unsafe extern "C" fn bounce(weap: *mut Thing, mname: *const c_char, noend: c_uchar) {
     if to_death != 0 {
         return;
     }
@@ -783,7 +783,7 @@ pub unsafe extern "C" fn bounce(weap: *mut CThing, mname: *const c_char, noend: 
 /// remove_mon:
 /// Remove a monster from the screen.
 #[no_mangle]
-pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut CThing, waskill: c_uchar) {
+pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: c_uchar) {
     let mut obj = crate::entity::player::thing_pack(tp);
     while !obj.is_null() {
         let nexti = crate::entity::player::thing_next(obj);
@@ -816,7 +816,7 @@ pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut CThing, waskill: c_
 /// killed:
 /// Called to put a monster to death.
 #[no_mangle]
-pub unsafe extern "C" fn killed(tp: *mut CThing, pr: c_uchar) {
+pub unsafe extern "C" fn killed(tp: *mut Thing, pr: c_uchar) {
     (*thing_t(crate::game::player_ptr())).t_stats.experience += (*thing_t(tp)).t_stats.experience;
 
     let mtype = (*thing_t(tp)).t_type;

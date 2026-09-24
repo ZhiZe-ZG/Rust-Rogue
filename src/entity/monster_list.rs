@@ -5,14 +5,14 @@
 //! raw head pointer, so the static is `Sync` while the gameplay code still
 //! traverses the list through raw pointers on the single game thread.
 
-use crate::entity::player::CThing;
+use crate::entity::player::Thing;
 use crate::item::thing_list::{
     attach as attach_thing, detach as detach_thing, free_list as free_thing_list,
 };
 use std::sync::RwLock;
 
 /// Head of the monster linked list.
-pub struct MonsterList(RwLock<*mut CThing>);
+pub struct MonsterList(RwLock<*mut Thing>);
 
 // The raw pointer is neither Send nor Sync; access is always guarded by the
 // inner RwLock and dereferenced only by the single-threaded gameplay loop.
@@ -26,26 +26,26 @@ impl MonsterList {
 
     /// Read the current list head.
     #[inline]
-    pub fn head(&self) -> *mut CThing {
+    pub fn head(&self) -> *mut Thing {
         *self.0.read().unwrap_or_else(|poison| poison.into_inner())
     }
 
     /// Replace the list head.
     #[inline]
-    pub fn set_head(&self, ptr: *mut CThing) {
+    pub fn set_head(&self, ptr: *mut Thing) {
         *self.0.write().unwrap_or_else(|poison| poison.into_inner()) = ptr;
     }
 
     /// Prepend `item` to the list.
     #[inline]
-    pub unsafe fn attach(&self, item: *mut CThing) {
+    pub unsafe fn attach(&self, item: *mut Thing) {
         let mut guard = self.0.write().unwrap_or_else(|poison| poison.into_inner());
         attach_thing(&raw mut *guard, item);
     }
 
     /// Unlink `item` from the list.
     #[inline]
-    pub unsafe fn detach(&self, item: *mut CThing) {
+    pub unsafe fn detach(&self, item: *mut Thing) {
         let mut guard = self.0.write().unwrap_or_else(|poison| poison.into_inner());
         detach_thing(&raw mut *guard, item);
     }

@@ -15,7 +15,7 @@ use crate::draw::enter_room;
 use crate::entity::chase::roomin;
 use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::{give_pack, new_monster, randmonster};
-use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::game;
 use crate::globals::{amulet, max_level, ntraps, seenstairs};
 use crate::item::potions::turn_see;
@@ -25,7 +25,7 @@ use crate::rnd::rnd;
 use crate::ui::output;
 
 use super::level::{with_current_level_mut, LevelFlags};
-use super::tile::{Tile, Trap};
+use super::tile::{Tile, TrapType};
 
 // -- Glyphs --
 const AMULET: u8 = b',';
@@ -36,13 +36,13 @@ const GOLDGRP: i32 = 1;
 
 /// Interpret `tp` as an object (`CThingObject`).
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
 /// Interpret `tp` as a monster (`CThingMonster`).
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
@@ -302,7 +302,7 @@ unsafe fn place_traps() {
 
         with_current_level_mut(|current| {
             let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
-            let trap = Trap::from_raw(rnd(GameConfig::TRAP_KIND_COUNT) as u8);
+            let trap = TrapType::from_raw(rnd(GameConfig::TRAP_KIND_COUNT) as u8);
             current
                 .map
                 .set(stairs.y as usize, stairs.x as usize, Tile::Trap(trap));

@@ -7,7 +7,7 @@ use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags};
+use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach_pack, new_actor};
@@ -99,22 +99,22 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
 #[inline]
-unsafe fn player_t() -> *mut CThingMonster {
+unsafe fn player_t() -> *mut ThingMonster {
     crate::entity::player::thing_t(crate::game::player_ptr())
 }
 
 #[inline]
-unsafe fn has_flag(tp: *mut CThing, flag: MonsterFlags) -> bool {
+unsafe fn has_flag(tp: *mut Thing, flag: MonsterFlags) -> bool {
     (*thing_t(tp)).t_flags.contains(flag)
 }
 
@@ -153,7 +153,7 @@ pub unsafe fn randmonster(wander: bool) -> c_char {
 
 /// Initializes a freshly allocated monster thing and places it on the map.
 #[no_mangle]
-pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: *mut IVec2) {
+pub unsafe extern "C" fn new_monster(tp: *mut Thing, monster_type: c_char, cp: *mut IVec2) {
     let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
@@ -196,7 +196,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut CThing, monster_type: c_char, cp: 
 
 /// Computes bonus experience from a monster's level and max HP.
 #[no_mangle]
-pub unsafe extern "C" fn exp_add(tp: *mut CThing) -> c_int {
+pub unsafe extern "C" fn exp_add(tp: *mut Thing) -> c_int {
     let mut modu = if (*thing_t(tp)).t_stats.level == 1 {
         (*thing_t(tp)).t_stats.max_hit_points / 8
     } else {
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn wanderer() {
 
 /// Wakes and updates an adjacent monster's pursuit behavior and special gaze logic.
 #[no_mangle]
-pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
+pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
     let tp = crate::game::monster_at(y, x);
     if tp.is_null() {
         runtime::shutdown();
@@ -312,7 +312,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut CThing {
 
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
 #[no_mangle]
-pub unsafe extern "C" fn give_pack(tp: *mut CThing) {
+pub unsafe extern "C" fn give_pack(tp: *mut Thing) {
     if crate::game::current_depth() >= max_level
         && rnd(100) < monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry
     {
@@ -322,7 +322,7 @@ pub unsafe extern "C" fn give_pack(tp: *mut CThing) {
 
 /// Rolls a saving throw for any creature against an effect category.
 #[no_mangle]
-pub unsafe extern "C" fn save_throw(which: c_int, tp: *mut CThing) -> c_int {
+pub unsafe extern "C" fn save_throw(which: c_int, tp: *mut Thing) -> c_int {
     let need = 14 + which - (*thing_t(tp)).t_stats.level / 2;
     if roll(1, 20) >= need {
         1

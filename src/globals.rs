@@ -4,7 +4,7 @@
 //! `extern.c` and `init.c`: material tables, monster state, and other globals.
 use crate::config::GameConfig;
 use crate::entity::player::{
-    CThing as PlayerCThing,
+    Thing as PlayerCThing,
 };
 use crate::entity::stats::Stats;
 use glam::IVec2;
@@ -56,8 +56,8 @@ pub struct CObjInfo {
 }
 
 pub type CThing = PlayerCThing;
-pub type CThingMonster = crate::entity::player::CThingMonster;
-pub type CThingObject = crate::entity::player::CThingObject;
+pub type CThingMonster = crate::entity::player::ThingMonster;
+pub type CThingObject = crate::entity::player::ThingObject;
 
 #[no_mangle]
 pub static mut allscore: c_uchar = 1; // ALLSCORES is enabled in the standard build

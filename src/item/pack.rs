@@ -6,7 +6,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CThing, MonsterFlags, ObjectFlags};
+use crate::entity::player::{Thing, MonsterFlags, ObjectFlags};
 use crate::item::scrolls::ScrollType;
 use crate::item::thing_list::{detach, discard, new_item};
 use crate::item::things::{add_line, inv_name};
@@ -42,8 +42,8 @@ unsafe extern "C" {
     static mut l_last_comm: c_char;
     static mut last_dir: c_char;
     static mut l_last_dir: c_char;
-    static mut last_pick: *mut CThing;
-    static mut l_last_pick: *mut CThing;
+    static mut last_pick: *mut Thing;
+    static mut l_last_pick: *mut Thing;
     static mut move_on: c_uchar;
     static mut msg_esc: bool;
     static mut mpos: c_int;
@@ -54,39 +54,39 @@ unsafe extern "C" {
 
 }
 
-unsafe fn thing_t(tp: *mut CThing) -> *mut crate::entity::player::CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut crate::entity::player::ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
-unsafe fn thing_o(tp: *mut CThing) -> *mut crate::entity::player::CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut crate::entity::player::ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
-unsafe fn next_item(item: *mut CThing) -> *mut CThing {
+unsafe fn next_item(item: *mut Thing) -> *mut Thing {
     crate::entity::player::thing_next(item)
 }
 
-unsafe fn detach_list(head: *mut *mut CThing, item: *mut CThing) {
+unsafe fn detach_list(head: *mut *mut Thing, item: *mut Thing) {
     detach(head, item);
 }
 
-unsafe fn prev_item(item: *mut CThing) -> *mut CThing {
+unsafe fn prev_item(item: *mut Thing) -> *mut Thing {
     crate::entity::player::thing_prev(item)
 }
 
-unsafe fn discard_item(item: *mut CThing) {
+unsafe fn discard_item(item: *mut Thing) {
     discard(item);
 }
 
-unsafe fn alloc_item() -> *mut CThing {
+unsafe fn alloc_item() -> *mut Thing {
     new_item()
 }
 
-unsafe fn pack_head() -> *mut CThing {
+unsafe fn pack_head() -> *mut Thing {
     crate::entity::player::thing_pack(crate::game::player_ptr())
 }
 
-unsafe fn set_pack_head(value: *mut CThing) {
+unsafe fn set_pack_head(value: *mut Thing) {
     crate::entity::player::set_thing_pack(crate::game::player_ptr(), value);
 }
 
@@ -113,11 +113,11 @@ unsafe fn floor_char_for_room() -> c_char {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
+pub unsafe extern "C" fn add_pack(obj: *mut Thing, silent: c_uchar) {
     let mut item = obj;
     let mut from_floor = false as c_uchar;
-    let mut op: *mut CThing;
-    let mut lp: *mut CThing;
+    let mut op: *mut Thing;
+    let mut lp: *mut Thing;
 
     if item.is_null() {
         item = find_obj(hero_coord().y, hero_coord().x);
@@ -256,7 +256,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut CThing, silent: c_uchar) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_uchar {
+pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut Thing) -> c_uchar {
     if inpack + 1 > MAXPACK {
         if terse == 0 {
             addmsg_str("there's ");
@@ -289,10 +289,10 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut CThing) -> c_u
 
 #[no_mangle]
 pub unsafe extern "C" fn leave_pack(
-    obj: *mut CThing,
+    obj: *mut Thing,
     newobj: c_uchar,
     all: c_uchar,
-) -> *mut CThing {
+) -> *mut Thing {
     let mut nobj = obj;
 
     inpack -= 1;
@@ -329,7 +329,7 @@ pub unsafe extern "C" fn pack_char() -> c_char {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn inventory(list: *mut CThing, type_: c_int) -> c_uchar {
+pub unsafe extern "C" fn inventory(list: *mut Thing, type_: c_int) -> c_uchar {
     let mut cur = list;
     n_objs = 0;
 
@@ -419,7 +419,7 @@ pub unsafe extern "C" fn pick_up(ch: c_char) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut CThing {
+pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut Thing {
     let mut ch: c_int;
 
     if pack_head().is_null() {
@@ -514,7 +514,7 @@ pub unsafe extern "C" fn reset_last() {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn move_msg(obj: *mut CThing) {
+pub unsafe extern "C" fn move_msg(obj: *mut Thing) {
     if terse == 0 {
         addmsg_str("you ");
     }

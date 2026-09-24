@@ -13,7 +13,7 @@ use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::entity::player::{CThing, CThingMonster, CThingObject, ObjectFlags};
+use crate::entity::player::{Thing, ThingMonster, ThingObject, ObjectFlags};
 use crate::globals::weap_info;
 use crate::item::thing_list::discard;
 use crate::item::things::{dropcheck, inv_name};
@@ -115,12 +115,12 @@ unsafe extern "C" {
 use std::os::raw::{c_short, c_uint};
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
@@ -135,7 +135,7 @@ unsafe fn chat(y: c_int, x: c_int) -> c_int {
 }
 
 #[inline]
-unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
+unsafe fn moat(y: c_int, x: c_int) -> *mut Thing {
     crate::game::monster_at(y, x)
 }
 
@@ -176,7 +176,7 @@ pub unsafe extern "C" fn missile(ydelta: c_int, xdelta: c_int) {
 
 /// Animates projectile movement until it hits blocking terrain or a door.
 #[no_mangle]
-pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_int) {
+pub unsafe extern "C" fn do_motion(obj: *mut Thing, ydelta: c_int, xdelta: c_int) {
     let o = thing_o(obj);
     (*o).o_pos = hero();
 
@@ -214,7 +214,7 @@ pub unsafe extern "C" fn do_motion(obj: *mut CThing, ydelta: c_int, xdelta: c_in
 
 /// Drops an item near its current position or discards it if no floor slot is available.
 #[no_mangle]
-pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
+pub unsafe extern "C" fn fall(obj: *mut Thing, pr: c_uchar) {
     if fallpos(&mut (*thing_o(obj)).o_pos, &raw mut FALL_POS) != 0 {
         // Objects render from the `lvl_obj` list; no glyph write needed.
         (*thing_o(obj)).o_pos = FALL_POS;
@@ -251,7 +251,7 @@ pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
 
 /// Initializes a weapon object with baseline damage, flags, and stack counts.
 #[no_mangle]
-pub unsafe extern "C" fn init_weapon(weap: *mut CThing, which: c_int) {
+pub unsafe extern "C" fn init_weapon(weap: *mut Thing, which: c_int) {
     let o = thing_o(weap);
     (*o).o_type = WEAPON as c_int;
     (*o).o_which = which;
@@ -280,7 +280,7 @@ pub unsafe extern "C" fn init_weapon(weap: *mut CThing, which: c_int) {
 
 /// Resolves thrown-weapon combat against the target tile.
 #[no_mangle]
-pub unsafe extern "C" fn hit_monster(y: c_int, x: c_int, obj: *mut CThing) -> c_int {
+pub unsafe extern "C" fn hit_monster(y: c_int, x: c_int, obj: *mut Thing) -> c_int {
     let mut mp = IVec2 { x, y };
     fight(&mut mp, obj, true as c_uchar)
 }

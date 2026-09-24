@@ -1,7 +1,7 @@
 //! Per-cell monster occupancy for the current level.
 
 use crate::config::GameConfig;
-use crate::entity::player::CThing;
+use crate::entity::player::Thing;
 
 /// Per-cell monster occupancy grid for the current level.
 ///
@@ -11,7 +11,7 @@ use crate::entity::player::CThing;
 /// the per-cell `p_monst` pointer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MonsterMap {
-    cells: [*mut CThing; GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH],
+    cells: [*mut Thing; GameConfig::LEVEL_HEIGHT * GameConfig::LEVEL_WIDTH],
 }
 
 // The raw pointers are neither `Send` nor `Sync`, but the game is
@@ -36,13 +36,13 @@ impl MonsterMap {
 
     /// The monster at `(y, x)`, or null.
     #[inline]
-    pub fn at(&self, y: usize, x: usize) -> *mut CThing {
+    pub fn at(&self, y: usize, x: usize) -> *mut Thing {
         self.cells[Self::index(y, x)]
     }
 
     /// Place `ptr` at `(y, x)`.
     #[inline]
-    pub fn set(&mut self, y: usize, x: usize, ptr: *mut CThing) {
+    pub fn set(&mut self, y: usize, x: usize, ptr: *mut Thing) {
         self.cells[Self::index(y, x)] = ptr;
     }
 

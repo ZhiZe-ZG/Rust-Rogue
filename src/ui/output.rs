@@ -5,7 +5,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 use std::sync::Mutex;
 
 use crate::config::GameConfig;
-use crate::entity::player::{Stats, CThing, CThingMonster};
+use crate::entity::player::{Stats, Thing, ThingMonster};
 use crate::game::EQUIPMENT;
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::terminal as cur;
@@ -61,7 +61,7 @@ unsafe extern "C" {
     static mut stat_msg: c_uchar;
 }
 
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 

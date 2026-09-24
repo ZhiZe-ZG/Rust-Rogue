@@ -4,7 +4,7 @@
 //! draw time, and [`Tile::is_walkable`] reports whether a cell can be entered
 //! or crossed.
 
-use super::trap::Trap;
+use super::trap::TrapType;
 
 /// Semantic tile kinds for the level map.
 ///
@@ -30,7 +30,7 @@ pub enum Tile {
     Stairs,
     /// Hidden trap that can trigger gameplay effects; renders as floor until
     /// seen. The payload identifies the [`Trap`] kind.
-    Trap(Trap),
+    Trap(TrapType),
 }
 
 impl Tile {
@@ -59,7 +59,7 @@ impl Tile {
             4 => Some(Tile::Wall),
             5 => Some(Tile::HiddenDoor),
             6 => Some(Tile::Stairs),
-            7 => Some(Tile::Trap(Trap::Door)),
+            7 => Some(Tile::Trap(TrapType::Door)),
             _ => None,
         }
     }
@@ -78,17 +78,17 @@ impl Tile {
 
     /// The trap kind carried by this tile, or [`Trap::Door`] (the zero-valued
     /// legacy representation) for non-trap cells.
-    pub const fn trap(self) -> Trap {
+    pub const fn trap(self) -> TrapType {
         match self {
             Tile::Trap(trap) => trap,
-            _ => Trap::Door,
+            _ => TrapType::Door,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Tile, Trap};
+    use super::{Tile, TrapType};
 
     #[test]
     fn tile_walkability_matches_map_semantics() {
@@ -101,7 +101,7 @@ mod tests {
             Tile::Passage,
             Tile::Door,
             Tile::Stairs,
-            Tile::Trap(Trap::Door),
+            Tile::Trap(TrapType::Door),
         ] {
             assert!(walkable.is_walkable());
         }

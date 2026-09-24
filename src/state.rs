@@ -37,7 +37,7 @@ use crate::daemon::CDelayedAction;
 use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
 use crate::entity::chase::runners;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject};
 use crate::game::EQUIPMENT;
 use crate::globals::{
     arm_info, monsters, pot_info, ring_info, scr_info, things, weap_info, ws_info, CMonster,
@@ -214,8 +214,8 @@ unsafe extern "C" {
     static mut oldpos: IVec2;
 
     // player / lists
-    static mut l_last_pick: *mut CThing;
-    static mut last_pick: *mut CThing;
+    static mut l_last_pick: *mut Thing;
+    static mut last_pick: *mut Thing;
 
     // rooms / map
     static mut max_stats: Stats;
@@ -247,12 +247,12 @@ unsafe extern "C" {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
@@ -976,7 +976,7 @@ unsafe fn rs_read_window(inf: *mut CFile) -> c_int {
 
 // ─── List helpers ────────────────────────────────────────────────────────────
 
-unsafe fn get_list_item(mut l: *mut CThing, i: c_int) -> *mut CThing {
+unsafe fn get_list_item(mut l: *mut Thing, i: c_int) -> *mut Thing {
     let mut count: c_int = 0;
 
     while !l.is_null() {
@@ -990,7 +990,7 @@ unsafe fn get_list_item(mut l: *mut CThing, i: c_int) -> *mut CThing {
     std::ptr::null_mut()
 }
 
-unsafe fn find_list_ptr(mut l: *mut CThing, ptr: *const c_void) -> c_int {
+unsafe fn find_list_ptr(mut l: *mut Thing, ptr: *const c_void) -> c_int {
     let mut count: c_int = 0;
 
     while !l.is_null() {
@@ -1004,7 +1004,7 @@ unsafe fn find_list_ptr(mut l: *mut CThing, ptr: *const c_void) -> c_int {
     -1
 }
 
-unsafe fn list_size(mut l: *mut CThing) -> c_int {
+unsafe fn list_size(mut l: *mut Thing) -> c_int {
     let mut count: c_int = 0;
 
     while !l.is_null() {
@@ -1685,7 +1685,7 @@ unsafe fn rs_read_monsters(inf: *mut CFile, m: *mut CMonster, count: c_int) -> c
 
 // ─── Objects ─────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_object(savef: *mut CFile, o: *mut CThing) -> c_int {
+unsafe fn rs_write_object(savef: *mut CFile, o: *mut Thing) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1720,7 +1720,7 @@ unsafe fn rs_write_object(savef: *mut CFile, o: *mut CThing) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_object(inf: *mut CFile, o: *mut CThing) -> c_int {
+unsafe fn rs_read_object(inf: *mut CFile, o: *mut Thing) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1750,7 +1750,7 @@ unsafe fn rs_read_object(inf: *mut CFile, o: *mut CThing) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_object_list(savef: *mut CFile, mut l: *mut CThing) -> c_int {
+unsafe fn rs_write_object_list(savef: *mut CFile, mut l: *mut Thing) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1766,11 +1766,11 @@ unsafe fn rs_write_object_list(savef: *mut CFile, mut l: *mut CThing) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_object_list(inf: *mut CFile, list: *mut *mut CThing) -> c_int {
+unsafe fn rs_read_object_list(inf: *mut CFile, list: *mut *mut Thing) -> c_int {
     let mut cnt: c_int = 0;
-    let mut l: *mut CThing = std::ptr::null_mut();
-    let mut previous: *mut CThing = std::ptr::null_mut();
-    let mut head: *mut CThing = std::ptr::null_mut();
+    let mut l: *mut Thing = std::ptr::null_mut();
+    let mut previous: *mut Thing = std::ptr::null_mut();
+    let mut head: *mut Thing = std::ptr::null_mut();
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1811,8 +1811,8 @@ unsafe fn rs_read_object_list(inf: *mut CFile, list: *mut *mut CThing) -> c_int 
 
 unsafe fn rs_write_object_reference(
     savef: *mut CFile,
-    list: *mut CThing,
-    item: *mut CThing,
+    list: *mut Thing,
+    item: *mut Thing,
 ) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -1825,8 +1825,8 @@ unsafe fn rs_write_object_reference(
 
 unsafe fn rs_read_object_reference(
     inf: *mut CFile,
-    list: *mut CThing,
-    item: *mut *mut CThing,
+    list: *mut Thing,
+    item: *mut *mut Thing,
 ) -> c_int {
     let mut i: c_int = 0;
 
@@ -1856,8 +1856,8 @@ unsafe fn find_room_coord(c: *mut IVec2) -> c_int {
     -1
 }
 
-unsafe fn find_thing_coord(monlist: *mut CThing, c: *mut IVec2) -> c_int {
-    let mut mitem: *mut CThing = monlist;
+unsafe fn find_thing_coord(monlist: *mut Thing, c: *mut IVec2) -> c_int {
+    let mut mitem: *mut Thing = monlist;
     let mut i: c_int = 0;
 
     while !mitem.is_null() {
@@ -1871,8 +1871,8 @@ unsafe fn find_thing_coord(monlist: *mut CThing, c: *mut IVec2) -> c_int {
     -1
 }
 
-unsafe fn find_object_coord(objlist: *mut CThing, c: *mut IVec2) -> c_int {
-    let mut oitem: *mut CThing = objlist;
+unsafe fn find_object_coord(objlist: *mut Thing, c: *mut IVec2) -> c_int {
+    let mut oitem: *mut Thing = objlist;
     let mut i: c_int = 0;
 
     while !oitem.is_null() {
@@ -1890,7 +1890,7 @@ unsafe fn find_object_coord(objlist: *mut CThing, c: *mut IVec2) -> c_int {
 /// into the global mlist, lvl_obj, rooms or hero.
 ///
 /// Uses globals: hero, mlist, lvl_obj, rooms.
-unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
+unsafe fn rs_write_thing(savef: *mut CFile, t: *mut Thing) -> c_int {
     let mut i: c_int = -1;
 
     if WRITE_ERROR != 0 {
@@ -1970,7 +1970,7 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut CThing) -> c_int {
 /// the global hero, mlist, lvl_obj and rooms tables.
 ///
 /// Uses globals: hero, mlist, lvl_obj, rooms.
-unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
+unsafe fn rs_read_thing(inf: *mut CFile, t: *mut Thing) -> c_int {
     let mut listid: c_int = 0;
     let mut index: c_int = -1;
 
@@ -2052,7 +2052,7 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
     (*thing_t(t)).t_flags = crate::entity::player::MonsterFlags::from_bits(t_flags_bits);
     let _ = rs_read_stats(inf, &raw mut (*thing_t(t)).t_stats);
     let _ = rs_read_room_reference(inf, &mut (*thing_t(t)).t_room);
-    let mut pack_head: *mut CThing = std::ptr::null_mut();
+    let mut pack_head: *mut Thing = std::ptr::null_mut();
     let _ = rs_read_object_list(inf, &mut pack_head);
     crate::entity::player::set_thing_pack(t, pack_head);
 
@@ -2062,7 +2062,7 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut CThing) -> c_int {
 /// Resolves a deferred monster chase target stored in t_reserved.
 ///
 /// Uses globals: mlist.
-unsafe fn rs_fix_thing(t: *mut CThing) {
+unsafe fn rs_fix_thing(t: *mut Thing) {
     if (*thing_t(t)).t_reserved < 0 {
         return;
     }
@@ -2074,7 +2074,7 @@ unsafe fn rs_fix_thing(t: *mut CThing) {
     }
 }
 
-unsafe fn rs_write_thing_list(savef: *mut CFile, mut l: *mut CThing) -> c_int {
+unsafe fn rs_write_thing_list(savef: *mut CFile, mut l: *mut Thing) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -2097,11 +2097,11 @@ unsafe fn rs_write_thing_list(savef: *mut CFile, mut l: *mut CThing) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_thing_list(inf: *mut CFile, list: *mut *mut CThing) -> c_int {
+unsafe fn rs_read_thing_list(inf: *mut CFile, list: *mut *mut Thing) -> c_int {
     let mut cnt: c_int = 0;
-    let mut l: *mut CThing = std::ptr::null_mut();
-    let mut previous: *mut CThing = std::ptr::null_mut();
-    let mut head: *mut CThing = std::ptr::null_mut();
+    let mut l: *mut Thing = std::ptr::null_mut();
+    let mut previous: *mut Thing = std::ptr::null_mut();
+    let mut head: *mut Thing = std::ptr::null_mut();
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -2139,8 +2139,8 @@ unsafe fn rs_read_thing_list(inf: *mut CFile, list: *mut *mut CThing) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_fix_thing_list(list: *mut CThing) {
-    let mut item: *mut CThing = list;
+unsafe fn rs_fix_thing_list(list: *mut Thing) {
+    let mut item: *mut Thing = list;
 
     while !item.is_null() {
         rs_fix_thing(item);
@@ -2150,8 +2150,8 @@ unsafe fn rs_fix_thing_list(list: *mut CThing) {
 
 unsafe fn rs_write_thing_reference(
     savef: *mut CFile,
-    list: *mut CThing,
-    item: *mut CThing,
+    list: *mut Thing,
+    item: *mut Thing,
 ) -> c_int {
     let mut i: c_int;
 
@@ -2171,8 +2171,8 @@ unsafe fn rs_write_thing_reference(
 
 unsafe fn rs_read_thing_reference(
     inf: *mut CFile,
-    list: *mut CThing,
-    item: *mut *mut CThing,
+    list: *mut Thing,
+    item: *mut *mut Thing,
 ) -> c_int {
     let mut i: c_int = 0;
 
@@ -2193,8 +2193,8 @@ unsafe fn rs_read_thing_reference(
 
 unsafe fn rs_write_thing_references(
     savef: *mut CFile,
-    list: *mut CThing,
-    items: *mut *mut CThing,
+    list: *mut Thing,
+    items: *mut *mut Thing,
     count: c_int,
 ) -> c_int {
     if WRITE_ERROR != 0 {
@@ -2212,8 +2212,8 @@ unsafe fn rs_write_thing_references(
 
 unsafe fn rs_read_thing_references(
     inf: *mut CFile,
-    list: *mut CThing,
-    items: *mut *mut CThing,
+    list: *mut Thing,
+    items: *mut *mut Thing,
     count: c_int,
 ) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -2293,7 +2293,7 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
             let mut seen: c_uchar = 0;
             let mut passnum: c_char = 0;
             let mut trap_kind: c_char = 0;
-            let mut monst: *mut CThing = std::ptr::null_mut();
+            let mut monst: *mut Thing = std::ptr::null_mut();
 
             let _ = rs_read_char(inf, &mut tile_disc);
             let _ = rs_read_boolean(inf, &mut real);
@@ -2303,7 +2303,7 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
             let _ = rs_read_char(inf, &mut trap_kind);
             let _ = rs_read_thing_reference(inf, MLIST.head(), &mut monst);
 
-            let trap = crate::level::Trap::from_raw(trap_kind as u8);
+            let trap = crate::level::TrapType::from_raw(trap_kind as u8);
             let tile =
                 crate::level::Tile::from_u8(tile_disc as u8).unwrap_or(crate::level::Tile::Empty);
             let tile = match tile {
@@ -2644,10 +2644,10 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_object_reference(inf, player_pack, &raw mut l_last_pick);
     let _ = rs_read_object_reference(inf, player_pack, &raw mut last_pick);
 
-    let mut items_head: *mut CThing = std::ptr::null_mut();
+    let mut items_head: *mut Thing = std::ptr::null_mut();
     let _ = rs_read_object_list(inf, &raw mut items_head);
     crate::game::with_current_level_mut(|level| level.items.set_head(items_head));
-    let mut mlist: *mut CThing = std::ptr::null_mut();
+    let mut mlist: *mut Thing = std::ptr::null_mut();
     let _ = rs_read_thing_list(inf, &raw mut mlist);
     MLIST.set_head(mlist);
     rs_fix_thing(crate::game::player_ptr());

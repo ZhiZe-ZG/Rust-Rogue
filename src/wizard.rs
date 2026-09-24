@@ -10,7 +10,7 @@ use crate::config::GameConfig;
 use crate::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
-use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::item::pack::{add_pack, floor_at, get_item};
 use crate::item::sticks::fix_stick;
 use crate::item::thing_list::new_item;
@@ -39,12 +39,12 @@ static mut master_mode_enabled: c_uchar = 1;
 static mut wizard: c_int = 0;
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
@@ -108,7 +108,7 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
         return;
     }
 
-    let mut obj: *mut CThing = ptr::null_mut();
+    let mut obj: *mut Thing = ptr::null_mut();
     loop {
         obj = get_item(c"identify".as_ptr(), item_type);
         if insist != 0 {
@@ -150,7 +150,7 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn set_know(obj: *mut CThing, info: *mut CObjInfo) {
+pub unsafe extern "C" fn set_know(obj: *mut Thing, info: *mut CObjInfo) {
     if obj.is_null() || info.is_null() {
         return;
     }
@@ -347,9 +347,9 @@ mod tests {
     #[test]
     fn set_know_marks_object_known() {
         unsafe {
-            let mut obj = CThing::Object {
+            let mut obj = Thing::Object {
                 link: crate::entity::player::ThingLink::empty(),
-                data: CThingObject {
+                data: ThingObject {
                     o_type: SCROLL,
                     o_pos: IVec2 { x: 0, y: 0 },
                     o_text: None,

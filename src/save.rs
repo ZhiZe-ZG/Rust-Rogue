@@ -1,7 +1,7 @@
 //! Game save, restore, and shell-escape handling.
 //!
 //! Ported from `src/c/save.c` to Rust.
-use crate::entity::player::CThing;
+use crate::entity::player::Thing;
 use crate::machdep::{resetltchars, setup};
 use crate::mdport::{
     md_chmod, md_getpid, md_ignoreallsignals, md_tstphold, md_tstpresume, md_unlink,

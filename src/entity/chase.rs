@@ -12,7 +12,7 @@ use crate::config::GameConfig;
 use crate::entity::fight::attack;
 use crate::globals::monsters;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags};
+use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::entity::player::{set_thing_dest, thing_dest};
 use crate::entity::rndmove::rndmove;
 use crate::item::scrolls::ScrollType;
@@ -66,12 +66,12 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
@@ -91,7 +91,7 @@ unsafe fn player_has(flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn monster_has(tp: *mut CThing, flag: MonsterFlags) -> bool {
+unsafe fn monster_has(tp: *mut Thing, flag: MonsterFlags) -> bool {
     (*thing_t(tp)).t_flags.contains(flag)
 }
 
@@ -106,12 +106,12 @@ unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
 }
 
 #[inline]
-unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
+unsafe fn moat_at(y: c_int, x: c_int) -> *mut Thing {
     crate::game::monster_at(y, x)
 }
 
 #[inline]
-unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
+unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut Thing) {
     crate::game::set_monster(y, x, tp);
 }
 
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn runners() {
 /// move_monst:
 /// Execute a single turn of running for a monster
 #[no_mangle]
-pub unsafe extern "C" fn move_monst(tp: *mut CThing) -> c_int {
+pub unsafe extern "C" fn move_monst(tp: *mut Thing) -> c_int {
     if !monster_has(tp, MonsterFlags::SLOW) || (*thing_t(tp)).t_turn {
         if do_chase(tp) == -1 {
             return -1;
@@ -174,7 +174,7 @@ pub unsafe extern "C" fn move_monst(tp: *mut CThing) -> c_int {
 ///
 /// Uses globals: places (via moat), player, see_monst (function).
 #[no_mangle]
-pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut IVec2) {
+pub unsafe extern "C" fn relocate(th: *mut Thing, new_loc: *mut IVec2) {
     if new_loc.is_null() {
         return;
     }
@@ -214,12 +214,12 @@ pub unsafe extern "C" fn relocate(th: *mut CThing, new_loc: *mut IVec2) {
 /// Uses globals: hero, proom, passages, places (via flat/chat/moat),
 /// delta, running, count, quiet, to_death, kamikaze, lvl_obj.
 #[no_mangle]
-pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
+pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
     let mut mindist: c_int = 32767;
     let mut curdist: c_int;
     let mut stoprun = false; // true as c_uchar means we are there
     let door: bool;
-    let mut obj: *mut CThing;
+    let mut obj: *mut Thing;
 
     let rer = (*thing_t(th)).t_room; // Find room of chaser
     if monster_has(th, MonsterFlags::GREED) && crate::game::room_goldval(rer) == 0 {
@@ -342,7 +342,7 @@ pub unsafe extern "C" fn do_chase(th: *mut CThing) -> c_int {
 ///
 /// Uses globals: player, hero, see_floor, places (via chat).
 #[no_mangle]
-pub unsafe extern "C" fn set_oldch(tp: *mut CThing, cp: *mut IVec2) {
+pub unsafe extern "C" fn set_oldch(tp: *mut Thing, cp: *mut IVec2) {
     if coord_eq((*thing_t(tp)).t_pos, *cp) {
         return;
     }
@@ -366,7 +366,7 @@ pub unsafe extern "C" fn set_oldch(tp: *mut CThing, cp: *mut IVec2) {
 ///
 /// Uses globals: player, hero, proom, places (via chat).
 #[no_mangle]
-pub unsafe extern "C" fn see_monst(mp: *mut CThing) -> c_uchar {
+pub unsafe extern "C" fn see_monst(mp: *mut Thing) -> c_uchar {
     if player_has(MonsterFlags::BLIND) {
         return false as c_uchar;
     }
@@ -427,7 +427,7 @@ pub unsafe extern "C" fn runto(runner: *mut IVec2) {
 ///
 /// Uses globals: hero, lvl_obj, places (via moat/chat/winat).
 #[no_mangle]
-pub unsafe extern "C" fn chase(tp: *mut CThing, ee: *mut IVec2) -> c_uchar {
+pub unsafe extern "C" fn chase(tp: *mut Thing, ee: *mut IVec2) -> c_uchar {
     let mut curdist: c_int;
     let mut thisdist: c_int;
     let er = &raw mut (*thing_t(tp)).t_pos;
@@ -608,7 +608,7 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
 ///
 /// Uses globals: monsters, hero, proom, lvl_obj, mlist.
 #[no_mangle]
-pub unsafe extern "C" fn find_dest(tp: *mut CThing) -> *mut IVec2 {
+pub unsafe extern "C" fn find_dest(tp: *mut Thing) -> *mut IVec2 {
     let prob = monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry;
     if prob <= 0
         || (*thing_t(tp)).t_room == (*thing_t(crate::game::player_ptr())).t_room

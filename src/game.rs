@@ -18,7 +18,7 @@ use std::os::raw::c_int;
 use std::sync::{OnceLock, RwLock};
 
 use crate::config::GameConfig;
-use crate::entity::player::{CThing, CThingMonster, Stats};
+use crate::entity::player::{Thing, ThingMonster, Stats};
 use crate::level::{Level, Tile};
 use glam::IVec2;
 
@@ -28,7 +28,7 @@ use glam::IVec2;
 /// `static`s (which must be `Sync`). The raw pointer itself is neither `Send`
 /// nor `Sync`, so this wrapper opts in explicitly and exposes lock-guarded
 /// access.
-struct PtrCell(RwLock<*mut CThing>);
+struct PtrCell(RwLock<*mut Thing>);
 
 // SAFETY: access to the pointer is always guarded by the inner `RwLock`, and
 // the pointer is only dereferenced by the owning (single-threaded) game logic.
@@ -41,12 +41,12 @@ impl PtrCell {
     }
 
     #[inline]
-    fn get(&self) -> *mut CThing {
+    fn get(&self) -> *mut Thing {
         *self.0.read().unwrap_or_else(|poison| poison.into_inner())
     }
 
     #[inline]
-    fn set(&self, ptr: *mut CThing) {
+    fn set(&self, ptr: *mut Thing) {
         *self.0.write().unwrap_or_else(|poison| poison.into_inner()) = ptr;
     }
 }
@@ -66,42 +66,42 @@ impl Equipment {
     };
 
     #[inline]
-    pub fn armor(&self) -> *mut CThing {
+    pub fn armor(&self) -> *mut Thing {
         self.armor.get()
     }
 
     #[inline]
-    pub fn set_armor(&self, armor: *mut CThing) {
+    pub fn set_armor(&self, armor: *mut Thing) {
         self.armor.set(armor);
     }
 
     #[inline]
-    pub fn left_ring(&self) -> *mut CThing {
+    pub fn left_ring(&self) -> *mut Thing {
         self.rings[0].get()
     }
 
     #[inline]
-    pub fn right_ring(&self) -> *mut CThing {
+    pub fn right_ring(&self) -> *mut Thing {
         self.rings[1].get()
     }
 
     #[inline]
-    pub fn set_left_ring(&self, ring: *mut CThing) {
+    pub fn set_left_ring(&self, ring: *mut Thing) {
         self.rings[0].set(ring);
     }
 
     #[inline]
-    pub fn set_right_ring(&self, ring: *mut CThing) {
+    pub fn set_right_ring(&self, ring: *mut Thing) {
         self.rings[1].set(ring);
     }
 
     #[inline]
-    pub fn weapon(&self) -> *mut CThing {
+    pub fn weapon(&self) -> *mut Thing {
         self.weapon.get()
     }
 
     #[inline]
-    pub fn set_weapon(&self, weapon: *mut CThing) {
+    pub fn set_weapon(&self, weapon: *mut Thing) {
         self.weapon.set(weapon);
     }
 }
@@ -110,10 +110,10 @@ impl Equipment {
 pub static EQUIPMENT: Equipment = Equipment::EMPTY;
 
 /// The zero-valued actor [`CThing`] used to seed the global player.
-fn default_player() -> CThing {
-    CThing::Monster {
+fn default_player() -> Thing {
+    Thing::Monster {
         link: crate::entity::player::ThingLink::empty(),
-        data: CThingMonster {
+        data: ThingMonster {
             t_pos: IVec2 { x: 0, y: 0 },
             t_turn: false,
             t_type: 0,
@@ -146,7 +146,7 @@ fn default_player() -> CThing {
 /// stable and [`Player::ptr`] always hands back the same `*mut CThing`. It
 /// replaces the legacy `#[no_mangle] static mut player` global.
 pub struct Player {
-    thing: OnceLock<Box<CThing>>,
+    thing: OnceLock<Box<Thing>>,
 }
 
 // SAFETY: the game runs on a single thread, and the boxed `CThing` is only ever
@@ -159,14 +159,14 @@ impl Player {
     };
 
     #[inline]
-    fn get(&self) -> &CThing {
+    fn get(&self) -> &Thing {
         self.thing.get_or_init(|| Box::new(default_player()))
     }
 
     /// A stable, process-lifetime pointer to the player `CThing`.
     #[inline]
-    pub fn ptr(&self) -> *mut CThing {
-        self.get() as *const CThing as *mut CThing
+    pub fn ptr(&self) -> *mut Thing {
+        self.get() as *const Thing as *mut Thing
     }
 }
 
@@ -179,7 +179,7 @@ pub static PLAYER: Player = Player::EMPTY;
 /// `CThing` is boxed once inside [`PLAYER`], so the returned address never
 /// changes.
 #[inline]
-pub fn player_ptr() -> *mut CThing {
+pub fn player_ptr() -> *mut Thing {
     PLAYER.ptr()
 }
 
@@ -228,25 +228,25 @@ impl CurrentLevel {
 
 /// Read the monster at `(y, x)`, or null.
 #[inline]
-pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut CThing {
+pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut Thing {
     with_current_level(|level| level.monsters.at(y as usize, x as usize))
 }
 
 /// Place `tp` at `(y, x)` in the per-cell monster occupancy map.
 #[inline]
-pub unsafe fn set_monster(y: c_int, x: c_int, tp: *mut CThing) {
+pub unsafe fn set_monster(y: c_int, x: c_int, tp: *mut Thing) {
     with_current_level_mut(|level| level.monsters.set(y as usize, x as usize, tp));
 }
 
 /// Read the monster map at `(y, x)` (equivalent to [`monster_at`]).
 #[inline]
-pub unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
+pub unsafe fn moat_at(y: c_int, x: c_int) -> *mut Thing {
     monster_at(y, x)
 }
 
 /// Place a monster in the per-cell monster occupancy map.
 #[inline]
-pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut CThing) {
+pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut Thing) {
     set_monster(y, x, tp);
 }
 
@@ -389,14 +389,14 @@ pub const GAME_WIDTH: usize = GameConfig::LEVEL_WIDTH;
 #[cfg(test)]
 mod tests {
     use super::{CurrentLevel, Equipment, Level};
-    use crate::entity::player::CThing;
+    use crate::entity::player::Thing;
     use std::mem::MaybeUninit;
 
     #[test]
     fn ring_accessors_keep_hands_independent() {
         let equipment = Equipment::EMPTY;
-        let mut left = MaybeUninit::<CThing>::uninit();
-        let mut right = MaybeUninit::<CThing>::uninit();
+        let mut left = MaybeUninit::<Thing>::uninit();
+        let mut right = MaybeUninit::<Thing>::uninit();
 
         equipment.set_left_ring(left.as_mut_ptr());
         equipment.set_right_ring(right.as_mut_ptr());

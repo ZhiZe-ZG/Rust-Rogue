@@ -4,11 +4,11 @@
 //! in map cells and equipment slots. The allocations themselves are owned by
 //! this vector, so list operations no longer depend on a C allocator or ABI.
 
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::entity::player::{Thing, ThingMonster, ThingObject};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-struct OwnedThing(Box<CThing>);
+struct OwnedThing(Box<Thing>);
 
 // The game accesses thing pointers on its single gameplay thread; the mutex
 // only protects the arena's ownership when the global is initialized.
@@ -22,7 +22,7 @@ fn things() -> &'static Mutex<Vec<OwnedThing>> {
 }
 
 /// Prepend `item` to the actor `owner`'s pack list.
-pub unsafe fn attach_pack(owner: *mut CThing, item: *mut CThing) {
+pub unsafe fn attach_pack(owner: *mut Thing, item: *mut Thing) {
     let head = crate::entity::player::thing_pack(owner);
     crate::entity::player::set_thing_next(item, head);
     crate::entity::player::set_thing_prev(item, std::ptr::null_mut());
@@ -33,7 +33,7 @@ pub unsafe fn attach_pack(owner: *mut CThing, item: *mut CThing) {
 }
 
 /// Unlink `item` from the actor `owner`'s pack list.
-pub unsafe fn detach_pack(owner: *mut CThing, item: *mut CThing) {
+pub unsafe fn detach_pack(owner: *mut Thing, item: *mut Thing) {
     let prev = crate::entity::player::thing_prev(item);
     let next = crate::entity::player::thing_next(item);
 
@@ -51,7 +51,7 @@ pub unsafe fn detach_pack(owner: *mut CThing, item: *mut CThing) {
 }
 
 /// Drop every item in the actor `owner`'s pack list.
-pub unsafe fn free_pack(owner: *mut CThing) {
+pub unsafe fn free_pack(owner: *mut Thing) {
     let mut item = crate::entity::player::thing_pack(owner);
     while !item.is_null() {
         let next = crate::entity::player::thing_next(item);
@@ -63,7 +63,7 @@ pub unsafe fn free_pack(owner: *mut CThing) {
 
 /// Unlink `item` from a doubly-linked list, patching its neighbours and
 /// clearing its own header.
-pub unsafe fn detach(list: *mut *mut CThing, item: *mut CThing) {
+pub unsafe fn detach(list: *mut *mut Thing, item: *mut Thing) {
     let prev = crate::entity::player::thing_prev(item);
     let next = crate::entity::player::thing_next(item);
 
@@ -81,7 +81,7 @@ pub unsafe fn detach(list: *mut *mut CThing, item: *mut CThing) {
 }
 
 /// Prepend `item` to a doubly-linked list.
-pub unsafe fn attach(list: *mut *mut CThing, item: *mut CThing) {
+pub unsafe fn attach(list: *mut *mut Thing, item: *mut Thing) {
     crate::entity::player::set_thing_next(item, *list);
     crate::entity::player::set_thing_prev(item, std::ptr::null_mut());
     if !(*list).is_null() {
@@ -90,7 +90,7 @@ pub unsafe fn attach(list: *mut *mut CThing, item: *mut CThing) {
     *list = item;
 }
 
-pub unsafe fn free_list(list: *mut *mut CThing) {
+pub unsafe fn free_list(list: *mut *mut Thing) {
     while !(*list).is_null() {
         let item = *list;
         *list = crate::entity::player::thing_next(item);
@@ -98,11 +98,11 @@ pub unsafe fn free_list(list: *mut *mut CThing) {
     }
 }
 
-pub unsafe fn discard(item: *mut CThing) {
+pub unsafe fn discard(item: *mut Thing) {
     let mut things = things().lock().expect("thing store poisoned");
     if let Some(index) = things
         .iter()
-        .position(|thing| (&*thing.0 as *const CThing).cast_mut() == item)
+        .position(|thing| (&*thing.0 as *const Thing).cast_mut() == item)
     {
         things.swap_remove(index);
         TOTAL.fetch_sub(1, Ordering::Relaxed);
@@ -110,25 +110,25 @@ pub unsafe fn discard(item: *mut CThing) {
 }
 
 /// Allocate an object (item) thing in the arena.
-pub unsafe fn new_object() -> *mut CThing {
-    let mut item = OwnedThing(Box::new(CThing::object(CThingObject::default())));
-    let pointer = (&mut *item.0) as *mut CThing;
+pub unsafe fn new_object() -> *mut Thing {
+    let mut item = OwnedThing(Box::new(Thing::object(ThingObject::default())));
+    let pointer = (&mut *item.0) as *mut Thing;
     things().lock().expect("thing store poisoned").push(item);
     TOTAL.fetch_add(1, Ordering::Relaxed);
     pointer
 }
 
 /// Allocate an actor (monster/player) thing in the arena.
-pub unsafe fn new_actor() -> *mut CThing {
-    let mut item = OwnedThing(Box::new(CThing::actor(CThingMonster::default())));
-    let pointer = (&mut *item.0) as *mut CThing;
+pub unsafe fn new_actor() -> *mut Thing {
+    let mut item = OwnedThing(Box::new(Thing::actor(ThingMonster::default())));
+    let pointer = (&mut *item.0) as *mut Thing;
     things().lock().expect("thing store poisoned").push(item);
     TOTAL.fetch_add(1, Ordering::Relaxed);
     pointer
 }
 
 /// Allocate an object thing; the historical item-allocation entry point.
-pub unsafe fn new_item() -> *mut CThing {
+pub unsafe fn new_item() -> *mut Thing {
     new_object()
 }
 

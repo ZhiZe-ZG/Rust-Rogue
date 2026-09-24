@@ -4,7 +4,7 @@
 use crate::entity::chase::{cansee, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};
-use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject, ObjectFlags};
+use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject, ObjectFlags};
 use crate::game::EQUIPMENT;
 use crate::globals::ws_info;
 use crate::item::pack::get_item;
@@ -79,12 +79,12 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
@@ -99,8 +99,8 @@ unsafe fn hero_stats_mut() -> *mut Stats {
 }
 
 #[inline]
-unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
-    crate::game::monster_at(y, x) as *mut CThing
+unsafe fn moat_at(y: c_int, x: c_int) -> *mut Thing {
+    crate::game::monster_at(y, x) as *mut Thing
 }
 
 #[inline]
@@ -125,14 +125,14 @@ unsafe fn set_c_string(dst: &mut [u8], src: &str) {
 }
 
 #[inline]
-unsafe fn stick_type(obj: *mut CThing) -> Option<StickType> {
+unsafe fn stick_type(obj: *mut Thing) -> Option<StickType> {
     StickType::from_raw((*thing_o(obj)).o_which)
 }
 
 /// fix_stick:
 /// Set up a new stick with the expected damage and charge values.
 #[no_mangle]
-pub unsafe extern "C" fn fix_stick(cur: *mut CThing) {
+pub unsafe extern "C" fn fix_stick(cur: *mut Thing) {
     if (*thing_o(cur)).o_type != STICK {
         return;
     }
@@ -201,7 +201,7 @@ pub unsafe extern "C" fn do_zap() {
         }
         Some(StickType::Missile) => {
             ws_info[StickType::Missile.index()].oi_know = true;
-            let mut bolt = CThing::object(CThingObject::default());
+            let mut bolt = Thing::object(ThingObject::default());
             (*thing_o(&mut bolt)).o_type = WEAPON;
             (*thing_o(&mut bolt)).o_which = FLAME;
             set_c_string(&mut (*thing_o(&mut bolt)).o_hurldmg, "1x4");
@@ -273,7 +273,7 @@ pub unsafe extern "C" fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, name: *mu
     let mut pos = *start;
     let mut hero = hero_pos();
     let hit_hero = start != &mut hero;
-    let mut bolt = CThing::object(CThingObject::default());
+    let mut bolt = Thing::object(ThingObject::default());
 
     (*thing_o(&mut bolt)).o_type = WEAPON;
     (*thing_o(&mut bolt)).o_which = FLAME;
@@ -306,7 +306,7 @@ pub unsafe extern "C" fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, name: *mu
 
 /// charge_str:
 /// Return an appropriate string for a wand charge display.
-unsafe fn charge_str(obj: *mut CThing) -> *mut c_char {
+unsafe fn charge_str(obj: *mut Thing) -> *mut c_char {
     static mut BUF: [u8; 20] = [0; 20];
     if !(*thing_o(obj)).o_flags.contains(ObjectFlags::KNOW) {
         BUF[0] = 0;

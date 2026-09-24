@@ -16,7 +16,7 @@ use crate::rnd::rnd;
 
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 
-use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::item::pack::add_pack;
 use crate::item::thing_list::new_item;
 use crate::item::weapons::init_weapon;
@@ -303,12 +303,12 @@ unsafe extern "C" {
 // ─── Private helpers ─────────────────────────────────────────────────────────
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 

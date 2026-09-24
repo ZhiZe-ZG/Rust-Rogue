@@ -14,7 +14,7 @@ use super::passages::{
 use super::monster_map::MonsterMap;
 use super::roomgraph::RoomGraph;
 use super::structure::{Room, Structure};
-use super::tile::{Tile, Trap};
+use super::tile::{Tile, TrapType};
 use crate::config::GameConfig;
 use crate::item::item_list::ItemList;
 
@@ -141,7 +141,7 @@ impl Level {
 
     /// Return the trap kind at `(y, x)`, derived from the [`Tile::Trap`] map.
     /// Non-trap cells report [`Trap::Door`], the zero-valued legacy default.
-    pub fn trap_at(&self, y: usize, x: usize) -> Trap {
+    pub fn trap_at(&self, y: usize, x: usize) -> TrapType {
         self.tile_at(y, x).trap()
     }
 

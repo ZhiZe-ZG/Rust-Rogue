@@ -8,7 +8,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 use crate::config::GameConfig;
 use crate::draw::{look, map_cell_reveal};
 use crate::entity::monsters::{new_monster, randmonster};
-use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::game;
 use crate::game::EQUIPMENT;
 use crate::globals::{scr_info, weap_info};
@@ -106,12 +106,12 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
@@ -126,12 +126,12 @@ unsafe fn proom() -> Option<usize> {
 }
 
 #[inline]
-unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
-    game::monster_at(y, x) as *mut CThing
+unsafe fn moat(y: c_int, x: c_int) -> *mut Thing {
+    game::monster_at(y, x) as *mut Thing
 }
 
 #[inline]
-unsafe fn on_flag(tp: *mut CThing, flag: MonsterFlags) -> bool {
+unsafe fn on_flag(tp: *mut Thing, flag: MonsterFlags) -> bool {
     (*thing_t(tp)).t_flags.contains(flag)
 }
 
@@ -391,7 +391,7 @@ pub unsafe extern "C" fn read_scroll() {
 /// uncurse:
 /// Uncurse an item.
 #[no_mangle]
-pub unsafe extern "C" fn uncurse(obj: *mut CThing) {
+pub unsafe extern "C" fn uncurse(obj: *mut Thing) {
     if !obj.is_null() {
         (*thing_o(obj)).o_flags.remove(ObjectFlags::CURSED);
     }

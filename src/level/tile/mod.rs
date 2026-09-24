@@ -7,4 +7,4 @@ mod tile;
 mod trap;
 
 pub use tile::Tile;
-pub use trap::{Trap, TrapHit};
+pub use trap::{TrapType, TrapHit};

@@ -9,7 +9,7 @@ use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon};
 use crate::daemons::{doctor, stomach, swander};
 use crate::entity::chase::{roomin, runners};
-use crate::entity::player::{CThing, CThingMonster, MonsterFlags};
+use crate::entity::player::{Thing, ThingMonster, MonsterFlags};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
@@ -112,7 +112,7 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 

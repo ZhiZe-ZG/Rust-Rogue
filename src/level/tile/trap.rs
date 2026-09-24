@@ -9,7 +9,7 @@ use crate::rnd::rnd;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Trap {
+pub enum TrapType {
     Door = 0,
     Arrow = 1,
     Sleep = 2,
@@ -31,7 +31,7 @@ pub enum TrapHit {
     Kill,
 }
 
-impl Trap {
+impl TrapType {
     #[inline]
     pub const fn from_raw(value: u8) -> Self {
         match value {
@@ -52,13 +52,13 @@ impl Trap {
     /// hit, and fatal variants used by the damaging traps.
     pub fn msg(&self, hit: TrapHit) -> Option<String> {
         match self {
-            Trap::Door => Some("you fell into a trap!".to_string()),
-            Trap::Bear => Some("you are caught in a bear trap".to_string()),
-            Trap::Sleep => {
+            TrapType::Door => Some("you fell into a trap!".to_string()),
+            TrapType::Bear => Some("you are caught in a bear trap".to_string()),
+            TrapType::Sleep => {
                 Some("a strange white mist envelops you and you fall asleep".to_string())
             }
-            Trap::Rust => Some("a gush of water hits you on the head".to_string()),
-            Trap::Mystery => match rnd(11) {
+            TrapType::Rust => Some("a gush of water hits you on the head".to_string()),
+            TrapType::Mystery => match rnd(11) {
                 0 => Some("you are suddenly in a parallel dimension".to_string()),
                 1 => Some(format!(
                     "the light in here suddenly seems {}",
@@ -81,17 +81,17 @@ impl Trap {
                 10 => Some(format!("you pack turns {}!", crate::colors::random_color())),
                 _ => None,
             },
-            Trap::Arrow => Some(match hit {
+            TrapType::Arrow => Some(match hit {
                 TrapHit::Miss => "an arrow shoots past you".to_string(),
                 TrapHit::Hit => "oh no! An arrow shot you".to_string(),
                 TrapHit::Kill => "an arrow killed you".to_string(),
             }),
-            Trap::Dart => Some(match hit {
+            TrapType::Dart => Some(match hit {
                 TrapHit::Miss => "a small dart whizzes by your ear and vanishes".to_string(),
                 TrapHit::Hit => "a small dart just hit you in the shoulder".to_string(),
                 TrapHit::Kill => "a poisoned dart killed you".to_string(),
             }),
-            Trap::Teleport => None,
+            TrapType::Teleport => None,
         }
     }
 }

@@ -19,9 +19,9 @@ use std::os::raw::{c_char, c_int, c_uchar};
 use crate::config::GameConfig;
 use crate::entity::chase::{roomin, see_monst};
 use crate::entity::monsters::wake_monster;
-use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags};
+use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::game;
-use crate::level::Trap;
+use crate::level::TrapType;
 use crate::level::{door_open, with_current_level, with_current_level_mut, Tile};
 use crate::misc::find_obj;
 use crate::rnd::rnd;
@@ -78,12 +78,12 @@ unsafe extern "C" {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
@@ -213,7 +213,7 @@ pub(crate) unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
 }
 
 /// Trap kind (0-7) at `(y, x)` from the tile map.
-pub(crate) unsafe fn trap_kind_at(y: c_int, x: c_int) -> Trap {
+pub(crate) unsafe fn trap_kind_at(y: c_int, x: c_int) -> TrapType {
     with_current_level(|lvl| {
         lvl.map
             .get(y as usize, x as usize)
@@ -355,7 +355,7 @@ pub unsafe extern "C" fn add_pass() {
 #[no_mangle]
 pub unsafe extern "C" fn look(wakeup: c_uchar) {
     let mut ch: c_int;
-    let mut tp: *mut CThing;
+    let mut tp: *mut Thing;
     let mut ey: c_int;
     let mut ex: c_int;
     let mut passcount: c_int = 0;

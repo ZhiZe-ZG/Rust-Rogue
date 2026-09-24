@@ -2,7 +2,7 @@
 //!
 //! Ported from `src/c/armor.c` to Rust.
 use crate::daemon::{do_daemons, do_fuses};
-use crate::entity::player::{CThing, CThingObject, ObjectFlags};
+use crate::entity::player::{Thing, ThingObject, ObjectFlags};
 use crate::game::EQUIPMENT;
 use crate::item::pack::get_item;
 use crate::item::rings::RingType;
@@ -22,12 +22,12 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
 #[inline]
-unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
+unsafe fn ring_is(ring: *mut Thing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
@@ -107,7 +107,7 @@ pub unsafe extern "C" fn waste_time() {
 /// rust_armor:
 /// Rust the given armor if it is a legal kind to rust.
 #[no_mangle]
-pub unsafe extern "C" fn rust_armor(arm: *mut CThing) {
+pub unsafe extern "C" fn rust_armor(arm: *mut Thing) {
     if arm.is_null()
         || (*thing_o(arm)).o_type != ARMOR
         || (*thing_o(arm)).o_which == 0

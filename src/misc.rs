@@ -18,7 +18,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{CThing, CThingMonster, CThingObject, MonsterFlags};
+use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::startup::roll;
 
 const PASSAGE: c_char = b'#' as c_char;
@@ -81,17 +81,17 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
 #[inline]
-unsafe fn on(thing: *mut CThing, flag: MonsterFlags) -> bool {
+unsafe fn on(thing: *mut Thing, flag: MonsterFlags) -> bool {
     (*thing_t(thing)).t_flags.contains(flag)
 }
 
@@ -127,7 +127,7 @@ pub unsafe fn show_floor() -> bool {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn find_obj(y: c_int, x: c_int) -> *mut CThing {
+pub unsafe extern "C" fn find_obj(y: c_int, x: c_int) -> *mut Thing {
     let mut obj = crate::game::with_current_level(|level| level.items.head());
     while !obj.is_null() {
         if (*thing_o(obj)).o_pos.y == y && (*thing_o(obj)).o_pos.x == x {
@@ -273,7 +273,7 @@ pub unsafe extern "C" fn aggravate() {
 }
 
 #[no_mangle]
-pub unsafe fn is_current(obj: *mut CThing) -> bool {
+pub unsafe fn is_current(obj: *mut Thing) -> bool {
     if obj.is_null() {
         return false;
     }

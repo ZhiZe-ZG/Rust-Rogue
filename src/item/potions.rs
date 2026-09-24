@@ -11,7 +11,7 @@ use crate::draw::look;
 
 use crate::entity::chase::see_monst;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::game::EQUIPMENT;
 use crate::globals::pot_info;
 use crate::item::pack::{get_item, leave_pack};
@@ -124,13 +124,13 @@ unsafe extern "C" {
 
 /// Cast a generic thing pointer to the monster portion of the union.
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 /// Cast a generic thing pointer to the object portion of the union.
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
@@ -145,27 +145,27 @@ unsafe fn player_has(flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn thing_has(tp: *mut CThing, flag: MonsterFlags) -> bool {
+unsafe fn thing_has(tp: *mut Thing, flag: MonsterFlags) -> bool {
     (*thing_t(tp)).t_flags.contains(flag)
 }
 
 #[inline]
-unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
+unsafe fn ring_is(ring: *mut Thing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
 #[inline]
-unsafe fn next_thing(tp: *mut CThing) -> *mut CThing {
+unsafe fn next_thing(tp: *mut Thing) -> *mut Thing {
     crate::entity::player::thing_next(tp)
 }
 
 #[inline]
-unsafe fn moat(y: c_int, x: c_int) -> *mut CThing {
+unsafe fn moat(y: c_int, x: c_int) -> *mut Thing {
     crate::game::monster_at(y, x)
 }
 
 #[inline]
-unsafe fn is_magic_local(obj: *mut CThing) -> bool {
+unsafe fn is_magic_local(obj: *mut Thing) -> bool {
     match (*thing_o(obj)).o_type {
         ARMOR => (*thing_o(obj)).o_flags.contains(ObjectFlags::PROT) || (*thing_o(obj)).o_arm != 0,
         WEAPON => (*thing_o(obj)).o_hplus != 0 || (*thing_o(obj)).o_dplus != 0,
@@ -247,8 +247,8 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
 #[no_mangle]
 pub unsafe extern "C" fn quaff() {
     let obj = get_item(c"quaff".as_ptr(), POTION);
-    let mut tp: *mut CThing;
-    let mut mp: *mut CThing;
+    let mut tp: *mut Thing;
+    let mut mp: *mut Thing;
     let discardit;
     let mut show = false;
     let trip = player_has(MonsterFlags::HALU);
@@ -476,7 +476,7 @@ pub unsafe extern "C" fn quaff() {
 /// is_magic:
 /// Returns true if an object radiates magic.
 #[no_mangle]
-pub unsafe extern "C" fn is_magic(obj: *mut CThing) -> c_uchar {
+pub unsafe extern "C" fn is_magic(obj: *mut Thing) -> c_uchar {
     if obj.is_null() {
         return 0;
     }
@@ -559,7 +559,7 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
 /// Return true if the player has seen the stairs.
 #[no_mangle]
 pub unsafe extern "C" fn seen_stairs() -> c_uchar {
-    let tp: *mut CThing;
+    let tp: *mut Thing;
     let stairs = crate::game::stairs();
 
     output::move_cursor(IVec2::new(stairs.x, stairs.y));

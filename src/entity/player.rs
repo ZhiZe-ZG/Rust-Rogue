@@ -18,7 +18,7 @@ use crate::item::pack::floor_at;
 use crate::item::rings::RingType;
 use crate::item::thing_list::new_item;
 use crate::item::weapons::{fall, init_weapon};
-use crate::level::{new_level, Trap, TrapHit};
+use crate::level::{new_level, TrapType, TrapHit};
 use crate::machdep::flush_type;
 use crate::misc::{chg_str, spread};
 use crate::rip::death;
@@ -288,7 +288,7 @@ const VS_POISON: c_int = 0;
 
 /// Monster/player (actor) data for a [`CThing`], using native Rust types.
 #[derive(Copy, Clone)]
-pub struct CThingMonster {
+pub struct ThingMonster {
     pub t_pos: IVec2,
     pub t_turn: bool,
     pub t_type: u8,
@@ -298,14 +298,14 @@ pub struct CThingMonster {
     pub t_flags: MonsterFlags,
     pub t_stats: Stats,
     pub t_room: Option<usize>,
-    pub t_pack: Option<NonNull<CThing>>,
+    pub t_pack: Option<NonNull<Thing>>,
     pub t_reserved: i32,
 }
 
 /// Object (item) data for a [`CThing`], using native Rust types. The `o_text`
 /// and `o_label` string fields are owned Rust `String`s rather than C pointers.
 #[derive(Clone)]
-pub struct CThingObject {
+pub struct ThingObject {
     pub o_type: i32,
     pub o_pos: IVec2,
     pub o_text: Option<String>,
@@ -328,8 +328,8 @@ pub struct CThingObject {
 /// links use Rust `NonNull` pointers with a null niche instead of raw `*mut`.
 #[derive(Copy, Clone)]
 pub struct ThingLink {
-    pub l_next: Option<NonNull<CThing>>,
-    pub l_prev: Option<NonNull<CThing>>,
+    pub l_next: Option<NonNull<Thing>>,
+    pub l_prev: Option<NonNull<Thing>>,
 }
 
 impl ThingLink {
@@ -346,32 +346,32 @@ impl ThingLink {
 /// been removed). It is `Clone` but not `Copy` because object string fields are
 /// owned values.
 #[derive(Clone)]
-pub enum CThing {
-    Monster { link: ThingLink, data: CThingMonster },
-    Object { link: ThingLink, data: CThingObject },
+pub enum Thing {
+    Monster { link: ThingLink, data: ThingMonster },
+    Object { link: ThingLink, data: ThingObject },
 }
 
-impl CThing {
+impl Thing {
     /// Build an actor thing with an empty list header.
-    pub const fn actor(data: CThingMonster) -> Self {
-        CThing::Monster {
+    pub const fn actor(data: ThingMonster) -> Self {
+        Thing::Monster {
             link: ThingLink::empty(),
             data,
         }
     }
 
     /// Build an object thing with an empty list header.
-    pub const fn object(data: CThingObject) -> Self {
-        CThing::Object {
+    pub const fn object(data: ThingObject) -> Self {
+        Thing::Object {
             link: ThingLink::empty(),
             data,
         }
     }
 }
 
-impl Default for CThingMonster {
+impl Default for ThingMonster {
     fn default() -> Self {
-        CThingMonster {
+        ThingMonster {
             t_pos: IVec2 { x: 0, y: 0 },
             t_turn: false,
             t_type: 0,
@@ -387,9 +387,9 @@ impl Default for CThingMonster {
     }
 }
 
-impl Default for CThingObject {
+impl Default for ThingObject {
     fn default() -> Self {
-        CThingObject {
+        ThingObject {
             o_type: 0,
             o_pos: IVec2 { x: 0, y: 0 },
             o_text: None,
@@ -411,7 +411,7 @@ impl Default for CThingObject {
 
 /// Read the next-list pointer of `tp` (null if `tp` is null).
 #[inline]
-pub unsafe fn thing_next(tp: *mut CThing) -> *mut CThing {
+pub unsafe fn thing_next(tp: *mut Thing) -> *mut Thing {
     if tp.is_null() {
         std::ptr::null_mut()
     } else {
@@ -423,13 +423,13 @@ pub unsafe fn thing_next(tp: *mut CThing) -> *mut CThing {
 
 /// Set the next-list pointer of `tp`.
 #[inline]
-pub unsafe fn set_thing_next(tp: *mut CThing, value: *mut CThing) {
+pub unsafe fn set_thing_next(tp: *mut Thing, value: *mut Thing) {
     (*thing_link(tp)).l_next = NonNull::new(value);
 }
 
 /// Read the prev-list pointer of `tp` (null if `tp` is null).
 #[inline]
-pub unsafe fn thing_prev(tp: *mut CThing) -> *mut CThing {
+pub unsafe fn thing_prev(tp: *mut Thing) -> *mut Thing {
     if tp.is_null() {
         std::ptr::null_mut()
     } else {
@@ -441,13 +441,13 @@ pub unsafe fn thing_prev(tp: *mut CThing) -> *mut CThing {
 
 /// Set the prev-list pointer of `tp`.
 #[inline]
-pub unsafe fn set_thing_prev(tp: *mut CThing, value: *mut CThing) {
+pub unsafe fn set_thing_prev(tp: *mut Thing, value: *mut Thing) {
     (*thing_link(tp)).l_prev = NonNull::new(value);
 }
 
 /// Read the actor's chase destination as a raw pointer (null when unset).
 #[inline]
-pub unsafe fn thing_dest(tp: *mut CThing) -> *mut IVec2 {
+pub unsafe fn thing_dest(tp: *mut Thing) -> *mut IVec2 {
     (*thing_t(tp))
         .t_dest
         .map_or(std::ptr::null_mut(), |p| p.as_ptr())
@@ -455,19 +455,19 @@ pub unsafe fn thing_dest(tp: *mut CThing) -> *mut IVec2 {
 
 /// Set the actor's chase destination from a raw pointer.
 #[inline]
-pub unsafe fn set_thing_dest(tp: *mut CThing, value: *mut IVec2) {
+pub unsafe fn set_thing_dest(tp: *mut Thing, value: *mut IVec2) {
     (*thing_t(tp)).t_dest = NonNull::new(value);
 }
 
 /// Read the actor's pack head as a raw pointer (null when empty).
 #[inline]
-pub unsafe fn thing_pack(tp: *mut CThing) -> *mut CThing {
+pub unsafe fn thing_pack(tp: *mut Thing) -> *mut Thing {
     (*thing_t(tp)).t_pack.map_or(std::ptr::null_mut(), |p| p.as_ptr())
 }
 
 /// Set the actor's pack head from a raw pointer.
 #[inline]
-pub unsafe fn set_thing_pack(tp: *mut CThing, value: *mut CThing) {
+pub unsafe fn set_thing_pack(tp: *mut Thing, value: *mut Thing) {
     (*thing_t(tp)).t_pack = NonNull::new(value);
 }
 
@@ -493,28 +493,28 @@ unsafe extern "C" {
 
 /// Borrow the actor payload of `tp` (null when `tp` is an object).
 #[inline]
-pub unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+pub unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     match &mut *tp {
-        CThing::Monster { data, .. } => data as *mut CThingMonster,
-        CThing::Object { .. } => std::ptr::null_mut(),
+        Thing::Monster { data, .. } => data as *mut ThingMonster,
+        Thing::Object { .. } => std::ptr::null_mut(),
     }
 }
 
 /// Borrow the object payload of `tp` (null when `tp` is an actor).
 #[inline]
-pub unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+pub unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     match &mut *tp {
-        CThing::Object { data, .. } => data as *mut CThingObject,
-        CThing::Monster { .. } => std::ptr::null_mut(),
+        Thing::Object { data, .. } => data as *mut ThingObject,
+        Thing::Monster { .. } => std::ptr::null_mut(),
     }
 }
 
 /// Borrow the shared list header of `tp`.
 #[inline]
-pub unsafe fn thing_link(tp: *mut CThing) -> *mut ThingLink {
+pub unsafe fn thing_link(tp: *mut Thing) -> *mut ThingLink {
     match &mut *tp {
-        CThing::Monster { link, .. } => link as *mut ThingLink,
-        CThing::Object { link, .. } => link as *mut ThingLink,
+        Thing::Monster { link, .. } => link as *mut ThingLink,
+        Thing::Object { link, .. } => link as *mut ThingLink,
     }
 }
 
@@ -529,7 +529,7 @@ unsafe fn hero_pos() -> IVec2 {
 }
 
 #[inline]
-unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
+unsafe fn ring_is(ring: *mut Thing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
@@ -578,7 +578,7 @@ unsafe fn move_stuff(next_pos: &mut IVec2, fl: c_char) {
 /// levitating, no trap effect applies. Uses the C engine helpers (`msg`,
 /// `roll`, `spread`, `teleport`, ...) exactly as the legacy `be_trapped` did,
 /// but is callable only from Rust.
-pub unsafe fn be_trapped(pos: IVec2) -> Trap {
+pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
     let trap =
         crate::level::with_current_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
 
@@ -586,7 +586,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
         .t_flags
         .contains(MonsterFlags::LEVIT)
     {
-        return Trap::Rust;
+        return TrapType::Rust;
     }
 
     running = false as c_uchar;
@@ -598,21 +598,21 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
     let mut hit = TrapHit::Miss;
 
     match trap {
-        Trap::Door => {
+        TrapType::Door => {
             crate::game::set_current_depth(crate::game::current_depth() + 1);
             new_level();
         }
-        Trap::Bear => {
+        TrapType::Bear => {
             no_move += spread(3);
         }
-        Trap::Mystery => {}
-        Trap::Sleep => {
+        TrapType::Mystery => {}
+        TrapType::Sleep => {
             no_command += spread(5);
             (*thing_t(crate::game::player_ptr()))
                 .t_flags
                 .remove(MonsterFlags::RUN);
         }
-        Trap::Arrow => {
+        TrapType::Arrow => {
             let stats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
             if swing(stats.level - 1, stats.armor, 1) != 0 {
                 stats.hit_points -= roll(1, 6);
@@ -630,10 +630,10 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
                 hit = TrapHit::Miss;
             }
         }
-        Trap::Teleport => {
+        TrapType::Teleport => {
             teleport();
         }
-        Trap::Dart => {
+        TrapType::Dart => {
             let stats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
             if swing(stats.level + 1, stats.armor, 1) == 0 {
                 hit = TrapHit::Miss;
@@ -652,7 +652,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
                 }
             }
         }
-        Trap::Rust => {
+        TrapType::Rust => {
             if let Some(msg) = trap.msg(hit) {
                 msg_str(&msg);
             }
@@ -662,14 +662,14 @@ pub unsafe fn be_trapped(pos: IVec2) -> Trap {
 
     // Send the message after the effect for every trap except `Rust`, which
     // prints its message before applying the effect above.
-    if trap != Trap::Rust {
+    if trap != TrapType::Rust {
         if let Some(msg) = trap.msg(hit) {
             msg_str(&msg);
         }
     }
 
     if hit == TrapHit::Kill {
-        death(if trap == Trap::Arrow {
+        death(if trap == TrapType::Arrow {
             b'a' as c_char
         } else {
             b'd' as c_char
@@ -830,7 +830,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         }
         TRAP => {
             let trap = be_trapped(next_pos);
-            if trap == Trap::Door || trap == Trap::Teleport {
+            if trap == TrapType::Door || trap == TrapType::Teleport {
                 return;
             }
             move_stuff(&mut next_pos, fl);

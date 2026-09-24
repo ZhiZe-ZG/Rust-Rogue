@@ -5,7 +5,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::draw::{erase_lamp, look};
-use crate::entity::player::{CThing, CThingMonster};
+use crate::entity::player::{Thing, ThingMonster};
 use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::{output, Window};
 use glam::IVec2;
@@ -55,7 +55,7 @@ unsafe extern "C" {
     fn toupper(c: c_int) -> c_int;
 }
 
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 

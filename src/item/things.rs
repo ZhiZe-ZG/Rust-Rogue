@@ -10,7 +10,7 @@ use crate::ui::output::msg_str;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::entity::player::{CThing, CThingObject, ObjectFlags};
+use crate::entity::player::{Thing, ThingObject, ObjectFlags};
 use crate::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
 };
@@ -46,7 +46,7 @@ unsafe extern "C" {
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
@@ -117,7 +117,7 @@ unsafe fn pick_one(info: *mut CObjInfo, nitems: c_int) -> c_int {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_char {
+pub unsafe extern "C" fn inv_name(obj: *mut Thing, drop: c_uchar) -> *mut c_char {
     if obj.is_null() {
         return prbuf.as_mut_ptr();
     }
@@ -210,7 +210,7 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dropcheck(obj: *mut CThing) -> c_uchar {
+pub unsafe extern "C" fn dropcheck(obj: *mut Thing) -> c_uchar {
     if obj.is_null() {
         return true as c_uchar;
     }
@@ -245,7 +245,7 @@ pub unsafe extern "C" fn dropcheck(obj: *mut CThing) -> c_uchar {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn new_thing() -> *mut CThing {
+pub unsafe extern "C" fn new_thing() -> *mut Thing {
     let cur = new_item();
     (*thing_o(cur)).o_hplus = 0;
     (*thing_o(cur)).o_dplus = 0;
@@ -399,11 +399,11 @@ unsafe fn nothing(_type: c_char) -> *mut c_char {
 
 #[no_mangle]
 pub unsafe extern "C" fn nameit(
-    obj: *mut CThing,
+    obj: *mut Thing,
     typ: *mut c_char,
     which: *mut c_char,
     op: *mut CObjInfo,
-    prfunc: unsafe extern "C" fn(*mut CThing) -> *mut c_char,
+    prfunc: unsafe extern "C" fn(*mut Thing) -> *mut c_char,
 ) {
     if op.is_null() || obj.is_null() {
         return;
@@ -435,7 +435,7 @@ pub unsafe extern "C" fn nameit(
     copy_to_prbuf(&text);
 }
 
-unsafe fn nullstr(_: *mut CThing) -> *mut c_char {
+unsafe fn nullstr(_: *mut Thing) -> *mut c_char {
     c"".as_ptr() as *mut c_char
 }
 

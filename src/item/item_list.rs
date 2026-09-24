@@ -3,7 +3,7 @@
 //! Replaces the legacy C `lvl_obj` global (a raw `THING *` list head) with a
 //! small owned handle stored on [`crate::level::Level`].
 
-use crate::entity::player::CThing;
+use crate::entity::player::Thing;
 use crate::item::thing_list::{attach, detach, free_list};
 
 /// Intrusive linked list of the floor items (objects) for the current level.
@@ -15,7 +15,7 @@ use crate::item::thing_list::{attach, detach, free_list};
 /// implementations compare the head address, matching `Level`'s derives.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ItemList {
-    head: *mut CThing,
+    head: *mut Thing,
 }
 
 // The raw head pointer is neither `Send` nor `Sync`, but the game is
@@ -34,17 +34,17 @@ impl ItemList {
     }
 
     /// Head of the floor-item list.
-    pub fn head(&self) -> *mut CThing {
+    pub fn head(&self) -> *mut Thing {
         self.head
     }
 
     /// Prepend `item` to the floor-item list.
-    pub unsafe fn attach(&mut self, item: *mut CThing) {
+    pub unsafe fn attach(&mut self, item: *mut Thing) {
         attach(&mut self.head, item);
     }
 
     /// Unlink `item` from the floor-item list.
-    pub unsafe fn detach(&mut self, item: *mut CThing) {
+    pub unsafe fn detach(&mut self, item: *mut Thing) {
         detach(&mut self.head, item);
     }
 
@@ -54,7 +54,7 @@ impl ItemList {
     }
 
     /// Replace the list head (used by save/restore).
-    pub fn set_head(&mut self, head: *mut CThing) {
+    pub fn set_head(&mut self, head: *mut Thing) {
         self.head = head;
     }
 }

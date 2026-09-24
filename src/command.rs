@@ -13,7 +13,7 @@ use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
 use crate::entity::player::{
-    do_move, do_run, CThing, CThingMonster, CThingObject, MonsterFlags, ObjectFlags,
+    do_move, do_run, Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags,
 };
 use crate::game::EQUIPMENT;
 use crate::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
@@ -148,10 +148,10 @@ unsafe extern "C" {
     static mut kamikaze: c_uchar;
     static mut l_last_comm: c_char;
     static mut l_last_dir: c_char;
-    static mut l_last_pick: *mut CThing;
+    static mut l_last_pick: *mut Thing;
     static mut last_comm: c_char;
     static mut last_dir: c_char;
-    static mut last_pick: *mut CThing;
+    static mut last_pick: *mut Thing;
     static mut lastscore: c_int;
     static mut max_hit: c_int;
     static mut move_on: c_uchar;
@@ -190,12 +190,12 @@ unsafe extern "C" {
 // ─── Module-local helpers ─────────────────────────────────────────────────────
 
 #[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
+unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
@@ -215,12 +215,12 @@ unsafe fn player_has(flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn moat_at(y: c_int, x: c_int) -> *mut CThing {
+unsafe fn moat_at(y: c_int, x: c_int) -> *mut Thing {
     crate::game::monster_at(y, x)
 }
 
 #[inline]
-unsafe fn isring(ring: *mut CThing, ring_type: RingType) -> bool {
+unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
@@ -240,7 +240,7 @@ unsafe fn isring(ring: *mut CThing, ring_type: RingType) -> bool {
 pub unsafe extern "C" fn command() {
     let mut ch: u8;
     let mut ntimes: c_int = 1; // Number of player moves
-    let mut mp: *mut CThing;
+    let mut mp: *mut Thing;
 
     if player_has(MonsterFlags::HASTE) {
         ntimes += 1;
@@ -752,7 +752,7 @@ pub unsafe extern "C" fn command() {
                                     }
                                 }
                                 CTRL_I => {
-                                    let mut obj: *mut CThing;
+                                    let mut obj: *mut Thing;
 
                                     for _ in 0..9 {
                                         raise_level();
@@ -1100,7 +1100,7 @@ pub unsafe extern "C" fn call() {
 ///
 /// Uses globals: after, terse, inv_describe.
 #[no_mangle]
-pub unsafe extern "C" fn current(cur: *mut CThing, how: *const c_char, where_: *const c_char) {
+pub unsafe extern "C" fn current(cur: *mut Thing, how: *const c_char, where_: *const c_char) {
     after = false as c_uchar;
     if !cur.is_null() {
         if terse == 0 {

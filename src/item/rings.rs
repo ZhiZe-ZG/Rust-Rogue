@@ -1,7 +1,7 @@
 //! Rings: putting them on, taking them off, and their magical effects.
 //!
 //! Ported from `src/c/rings.c` to Rust.
-use crate::entity::player::{CThing, CThingObject, ObjectFlags};
+use crate::entity::player::{Thing, ThingObject, ObjectFlags};
 use crate::item::potions::invis_on;
 use crate::rnd::rnd;
 use std::ffi::CStr;
@@ -96,7 +96,7 @@ unsafe extern "C" {
 static mut RING_NUM_BUF: [c_char; 10] = [0; 10];
 
 #[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
+unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
 }
 
 /// Returns bracketed ring bonus text for known stat-modifier rings.
-unsafe fn ring_num(obj: *mut CThing) -> *mut c_char {
+unsafe fn ring_num(obj: *mut Thing) -> *mut c_char {
     if obj.is_null() {
         return c"".as_ptr() as *mut c_char;
     }
