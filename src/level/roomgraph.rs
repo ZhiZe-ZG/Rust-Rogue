@@ -6,15 +6,13 @@
 //! room slots, fixed adjacency, and per-level connection state so level
 //! generation can run without C globals.
 
-use std::os::raw::c_int;
-
 use crate::rnd::rnd;
 use glam::IVec2;
 
 use super::structure::Room;
 use crate::config::GameConfig;
 
-type AdjacentArray = [[u8; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
+type AdjacentArray = [[bool; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
 
 /// Room grid plus adjacency and connection state for one generation pass.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -22,7 +20,7 @@ pub struct RoomGraph {
     rooms: [Room; GameConfig::MAX_ROOMS],
     adjacent: AdjacentArray,
     isconn: AdjacentArray,
-    ingraph: [u8; GameConfig::MAX_ROOMS],
+    ingraph: [bool; GameConfig::MAX_ROOMS],
     connections: Vec<(usize, usize)>,
 }
 
@@ -59,8 +57,8 @@ impl RoomGraph {
 
     /// Reset per-level connection state, keeping the fixed adjacency.
     pub fn reset(&mut self) {
-        self.isconn = [[0; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
-        self.ingraph = [0; GameConfig::MAX_ROOMS];
+        self.isconn = [[false; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
+        self.ingraph = [false; GameConfig::MAX_ROOMS];
         self.connections.clear();
     }
 
@@ -72,8 +70,8 @@ impl RoomGraph {
         Self {
             rooms,
             adjacent,
-            isconn: [[0; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS],
-            ingraph: [0; GameConfig::MAX_ROOMS],
+            isconn: [[false; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS],
+            ingraph: [false; GameConfig::MAX_ROOMS],
             connections: Vec::new(),
         }
     }
@@ -118,13 +116,13 @@ impl RoomGraph {
 
     /// Mark `room` as part of the connected passage graph.
     fn mark_in_graph(&mut self, room: usize) {
-        self.ingraph[room] = 1;
+        self.ingraph[room] = true;
     }
 
     /// Record that a passage between `a` and `b` has been dug.
     fn connect(&mut self, a: usize, b: usize) {
-        self.isconn[a][b] = 1;
-        self.isconn[b][a] = 1;
+        self.isconn[a][b] = true;
+        self.isconn[b][a] = true;
     }
 
     /// Pick a uniformly random adjacent room that is not yet in the graph.
@@ -141,7 +139,7 @@ impl RoomGraph {
     fn pick_in_graph(&self) -> usize {
         loop {
             let idx = random_room_index();
-            if self.ingraph[idx] != 0 {
+            if self.ingraph[idx] {
                 return idx;
             }
         }
@@ -206,23 +204,23 @@ fn grid_top_left(i: usize, bsze: IVec2) -> IVec2 {
 }
 
 fn build_base_adjacency() -> AdjacentArray {
-    let mut adjacent = [[0; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
+    let mut adjacent = [[false; GameConfig::MAX_ROOMS]; GameConfig::MAX_ROOMS];
 
     for idx in 0..GameConfig::MAX_ROOMS {
         let row = idx / 3;
         let col = idx % 3;
 
         if col > 0 {
-            adjacent[idx][idx - 1] = 1;
+            adjacent[idx][idx - 1] = true;
         }
         if col < 2 {
-            adjacent[idx][idx + 1] = 1;
+            adjacent[idx][idx + 1] = true;
         }
         if row > 0 {
-            adjacent[idx][idx - 3] = 1;
+            adjacent[idx][idx - 3] = true;
         }
         if row < 2 {
-            adjacent[idx][idx + 3] = 1;
+            adjacent[idx][idx + 3] = true;
         }
     }
 
@@ -273,7 +271,7 @@ fn place_regular_room(room: &mut Room, top: IVec2, bsze: IVec2) {
 }
 
 fn random_room_index() -> usize {
-    rnd(GameConfig::MAX_ROOMS as c_int) as usize
+    rnd(GameConfig::MAX_ROOMS as i32) as usize
 }
 
 fn non_gone_count(room_states: &[Room]) -> usize {
@@ -289,18 +287,18 @@ fn pick_non_gone(room_states: &[Room]) -> usize {
     }
 }
 
-/// Pick a uniformly random index where `available` is nonzero and `blocked`
-/// is zero, or `None` when no such index exists.
+/// Pick a uniformly random index where `available` is set and `blocked` is
+/// clear, or `None` when no such index exists.
 fn pick_unconnected_adjacent(
-    available: &[u8; GameConfig::MAX_ROOMS],
-    blocked: &[u8; GameConfig::MAX_ROOMS],
+    available: &[bool; GameConfig::MAX_ROOMS],
+    blocked: &[bool; GameConfig::MAX_ROOMS],
 ) -> Option<usize> {
     let mut count = 0;
     let mut pick = None;
     for i in 0..GameConfig::MAX_ROOMS {
-        if available[i] != 0 && blocked[i] == 0 {
+        if available[i] && !blocked[i] {
             count += 1;
-            if rnd(count as c_int) == 0 {
+            if rnd(count) == 0 {
                 pick = Some(i);
             }
         }
