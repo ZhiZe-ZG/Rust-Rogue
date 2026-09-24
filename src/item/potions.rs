@@ -13,6 +13,7 @@ use crate::entity::chase::see_monst;
 use crate::entity::monster_list::MLIST;
 use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
+use crate::globals::pot_info;
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
 use crate::item::thing_list::discard;
@@ -109,18 +110,6 @@ const HEALTIME: c_int = 30;
 const BEFORE: c_int = 1;
 const AFTER: c_int = 2;
 
-/// Data structures mirrored from the C game so Rust can interact with
-/// the same in-memory layout expected by the FFI boundary.
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CObjInfo {
-    pub oi_name: *mut c_char,
-    pub oi_prob: c_int,
-    pub oi_worth: c_int,
-    pub oi_guess: *mut c_char,
-    pub oi_know: c_uchar,
-}
-
 #[repr(C)]
 struct PACT {
     pa_flags: c_short,
@@ -139,7 +128,6 @@ unsafe extern "C" {
     static mut fruit: [c_char; 1024];
     static mut prbuf: [c_char; 2048];
     static mut player: CThing;
-    static mut pot_info: [CObjInfo; MAXPOTIONS];
     static mut max_stats: Stats;
     static mut e_levels: [c_int; 21];
 
@@ -200,7 +188,7 @@ unsafe fn is_magic_local(obj: *mut CThing) -> bool {
 
 /// Shared implementation for potion effects that need the normal fuse/flag
 /// setup and knowledge tracking used by the C version.
-unsafe fn do_pot_impl(potion: PotionType, knowit: c_uchar) {
+unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
     let (flags, daemon, base_time, high_msg, straight_msg) = {
         let taste_ptr = (&raw mut prbuf) as *mut [c_char; 2048] as *mut c_char as *const c_char;
         match potion {
@@ -294,13 +282,13 @@ pub unsafe extern "C" fn quaff() {
         PotionType::Confuse => do_pot_impl(
             PotionType::Confuse,
             if trip {
-                false as c_uchar
+                false
             } else {
-                true as c_uchar
+                true
             },
         ),
         PotionType::Poison => {
-            (*pot_info.as_mut_ptr().add(PotionType::Poison.index())).oi_know = true as c_uchar;
+            (*pot_info.as_mut_ptr().add(PotionType::Poison.index())).oi_know = true;
             if ring_is(EQUIPMENT.left_ring(), RingType::SustainStrength)
                 || ring_is(EQUIPMENT.right_ring(), RingType::SustainStrength)
             {
@@ -313,7 +301,7 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::Healing => {
             let stats = thing_t(&raw mut player);
-            (*pot_info.as_mut_ptr().add(PotionType::Healing.index())).oi_know = true as c_uchar;
+            (*pot_info.as_mut_ptr().add(PotionType::Healing.index())).oi_know = true;
             (*stats).t_stats.hit_points += roll((*stats).t_stats.level, 4);
             if (*stats).t_stats.hit_points > (*stats).t_stats.max_hit_points {
                 (*stats).t_stats.max_hit_points += 1;
@@ -323,7 +311,7 @@ pub unsafe extern "C" fn quaff() {
             msg_str("you begin to feel better");
         }
         PotionType::Strength => {
-            (*pot_info.as_mut_ptr().add(PotionType::Strength.index())).oi_know = true as c_uchar;
+            (*pot_info.as_mut_ptr().add(PotionType::Strength.index())).oi_know = true;
             chg_str(1);
             msg_str("you feel stronger, now.  What bulging muscles!");
         }
@@ -358,7 +346,7 @@ pub unsafe extern "C" fn quaff() {
                         );
                         output::write_window_glyph(window, (MAGIC as u8) as char);
                         (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know =
-                            true as c_uchar;
+                            true;
                     }
                     tp = next_thing(tp);
                 }
@@ -381,7 +369,7 @@ pub unsafe extern "C" fn quaff() {
             }
             if show {
                 (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know =
-                    true as c_uchar;
+                    true;
                 show_win("You sense the presence of magic on this level.--More--");
             } else {
                 msg_str(&format!(
@@ -399,7 +387,7 @@ pub unsafe extern "C" fn quaff() {
                 start_daemon(visuals as *const c_void, 0, BEFORE);
                 seenstairs = seen_stairs();
             }
-            do_pot_impl(PotionType::Lsd, true as c_uchar);
+            do_pot_impl(PotionType::Lsd, true);
         }
         PotionType::SeeInvisible => {
             let _ = snprintf(
@@ -409,21 +397,21 @@ pub unsafe extern "C" fn quaff() {
                 fruit.as_ptr(),
             );
             show = player_has(CANSEE);
-            do_pot_impl(PotionType::SeeInvisible, false as c_uchar);
+            do_pot_impl(PotionType::SeeInvisible, false);
             if !show {
                 invis_on();
             }
             sight();
         }
         PotionType::Raise => {
-            (*pot_info.as_mut_ptr().add(PotionType::Raise.index())).oi_know = true as c_uchar;
+            (*pot_info.as_mut_ptr().add(PotionType::Raise.index())).oi_know = true;
             msg_str("you suddenly feel much more skillful");
             raise_level();
         }
         PotionType::ExtraHealing => {
             let stats = thing_t(&raw mut player);
             (*pot_info.as_mut_ptr().add(PotionType::ExtraHealing.index())).oi_know =
-                true as c_uchar;
+                true;
             (*stats).t_stats.hit_points += roll((*stats).t_stats.level, 8);
             if (*stats).t_stats.hit_points > (*stats).t_stats.max_hit_points {
                 if (*stats).t_stats.hit_points > (*stats).t_stats.max_hit_points + (*stats).t_stats.level + 1 {
@@ -437,7 +425,7 @@ pub unsafe extern "C" fn quaff() {
             msg_str("you begin to feel much better");
         }
         PotionType::Haste => {
-            (*pot_info.as_mut_ptr().add(PotionType::Haste.index())).oi_know = true as c_uchar;
+            (*pot_info.as_mut_ptr().add(PotionType::Haste.index())).oi_know = true;
             after = false as c_uchar;
             if add_haste(true) {
                 msg_str("you feel yourself moving much faster");
@@ -474,8 +462,8 @@ pub unsafe extern "C" fn quaff() {
             }
             msg_str("hey, this tastes great.  It make you feel warm all over");
         }
-        PotionType::Blind => do_pot_impl(PotionType::Blind, true as c_uchar),
-        PotionType::Levitate => do_pot_impl(PotionType::Levitate, true as c_uchar),
+        PotionType::Blind => do_pot_impl(PotionType::Blind, true),
+        PotionType::Levitate => do_pot_impl(PotionType::Levitate, true),
         _ => {
             msg_str("what an odd tasting potion!");
             return;
@@ -483,7 +471,7 @@ pub unsafe extern "C" fn quaff() {
     }
 
     status();
-    call_it((&mut pot_info[(*thing_o(obj)).o_which as usize] as *mut CObjInfo).cast());
+    call_it(&mut pot_info[(*thing_o(obj)).o_which as usize]);
     if discardit {
         discard(obj);
     }
@@ -603,6 +591,6 @@ pub unsafe extern "C" fn raise_level() {
 
 /// do_pot:
 /// Do a potion with the standard fuse/flag setup.
-unsafe fn do_pot(type_id: c_int, knowit: c_uchar) {
+unsafe fn do_pot(type_id: c_int, knowit: bool) {
     do_pot_impl(PotionType::from_raw(type_id), knowit);
 }

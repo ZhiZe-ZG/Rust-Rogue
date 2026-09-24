@@ -7,7 +7,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
 
 use crate::config::GameConfig;
-use crate::globals::monsters;
+use crate::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
@@ -40,16 +40,6 @@ const F_REAL: c_char = 0x10u8 as c_char;
 
 static mut master_mode_enabled: c_uchar = 1;
 static mut wizard: c_int = 0;
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CObjInfo {
-    pub oi_name: *mut c_char,
-    pub oi_prob: c_int,
-    pub oi_worth: c_int,
-    pub oi_guess: *mut c_char,
-    pub oi_know: c_uchar,
-}
 
 #[inline]
 unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
@@ -109,10 +99,6 @@ unsafe extern "C" {
     static mut running: c_uchar;
     static mut vf_hit: c_int;
     static mut player: CThing;
-    static mut scr_info: [CObjInfo; 18];
-    static mut pot_info: [CObjInfo; 14];
-    static mut ws_info: [CObjInfo; 14];
-    static mut ring_info: [CObjInfo; 16];
 
     fn isdigit(ch: c_int) -> c_int;
     fn free(ptr: *mut std::ffi::c_void);
@@ -175,13 +161,9 @@ pub unsafe extern "C" fn set_know(obj: *mut CThing, info: *mut CObjInfo) {
 
     let idx = (*thing_o(obj)).o_which as usize;
     let item = &mut *info.add(idx);
-    item.oi_know = true as c_uchar;
+    item.oi_know = true;
     (*thing_o(obj)).o_flags |= ISKNOW;
-    let guess = &mut item.oi_guess;
-    if !guess.is_null() {
-        free(*guess as *mut std::ffi::c_void);
-        *guess = ptr::null_mut();
-    }
+    item.oi_guess = None;
 }
 
 #[no_mangle]
@@ -387,15 +369,15 @@ mod tests {
             };
 
             let mut info = [CObjInfo {
-                oi_name: ptr::null_mut(),
+                oi_name: "",
                 oi_prob: 0,
                 oi_worth: 0,
-                oi_guess: ptr::null_mut(),
-                oi_know: false as c_uchar,
+                oi_guess: None,
+                oi_know: false,
             }];
 
             set_know(&mut obj, info.as_mut_ptr());
-            assert_eq!(info[0].oi_know, true as c_uchar);
+            assert_eq!(info[0].oi_know, true);
             assert!(((*thing_o(&mut obj)).o_flags & ISKNOW) != 0);
         }
     }

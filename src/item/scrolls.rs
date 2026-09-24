@@ -11,6 +11,7 @@ use crate::entity::monsters::{new_monster, randmonster};
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game;
 use crate::game::EQUIPMENT;
+use crate::globals::{scr_info, weap_info};
 use crate::init::pick_color;
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::thing_list::{discard, new_item};
@@ -106,22 +107,10 @@ impl ScrollType {
     }
 }
 
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CObjInfo {
-    pub oi_name: *mut c_char,
-    pub oi_prob: c_int,
-    pub oi_worth: c_int,
-    pub oi_guess: *mut c_char,
-    pub oi_know: c_uchar,
-}
-
 unsafe extern "C" {
     static mut terse: c_uchar;
     static mut no_command: c_int;
     static mut player: CThing;
-    static mut scr_info: [CObjInfo; MAXSCROLLS];
-    static mut weap_info: [CObjInfo; 10];
 
 }
 
@@ -235,13 +224,13 @@ pub unsafe extern "C" fn read_scroll() {
                     addmsg_str("s");
                 }
                 endmsg();
-                scr_info[ScrollType::Hold.index()].oi_know = true as c_uchar;
+                scr_info[ScrollType::Hold.index()].oi_know = true;
             } else {
                 msg_str("you feel a strange sense of loss");
             }
         }
         ScrollType::Sleep => {
-            scr_info[ScrollType::Sleep.index()].oi_know = true as c_uchar;
+            scr_info[ScrollType::Sleep.index()].oi_know = true;
             no_command += rnd(SLEEPTIME) + 4;
             (*thing_t(&raw mut player)).t_flags &= !ISRUN;
             msg_str("you fall asleep");
@@ -287,16 +276,15 @@ pub unsafe extern "C" fn read_scroll() {
         | ScrollType::IdentifyRingOrStick => {
             let id_type: [c_int; ScrollType::IdentifyRingOrStick.index() + 1] =
                 [0, 0, 0, 0, 0, POTION, SCROLL, WEAPON, ARMOR, R_OR_S];
-            scr_info[(*thing_o(obj)).o_which as usize].oi_know = true as c_uchar;
+            scr_info[(*thing_o(obj)).o_which as usize].oi_know = true;
             msg_str(&format!(
                 "this scroll is an {} scroll",
-                CStr::from_ptr(scr_info[(*thing_o(obj)).o_which as usize].oi_name)
-                    .to_string_lossy()
+                scr_info[(*thing_o(obj)).o_which as usize].oi_name
             ));
             whatis(true as c_uchar, id_type[(*thing_o(obj)).o_which as usize]);
         }
         ScrollType::Map => {
-            scr_info[ScrollType::Map.index()].oi_know = true as c_uchar;
+            scr_info[ScrollType::Map.index()].oi_know = true;
             msg_str("oh, now this scroll has a map on it");
 
             for y in 1..(GameConfig::SCREEN_LINES - 1) {
@@ -331,7 +319,7 @@ pub unsafe extern "C" fn read_scroll() {
                 it = (*thing_o(it)).l_next;
             }
             if found != 0 {
-                scr_info[ScrollType::FindFood.index()].oi_know = true as c_uchar;
+                scr_info[ScrollType::FindFood.index()].oi_know = true;
                 show_win("Your nose tingles and you smell food.--More--");
             } else {
                 msg_str("your nose tingles");
@@ -341,7 +329,7 @@ pub unsafe extern "C" fn read_scroll() {
             let cur_room = proom();
             teleport();
             if cur_room != proom() {
-                scr_info[ScrollType::Teleport.index()].oi_know = true as c_uchar;
+                scr_info[ScrollType::Teleport.index()].oi_know = true;
             }
         }
         ScrollType::Enchant => {
@@ -356,10 +344,7 @@ pub unsafe extern "C" fn read_scroll() {
                 }
                 msg_str(&format!(
                     "your {} glows {} for a moment",
-                    CStr::from_ptr(
-                        weap_info[(*thing_o(EQUIPMENT.weapon())).o_which as usize].oi_name,
-                    )
-                    .to_string_lossy(),
+                    weap_info[(*thing_o(EQUIPMENT.weapon())).o_which as usize].oi_name,
                     pick_color("blue")
                 ));
             }
@@ -402,7 +387,7 @@ pub unsafe extern "C" fn read_scroll() {
     look(true as c_uchar);
     status();
 
-    call_it((&mut scr_info[(*thing_o(obj)).o_which as usize] as *mut CObjInfo).cast());
+    call_it(&mut scr_info[(*thing_o(obj)).o_which as usize]);
     if discardit {
         discard(obj);
     }

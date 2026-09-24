@@ -13,6 +13,9 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::entity::player::{CThing, CThingObject};
+use crate::globals::{
+    arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
+};
 use crate::item::rings::RingType;
 use crate::item::sticks::fix_stick;
 use crate::item::thing_list::new_item;
@@ -40,33 +43,16 @@ const AMULET: c_int = b',' as c_int;
 const ISCURSED: c_int = 0o000001;
 const ISKNOW: c_int = 0o000200;
 
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CObjInfo {
-    pub oi_name: *mut c_char,
-    pub oi_prob: c_int,
-    pub oi_worth: c_int,
-    pub oi_guess: *mut c_char,
-    pub oi_know: c_uchar,
-}
-
 unsafe extern "C" {
     static mut after: c_uchar;
     static mut a_class: [c_int; 26];
     static mut amulet: c_uchar;
-    static mut arm_info: [CObjInfo; MAXARMORS];
     static mut fruit: [c_char; MAXSTR];
     static mut inv_describe: c_uchar;
     static mut no_food: c_int;
     static mut player: CThing;
-    static mut pot_info: [CObjInfo; MAXPOTIONS];
     static mut prbuf: [c_char; MAXSTR];
-    static mut ring_info: [CObjInfo; MAXRINGS];
-    static mut scr_info: [CObjInfo; MAXSCROLLS];
     static mut terse: c_uchar;
-    static mut things: [CObjInfo; NUMTHINGS];
-    static mut weap_info: [CObjInfo; MAXWEAPONS + 1];
-    static mut ws_info: [CObjInfo; MAXSTICKS];
 
     fn isupper(ch: c_int) -> c_int;
     fn sprintf(buf: *mut c_char, fmt: *const c_char, ...) -> c_int;
@@ -99,18 +85,18 @@ unsafe fn starts_with_article(name: *const c_char) -> *mut c_char {
 }
 
 #[inline]
-unsafe fn item_name(typ: c_int, which: c_int) -> *mut c_char {
+unsafe fn item_name(typ: c_int, which: c_int) -> *const c_char {
     match typ {
-        POTION => pot_info[which as usize].oi_name,
-        SCROLL => scr_info[which as usize].oi_name,
-        RING => ring_info[which as usize].oi_name,
-        STICK => ws_info[which as usize].oi_name,
-        WEAPON => weap_info[which as usize].oi_name,
-        ARMOR => arm_info[which as usize].oi_name,
-        FOOD => c"food".as_ptr() as *mut c_char,
-        GOLD => c"gold".as_ptr() as *mut c_char,
-        AMULET => c"the Amulet of Yendor".as_ptr() as *mut c_char,
-        _ => c"item".as_ptr() as *mut c_char,
+        POTION => pot_info[which as usize].oi_name.as_ptr().cast(),
+        SCROLL => scr_info[which as usize].oi_name.as_ptr().cast(),
+        RING => ring_info[which as usize].oi_name.as_ptr().cast(),
+        STICK => ws_info[which as usize].oi_name.as_ptr().cast(),
+        WEAPON => weap_info[which as usize].oi_name.as_ptr().cast(),
+        ARMOR => arm_info[which as usize].oi_name.as_ptr().cast(),
+        FOOD => c"food".as_ptr(),
+        GOLD => c"gold".as_ptr(),
+        AMULET => c"the Amulet of Yendor".as_ptr(),
+        _ => c"item".as_ptr(),
     }
 }
 
@@ -143,13 +129,13 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
     match typ {
         POTION => {
             if count == 1 {
-                sprintf(empty, c"A %s".as_ptr(), pot_info[which as usize].oi_name);
+                sprintf(empty, c"A %s".as_ptr(), pot_info[which as usize].oi_name.as_ptr().cast::<c_char>());
             } else {
                 sprintf(
                     empty,
                     c"%d %ss".as_ptr(),
                     count,
-                    pot_info[which as usize].oi_name,
+                    pot_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
                 );
             }
         }
@@ -158,26 +144,26 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
                 sprintf(
                     empty,
                     c"A %s ring".as_ptr(),
-                    ring_info[which as usize].oi_name,
+                    ring_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
                 );
             } else {
                 sprintf(
                     empty,
                     c"%d %s rings".as_ptr(),
                     count,
-                    ring_info[which as usize].oi_name,
+                    ring_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
                 );
             }
         }
         STICK => {
             if count == 1 {
-                sprintf(empty, c"A %s".as_ptr(), ws_info[which as usize].oi_name);
+                sprintf(empty, c"A %s".as_ptr(), ws_info[which as usize].oi_name.as_ptr().cast::<c_char>());
             } else {
                 sprintf(
                     empty,
                     c"%d %ss".as_ptr(),
                     count,
-                    ws_info[which as usize].oi_name,
+                    ws_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
                 );
             }
         }
@@ -186,14 +172,14 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
                 sprintf(
                     empty,
                     c"A scroll of %s".as_ptr(),
-                    scr_info[which as usize].oi_name,
+                    scr_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
                 );
             } else {
                 sprintf(
                     empty,
                     c"%d scrolls of %s".as_ptr(),
                     count,
-                    scr_info[which as usize].oi_name,
+                    scr_info[which as usize].oi_name.as_ptr().cast::<c_char>(),
                 );
             }
         }
@@ -205,7 +191,7 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
             }
         }
         WEAPON => {
-            let name = weap_info[which as usize].oi_name;
+            let name = weap_info[which as usize].oi_name.as_ptr().cast::<c_char>();
             if (*thing_o(obj)).o_count > 1 {
                 sprintf(empty, c"%d %ss".as_ptr(), count, name);
             } else {
@@ -219,7 +205,7 @@ pub unsafe extern "C" fn inv_name(obj: *mut CThing, drop: c_uchar) -> *mut c_cha
             }
         }
         ARMOR => {
-            let name = arm_info[which as usize].oi_name;
+            let name = arm_info[which as usize].oi_name.as_ptr().cast::<c_char>();
             sprintf(empty, c"%s".as_ptr(), name);
             if !(*thing_o(obj)).o_label.is_null() {
                 let label = (*thing_o(obj)).o_label;
@@ -464,7 +450,7 @@ pub unsafe extern "C" fn nameit(
     if op.is_null() || obj.is_null() {
         return;
     }
-    if ((*op).oi_know != 0) || !(*op).oi_guess.is_null() {
+    if (*op).oi_know || (*op).oi_guess.is_some() {
         let mut buf = prbuf.as_mut_ptr();
         if (*thing_o(obj)).o_count == 1 {
             sprintf(buf, c"A %s ".as_ptr(), typ);
@@ -472,19 +458,19 @@ pub unsafe extern "C" fn nameit(
             sprintf(buf, c"%d %ss ".as_ptr(), (*thing_o(obj)).o_count, typ);
         }
         let tail = buf.add(strlen(buf));
-        if (*op).oi_know != 0 {
+        if (*op).oi_know {
             sprintf(
                 tail,
                 c"of %s%s(%s)".as_ptr(),
-                (*op).oi_name,
+                (*op).oi_name.as_ptr().cast::<c_char>(),
                 prfunc(obj),
                 which,
             );
-        } else if !(*op).oi_guess.is_null() {
+        } else if let Some(guess) = &(*op).oi_guess {
             sprintf(
                 tail,
                 c"called %s%s(%s)".as_ptr(),
-                (*op).oi_guess,
+                guess.as_ptr().cast::<c_char>(),
                 prfunc(obj),
                 which,
             );

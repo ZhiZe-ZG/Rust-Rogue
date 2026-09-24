@@ -6,6 +6,7 @@ use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};
 use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
+use crate::globals::ws_info;
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
 use crate::rip::death;
@@ -72,23 +73,11 @@ impl StickType {
 
 const MAXSTICKS: usize = StickType::COUNT;
 
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CObjInfo {
-    pub oi_name: *mut c_char,
-    pub oi_prob: c_int,
-    pub oi_worth: c_int,
-    pub oi_guess: *mut c_char,
-    pub oi_know: c_uchar,
-}
-
 unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
     static mut delta: IVec2;
-    static mut ws_info: [CObjInfo; MAXSTICKS];
     static mut player: CThing;
-    static mut weap_info: [CObjInfo; 10];
 
 }
 
@@ -187,7 +176,7 @@ pub unsafe extern "C" fn do_zap() {
 
     match kind {
         Some(StickType::Light) => {
-            ws_info[StickType::Light.index()].oi_know = true as c_uchar;
+            ws_info[StickType::Light.index()].oi_know = true;
             msg_str("the corridor glows and then fades");
         }
         Some(StickType::Drain) => {
@@ -214,7 +203,7 @@ pub unsafe extern "C" fn do_zap() {
             }
         }
         Some(StickType::Missile) => {
-            ws_info[StickType::Missile.index()].oi_know = true as c_uchar;
+            ws_info[StickType::Missile.index()].oi_know = true;
             let mut bolt = std::mem::zeroed::<CThing>();
             (*thing_o(&mut bolt)).o_type = WEAPON;
             (*thing_o(&mut bolt)).o_which = FLAME;
@@ -258,7 +247,7 @@ pub unsafe extern "C" fn do_zap() {
             let mut hero = hero_pos();
             fire_bolt(&mut hero, &raw mut delta, name.as_ptr() as *mut c_char);
             if let Some(kind) = kind {
-                ws_info[kind.index()].oi_know = true as c_uchar;
+                ws_info[kind.index()].oi_know = true;
             }
         }
         Some(StickType::Nop) => {}
@@ -294,7 +283,6 @@ pub unsafe extern "C" fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, name: *mu
     set_c_string(&mut (*thing_o(&mut bolt)).o_hurldmg, "6x6");
     (*thing_o(&mut bolt)).o_hplus = 100;
     (*thing_o(&mut bolt)).o_dplus = 0;
-    weap_info[FLAME as usize].oi_name = name;
 
     pos.y += (*dir).y;
     pos.x += (*dir).x;

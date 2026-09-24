@@ -14,6 +14,7 @@ use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
 use crate::entity::player::{do_move, do_run, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
+use crate::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::help::{help, identify};
 use crate::item::armor::{take_off, wear};
 use crate::item::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
@@ -134,19 +135,6 @@ const fn ctrl(c: u8) -> u8 {
 /// compiled in, matching the style used by wizard.rs, chase.rs and friends.
 const MASTER: bool = true;
 
-// ─── C ABI structs ────────────────────────────────────────────────────────────
-
-/// Mirrors the C `struct obj_info`.
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CObjInfo {
-    pub oi_name: *mut c_char,
-    pub oi_prob: c_int,
-    pub oi_worth: c_int,
-    pub oi_guess: *mut c_char,
-    pub oi_know: c_uchar,
-}
-
 // ─── Static locals for command() ─────────────────────────────────────────────
 
 static mut COUNTCH: c_char = 0;
@@ -202,10 +190,6 @@ unsafe extern "C" {
     static mut p_colors: [*mut c_char; 14];
     static mut s_names: [*mut c_char; 18];
     static mut ws_made: [*mut c_char; 14];
-    static mut ring_info: [CObjInfo; 14];
-    static mut pot_info: [CObjInfo; 14];
-    static mut scr_info: [CObjInfo; 18];
-    static mut ws_info: [CObjInfo; 14];
     static mut wizard: c_int;
 }
 
@@ -1030,64 +1014,79 @@ pub unsafe extern "C" fn call() {
         return;
     }
 
-    let mut op: *mut CObjInfo = std::ptr::null_mut();
-    let mut guess: *mut *mut c_char = std::ptr::null_mut();
-    let mut know: *mut c_uchar = std::ptr::null_mut();
-    let mut elsewise: *mut c_char = std::ptr::null_mut();
+    let otype = (*thing_o(obj)).o_type as u8;
 
-    match (*thing_o(obj)).o_type as u8 {
-        x if x == RING as u8 => {
-            op = ring_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize);
-            elsewise = r_stones[(*thing_o(obj)).o_which as usize];
-            know = &raw mut (*op).oi_know;
-            guess = &raw mut (*op).oi_guess;
-            if !(*guess).is_null() {
-                elsewise = *guess;
-            }
-        }
-        x if x == POTION as u8 => {
-            op = pot_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize);
-            elsewise = p_colors[(*thing_o(obj)).o_which as usize];
-            know = &raw mut (*op).oi_know;
-            guess = &raw mut (*op).oi_guess;
-            if !(*guess).is_null() {
-                elsewise = *guess;
-            }
-        }
-        x if x == SCROLL as u8 => {
-            op = scr_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize);
-            elsewise = s_names[(*thing_o(obj)).o_which as usize];
-            know = &raw mut (*op).oi_know;
-            guess = &raw mut (*op).oi_guess;
-            if !(*guess).is_null() {
-                elsewise = *guess;
-            }
-        }
-        x if x == STICK as u8 => {
-            op = ws_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize);
-            elsewise = ws_made[(*thing_o(obj)).o_which as usize];
-            know = &raw mut (*op).oi_know;
-            guess = &raw mut (*op).oi_guess;
-            if !(*guess).is_null() {
-                elsewise = *guess;
-            }
-        }
-        x if x == FOOD as u8 => {
-            msg_str("you can't call that anything");
-            return;
-        }
-        _ => {
-            guess = &raw mut (*thing_o(obj)).o_label;
-            know = std::ptr::null_mut();
-            elsewise = (*thing_o(obj)).o_label;
-        }
+    if otype == FOOD as u8 {
+        msg_str("you can't call that anything");
+        return;
     }
 
-    if !know.is_null() && *know != 0 {
+    // Weapons and armor store their player-assigned name directly in `o_label`.
+    if otype != RING as u8 && otype != POTION as u8 && otype != SCROLL as u8 && otype != STICK as u8
+    {
+        let label = &mut (*thing_o(obj)).o_label;
+        let elsewise = *label;
+
+        if !elsewise.is_null() {
+            if terse == 0 {
+                addmsg_str("Was ");
+            }
+            msg_str(&format!(
+                "called \"{}\"",
+                CStr::from_ptr(elsewise).to_string_lossy()
+            ));
+        }
+
+        if terse != 0 {
+            msg_str("call it: ");
+        } else {
+            msg_str("what do you want to call it? ");
+        }
+
+        if elsewise.is_null() {
+            prbuf[0] = 0;
+        } else {
+            strcpy(prbuf.as_mut_ptr(), elsewise);
+        }
+        if get_str(prbuf.as_mut_ptr().cast(), Window::Stdscr) == NORM {
+            if !(*label).is_null() {
+                free(*label as *mut c_void);
+            }
+            let len = strlen(prbuf.as_ptr()) + 1;
+            let buf = malloc(len) as *mut c_char;
+            if !buf.is_null() {
+                strcpy(buf, prbuf.as_ptr());
+                *label = buf;
+            }
+        }
+        return;
+    }
+
+    // Magic items keep their call-name in the obj-info table entry.
+    let op = match otype {
+        x if x == RING as u8 => ring_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize),
+        x if x == POTION as u8 => pot_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize),
+        x if x == SCROLL as u8 => scr_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize),
+        _ => ws_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize),
+    };
+
+    let mut elsewise: *mut c_char = match otype {
+        x if x == RING as u8 => r_stones[(*thing_o(obj)).o_which as usize],
+        x if x == POTION as u8 => p_colors[(*thing_o(obj)).o_which as usize],
+        x if x == SCROLL as u8 => s_names[(*thing_o(obj)).o_which as usize],
+        _ => ws_made[(*thing_o(obj)).o_which as usize],
+    };
+
+    if let Some(guess) = &(*op).oi_guess {
+        elsewise = guess.as_ptr().cast::<c_char>().cast_mut();
+    }
+
+    if (*op).oi_know {
         msg_str("that has already been identified");
         return;
     }
-    if !elsewise.is_null() && !guess.is_null() && elsewise == *guess {
+
+    if (*op).oi_guess.is_some() {
         if terse == 0 {
             addmsg_str("Was ");
         }
@@ -1109,15 +1108,8 @@ pub unsafe extern "C" fn call() {
         strcpy(prbuf.as_mut_ptr(), elsewise);
     }
     if get_str(prbuf.as_mut_ptr().cast(), Window::Stdscr) == NORM {
-        if !(*guess).is_null() {
-            free(*guess as *mut c_void);
-        }
-        let len = strlen(prbuf.as_ptr()) + 1;
-        let buf = malloc(len) as *mut c_char;
-        if !buf.is_null() {
-            strcpy(buf, prbuf.as_ptr());
-            *guess = buf;
-        }
+        let text = CStr::from_ptr(prbuf.as_ptr()).to_string_lossy().into_owned();
+        (*op).oi_guess = Some(text);
     }
 }
 

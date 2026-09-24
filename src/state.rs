@@ -30,6 +30,7 @@
 //! SUCH DAMAGE.
 
 use glam::IVec2;
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 
 use crate::daemon::CDelayedAction;
@@ -38,9 +39,11 @@ use crate::entity::chase::runners;
 use crate::entity::monster_list::MLIST;
 use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
-use crate::globals::{monsters, CMonster};
+use crate::globals::{
+    arm_info, monsters, pot_info, ring_info, scr_info, things, weap_info, ws_info, CMonster,
+    CObjInfo,
+};
 use crate::item::thing_list::{allocated_count, new_item};
-use crate::item::things::CObjInfo;
 use crate::level::{PassageLinks, Room};
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -218,15 +221,6 @@ unsafe extern "C" {
     // rooms / map
     static mut max_stats: Stats;
     static mut oldrp: Option<usize>;
-
-    // object info tables
-    static mut things: [CObjInfo; NUMTHINGS];
-    static mut arm_info: [CObjInfo; MAXARMORS];
-    static mut pot_info: [CObjInfo; MAXPOTIONS];
-    static mut ring_info: [CObjInfo; MAXRINGS];
-    static mut scr_info: [CObjInfo; MAXSCROLLS];
-    static mut weap_info: [CObjInfo; MAXWEAPONS + 1];
-    static mut ws_info: [CObjInfo; MAXSTICKS];
 
     // daemons (defined in daemon.rs as `d_list`) and misc C-visible globals
     static mut d_list: [CDelayedAction; MAXDAEMONS];
@@ -1411,7 +1405,9 @@ unsafe fn rs_write_obj_info(savef: *mut CFile, info: *mut CObjInfo, count: c_int
         // oi_name is constant, defined at compile time in all cases
         let _ = rs_write_int(savef, (*info.add(n as usize)).oi_prob);
         let _ = rs_write_int(savef, (*info.add(n as usize)).oi_worth);
-        let _ = rs_write_string(savef, (*info.add(n as usize)).oi_guess);
+        let guess = (*info.add(n as usize)).oi_guess.as_deref();
+        let guess_ptr = guess.map_or(std::ptr::null(), |s| s.as_ptr());
+        let _ = rs_write_string(savef, guess_ptr as *const c_char);
         let _ = rs_write_boolean(savef, (*info.add(n as usize)).oi_know as c_int);
         n += 1;
     }
@@ -1438,8 +1434,16 @@ unsafe fn rs_read_obj_info(inf: *mut CFile, mi: *mut CObjInfo, count: c_int) -> 
         // oi_name is constant, defined at compile time in all cases
         let _ = rs_read_int(inf, &mut (*mi.add(n as usize)).oi_prob);
         let _ = rs_read_int(inf, &mut (*mi.add(n as usize)).oi_worth);
-        let _ = rs_read_new_string(inf, &mut (*mi.add(n as usize)).oi_guess);
-        let _ = rs_read_boolean(inf, &mut (*mi.add(n as usize)).oi_know);
+        let mut guess_ptr: *mut c_char = std::ptr::null_mut();
+        let _ = rs_read_new_string(inf, &mut guess_ptr);
+        (*mi.add(n as usize)).oi_guess = if guess_ptr.is_null() {
+            None
+        } else {
+            Some(CStr::from_ptr(guess_ptr).to_string_lossy().into_owned())
+        };
+        let mut know: c_uchar = 0;
+        let _ = rs_read_boolean(inf, &mut know);
+        (*mi.add(n as usize)).oi_know = know != 0;
         n += 1;
     }
 

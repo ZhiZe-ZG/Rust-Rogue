@@ -14,6 +14,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::globals::weap_info;
 use crate::item::thing_list::discard;
 use crate::item::things::{dropcheck, inv_name};
 
@@ -31,15 +32,6 @@ const MAXWEAPONS: usize = 9;
 
 const ISMISL: c_int = 0o000004;
 const ISMANY: c_int = 0o000010;
-
-#[repr(C)]
-pub struct CObjInfo {
-    pub oi_name: *mut c_char,
-    pub oi_prob: c_int,
-    pub oi_worth: c_int,
-    pub oi_guess: *mut c_char,
-    pub oi_know: c_uchar,
-}
 
 #[derive(Copy, Clone)]
 struct InitWeap {
@@ -117,7 +109,6 @@ unsafe extern "C" {
     static mut after: c_uchar;
     static mut has_hit: c_uchar;
     static mut player: CThing;
-    static mut weap_info: [CObjInfo; MAXWEAPONS + 1];
 
     fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
@@ -252,7 +243,7 @@ pub unsafe extern "C" fn fall(obj: *mut CThing, pr: c_uchar) {
         }
         msg_str(&format!(
             "the {} vanishes as it hits the ground",
-            CStr::from_ptr(weap_info[(*thing_o(obj)).o_which as usize].oi_name).to_string_lossy()
+            weap_info[(*thing_o(obj)).o_which as usize].oi_name
         ));
     }
 

@@ -25,7 +25,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
-use crate::globals::monsters;
+use crate::globals::{monsters, weap_info};
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach, detach, discard, new_item};
 use crate::item::things::inv_name;
@@ -114,7 +114,6 @@ static mut PRNAME_BUF: [c_char; MAXSTR] = [0; MAXSTR];
 
 unsafe extern "C" {
     static mut player: CThing;
-    static mut weap_info: [CObjInfo; 10]; // MAXWEAPONS + 1
     static mut e_levels: [c_int; 21];
 
     static mut count: c_int;
@@ -143,17 +142,6 @@ unsafe extern "C" {
     fn atoi(s: *const c_char) -> c_int;
     fn sprintf(s: *mut c_char, fmt: *const c_char, ...) -> c_int;
 
-}
-
-// ─── Local structs (repr(C)) ──────────────────────────────────────────────────
-
-#[repr(C)]
-pub struct CObjInfo {
-    pub oi_name: *mut c_char,
-    pub oi_prob: c_int,
-    pub oi_worth: c_int,
-    pub oi_guess: *mut c_char,
-    pub oi_know: c_uchar,
 }
 
 // ─── Inline helpers ───────────────────────────────────────────────────────────
@@ -701,7 +689,7 @@ pub unsafe extern "C" fn thunk(weap: *mut CThing, mname: *const c_char, noend: c
     if (*thing_o(weap)).o_type == WEAPON {
         addmsg_str(&format!(
             "the {} hits ",
-            CStr::from_ptr(weap_info[(*thing_o(weap)).o_which as usize].oi_name).to_string_lossy()
+            weap_info[(*thing_o(weap)).o_which as usize].oi_name
         ));
     } else {
         addmsg_str("you hit ");
@@ -782,7 +770,7 @@ pub unsafe extern "C" fn bounce(weap: *mut CThing, mname: *const c_char, noend: 
     if (*thing_o(weap)).o_type == WEAPON {
         addmsg_str(&format!(
             "the {} misses ",
-            CStr::from_ptr(weap_info[(*thing_o(weap)).o_which as usize].oi_name).to_string_lossy()
+            weap_info[(*thing_o(weap)).o_which as usize].oi_name
         ));
     } else {
         addmsg_str("you missed ");

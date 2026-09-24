@@ -9,6 +9,9 @@
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
 use crate::game::EQUIPMENT;
+use crate::globals::{
+    arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
+};
 use crate::rnd::rnd;
 
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
@@ -51,18 +54,6 @@ const ISKNOW: c_int = 0o000200;
 const ISHALU: c_short = 0o004000;
 
 use std::os::raw::c_short;
-
-// ─── Data types ──────────────────────────────────────────────────────────────
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CObjInfo {
-    pub oi_name: *mut c_char,
-    pub oi_prob: c_int,
-    pub oi_worth: c_int,
-    pub oi_guess: *mut c_char,
-    pub oi_know: c_uchar,
-}
 
 /// Matches the C `STONE` typedef used for ring stone names and values.
 #[repr(C)]
@@ -306,15 +297,6 @@ unsafe extern "C" {
 
     // Scratch string buffer
     static mut prbuf: [c_char; MAXSTR];
-
-    // Item-info probability tables
-    static mut ring_info: [CObjInfo; MAXRINGS];
-    static mut things: [CObjInfo; NUMTHINGS];
-    static mut pot_info: [CObjInfo; MAXPOTIONS];
-    static mut scr_info: [CObjInfo; MAXSCROLLS];
-    static mut ws_info: [CObjInfo; MAXSTICKS];
-    static mut weap_info: [CObjInfo; MAXWEAPONS + 1];
-    static mut arm_info: [CObjInfo; MAXARMORS];
 }
 
 // ─── Extern C functions ──────────────────────────────────────────────────────

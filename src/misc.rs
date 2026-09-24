@@ -3,6 +3,7 @@
 //! Ported from `src/c/misc.c` to Rust: gold, hunger, the floor map, and other
 //! helpers shared across the game loop.
 use crate::config::GameConfig;
+use crate::globals::CObjInfo;
 use crate::daemon::{extinguish, fuse};
 use crate::daemons::nohaste;
 use crate::entity::chase::runto;
@@ -53,15 +54,6 @@ const ESCAPE: c_int = 27;
 const NORM: c_int = 0;
 const F_SEEN: c_uchar = 0x40;
 
-#[repr(C)]
-pub struct CObjInfo {
-    pub oi_name: *mut c_char,
-    pub oi_prob: c_int,
-    pub oi_worth: c_int,
-    pub oi_guess: *mut c_char,
-    pub oi_know: c_uchar,
-}
-
 unsafe extern "C" {
     static mut after: c_uchar;
     static mut again: c_uchar;
@@ -90,9 +82,7 @@ unsafe extern "C" {
     static mut see_floor: bool;
     static mut terse: c_uchar;
 
-    fn free(ptr: *mut c_void);
     fn isupper(c: c_int) -> c_int;
-    fn malloc(size: usize) -> *mut c_void;
     fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
     fn tolower(c: c_int) -> c_int;
@@ -407,28 +397,18 @@ pub unsafe extern "C" fn spread(nm: c_int) -> c_int {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn call_it(info: *mut CObjInfo) {
-    if (*info).oi_know != 0 {
-        if !(*info).oi_guess.is_null() {
-            free((*info).oi_guess as *mut c_void);
-            (*info).oi_guess = std::ptr::null_mut();
-        }
-    } else if (*info).oi_guess.is_null() {
+pub unsafe extern "C" fn call_it(info: &mut CObjInfo) {
+    if info.oi_know {
+        info.oi_guess = None;
+    } else if info.oi_guess.is_none() {
         if terse != 0 {
             msg_str("call it: ");
         } else {
             msg_str("what do you want to call it? ");
         }
         if get_str(prbuf.as_mut_ptr().cast(), crate::ui::Window::Stdscr) == NORM {
-            if !(*info).oi_guess.is_null() {
-                free((*info).oi_guess as *mut c_void);
-            }
-            let len = strlen(prbuf.as_ptr()) + 1;
-            let buf = malloc(len) as *mut c_char;
-            if !buf.is_null() {
-                strcpy(buf, prbuf.as_ptr());
-                (*info).oi_guess = buf;
-            }
+            let text = CStr::from_ptr(prbuf.as_ptr()).to_string_lossy().into_owned();
+            info.oi_guess = Some(text);
         }
     }
 }
