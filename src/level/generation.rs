@@ -5,7 +5,6 @@
 //! room when it becomes visible.
 
 use glam::IVec2;
-use std::os::raw::{c_int, c_short};
 
 use crate::config::GameConfig;
 use crate::draw::winat;
@@ -13,19 +12,14 @@ use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::{CThing, CThingMonster};
 use crate::game::{clear_level, with_current_level_mut};
+use crate::globals::{max_level, no_food, player};
 use crate::item::thing_list::free_list;
 use crate::ui::output;
 
 use super::presence::populate_level;
 use super::structure::Room;
 
-const ISHELD: c_short = 0o0000400;
-
-unsafe extern "C" {
-    static mut max_level: c_int;
-    static mut no_food: c_int;
-    static mut player: CThing;
-}
+const ISHELD: i16 = 0o0000400;
 
 /// Interpret `tp` as a monster (`CThingMonster`).
 #[inline]

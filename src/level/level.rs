@@ -4,8 +4,6 @@
 //! for the current dungeon level, plus the process-wide singleton holding
 //! the live level.
 
-use std::os::raw::c_int;
-
 use crate::rnd::rnd;
 use glam::IVec2;
 
@@ -349,7 +347,7 @@ impl Level {
     /// found. Returns the room's index into [`Level::rooms`].
     pub fn rnd_room(&self) -> usize {
         loop {
-            let rm = rnd(GameConfig::MAX_ROOMS as c_int) as usize;
+            let rm = rnd(GameConfig::MAX_ROOMS as i32) as usize;
             if !self.rooms[rm].is_gone() {
                 return rm;
             }

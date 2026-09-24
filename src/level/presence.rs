@@ -8,7 +8,6 @@
 //! calls these after the rooms/passages have been dug and mirrored.
 
 use glam::IVec2;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
 use crate::config::GameConfig;
 use crate::daemons::visuals;
@@ -18,6 +17,7 @@ use crate::entity::monster_list::MLIST;
 use crate::entity::monsters::{give_pack, new_monster, randmonster};
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game;
+use crate::globals::{amulet, max_level, ntraps, player, seenstairs};
 use crate::item::potions::turn_see;
 use crate::item::thing_list::new_item;
 use crate::item::things::new_thing;
@@ -28,25 +28,17 @@ use super::level::{with_current_level_mut, LevelFlags};
 use super::tile::{Tile, Trap};
 
 // -- Object/thing flags --
-const ISMANY: c_int = 0o0000010;
-const ISMEAN: c_short = 0o0004000;
-const SEEMONST: c_short = 0o040000;
-const ISHALU: c_short = 0o0004000;
+const ISMANY: i32 = 0o0000010;
+const ISMEAN: i16 = 0o0004000;
+const SEEMONST: i16 = 0o040000;
+const ISHALU: i16 = 0o0004000;
 
 // -- Glyphs --
-const AMULET: c_char = b',' as c_char;
-const GOLD: c_char = b'*' as c_char;
-const PLAYER: c_char = b'@' as c_char;
+const AMULET: u8 = b',';
+const GOLD: u8 = b'*';
+const PLAYER: u8 = b'@';
 
-const GOLDGRP: c_int = 1;
-
-unsafe extern "C" {
-    static mut amulet: bool;
-    static mut max_level: c_int;
-    static mut ntraps: c_int;
-    static mut player: CThing;
-    static mut seenstairs: bool;
-}
+const GOLDGRP: i32 = 1;
 
 /// Interpret `tp` as an object (`CThingObject`).
 #[inline]
@@ -71,7 +63,7 @@ unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
 pub unsafe fn find_floor(
     room_idx: Option<usize>,
     cp: *mut IVec2,
-    limit: c_int,
+    limit: i32,
     monst: bool,
 ) -> bool {
     if cp.is_null() {
@@ -211,7 +203,7 @@ unsafe fn place_room_contents() {
                 (*og).o_pos = gold_pos;
                 (*og).o_flags = ISMANY;
                 (*og).o_group = GOLDGRP;
-                (*og).o_type = GOLD as c_int;
+                (*og).o_type = GOLD as i32;
                 with_current_level_mut(|current| current.items.attach(gold));
             }
         }
@@ -265,9 +257,9 @@ unsafe fn put_things() {
         (*og).o_hplus = 0;
         (*og).o_dplus = 0;
         (*og).o_damage = [
-            b'0' as c_char,
-            b'x' as c_char,
-            b'0' as c_char,
+            b'0' as i8,
+            b'x' as i8,
+            b'0' as i8,
             0,
             0,
             0,
@@ -275,9 +267,9 @@ unsafe fn put_things() {
             0,
         ];
         (*og).o_hurldmg = [
-            b'0' as c_char,
-            b'x' as c_char,
-            b'0' as c_char,
+            b'0' as i8,
+            b'x' as i8,
+            b'0' as i8,
             0,
             0,
             0,
@@ -285,7 +277,7 @@ unsafe fn put_things() {
             0,
         ];
         (*og).o_arm = 11;
-        (*og).o_type = AMULET as c_int;
+        (*og).o_type = AMULET as i32;
         let pos = &raw mut (*og).o_pos;
         find_floor(None, pos, 0, false);
     }
@@ -337,7 +329,7 @@ unsafe fn place_stairs() {
             .map
             .set(stairs.y as usize, stairs.x as usize, Tile::Stairs);
     });
-    seenstairs = false;
+    seenstairs = false as u8;
 }
 
 /// Link every monster on the level to the room its position falls in.
@@ -355,14 +347,14 @@ unsafe fn place_hero() {
     find_floor(None, &raw mut (*thing_t(&raw mut player)).t_pos, 0, true);
     enter_room(&raw mut (*thing_t(&raw mut player)).t_pos);
     output::write_glyph_at(
-        IVec2::new(
-            (*thing_t(&raw mut player)).t_pos.x,
-            (*thing_t(&raw mut player)).t_pos.y,
-        ),
-        (PLAYER as u8) as char,
+            IVec2::new(
+                (*thing_t(&raw mut player)).t_pos.x,
+                (*thing_t(&raw mut player)).t_pos.y,
+            ),
+        PLAYER as char,
     );
     if ((*thing_t(&raw mut player)).t_flags & SEEMONST) != 0 {
-        turn_see(false as c_uchar);
+        turn_see(false as u8);
     }
     if ((*thing_t(&raw mut player)).t_flags & ISHALU) != 0 {
         visuals();
