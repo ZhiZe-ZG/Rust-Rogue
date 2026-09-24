@@ -24,4 +24,4 @@ pub use roomgraph::RoomGraph;
 pub use rooms::{Door, DoorKind, Room};
 pub use structure::Structure;
 pub use tile::Tile;
-pub use trap::{be_trapped, Trap};
+pub use trap::{Trap, TrapHit};

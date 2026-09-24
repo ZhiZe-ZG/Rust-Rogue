@@ -8,14 +8,25 @@ use crate::draw::{
     turnref as draw_turnref, winat,
 };
 use crate::entity::chase::{diag_ok, roomin};
-use crate::entity::fight::fight;
+use crate::entity::fight::{fight, swing};
+use crate::entity::monsters::save;
 use crate::entity::rndmove::rndmove;
 use crate::game;
+use crate::game::EQUIPMENT;
+use crate::item::armor::rust_armor;
 use crate::item::pack::floor_at;
-use crate::level::{be_trapped, Trap};
+use crate::item::rings::RingType;
+use crate::item::thing_list::new_item;
+use crate::item::weapons::{fall, init_weapon};
+use crate::level::{new_level, Trap, TrapHit};
+use crate::machdep::flush_type;
+use crate::misc::{chg_str, spread};
+use crate::rip::death;
 use crate::rnd::rnd;
+use crate::startup::roll;
 use crate::ui::output;
 use crate::ui::output::msg_str;
+use crate::wizard::teleport;
 use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
@@ -34,9 +45,13 @@ const ISBLIND: c_short = 0o0000004;
 const ISHELD: c_short = 0o0000400;
 const ISHUH: c_short = 0o0001000;
 const ISLEVIT: c_short = 0o0000010;
+const ISRUN: c_short = 0o020000;
 
 const F_PASS: c_char = 0x80u8 as c_char;
 const F_REAL: c_char = 0x10u8 as c_char;
+
+const ARROW: c_int = 3;
+const VS_POISON: c_int = 0;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -91,6 +106,7 @@ unsafe extern "C" {
     static mut firstmove: c_uchar;
     static mut jump: c_uchar;
     static mut move_on: c_uchar;
+    static mut no_command: c_int;
     static mut no_move: c_int;
     static mut passgo: c_uchar;
     static mut running: c_uchar;
@@ -122,6 +138,11 @@ unsafe fn hero_ptr() -> *mut IVec2 {
 #[inline]
 unsafe fn hero_pos() -> IVec2 {
     (*thing_t(&raw mut player)).t_pos
+}
+
+#[inline]
+unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
+    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
 #[inline]
@@ -161,6 +182,109 @@ unsafe fn move_stuff(next_pos: &mut IVec2, fl: c_char) {
         draw_leave_room(next_pos);
     }
     *hero_ptr() = *next_pos;
+}
+
+/// Applies the trap at the given map cell, returning the trap kind that fired.
+///
+/// The cell's trap nibble holds the trap number (0-7). If the hero is
+/// levitating, no trap effect applies. Uses the C engine helpers (`msg`,
+/// `roll`, `spread`, `teleport`, ...) exactly as the legacy `be_trapped` did,
+/// but is callable only from Rust.
+pub unsafe fn be_trapped(pos: IVec2) -> Trap {
+    let trap =
+        crate::level::with_current_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
+
+    if ((*thing_t(&raw mut player)).t_flags & ISLEVIT) != 0 {
+        return Trap::Rust;
+    }
+
+    running = false as c_uchar;
+    count = 0;
+    crate::level::with_current_level_mut(|current| {
+        current.reveal_trap(pos.y as usize, pos.x as usize);
+    });
+
+    let mut hit = TrapHit::Miss;
+
+    match trap {
+        Trap::Door => {
+            crate::game::set_current_depth(crate::game::current_depth() + 1);
+            new_level();
+        }
+        Trap::Bear => {
+            no_move += spread(3);
+        }
+        Trap::Mystery => {}
+        Trap::Sleep => {
+            no_command += spread(5);
+            (*thing_t(&raw mut player)).t_flags &= !ISRUN;
+        }
+        Trap::Arrow => {
+            let stats = &mut (*thing_t(&raw mut player)).t_stats;
+            if swing(stats.level - 1, stats.armor, 1) != 0 {
+                stats.hit_points -= roll(1, 6);
+                hit = if stats.hit_points <= 0 {
+                    TrapHit::Kill
+                } else {
+                    TrapHit::Hit
+                };
+            } else {
+                let arrow = new_item();
+                init_weapon(arrow, ARROW);
+                (*thing_o(arrow)).o_count = 1;
+                (*thing_o(arrow)).o_pos = hero_pos();
+                fall(arrow, false as c_uchar);
+                hit = TrapHit::Miss;
+            }
+        }
+        Trap::Teleport => {
+            teleport();
+        }
+        Trap::Dart => {
+            let stats = &mut (*thing_t(&raw mut player)).t_stats;
+            if swing(stats.level + 1, stats.armor, 1) == 0 {
+                hit = TrapHit::Miss;
+            } else {
+                stats.hit_points -= roll(1, 4);
+                if stats.hit_points <= 0 {
+                    hit = TrapHit::Kill;
+                } else {
+                    if !ring_is(EQUIPMENT.left_ring(), RingType::SustainStrength)
+                        && !ring_is(EQUIPMENT.right_ring(), RingType::SustainStrength)
+                        && save(VS_POISON) == 0
+                    {
+                        chg_str(-1);
+                    }
+                    hit = TrapHit::Hit;
+                }
+            }
+        }
+        Trap::Rust => {
+            if let Some(msg) = trap.msg(hit) {
+                msg_str(&msg);
+            }
+            rust_armor(EQUIPMENT.armor());
+        }
+    }
+
+    // Send the message after the effect for every trap except `Rust`, which
+    // prints its message before applying the effect above.
+    if trap != Trap::Rust {
+        if let Some(msg) = trap.msg(hit) {
+            msg_str(&msg);
+        }
+    }
+
+    if hit == TrapHit::Kill {
+        death(if trap == Trap::Arrow {
+            b'a' as c_char
+        } else {
+            b'd' as c_char
+        });
+    }
+
+    flush_type();
+    trap
 }
 
 #[inline]

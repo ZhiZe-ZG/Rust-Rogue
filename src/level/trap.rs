@@ -1,33 +1,11 @@
-//! Trap handling.
+//! Trap kinds and their messages.
 //!
-//! [`be_trapped`] applies the effect of the trap under a dungeon cell: arrow
-//! darts, teleportation, rusting armor, a fall into a deeper level, and so
-//! on. This is a pure Rust API consumed by the movement code in
-//! [`crate::player`]; the legacy C ABI is intentionally not retained.
+//! [`Trap`] is the trap-kind vocabulary stored in each dungeon cell.
+//! [`Trap::msg`] determines the message the hero sees when a trap fires; the
+//! trap effect itself is applied by the movement code in
+//! [`crate::entity::player`].
 
-use glam::IVec2;
-use std::os::raw::{c_char, c_int, c_short, c_uchar};
-
-use crate::entity::fight::swing;
-use crate::entity::monsters::save;
-use crate::entity::player::{CThing, CThingMonster, CThingObject};
-use crate::game::EQUIPMENT;
-use crate::item::armor::rust_armor;
-use crate::item::rings::RingType;
-use crate::item::thing_list::new_item;
-use crate::item::weapons::{fall, init_weapon};
-use crate::machdep::flush_type;
-use crate::misc::{chg_str, spread};
-use crate::rip::death;
 use crate::rnd::rnd;
-use crate::startup::roll;
-use crate::ui::output::msg_str;
-use crate::wizard::teleport;
-
-use super::generation::new_level;
-
-const ISLEVIT: c_short = 0o0000010;
-const ISRUN: c_short = 0o020000;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,6 +18,17 @@ pub enum Trap {
     Dart = 5,
     Rust = 6,
     Mystery = 7,
+}
+
+/// Outcome of a damaging trap attack, used to select the right [`Trap::msg`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrapHit {
+    /// The attack missed.
+    Miss,
+    /// The attack connected but was not fatal.
+    Hit,
+    /// The attack killed the hero.
+    Kill,
 }
 
 impl Trap {
@@ -57,176 +46,52 @@ impl Trap {
             _ => panic!("invalid trap type"),
         }
     }
-}
 
-const ARROW: c_int = 3;
-const VS_POISON: c_int = 0;
-
-// ─── Extern C globals ────────────────────────────────────────────────────────
-//
-// These bind to the process-wide symbols exported by `crate::globals` (game
-// control state) and `crate::init` (material tables), preserving the legacy C
-// ABI used by the ported `be_trapped` from `src/c/trap.c`.
-
-unsafe extern "C" {
-    // Whether the hero is currently auto-running (repeating a movement in one
-    // direction). Cleared by `be_trapped` so a trap interrupts the run.
-    static mut running: c_uchar;
-    // Command repetition / run-step count (the numeric prefix). Reset to zero
-    // when a trap fires to stop any pending repeat or run.
-    static mut count: c_int;
-    // Number of turns the hero is unable to issue commands (confused/asleep).
-    // The sleep trap adds `spread(5)`.
-    static mut no_command: c_int;
-    // Number of turns the hero cannot move (held). The bear trap adds
-    // `spread(3)`.
-    static mut no_move: c_int;
-    // The player/hero object (C `THING player`), defined in `crate::globals`.
-    // `be_trapped` reads `t_flags`, `t_stats`, and `t_pos` from it.
-    static mut player: CThing;
-}
-
-#[inline]
-unsafe fn thing_t(tp: *mut CThing) -> *mut CThingMonster {
-    tp as *mut CThingMonster
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut CThing) -> *mut CThingObject {
-    tp as *mut CThingObject
-}
-
-#[inline]
-unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(&raw mut player)).t_pos
-}
-
-#[inline]
-unsafe fn ring_is(ring: *mut CThing, ring_type: RingType) -> bool {
-    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
-}
-
-/// Applies the trap at the given map cell, returning the trap kind that fired.
-///
-/// The cell's `p_flags` nibble holds the trap number (0-7). If the hero is
-/// levitating, no trap effect applies. Uses the C engine helpers (`msg`,
-/// `roll`, `spread`, `teleport`, ...) exactly as the legacy `be_trapped` did,
-/// but is callable only from Rust.
-pub unsafe fn be_trapped(pos: IVec2) -> Trap {
-    let trap =
-        crate::level::with_current_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
-
-    if ((*thing_t(&raw mut player)).t_flags & ISLEVIT) != 0 {
-        return Trap::Rust;
-    }
-
-    running = false as c_uchar;
-    count = false as c_uchar as c_int;
-    crate::level::with_current_level_mut(|current| {
-        current.reveal_trap(pos.y as usize, pos.x as usize);
-    });
-
-    match trap {
-        Trap::Door => {
-            crate::game::set_current_depth(crate::game::current_depth() + 1);
-            new_level();
-            msg_str("you fell into a trap!");
-        }
-        Trap::Bear => {
-            no_move += spread(3);
-            msg_str("you are caught in a bear trap");
-        }
-        Trap::Mystery => {
-            let color = || crate::colors::random_color();
-            match rnd(11) {
-                0 => {
-                    msg_str("you are suddenly in a parallel dimension");
-                }
-                1 => {
-                    msg_str(&format!("the light in here suddenly seems {}", color()));
-                }
-                2 => {
-                    msg_str("you feel a sting in the side of your neck");
-                }
-                3 => {
-                    msg_str("multi-colored lines swirl around you, then fade");
-                }
-                4 => {
-                    msg_str(&format!("a {} light flashes in your eyes", color()));
-                }
-                5 => {
-                    msg_str("a spike shoots past your ear!");
-                }
-                6 => {
-                    msg_str(&format!("{} sparks dance across your armor", color()));
-                }
-                7 => {
-                    msg_str("you suddenly feel very thirsty");
-                }
-                8 => {
-                    msg_str("you feel time speed up suddenly");
-                }
-                9 => {
-                    msg_str("time now seems to be going slower");
-                }
-                10 => {
-                    msg_str(&format!("you pack turns {}!", color()));
-                }
-                _ => {}
+    /// Determine the message the hero sees when this trap fires, or `None` for
+    /// traps that print no message (teleport). `hit` selects among the miss,
+    /// hit, and fatal variants used by the damaging traps.
+    pub fn msg(&self, hit: TrapHit) -> Option<String> {
+        match self {
+            Trap::Door => Some("you fell into a trap!".to_string()),
+            Trap::Bear => Some("you are caught in a bear trap".to_string()),
+            Trap::Sleep => {
+                Some("a strange white mist envelops you and you fall asleep".to_string())
             }
-        }
-        Trap::Sleep => {
-            no_command += spread(5);
-            (*thing_t(&raw mut player)).t_flags &= !ISRUN;
-            msg_str("a strange white mist envelops you and you fall asleep");
-        }
-        Trap::Arrow => {
-            let stats = &mut (*thing_t(&raw mut player)).t_stats;
-            if swing(stats.level - 1, stats.armor, 1) != 0 {
-                stats.hit_points -= roll(1, 6);
-                if stats.hit_points <= 0 {
-                    msg_str("an arrow killed you");
-                    death(b'a' as c_char);
-                } else {
-                    msg_str("oh no! An arrow shot you");
-                }
-            } else {
-                let arrow = new_item();
-                init_weapon(arrow, ARROW);
-                (*thing_o(arrow)).o_count = 1;
-                (*thing_o(arrow)).o_pos = hero_pos();
-                fall(arrow, false as c_uchar);
-                msg_str("an arrow shoots past you");
-            }
-        }
-        Trap::Teleport => {
-            teleport();
-        }
-        Trap::Dart => {
-            let stats = &mut (*thing_t(&raw mut player)).t_stats;
-            if swing(stats.level + 1, stats.armor, 1) == 0 {
-                msg_str("a small dart whizzes by your ear and vanishes");
-            } else {
-                stats.hit_points -= roll(1, 4);
-                if stats.hit_points <= 0 {
-                    msg_str("a poisoned dart killed you");
-                    death(b'd' as c_char);
-                }
-                if !ring_is(EQUIPMENT.left_ring(), RingType::SustainStrength)
-                    && !ring_is(EQUIPMENT.right_ring(), RingType::SustainStrength)
-                    && save(VS_POISON) == 0
-                {
-                    chg_str(-1);
-                }
-                msg_str("a small dart just hit you in the shoulder");
-            }
-        }
-        Trap::Rust => {
-            msg_str("a gush of water hits you on the head");
-            rust_armor(EQUIPMENT.armor());
+            Trap::Rust => Some("a gush of water hits you on the head".to_string()),
+            Trap::Mystery => match rnd(11) {
+                0 => Some("you are suddenly in a parallel dimension".to_string()),
+                1 => Some(format!(
+                    "the light in here suddenly seems {}",
+                    crate::colors::random_color()
+                )),
+                2 => Some("you feel a sting in the side of your neck".to_string()),
+                3 => Some("multi-colored lines swirl around you, then fade".to_string()),
+                4 => Some(format!(
+                    "a {} light flashes in your eyes",
+                    crate::colors::random_color()
+                )),
+                5 => Some("a spike shoots past your ear!".to_string()),
+                6 => Some(format!(
+                    "{} sparks dance across your armor",
+                    crate::colors::random_color()
+                )),
+                7 => Some("you suddenly feel very thirsty".to_string()),
+                8 => Some("you feel time speed up suddenly".to_string()),
+                9 => Some("time now seems to be going slower".to_string()),
+                10 => Some(format!("you pack turns {}!", crate::colors::random_color())),
+                _ => None,
+            },
+            Trap::Arrow => Some(match hit {
+                TrapHit::Miss => "an arrow shoots past you".to_string(),
+                TrapHit::Hit => "oh no! An arrow shot you".to_string(),
+                TrapHit::Kill => "an arrow killed you".to_string(),
+            }),
+            Trap::Dart => Some(match hit {
+                TrapHit::Miss => "a small dart whizzes by your ear and vanishes".to_string(),
+                TrapHit::Hit => "a small dart just hit you in the shoulder".to_string(),
+                TrapHit::Kill => "a poisoned dart killed you".to_string(),
+            }),
+            Trap::Teleport => None,
         }
     }
-
-    flush_type();
-    trap
 }
