@@ -24,7 +24,8 @@ use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 
-use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
+use crate::globals::monsters;
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach, detach, discard, new_item};
 use crate::item::things::inv_name;
@@ -113,7 +114,6 @@ static mut PRNAME_BUF: [c_char; MAXSTR] = [0; MAXSTR];
 
 unsafe extern "C" {
     static mut player: CThing;
-    static mut monsters: [CMonster; 26];
     static mut weap_info: [CObjInfo; 10]; // MAXWEAPONS + 1
     static mut e_levels: [c_int; 21];
 
@@ -146,14 +146,6 @@ unsafe extern "C" {
 }
 
 // ─── Local structs (repr(C)) ──────────────────────────────────────────────────
-
-#[repr(C)]
-pub struct CMonster {
-    pub m_name: *mut c_char,
-    pub m_carry: c_int,
-    pub m_flags: c_short,
-    pub m_stats: Stats,
-}
 
 #[repr(C)]
 pub struct CObjInfo {
@@ -535,7 +527,7 @@ pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
         MNAME_INIT = true;
     }
 
-    let mname: *mut c_char;
+    let mname: &'static str;
     if on_p(&raw mut player, ISHALU) {
         output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
         let ch = toascii(output::glyph_at_cursor() as c_int);
@@ -551,7 +543,10 @@ pub unsafe extern "C" fn set_mname(tp: *mut CThing) -> *mut c_char {
     }
 
     // Copy into static buffer starting at offset 4 ("the ").
-    strcpy(MNAME_BUF[4..].as_mut_ptr(), mname);
+    strcpy(
+        MNAME_BUF[4..].as_mut_ptr(),
+        mname.as_ptr().cast(),
+    );
     MNAME_BUF.as_mut_ptr()
 }
 

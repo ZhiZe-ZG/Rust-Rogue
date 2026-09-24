@@ -4,7 +4,7 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_ushort};
 
-use crate::globals::{allscore, numscores, Numname};
+use crate::globals::{allscore, monsters, numscores, Numname};
 use crate::item::things::inv_name;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
 use crate::mdport::{md_getuid, md_raw_standend, md_raw_standout};
@@ -57,7 +57,6 @@ unsafe extern "C" {
     static mut tombstone: c_uchar;
     static mut whoami: [c_char; MAXSTR];
     static mut wizard: c_int;
-    static mut monsters: [crate::entity::monsters::CMonster; 26];
     static mut scoreboard: *mut crate::score::CFile;
 
     fn getuid() -> c_uint;
@@ -121,8 +120,7 @@ pub unsafe extern "C" fn killname(monst: c_char, doart: bool) -> *mut c_char {
     if (monst as u8).is_ascii_uppercase() {
         let idx = (monst as u8 - b'A') as usize;
         let monster = unsafe { &*monsters.get_unchecked(idx) };
-        let monster_name = CStr::from_ptr(monster.m_name).to_string_lossy();
-        name = monster_name.to_string();
+        name = monster.m_name.to_string();
         article = true;
     } else {
         let special = match monst as u8 {

@@ -10,6 +10,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar};
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
+use crate::globals::monsters;
 use crate::entity::monster_list::MLIST;
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::entity::rndmove::rndmove;
@@ -74,7 +75,6 @@ unsafe extern "C" {
     static mut kamikaze: c_uchar;
     static mut see_floor: c_uchar;
     static mut delta: IVec2;
-    static mut monsters: [crate::entity::monsters::CMonster; 26];
 
     fn abort() -> !;
 }

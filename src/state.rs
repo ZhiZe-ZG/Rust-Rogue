@@ -38,6 +38,7 @@ use crate::entity::chase::runners;
 use crate::entity::monster_list::MLIST;
 use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
+use crate::globals::{monsters, CMonster};
 use crate::item::thing_list::{allocated_count, new_item};
 use crate::item::things::CObjInfo;
 use crate::level::{PassageLinks, Room};
@@ -118,16 +119,6 @@ pub struct CFile {
 pub struct CStone {
     pub st_name: *const c_char,
     pub st_value: c_int,
-}
-
-/// Local layout mirror of the C `struct monster` with `player::Stats`
-/// (the `monsters::Stats` type is distinct and would not type-check here).
-#[repr(C)]
-struct CMonsterState {
-    m_name: *mut c_char,
-    m_carry: c_int,
-    m_flags: c_short,
-    m_stats: Stats,
 }
 
 /// Delayed-action callback slot type (same representation as `daemon::DFunc`).
@@ -228,8 +219,7 @@ unsafe extern "C" {
     static mut max_stats: Stats;
     static mut oldrp: Option<usize>;
 
-    // monster / object info tables
-    static mut monsters: [CMonsterState; MAXMONSTERS];
+    // object info tables
     static mut things: [CObjInfo; NUMTHINGS];
     static mut arm_info: [CObjInfo; MAXARMORS];
     static mut pot_info: [CObjInfo; MAXPOTIONS];
@@ -1635,7 +1625,7 @@ unsafe fn rs_read_room_reference(inf: *mut CFile, room: &mut Option<usize>) -> c
 
 // ─── Monsters ────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_monsters(savef: *mut CFile, m: *mut CMonsterState, count: c_int) -> c_int {
+unsafe fn rs_write_monsters(savef: *mut CFile, m: *mut CMonster, count: c_int) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1652,7 +1642,7 @@ unsafe fn rs_write_monsters(savef: *mut CFile, m: *mut CMonsterState, count: c_i
     WRITE_ERROR
 }
 
-unsafe fn rs_read_monsters(inf: *mut CFile, m: *mut CMonsterState, count: c_int) -> c_int {
+unsafe fn rs_read_monsters(inf: *mut CFile, m: *mut CMonster, count: c_int) -> c_int {
     let mut value: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -2435,7 +2425,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 
     let _ = rs_write_monsters(
         savef,
-        (&raw mut monsters) as *mut CMonsterState,
+        (&raw mut monsters) as *mut CMonster,
         MAXMONSTERS as c_int,
     );
     let _ = rs_write_obj_info(
@@ -2659,7 +2649,7 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
 
     let _ = rs_read_monsters(
         inf,
-        (&raw mut monsters) as *mut CMonsterState,
+        (&raw mut monsters) as *mut CMonster,
         MAXMONSTERS as c_int,
     );
     let _ = rs_read_obj_info(inf, (&raw mut things) as *mut CObjInfo, NUMTHINGS as c_int);

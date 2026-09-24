@@ -7,7 +7,7 @@ use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monster_list::MLIST;
-use crate::entity::player::{Stats, CThing, CThingMonster, CThingObject};
+use crate::entity::player::{CThing, CThingMonster, CThingObject};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach, new_item};
@@ -21,7 +21,9 @@ use crate::ui::output::{addmsg_str, msg_str};
 use crate::ui::runtime;
 use glam::IVec2;
 use std::ffi::{c_void, CStr};
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_short, c_uchar};
+
+use crate::globals::monsters;
 
 const LAMPDIST: c_int = 3;
 const HUHDURATION: c_int = 20;
@@ -41,16 +43,7 @@ const ISHALU: c_short = 0o004000;
 const ISRUN: c_short = 0o020000;
 const SEEMONST: c_short = 0o040000;
 
-/// Layout mirror of the C `struct monster` stat table, tied to the `monsters[]`
-/// global the C engine exposes.
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CMonster {
-    pub m_name: *mut c_char,
-    pub m_carry: c_int,
-    pub m_flags: c_short,
-    pub m_stats: Stats,
-}
+pub use crate::globals::CMonster;
 
 static LVL_MONS: [c_char; 26] = [
     b'K' as c_char,
@@ -112,7 +105,6 @@ static WAND_MONS: [c_char; 26] = [
 
 unsafe extern "C" {
     static mut max_level: c_int;
-    static mut monsters: [CMonster; 26];
     static mut player: CThing;
     static mut wizard: c_int;
 
@@ -263,8 +255,7 @@ pub unsafe extern "C" fn wanderer() {
     if wizard != 0 {
         msg_str(&format!(
             "started a wandering {}",
-            CStr::from_ptr(monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_name)
-                .to_string_lossy()
+            monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_name
         ));
     }
 }

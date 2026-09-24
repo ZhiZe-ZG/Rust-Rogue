@@ -8,7 +8,7 @@ use crate::entity::player::{
 };
 use crate::entity::stats::Stats;
 use glam::IVec2;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 const MAXSTR: usize = 1024;
 
@@ -36,12 +36,12 @@ const MAXWEAPONS: usize = 9;
 const NUMTHINGS: usize = 7;
 const MAXMONSTERS: usize = 26;
 
-#[repr(C)]
+/// Stat-table entry for a monster kind, using native Rust types (no C ABI).
 #[derive(Copy, Clone)]
-pub struct CMonsterState {
-    pub m_name: *mut c_char,
-    pub m_carry: c_int,
-    pub m_flags: c_short,
+pub struct CMonster {
+    pub m_name: &'static str,
+    pub m_carry: i32,
+    pub m_flags: i16,
     pub m_stats: Stats,
 }
 
@@ -276,9 +276,9 @@ pub static mut max_stats: Stats = Stats {
 #[no_mangle]
 pub static mut oldrp: Option<usize> = None;
 #[no_mangle]
-pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
-    CMonsterState {
-        m_name: b"aquator\0".as_ptr() as *mut c_char,
+pub static mut monsters: [CMonster; MAXMONSTERS] = [
+    CMonster {
+        m_name: "aquator",
         m_carry: 0,
         m_flags: 0o004000,
         m_stats: Stats {
@@ -291,8 +291,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"bat\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "bat",
         m_carry: 0,
         m_flags: 0o000200,
         m_stats: Stats {
@@ -305,8 +305,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"centaur\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "centaur",
         m_carry: 15,
         m_flags: 0,
         m_stats: Stats {
@@ -319,8 +319,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"dragon\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "dragon",
         m_carry: 100,
         m_flags: 0o004000,
         m_stats: Stats {
@@ -333,8 +333,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"emu\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "emu",
         m_carry: 0,
         m_flags: 0o004000,
         m_stats: Stats {
@@ -347,8 +347,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"venus flytrap\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "venus flytrap",
         m_carry: 0,
         m_flags: 0o004000,
         m_stats: Stats {
@@ -361,8 +361,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"griffin\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "griffin",
         m_carry: 20,
         m_flags: 0o004000 | 0o000200 | 0o000100,
         m_stats: Stats {
@@ -375,8 +375,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"hobgoblin\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "hobgoblin",
         m_carry: 0,
         m_flags: 0o004000,
         m_stats: Stats {
@@ -389,8 +389,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"ice monster\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "ice monster",
         m_carry: 0,
         m_flags: 0,
         m_stats: Stats {
@@ -403,8 +403,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"jabberwock\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "jabberwock",
         m_carry: 70,
         m_flags: 0,
         m_stats: Stats {
@@ -417,8 +417,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"kestrel\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "kestrel",
         m_carry: 0,
         m_flags: 0o004000 | 0o000200,
         m_stats: Stats {
@@ -431,8 +431,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"leprechaun\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "leprechaun",
         m_carry: 0,
         m_flags: 0,
         m_stats: Stats {
@@ -445,8 +445,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"medusa\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "medusa",
         m_carry: 40,
         m_flags: 0o004000,
         m_stats: Stats {
@@ -459,8 +459,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"nymph\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "nymph",
         m_carry: 100,
         m_flags: 0,
         m_stats: Stats {
@@ -473,8 +473,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"orc\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "orc",
         m_carry: 15,
         m_flags: 0o000040,
         m_stats: Stats {
@@ -487,8 +487,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"phantom\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "phantom",
         m_carry: 0,
         m_flags: 0o000200,
         m_stats: Stats {
@@ -501,8 +501,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"quagga\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "quagga",
         m_carry: 0,
         m_flags: 0o004000,
         m_stats: Stats {
@@ -515,8 +515,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"rattlesnake\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "rattlesnake",
         m_carry: 0,
         m_flags: 0o004000,
         m_stats: Stats {
@@ -529,8 +529,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"snake\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "snake",
         m_carry: 0,
         m_flags: 0o004000,
         m_stats: Stats {
@@ -543,8 +543,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"troll\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "troll",
         m_carry: 50,
         m_flags: 0o000100 | 0o004000,
         m_stats: Stats {
@@ -557,8 +557,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"black unicorn\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "black unicorn",
         m_carry: 0,
         m_flags: 0o004000,
         m_stats: Stats {
@@ -571,8 +571,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"vampire\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "vampire",
         m_carry: 20,
         m_flags: 0o000100 | 0o004000,
         m_stats: Stats {
@@ -585,8 +585,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"wraith\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "wraith",
         m_carry: 0,
         m_flags: 0,
         m_stats: Stats {
@@ -599,8 +599,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"xeroc\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "xeroc",
         m_carry: 30,
         m_flags: 0,
         m_stats: Stats {
@@ -613,8 +613,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"yeti\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "yeti",
         m_carry: 30,
         m_flags: 0,
         m_stats: Stats {
@@ -627,8 +627,8 @@ pub static mut monsters: [CMonsterState; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonsterState {
-        m_name: b"zombie\0".as_ptr() as *mut c_char,
+    CMonster {
+        m_name: "zombie",
         m_carry: 0,
         m_flags: 0o004000,
         m_stats: Stats {

@@ -248,9 +248,7 @@ pub(crate) unsafe fn identify() {
     }
 
     let description = if (b'A' as c_int..=b'Z' as c_int).contains(&ch) {
-        CStr::from_ptr(monsters[(ch - b'A' as c_int) as usize].m_name)
-            .to_string_lossy()
-            .into_owned()
+        monsters[(ch - b'A' as c_int) as usize].m_name.to_owned()
     } else {
         IDENT_ITEMS
             .iter()

@@ -7,6 +7,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint};
 use std::ptr;
 
 use crate::config::GameConfig;
+use crate::globals::monsters;
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
 use crate::entity::player::{CThing, CThingMonster, CThingObject};
@@ -107,7 +108,6 @@ unsafe extern "C" {
     static mut count: c_int;
     static mut running: c_uchar;
     static mut vf_hit: c_int;
-    static mut monsters: [crate::entity::monsters::CMonster; 26];
     static mut player: CThing;
     static mut scr_info: [CObjInfo; 18];
     static mut pot_info: [CObjInfo; 14];
