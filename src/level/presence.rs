@@ -322,7 +322,6 @@ unsafe fn place_traps() {
                 .map
                 .set(stairs.y as usize, stairs.x as usize, Tile::Trap(trap));
             current.flags.real[idx] = false;
-            current.flags.trap[idx] = trap;
         });
         i -= 1;
     }

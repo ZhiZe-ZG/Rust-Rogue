@@ -26,8 +26,8 @@ use crate::item::item_list::ItemList;
 ///
 /// The single source of truth for the cell flags previously stored in the C
 /// `places` grid's `p_flags` field. `real`/`passage`/`seen`/`passnum` are
-/// maintained by level generation; [`LevelFlags::trap`] holds the trap-kind
-/// nibble (0-7, the legacy `F_TMASK` bits) set by `place_traps`.
+/// maintained by level generation; trap kinds live in the [`Tile`] map itself
+/// (see [`Tile::Trap`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LevelFlags {
     /// Whether each cell is real and visible as solid terrain; `false` marks
@@ -40,9 +40,6 @@ pub struct LevelFlags {
     /// Passage component number for each cell, assigned by
     /// [`number_passages`]; zero means that no component is assigned.
     pub passnum: Vec<u8>,
-    /// Trap kind for each cell; cells without a trap use [`Trap::Door`], the
-    /// zero-valued legacy representation.
-    pub trap: Vec<Trap>,
 }
 
 impl LevelFlags {
@@ -53,7 +50,6 @@ impl LevelFlags {
             passage: vec![false; cells],
             seen: vec![false; cells],
             passnum: vec![0; cells],
-            trap: vec![Trap::Door; cells],
         }
     }
 
@@ -122,9 +118,10 @@ impl Level {
         }
     }
 
-    /// Return the trap kind stored at `(y, x)`.
+    /// Return the trap kind at `(y, x)`, derived from the [`Tile::Trap`] map.
+    /// Non-trap cells report [`Trap::Door`], the zero-valued legacy default.
     pub fn trap_at(&self, y: usize, x: usize) -> Trap {
-        self.flags.trap[LevelFlags::flag_idx(y, x)]
+        self.tile_at(y, x).trap()
     }
 
     /// The tile at `(y, x)`, defaulting to [`Tile::Empty`] outside the map.

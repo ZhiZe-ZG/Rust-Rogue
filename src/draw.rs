@@ -211,14 +211,20 @@ pub(crate) unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
         if lvl.flags.real[idx] {
             f |= F_REAL as u8;
         }
-        f |= (lvl.flags.trap[idx] as u8) & (F_TMASK as u8);
+        f |= (lvl.map.get(y as usize, x as usize).unwrap_or(Tile::Empty).trap() as u8)
+            & (F_TMASK as u8);
         f as c_char
     })
 }
 
-/// Trap kind (0-7) at `(y, x)` from the level trap grid.
+/// Trap kind (0-7) at `(y, x)` from the tile map.
 pub(crate) unsafe fn trap_kind_at(y: c_int, x: c_int) -> Trap {
-    with_current_level(|lvl| lvl.flags.trap[cell_index(y as usize, x as usize)])
+    with_current_level(|lvl| {
+        lvl.map
+            .get(y as usize, x as usize)
+            .unwrap_or(Tile::Empty)
+            .trap()
+    })
 }
 
 /// Whether the tile at `(y, x)` is a hidden trap.

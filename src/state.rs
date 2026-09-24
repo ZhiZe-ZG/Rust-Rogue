@@ -2220,7 +2220,7 @@ unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
             let _ = rs_write_boolean(savef, lvl.flags.passage[idx] as c_int);
             let _ = rs_write_boolean(savef, lvl.flags.seen[idx] as c_int);
             let _ = rs_write_char(savef, lvl.flags.passnum[idx] as c_char);
-            let _ = rs_write_char(savef, lvl.flags.trap[idx] as u8 as c_char);
+            let _ = rs_write_char(savef, tile.trap() as u8 as c_char);
             // Per-cell monster occupancy.
             let _ = rs_write_thing_reference(
                 savef,
@@ -2279,7 +2279,6 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
             lvl.flags.passage[idx] = passage != 0;
             lvl.flags.seen[idx] = seen != 0;
             lvl.flags.passnum[idx] = passnum as u8;
-            lvl.flags.trap[idx] = trap;
 
             // Per-cell monster occupancy.
             lvl.monsters.set(y as usize, x as usize, monst);

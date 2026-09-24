@@ -75,6 +75,15 @@ impl Tile {
     pub const fn is_walkable(self) -> bool {
         !matches!(self, Tile::Empty | Tile::Wall | Tile::HiddenDoor)
     }
+
+    /// The trap kind carried by this tile, or [`Trap::Door`] (the zero-valued
+    /// legacy representation) for non-trap cells.
+    pub const fn trap(self) -> Trap {
+        match self {
+            Tile::Trap(trap) => trap,
+            _ => Trap::Door,
+        }
+    }
 }
 
 #[cfg(test)]
