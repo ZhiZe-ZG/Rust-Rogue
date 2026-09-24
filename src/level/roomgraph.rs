@@ -7,9 +7,8 @@
 //! [`plan_connections`] from each slot's `gone` flag, growing a spanning tree
 //! over the live rooms and then adding a few extra links for loopiness.
 
-use crate::rnd::rnd;
-
 use crate::config::GameConfig;
+use crate::rnd::rnd;
 
 /// Planned room-to-room passage connections for one generation pass.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -28,13 +27,12 @@ impl RoomGraph {
         &self.connections
     }
 
-    /// Recompute the connection plan from the rooms' `gone` flags, replacing
-    /// any previous plan.
+    /// Recompute the connection plan from the rooms' `gone` flags.
     pub(crate) fn generate(&mut self, gone: &[bool]) {
         self.connections = plan_connections(gone);
     }
 
-    /// Discard the current per-level connection plan.
+    /// Discard the current connection plan.
     pub fn reset(&mut self) {
         self.connections.clear();
     }
@@ -42,7 +40,7 @@ impl RoomGraph {
 
 /// Plan which room pairs get connected.
 fn plan_connections(gone: &[bool]) -> Vec<(usize, usize)> {
-    let live_rooms = non_gone_count(gone);
+    let live_rooms = gone.iter().filter(|&&is_gone| !is_gone).count();
     if live_rooms <= 1 {
         return Vec::new();
     }
@@ -63,9 +61,9 @@ fn build_spanning_tree(
     connections: &mut Vec<(usize, usize)>,
 ) {
     let mut in_graph = [false; GameConfig::MAX_ROOMS];
-    let mut reached = 1;
-    let mut current = pick_non_gone(gone);
+    let mut current = pick_random(|idx| !gone[idx]);
     in_graph[current] = true;
+    let mut reached = 1;
 
     while reached < live_rooms {
         match next_unreached(current, &in_graph) {
@@ -77,7 +75,7 @@ fn build_spanning_tree(
                 connections.push((current, next));
                 current = next;
             }
-            None => current = pick_in_graph(&in_graph),
+            None => current = pick_random(|idx| in_graph[idx]),
         }
     }
 }
@@ -86,7 +84,7 @@ fn build_spanning_tree(
 fn add_extra_connections(gone: &[bool], connections: &mut Vec<(usize, usize)>) {
     let mut extra = rnd(GameConfig::EXTRA_CONNECTION_ROLLS);
     while extra > 0 {
-        let from = pick_non_gone(gone);
+        let from = pick_random(|idx| !gone[idx]);
         if let Some(to) = next_unconnected(from, connections) {
             connections.push((from, to));
         }
@@ -94,26 +92,14 @@ fn add_extra_connections(gone: &[bool], connections: &mut Vec<(usize, usize)>) {
     }
 }
 
-/// Pick a uniformly random adjacent room reachable from `from` that is not yet
-/// part of the connected graph.
+/// Pick a uniformly random adjacent room not yet part of the connected graph.
 fn next_unreached(from: usize, in_graph: &[bool; GameConfig::MAX_ROOMS]) -> Option<usize> {
     pick_unconnected(neighbors(from), |room| in_graph[room])
 }
 
-/// Pick a uniformly random adjacent room reachable from `from` that has no dug
-/// connection to `from` yet.
+/// Pick a uniformly random adjacent room with no dug connection to `from` yet.
 fn next_unconnected(from: usize, connections: &[(usize, usize)]) -> Option<usize> {
     pick_unconnected(neighbors(from), |room| is_connected(connections, from, room))
-}
-
-/// Pick a uniformly random room already part of the connected graph.
-fn pick_in_graph(in_graph: &[bool; GameConfig::MAX_ROOMS]) -> usize {
-    loop {
-        let idx = random_room_index();
-        if in_graph[idx] {
-            return idx;
-        }
-    }
 }
 
 fn is_connected(connections: &[(usize, usize)], a: usize, b: usize) -> bool {
@@ -140,44 +126,29 @@ fn pick_unconnected(
     pick
 }
 
-/// Indexes of the rooms orthogonally adjacent to `room`, in ascending order.
-fn neighbors(room: usize) -> Vec<usize> {
-    let row = room / GameConfig::GRID_COLS;
-    let col = room % GameConfig::GRID_COLS;
-    let mut result = Vec::with_capacity(4);
-
-    if row > 0 {
-        result.push(room - GameConfig::GRID_COLS);
-    }
-    if col > 0 {
-        result.push(room - 1);
-    }
-    if col + 1 < GameConfig::GRID_COLS {
-        result.push(room + 1);
-    }
-    if row + 1 < GameConfig::GRID_ROWS {
-        result.push(room + GameConfig::GRID_COLS);
-    }
-
-    result
-}
-
-fn random_room_index() -> usize {
-    rnd(GameConfig::MAX_ROOMS as i32) as usize
-}
-
-fn non_gone_count(gone: &[bool]) -> usize {
-    gone.iter().filter(|&&is_gone| !is_gone).count()
-}
-
-/// Pick a uniformly random room slot that has not been removed for the level.
-fn pick_non_gone(gone: &[bool]) -> usize {
+/// Pick a uniformly random room index satisfying `predicate`.
+fn pick_random(predicate: impl Fn(usize) -> bool) -> usize {
     loop {
-        let idx = random_room_index();
-        if !gone[idx] {
+        let idx = rnd(GameConfig::MAX_ROOMS as i32) as usize;
+        if predicate(idx) {
             return idx;
         }
     }
+}
+
+/// Indexes of the rooms orthogonally adjacent to `room`, in ascending order.
+fn neighbors(room: usize) -> impl Iterator<Item = usize> {
+    let row = room / GameConfig::GRID_COLS;
+    let col = room % GameConfig::GRID_COLS;
+
+    [
+        (row > 0).then(|| room - GameConfig::GRID_COLS),
+        (col > 0).then(|| room - 1),
+        (col + 1 < GameConfig::GRID_COLS).then(|| room + 1),
+        (row + 1 < GameConfig::GRID_ROWS).then(|| room + GameConfig::GRID_COLS),
+    ]
+    .into_iter()
+    .flatten()
 }
 
 #[cfg(test)]
@@ -186,18 +157,18 @@ mod tests {
 
     #[test]
     fn neighbors_are_orthogonal_and_in_grid() {
-        assert_eq!(neighbors(0), vec![1, 3]);
-        assert_eq!(neighbors(2), vec![1, 5]);
-        assert_eq!(neighbors(4), vec![1, 3, 5, 7]);
-        assert_eq!(neighbors(8), vec![5, 7]);
+        assert_eq!(neighbors(0).collect::<Vec<_>>(), vec![1, 3]);
+        assert_eq!(neighbors(2).collect::<Vec<_>>(), vec![1, 5]);
+        assert_eq!(neighbors(4).collect::<Vec<_>>(), vec![1, 3, 5, 7]);
+        assert_eq!(neighbors(8).collect::<Vec<_>>(), vec![5, 7]);
     }
 
     #[test]
     fn plan_connections_with_single_live_room_is_empty() {
         let mut gone = [false; GameConfig::MAX_ROOMS];
-        for (i, g) in gone.iter_mut().enumerate() {
+        for (i, is_gone) in gone.iter_mut().enumerate() {
             if i != 4 {
-                *g = true;
+                *is_gone = true;
             }
         }
         assert!(plan_connections(&gone).is_empty());
@@ -209,14 +180,14 @@ mod tests {
         let connections = plan_connections(&gone);
         let live = GameConfig::MAX_ROOMS;
 
-        // Spanning tree yields exactly |V| - 1 links; extra links are added on
-        // top, bounded by EXTRA_CONNECTION_ROLLS.
+        // Spanning tree yields |V| - 1 links; extra links are added on top,
+        // bounded by EXTRA_CONNECTION_ROLLS.
         assert!(connections.len() >= live - 1);
         assert!(connections.len() <= live - 1 + GameConfig::EXTRA_CONNECTION_ROLLS as usize);
 
         // Every link joins orthogonally adjacent slots.
         for &(a, b) in &connections {
-            assert!(neighbors(a).contains(&b), "{a} is not adjacent to {b}");
+            assert!(neighbors(a).any(|n| n == b), "{a} is not adjacent to {b}");
         }
 
         // The resulting graph reaches every live room.
