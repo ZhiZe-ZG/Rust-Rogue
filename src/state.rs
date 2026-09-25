@@ -44,7 +44,8 @@ use crate::globals::{
     CObjInfo,
 };
 use crate::item::thing_list::{allocated_count, new_actor, new_item};
-use crate::level::{PassageLinks, Room};
+use crate::level::PassageLinks;
+use crate::structure::Room;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -2236,7 +2237,7 @@ unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
             let tile = lvl
                 .map
                 .get(y as usize, x as usize)
-                .unwrap_or(crate::level::Tile::Empty);
+                .unwrap_or(crate::tile::Tile::Empty);
             let _ = rs_write_char(savef, tile.to_u8() as c_char);
             let _ = rs_write_boolean(savef, lvl.flags.real[idx] as c_int);
             let _ = rs_write_boolean(savef, lvl.flags.passage[idx] as c_int);
@@ -2290,11 +2291,11 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
             let _ = rs_read_char(inf, &mut trap_kind);
             let _ = rs_read_thing_reference(inf, MLIST.head(), &mut monst);
 
-            let trap = crate::level::TrapType::from_raw(trap_kind as u8);
+            let trap = crate::tile::TrapType::from_raw(trap_kind as u8);
             let tile =
-                crate::level::Tile::from_u8(tile_disc as u8).unwrap_or(crate::level::Tile::Empty);
+                crate::tile::Tile::from_u8(tile_disc as u8).unwrap_or(crate::tile::Tile::Empty);
             let tile = match tile {
-                crate::level::Tile::Trap(_) => crate::level::Tile::Trap(trap),
+                crate::tile::Tile::Trap(_) => crate::tile::Tile::Trap(trap),
                 other => other,
             };
             let _ = lvl.map.set(y as usize, x as usize, tile);

@@ -25,7 +25,7 @@ use crate::rnd::rnd;
 use crate::ui::output;
 
 use super::level::{with_current_level_mut, LevelFlags};
-use super::tile::{Tile, TrapType};
+use crate::tile::{Tile, TrapType};
 
 // -- Glyphs --
 const AMULET: u8 = b',';

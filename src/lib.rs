@@ -26,6 +26,8 @@ pub mod save;
 pub mod score;
 pub mod startup;
 pub mod state;
+pub mod structure;
+pub mod tile;
 pub mod ui;
 pub mod vers;
 pub mod wizard;

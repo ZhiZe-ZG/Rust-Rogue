@@ -19,7 +19,8 @@ use std::sync::{OnceLock, RwLock};
 
 use crate::config::GameConfig;
 use crate::entity::player::{Thing, ThingMonster, Stats};
-use crate::level::{Level, Tile};
+use crate::level::Level;
+use crate::tile::Tile;
 use glam::IVec2;
 
 /// A non-owning, interior-mutable cell for a raw [`CThing`] pointer.

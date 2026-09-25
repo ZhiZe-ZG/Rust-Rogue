@@ -869,7 +869,7 @@ pub unsafe extern "C" fn search() {
             let flags = crate::draw::flat_at(y, x);
             if (flags as u8 & F_REAL as u8) == 0 {
                 match crate::game::tile_at(y, x) {
-                    crate::level::Tile::Wall | crate::level::Tile::HiddenDoor => {
+                    crate::tile::Tile::Wall | crate::tile::Tile::HiddenDoor => {
                         if rnd(5 + probinc) == 0 {
                             crate::draw::reveal_secret_at(y, x);
                             msg_str("a secret door");
@@ -878,7 +878,7 @@ pub unsafe extern "C" fn search() {
                             running = false as c_uchar;
                         }
                     }
-                    crate::level::Tile::Trap(_) => {
+                    crate::tile::Tile::Trap(_) => {
                         if rnd(2 + probinc) == 0 {
                             crate::level::with_current_level_mut(|current| {
                                 current.reveal_trap(y as usize, x as usize);
@@ -906,7 +906,7 @@ pub unsafe extern "C" fn search() {
                             running = false as c_uchar;
                         }
                     }
-                    crate::level::Tile::Empty => {
+                    crate::tile::Tile::Empty => {
                         if rnd(3 + probinc) == 0 {
                             crate::draw::reveal_secret_at(y, x);
                             found = true;
@@ -939,7 +939,7 @@ pub unsafe extern "C" fn d_level() {
         return;
     }
     let hero = hero_pos();
-    if crate::game::tile_at(hero.y, hero.x) != crate::level::Tile::Stairs {
+    if crate::game::tile_at(hero.y, hero.x) != crate::tile::Tile::Stairs {
         msg_str("I see no way down");
     } else {
         crate::game::set_current_depth(crate::game::current_depth() + 1);
@@ -958,7 +958,7 @@ pub unsafe extern "C" fn u_level() {
         return;
     }
     let hero = hero_pos();
-    if crate::game::tile_at(hero.y, hero.x) == crate::level::Tile::Stairs {
+    if crate::game::tile_at(hero.y, hero.x) == crate::tile::Tile::Stairs {
         if amulet != 0 {
             crate::game::set_current_depth(crate::game::current_depth() - 1);
             if crate::game::current_depth() == 0 {

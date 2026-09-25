@@ -16,7 +16,7 @@ use crate::globals::{max_level, no_food};
 use crate::ui::output;
 
 use super::presence::populate_level;
-use super::structure::Room;
+use crate::structure::Room;
 
 /// Interpret `tp` as a monster (`CThingMonster`).
 #[inline]

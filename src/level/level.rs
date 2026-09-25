@@ -12,8 +12,8 @@ use super::passages::{
     number_passages, plan_corridor, Passage, PassageLinks,
 };
 use super::roomgraph::RoomGraph;
-use super::structure::{Room, Structure};
-use super::tile::{Tile, TrapType};
+use crate::structure::{Room, Structure};
+use crate::tile::{Tile, TrapType};
 use crate::config::GameConfig;
 use crate::game::MonsterMap;
 use crate::item::item_list::ItemList;
