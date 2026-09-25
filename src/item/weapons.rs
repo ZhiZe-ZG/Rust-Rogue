@@ -70,7 +70,7 @@ static INIT_DAM: [InitWeap; MAXWEAPONS] = [
         iw_dam: b"1x6\0",
         iw_hrl: b"1x4\0",
         iw_launch: NO_WEAPON,
-        iw_flags: ISMISL | ISMISL,
+        iw_flags: ISMISL,
     },
     InitWeap {
         iw_dam: b"4x4\0",

@@ -6,9 +6,8 @@ use std::os::raw::{c_char, c_int, c_long, c_uchar, c_void};
 
 use crate::command::command;
 use crate::config::GameConfig;
-use crate::daemon::{fuse, start_daemon};
-use crate::daemons::{doctor, stomach, swander};
-use crate::entity::chase::{roomin, runners};
+use crate::daemon::{fuse, start_daemon, Daemon};
+use crate::entity::chase::roomin;
 use crate::entity::player::{Thing, ThingMonster, MonsterFlags};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
@@ -446,21 +445,20 @@ pub unsafe extern "C" fn rogue_main(
         .flush()
         .expect("failed to flush startup message");
     runtime::initialize();
-    if GameConfig::SCREEN_LINES < GameConfig::SCREEN_LINES
-        || GameConfig::SCREEN_COLS < GameConfig::SCREEN_COLS
-    {
-        runtime::shutdown();
-        eprintln!(
-            "Sorry, the screen must be at least {}x{}",
-            GameConfig::SCREEN_LINES,
-            GameConfig::SCREEN_COLS
-        );
-        eprintln!(
-            "Current terminal size: {}x{}",
-            GameConfig::SCREEN_COLS,
-            GameConfig::SCREEN_LINES
-        );
-        my_exit(1);
+    // Reject terminals smaller than the fixed game grid. The physical size is
+    // unavailable on some backends; in that case keep the legacy permissive
+    // behaviour and continue.
+    if let Some(size) = crate::ui::physical_size() {
+        if size.y < GameConfig::SCREEN_LINES || size.x < GameConfig::SCREEN_COLS {
+            runtime::shutdown();
+            eprintln!(
+                "Sorry, the screen must be at least {}x{}",
+                GameConfig::SCREEN_LINES,
+                GameConfig::SCREEN_COLS
+            );
+            eprintln!("Current terminal size: {}x{}", size.x, size.y);
+            my_exit(1);
+        }
     }
 
     init_probs();
@@ -475,10 +473,10 @@ pub unsafe extern "C" fn rogue_main(
         noscore = wizard;
     }
     new_level();
-    start_daemon(runners as *const c_void, 0, AFTER);
-    start_daemon(doctor as *const c_void, 0, AFTER);
-    fuse(swander as *const c_void, 0, WANDERTIME, AFTER);
-    start_daemon(stomach as *const c_void, 0, AFTER);
+    start_daemon(Daemon::Runners, 0, AFTER);
+    start_daemon(Daemon::Doctor, 0, AFTER);
+    fuse(Daemon::Swander, 0, WANDERTIME, AFTER);
+    start_daemon(Daemon::Stomach, 0, AFTER);
     playit();
     0
 }

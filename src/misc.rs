@@ -4,8 +4,7 @@
 //! helpers shared across the game loop.
 use crate::config::GameConfig;
 use crate::globals::CObjInfo;
-use crate::daemon::{extinguish, fuse};
-use crate::daemons::nohaste;
+use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
 use crate::game::PLAYER;
 use crate::item::pack::{get_item, leave_pack, reset_last};
@@ -248,14 +247,14 @@ pub unsafe fn add_haste(potion: bool) -> bool {
     if player_has(MonsterFlags::HASTE) {
         no_command += rnd(8);
         PLAYER.remove_flag(MonsterFlags::RUN | MonsterFlags::HASTE);
-        extinguish(nohaste as *const c_void);
+        extinguish(Daemon::Nohaste);
         msg_str("you faint from exhaustion");
         return false;
     }
 
     PLAYER.add_flag(MonsterFlags::HASTE);
     if potion {
-        fuse(nohaste as *const c_void, 0, rnd(4) + 4, AFTER);
+        fuse(Daemon::Nohaste, 0, rnd(4) + 4, AFTER);
     }
     true
 }

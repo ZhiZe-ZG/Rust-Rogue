@@ -14,9 +14,9 @@ use glam::IVec2;
 
 use crate::ui::output::{addmsg_str, msg_str};
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
-use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon};
+use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon, Daemon};
 use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
 use crate::game::MONSTER_LIST;
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn doctor() {
 /// Called when it is time to start rolling for wandering monsters.
 #[no_mangle]
 pub unsafe extern "C" fn swander() {
-    start_daemon(rollwand as *const c_void, 0, BEFORE);
+    start_daemon(Daemon::Rollwand, 0, BEFORE);
 }
 
 /// rollwand:
@@ -129,8 +129,8 @@ pub unsafe extern "C" fn rollwand() {
     if between >= 4 {
         if roll(1, 6) == 4 {
             wanderer();
-            kill_daemon(rollwand as *const c_void);
-            fuse(swander as *const c_void, 0, spread(70), BEFORE);
+            kill_daemon(Daemon::Rollwand);
+            fuse(Daemon::Swander, 0, spread(70), BEFORE);
         }
         between = 0;
     }
@@ -173,7 +173,7 @@ pub unsafe extern "C" fn unsee() {
 #[no_mangle]
 pub unsafe extern "C" fn sight() {
     if PLAYER.has_flag(MonsterFlags::BLIND) {
-        extinguish(sight as *const c_void);
+        extinguish(Daemon::Sight);
         PLAYER.remove_flag(MonsterFlags::BLIND);
         let proom = PLAYER.room();
         if !crate::game::room_gone(proom) {
@@ -281,7 +281,7 @@ pub unsafe extern "C" fn come_down() {
         return;
     }
 
-    kill_daemon(visuals as *const c_void);
+    kill_daemon(Daemon::Visuals);
     PLAYER.remove_flag(MonsterFlags::HALU);
 
     if PLAYER.has_flag(MonsterFlags::BLIND) {

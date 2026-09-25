@@ -83,6 +83,15 @@ pub(crate) const fn screen_size() -> IVec2 {
     IVec2::new(NCOLS as i32, NROWS as i32)
 }
 
+/// The physical terminal size in (columns, rows), if it can be queried.
+///
+/// Used by startup to reject terminals smaller than the fixed game grid.
+pub(crate) fn physical_size() -> Option<IVec2> {
+    crossterm::terminal::size()
+        .ok()
+        .map(|(cols, rows)| IVec2::new(cols as i32, rows as i32))
+}
+
 #[inline]
 fn in_bounds(y: i32, x: i32) -> bool {
     y >= 0 && x >= 0 && (y as usize) < NROWS && (x as usize) < NCOLS

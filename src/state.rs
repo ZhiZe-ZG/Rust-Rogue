@@ -33,9 +33,7 @@ use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 
-use crate::daemon::CDelayedAction;
-use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfuse, unsee};
-use crate::entity::chase::runners;
+use crate::daemon::{CDelayedAction, Daemon, D_LIST};
 use crate::game::{MONSTER_LIST, MONSTER_MAP};
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
@@ -124,9 +122,6 @@ pub struct CStone {
     pub st_name: *const c_char,
     pub st_value: c_int,
 }
-
-/// Delayed-action callback slot type (same representation as `daemon::DFunc`).
-type DFunc = Option<unsafe extern "C" fn()>;
 
 // ─── Extern C globals (defined in vers.c) ────────────────────────────────────
 
@@ -222,8 +217,7 @@ unsafe extern "C" {
     static mut max_stats: Stats;
     static mut oldrp: Option<usize>;
 
-    // daemons (defined in daemon.rs as `d_list`) and misc C-visible globals
-    static mut d_list: [CDelayedAction; MAXDAEMONS];
+    // misc C-visible globals (daemons live in `crate::daemon::D_LIST`)
     static mut between: c_int;
     static mut nh: IVec2;
     static mut group: c_int;
@@ -255,12 +249,6 @@ unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
 #[inline]
 unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
-}
-
-/// Wrap a daemon callback in the nullable function-pointer representation.
-#[inline]
-unsafe fn fn_to_dfunc(f: unsafe extern "C" fn()) -> DFunc {
-    Some(f)
 }
 
 // ─── Low-level primitives ────────────────────────────────────────────────────
@@ -1305,7 +1293,6 @@ unsafe fn rs_read_sticks(inf: *mut CFile) -> c_int {
 
 unsafe fn rs_write_daemons(savef: *mut CFile, dl: *mut CDelayedAction, cnt: c_int) -> c_int {
     let mut i: c_int = 0;
-    let mut func: c_int = 0;
 
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -1315,31 +1302,13 @@ unsafe fn rs_write_daemons(savef: *mut CFile, dl: *mut CDelayedAction, cnt: c_in
     let _ = rs_write_int(savef, cnt);
 
     while i < cnt {
-        let f = (*dl.add(i as usize)).d_func;
-
-        if f == fn_to_dfunc(rollwand) {
-            func = 1;
-        } else if f == fn_to_dfunc(doctor) {
-            func = 2;
-        } else if f == fn_to_dfunc(stomach) {
-            func = 3;
-        } else if f == fn_to_dfunc(runners) {
-            func = 4;
-        } else if f == fn_to_dfunc(swander) {
-            func = 5;
-        } else if f == fn_to_dfunc(nohaste) {
-            func = 6;
-        } else if f == fn_to_dfunc(unconfuse) {
-            func = 7;
-        } else if f == fn_to_dfunc(unsee) {
-            func = 8;
-        } else if f == fn_to_dfunc(sight) {
-            func = 9;
-        } else if f.is_none() {
-            func = 0;
-        } else {
-            func = -1;
-        }
+        // Map the typed callback back to the legacy integer identity. Callbacks
+        // the original `state.c` did not know (and empty slots) serialise as 0
+        // or -1, exactly as before, so the bytes are unchanged.
+        let func: c_int = match (*dl.add(i as usize)).d_func {
+            None => 0,
+            Some(d) => d.save_id().unwrap_or(-1),
+        };
 
         let _ = rs_write_int(savef, (*dl.add(i as usize)).d_type);
         let _ = rs_write_int(savef, func);
@@ -1375,18 +1344,7 @@ unsafe fn rs_read_daemons(inf: *mut CFile, dl: *mut CDelayedAction, cnt: c_int) 
         let _ = rs_read_int(inf, &mut (*dl.add(i as usize)).d_arg);
         let _ = rs_read_int(inf, &mut (*dl.add(i as usize)).d_time);
 
-        (*dl.add(i as usize)).d_func = match func {
-            1 => fn_to_dfunc(rollwand),
-            2 => fn_to_dfunc(doctor),
-            3 => fn_to_dfunc(stomach),
-            4 => fn_to_dfunc(runners),
-            5 => fn_to_dfunc(swander),
-            6 => fn_to_dfunc(nohaste),
-            7 => fn_to_dfunc(unconfuse),
-            8 => fn_to_dfunc(unsee),
-            9 => fn_to_dfunc(sight),
-            _ => None,
-        };
+        (*dl.add(i as usize)).d_func = Daemon::from_save_id(func);
 
         i += 1;
     }
@@ -2326,7 +2284,7 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
 /// stairs, player, equipment slots, l_last_pick,
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
-/// scr_info, weap_info, ws_info, d_list, total, between, nh, group.
+/// scr_info, weap_info, ws_info, D_LIST, total, between, nh, group.
 #[no_mangle]
 pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     if WRITE_ERROR != 0 {
@@ -2486,7 +2444,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 
     let _ = rs_write_daemons(
         savef,
-        (&raw mut d_list) as *mut CDelayedAction,
+        (&raw mut D_LIST) as *mut CDelayedAction,
         MAXDAEMONS as c_int,
     );
     if MASTER {
@@ -2520,7 +2478,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 /// stairs, player, equipment slots, l_last_pick,
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
-/// scr_info, weap_info, ws_info, d_list, total, between, nh, group.
+/// scr_info, weap_info, ws_info, D_LIST, total, between, nh, group.
 #[no_mangle]
 pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let mut dummyint: c_int = 0;
@@ -2686,7 +2644,7 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
 
     let _ = rs_read_daemons(
         inf,
-        (&raw mut d_list) as *mut CDelayedAction,
+        (&raw mut D_LIST) as *mut CDelayedAction,
         MAXDAEMONS as c_int,
     );
     let _ = rs_read_int(inf, &mut dummyint); /* total */

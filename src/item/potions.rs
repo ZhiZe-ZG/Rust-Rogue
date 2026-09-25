@@ -5,7 +5,7 @@ use crate::rnd::rnd;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
 use std::ptr;
 
-use crate::daemon::{fuse, lengthen, start_daemon};
+use crate::daemon::{fuse, lengthen, start_daemon, Daemon};
 use crate::daemons::{come_down, land, sight, unconfuse, unsee, visuals};
 use crate::draw::look;
 
@@ -182,52 +182,49 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
         match potion {
             PotionType::Confuse => (
                 MonsterFlags::HUH,
-                unconfuse as *const c_void,
+                Some(Daemon::Unconfuse),
                 HUHDURATION,
                 c"what a tripy feeling!".as_ptr(),
                 c"wait, what's going on here. Huh? What? Who?".as_ptr(),
             ),
             PotionType::Lsd => (
                 MonsterFlags::HALU,
-                come_down as *const c_void,
+                Some(Daemon::ComeDown),
                 SEEDURATION,
                 c"Oh, wow!  Everything seems so cosmic!".as_ptr(),
                 c"Oh, wow!  Everything seems so cosmic!".as_ptr(),
             ),
             PotionType::SeeInvisible => (
                 MonsterFlags::CANSEE,
-                unsee as *const c_void,
+                Some(Daemon::Unsee),
                 SEEDURATION,
                 taste_ptr,
                 taste_ptr,
             ),
             PotionType::Blind => (
                 MonsterFlags::BLIND,
-                sight as *const c_void,
+                Some(Daemon::Sight),
                 SEEDURATION,
                 c"oh, bummer!  Everything is dark!  Help!".as_ptr(),
                 c"a cloak of darkness falls around you".as_ptr(),
             ),
             PotionType::Levitate => (
                 MonsterFlags::LEVIT,
-                land as *const c_void,
+                Some(Daemon::Land),
                 HEALTIME,
                 c"oh, wow!  You're floating in the air!".as_ptr(),
                 c"you start to float in the air".as_ptr(),
             ),
-            _ => (
-                MonsterFlags::NONE,
-                ptr::null(),
-                0,
-                ptr::null(),
-                ptr::null(),
-            ),
+            _ => (MonsterFlags::NONE, None, 0, ptr::null(), ptr::null()),
         }
     };
 
     (*pot_info.as_mut_ptr().add(potion.index())).oi_know = knowit;
 
-    if flags.is_empty() || daemon.is_null() {
+    let Some(daemon) = daemon else {
+        return;
+    };
+    if flags.is_empty() {
         return;
     }
 
@@ -312,12 +309,7 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::MonsterFind => {
             crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
-            fuse(
-                turn_see as *const c_void,
-                true as c_uchar as c_int,
-                HUHDURATION,
-                AFTER,
-            );
+            fuse(Daemon::TurnSee, true as c_uchar as c_int, HUHDURATION, AFTER);
             if turn_see(false as c_uchar) == 0 {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
@@ -379,7 +371,7 @@ pub unsafe extern "C" fn quaff() {
                 if player_has(MonsterFlags::SEEMONST) {
                     turn_see(false as c_uchar);
                 }
-                start_daemon(visuals as *const c_void, 0, BEFORE);
+                start_daemon(Daemon::Visuals, 0, BEFORE);
                 seenstairs = seen_stairs();
             }
             do_pot_impl(PotionType::Lsd, true);

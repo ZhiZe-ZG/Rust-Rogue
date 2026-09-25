@@ -2,8 +2,7 @@
 //!
 //! Ported from `src/c/monsters.c` to Rust.
 use crate::config::GameConfig;
-use crate::daemon::{fuse, lengthen};
-use crate::daemons::unconfuse;
+use crate::daemon::{fuse, lengthen, Daemon};
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
@@ -275,9 +274,9 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
             (*thing_t(tp)).t_flags.insert(MonsterFlags::FOUND);
             if save(VS_MAGIC) == 0 {
                 if player_has(MonsterFlags::HUH) {
-                    lengthen(unconfuse as *const c_void, spread(HUHDURATION));
+                    lengthen(Daemon::Unconfuse, spread(HUHDURATION));
                 } else {
-                    fuse(unconfuse as *const c_void, 0, spread(HUHDURATION), AFTER);
+                    fuse(Daemon::Unconfuse, 0, spread(HUHDURATION), AFTER);
                 }
                 crate::game::PLAYER.add_flag(MonsterFlags::HUH);
                 let mname = set_mname(tp);

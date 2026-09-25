@@ -29,6 +29,11 @@ pub fn screen_size() -> IVec2 {
     terminal::screen_size()
 }
 
+/// The physical terminal size in (columns, rows), if it can be queried.
+pub fn physical_size() -> Option<IVec2> {
+    terminal::physical_size()
+}
+
 /// Read one cell from the retained screen grid (row, column).
 ///
 /// Used by save/restore to dump and reload the visible screen.
