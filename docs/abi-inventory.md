@@ -38,10 +38,26 @@ Landed in this slice:
   terminal size via `ui::physical_size`).
 - Removed the now-dead daemon-function imports introduced by the migration.
 
-Still open in Stage 1: consolidating the duplicated libc/ncurses declarations
-into one private FFI module, and the `unsafe impl Send`/`Sync` review (the latter
-is blocked on Stage 2, because `Thing` still embeds `NonNull` handles that
-`MonsterList`'s `Mutex` relies on).
+Stage 1.1 (FFI consolidation) is **done**: all portable libc/stdio/string/ctype
+declarations now live in the private `src/ffi.rs`, and the three duplicate
+`CFile` definitions collapsed to the single `ffi::CFile`. The only Stage 1 item
+still open is the `unsafe impl Send`/`Sync` removal, which is **blocked on
+Stage 2** because `Thing` still embeds `NonNull` handles that `MonsterList`'s
+`Mutex` relies on.
+
+### Stage 2 progress (handle/list migration)
+
+Because the handle migration touches nearly every gameplay module, it is being
+split into reviewable slices:
+
+- **Stage 2.5 (done)**: added focused tests to `item/thing_list.rs` pinning the
+  list/arena invariants the migration must preserve — attach/detach across
+  head/middle/tail/only-element cases, neighbour-link patching, removal during
+  traversal (capturing the successor before free), and balanced allocation
+  accounting via `allocated_count`. Test count is now 41.
+- **Still open**: the generational `ThingId` arena that replaces the `Box`
+  arena and intrusive `l_next`/`l_prev` ordering, and migrating callers off raw
+  `*mut Thing` handles.
 
 ### `cargo check` warning categories (top groups)
 
@@ -161,11 +177,17 @@ stale).
 
 | Location | Type | Justification to review |
 | --- | --- | --- |
-| `entity/player.rs:366-367` | `Thing` | needed only because `MonsterList` is a `Mutex`; remove when handles are IDs |
-| `item/thing_list.rs:15` | `OwnedThing` | arena |
-| `item/item_list.rs:25-26` | `ItemList` | `Level` behind lock |
-| `game/player.rs:36-37` | `Slot` | `PLAYER` static |
-| `init.rs:61` | `CStone` | material table |
+| `entity/player.rs:366-367` | `Thing` | needed only because `MonsterList` is a `Mutex`; remove when handles are IDs (Stage 2) |
+| `init.rs:62` | `CStone` | `static` table of `'static` string pointers; the impl is load-bearing |
+
+The unsafe-impl count dropped from **9 → 3**:
+- `item/thing_list.rs` — `unsafe impl Send for OwnedThing` was redundant
+  (`Thing` already opts into `Send`, so `Box<Thing>` is `Send`).
+- `item/item_list.rs` — `unsafe impl Send/Sync for ItemList` were removed by
+  storing the head in an `AtomicPtr<Thing>` (unconditionally `Send + Sync`)
+  instead of a bare `*mut Thing`, while keeping the same handle semantics.
+- `game/player.rs` — `unsafe impl Send/Sync for Slot` were removed the same way,
+  by storing each equipment handle in an `AtomicPtr<Thing>`.
 
 ## 6. Confirmed ABI-safety / correctness items
 

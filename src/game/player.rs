@@ -17,41 +17,35 @@
 //! dereference.
 
 use std::ptr::NonNull;
+use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingMonster};
 use glam::IVec2;
 
-/// Interior-mutable, lock-guarded slot holding an optional [`Thing`] handle.
+/// Interior-mutable slot holding an optional [`Thing`] handle.
 ///
 /// The game is single-threaded, but the slot is reachable through the
-/// process-wide [`PLAYER`] `static` (which must be `Sync`). [`NonNull`] is
-/// neither `Send` nor `Sync`, so this wrapper opts in explicitly and only ever
-/// dereferences the handle from the owning (single-threaded) game logic.
+/// process-wide [`PLAYER`] `static` (which must be `Sync`). The handle is
+/// stored in an [`AtomicPtr`], which is unconditionally `Send + Sync`, so no
+/// `unsafe impl` is required; a null pointer means "empty" and the handle is
+/// only ever dereferenced by the single-threaded gameplay loop.
 #[derive(Default)]
-struct Slot(RwLock<Option<NonNull<Thing>>>);
-
-// SAFETY: access to the handle is always guarded by the inner `RwLock`, and the
-// handle is only dereferenced by the single-threaded gameplay loop.
-unsafe impl Send for Slot {}
-unsafe impl Sync for Slot {}
+struct Slot(AtomicPtr<Thing>);
 
 impl Slot {
     const fn new() -> Self {
-        Self(RwLock::new(None))
+        Self(AtomicPtr::new(std::ptr::null_mut()))
     }
 
     #[inline]
     fn get(&self) -> *mut Thing {
-        self.0
-            .read()
-            .unwrap_or_else(|poison| poison.into_inner())
-            .map_or(std::ptr::null_mut(), NonNull::as_ptr)
+        self.0.load(Ordering::Relaxed)
     }
 
     #[inline]
     fn set(&self, ptr: *mut Thing) {
-        *self.0.write().unwrap_or_else(|poison| poison.into_inner()) = NonNull::new(ptr);
+        self.0.store(ptr, Ordering::Relaxed);
     }
 }
 

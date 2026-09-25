@@ -5,56 +5,80 @@
 
 use crate::entity::player::Thing;
 use crate::item::thing_list::{attach, detach, free_list};
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 /// Intrusive linked list of the floor items (objects) for the current level.
 ///
-/// Holds the head of the `l_next`/`l_prev` chain of [`CThing`] objects resting
+/// Holds the head of the `l_next`/`l_prev` chain of [`Thing`] objects resting
 /// on the level floor. The allocations themselves are owned by
 /// [`crate::item::thing_list`]; this type is only a handle to the head pointer,
-/// so it is `Copy`-like (cloning shares the same list) and its `Debug`/`Eq`
-/// implementations compare the head address, matching `Level`'s derives.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// so cloning shares the same list and `Debug`/`Eq` compare the head address,
+/// matching `Level`'s derives.
+///
+/// The head is stored in an [`AtomicPtr`] rather than a bare `*mut Thing`. The
+/// game is single-threaded, but `Level` (which owns this list) is reachable
+/// through `CURRENT_LEVEL`, so the list must be `Send`/`Sync`. `AtomicPtr<T>`
+/// is unconditionally `Send + Sync`, which removes the need for an
+/// `unsafe impl` on this type while keeping the same pointer-as-handle model.
+#[derive(Debug)]
 pub struct ItemList {
-    head: *mut Thing,
+    head: AtomicPtr<Thing>,
 }
-
-// The raw head pointer is neither `Send` nor `Sync`, but the game is
-// single-threaded and the pointer is only dereferenced by the gameplay loop.
-// `Level` (which owns this list) is shared through `CURRENT_LEVEL`'s `RwLock`,
-// so opting in here matches `MonsterList` and `Equipment`.
-unsafe impl Send for ItemList {}
-unsafe impl Sync for ItemList {}
 
 impl ItemList {
     /// An empty list.
     pub const fn new() -> Self {
         Self {
-            head: std::ptr::null_mut(),
+            head: AtomicPtr::new(std::ptr::null_mut()),
         }
     }
 
     /// Head of the floor-item list.
     pub fn head(&self) -> *mut Thing {
-        self.head
+        self.head.load(Ordering::Relaxed)
     }
 
     /// Prepend `item` to the floor-item list.
     pub unsafe fn attach(&mut self, item: *mut Thing) {
-        attach(&mut self.head, item);
+        attach(self.head.get_mut(), item);
     }
 
     /// Unlink `item` from the floor-item list.
     pub unsafe fn detach(&mut self, item: *mut Thing) {
-        detach(&mut self.head, item);
+        detach(self.head.get_mut(), item);
     }
 
     /// Drop every item in the list.
     pub unsafe fn clear(&mut self) {
-        free_list(&mut self.head);
+        free_list(self.head.get_mut());
     }
 
     /// Replace the list head (used by save/restore).
     pub fn set_head(&mut self, head: *mut Thing) {
-        self.head = head;
+        *self.head.get_mut() = head;
     }
 }
+
+impl Default for ItemList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Clone for ItemList {
+    fn clone(&self) -> Self {
+        // A copy shares the same underlying list via the head address, matching
+        // the previous pointer-copy semantics.
+        Self {
+            head: AtomicPtr::new(self.head()),
+        }
+    }
+}
+
+impl PartialEq for ItemList {
+    fn eq(&self, other: &Self) -> bool {
+        self.head() == other.head()
+    }
+}
+
+impl Eq for ItemList {}

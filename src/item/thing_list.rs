@@ -8,11 +8,13 @@ use crate::entity::player::{Thing, ThingMonster, ThingObject};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Mutex, OnceLock};
 
+/// Arena slot: a boxed, stable-address thing.
+///
+/// `Thing` already opts into `Send` (see `entity::player`), so `Box<Thing>` is
+/// `Send` automatically and no explicit `unsafe impl` is needed here. The game
+/// accesses the pointers from its single gameplay thread; the mutex only
+/// protects the arena's ownership when the global is initialised.
 struct OwnedThing(Box<Thing>);
-
-// The game accesses thing pointers on its single gameplay thread; the mutex
-// only protects the arena's ownership when the global is initialized.
-unsafe impl Send for OwnedThing {}
 
 static THINGS: OnceLock<Mutex<Vec<OwnedThing>>> = OnceLock::new();
 static TOTAL: AtomicI32 = AtomicI32::new(0);
@@ -163,4 +165,128 @@ pub unsafe fn new_item() -> *mut Thing {
 
 pub fn allocated_count() -> i32 {
     TOTAL.load(Ordering::Relaxed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::player::{thing_next, thing_prev};
+
+    /// Serialise the arena assertions; the arena and its counter are process
+    /// globals, so the tests must not interleave allocation/free from several
+    /// threads.
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Prepend/remove across head, middle, tail, and only-element cases, and
+    /// confirm neighbour links and the head pointer are patched correctly.
+    #[test]
+    fn attach_detach_preserves_order_and_links() {
+        let _guard = serial();
+        let a = unsafe { new_object() };
+        let b = unsafe { new_object() };
+        let c = unsafe { new_object() };
+
+        let mut head: *mut Thing = std::ptr::null_mut();
+        unsafe {
+            attach(&mut head, a);
+            attach(&mut head, b);
+            attach(&mut head, c);
+        }
+
+        // Head is the most recently attached; links read c, b, a.
+        assert_eq!(head, c);
+        unsafe {
+            assert_eq!(thing_next(c), b);
+            assert_eq!(thing_next(b), a);
+            assert!(thing_next(a).is_null());
+            assert!(thing_prev(c).is_null());
+            assert_eq!(thing_prev(b), c);
+            assert_eq!(thing_prev(a), b);
+        }
+
+        // Remove the middle element.
+        unsafe {
+            detach(&mut head, b);
+        }
+        assert_eq!(head, c);
+        unsafe {
+            assert_eq!(thing_next(c), a);
+            assert_eq!(thing_prev(a), c);
+            // The removed node's own header is cleared.
+            assert!(thing_next(b).is_null());
+            assert!(thing_prev(b).is_null());
+        }
+
+        // Remove the head element.
+        unsafe {
+            detach(&mut head, c);
+        }
+        assert_eq!(head, a);
+        unsafe {
+            assert!(thing_prev(a).is_null());
+        }
+
+        // Remove the only remaining element.
+        unsafe {
+            detach(&mut head, a);
+        }
+        assert!(head.is_null());
+
+        unsafe {
+            discard(a);
+            discard(b);
+            discard(c);
+        }
+    }
+
+    /// Draining a list while traversing must capture each node's successor
+    /// before the node is freed, and leave the list empty.
+    #[test]
+    fn removal_during_traversal_drains_list() {
+        let _guard = serial();
+        let a = unsafe { new_object() };
+        let b = unsafe { new_object() };
+        let c = unsafe { new_object() };
+
+        let mut head: *mut Thing = std::ptr::null_mut();
+        unsafe {
+            attach(&mut head, a);
+            attach(&mut head, b);
+            attach(&mut head, c);
+        }
+
+        let before = allocated_count();
+        let mut node = head;
+        let mut visited = 0;
+        unsafe {
+            while !node.is_null() {
+                // Capture the successor before the node is freed.
+                let next = thing_next(node);
+                visited += 1;
+                discard(node);
+                node = next;
+            }
+        }
+        assert_eq!(visited, 3);
+        // All three arena entries were released during the traversal.
+        assert_eq!(allocated_count(), before - 3);
+    }
+
+    /// Allocating and discarding objects keeps the tracked count balanced.
+    #[test]
+    fn allocation_count_is_balanced() {
+        let _guard = serial();
+        let before = allocated_count();
+        let a = unsafe { new_object() };
+        let b = unsafe { new_object() };
+        assert_eq!(allocated_count(), before + 2);
+        unsafe {
+            discard(a);
+            discard(b);
+        }
+        assert_eq!(allocated_count(), before);
+    }
 }
