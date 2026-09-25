@@ -12,7 +12,7 @@ use crate::entity::fight::{fight, swing};
 use crate::entity::monsters::save;
 use crate::entity::rndmove::rndmove;
 use crate::game;
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::item::armor::rust_armor;
 use crate::item::pack::floor_at;
 use crate::item::rings::RingType;
@@ -651,8 +651,8 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
                 if stats.hit_points <= 0 {
                     hit = TrapHit::Kill;
                 } else {
-                    if !ring_is(EQUIPMENT.left_ring(), RingType::SustainStrength)
-                        && !ring_is(EQUIPMENT.right_ring(), RingType::SustainStrength)
+                    if !ring_is(PLAYER.left_ring(), RingType::SustainStrength)
+                        && !ring_is(PLAYER.right_ring(), RingType::SustainStrength)
                         && save(VS_POISON) == 0
                     {
                         chg_str(-1);
@@ -665,7 +665,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
             if let Some(msg) = trap.msg(hit) {
                 msg_str(&msg);
             }
-            rust_armor(EQUIPMENT.armor());
+            rust_armor(PLAYER.armor());
         }
     }
 
@@ -858,7 +858,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
             seenstairs = true as c_uchar;
             running = false as c_uchar;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, game::EQUIPMENT.weapon(), false as c_uchar);
+                fight(&mut next_pos, game::PLAYER.weapon(), false as c_uchar);
             } else {
                 take = ch;
                 move_stuff(&mut next_pos, fl);
@@ -867,7 +867,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         _ => {
             running = false as c_uchar;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, game::EQUIPMENT.weapon(), false as c_uchar);
+                fight(&mut next_pos, game::PLAYER.weapon(), false as c_uchar);
             } else {
                 if ch != STAIRS {
                     take = ch;

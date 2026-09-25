@@ -10,7 +10,7 @@ use crate::draw::{look, map_cell_reveal};
 use crate::entity::monsters::{new_monster, randmonster};
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::game;
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::globals::{scr_info, weap_info};
 use crate::init::pick_color;
 use crate::item::pack::{get_item, leave_pack};
@@ -161,8 +161,8 @@ pub unsafe extern "C" fn read_scroll() {
         return;
     }
 
-    if obj == EQUIPMENT.weapon() {
-        EQUIPMENT.set_weapon(std::ptr::null_mut());
+    if obj == PLAYER.weapon() {
+        PLAYER.set_weapon(std::ptr::null_mut());
     }
 
     let discardit = (*thing_o(obj)).o_count == 1;
@@ -178,9 +178,9 @@ pub unsafe extern "C" fn read_scroll() {
             msg_str(&format!("your hands begin to glow {}", pick_color("red")));
         }
         ScrollType::Armor => {
-            if !EQUIPMENT.armor().is_null() {
-                (*thing_o(EQUIPMENT.armor())).o_arm -= 1;
-                (*thing_o(EQUIPMENT.armor())).o_flags.remove(ObjectFlags::CURSED);
+            if !PLAYER.armor().is_null() {
+                (*thing_o(PLAYER.armor())).o_arm -= 1;
+                (*thing_o(PLAYER.armor())).o_flags.remove(ObjectFlags::CURSED);
                 msg_str(&format!(
                     "your armor glows {} for a moment",
                     pick_color("silver")
@@ -328,18 +328,18 @@ pub unsafe extern "C" fn read_scroll() {
             }
         }
         ScrollType::Enchant => {
-            if EQUIPMENT.weapon().is_null() || (*thing_o(EQUIPMENT.weapon())).o_type != WEAPON {
+            if PLAYER.weapon().is_null() || (*thing_o(PLAYER.weapon())).o_type != WEAPON {
                 msg_str("you feel a strange sense of loss");
             } else {
-                (*thing_o(EQUIPMENT.weapon())).o_flags.remove(ObjectFlags::CURSED);
+                (*thing_o(PLAYER.weapon())).o_flags.remove(ObjectFlags::CURSED);
                 if rnd(2) == 0 {
-                    (*thing_o(EQUIPMENT.weapon())).o_hplus += 1;
+                    (*thing_o(PLAYER.weapon())).o_hplus += 1;
                 } else {
-                    (*thing_o(EQUIPMENT.weapon())).o_dplus += 1;
+                    (*thing_o(PLAYER.weapon())).o_dplus += 1;
                 }
                 msg_str(&format!(
                     "your {} glows {} for a moment",
-                    weap_info[(*thing_o(EQUIPMENT.weapon())).o_which as usize].oi_name,
+                    weap_info[(*thing_o(PLAYER.weapon())).o_which as usize].oi_name,
                     pick_color("blue")
                 ));
             }
@@ -348,10 +348,10 @@ pub unsafe extern "C" fn read_scroll() {
             msg_str("you hear maniacal laughter in the distance");
         }
         ScrollType::RemoveCurse => {
-            uncurse(EQUIPMENT.armor());
-            uncurse(EQUIPMENT.weapon());
-            uncurse(EQUIPMENT.left_ring());
-            uncurse(EQUIPMENT.right_ring());
+            uncurse(PLAYER.armor());
+            uncurse(PLAYER.weapon());
+            uncurse(PLAYER.left_ring());
+            uncurse(PLAYER.right_ring());
             msg_str(
                 &CStr::from_ptr(choose_str(
                     c"you feel in touch with the Universal Onenes".as_ptr(),
@@ -365,8 +365,8 @@ pub unsafe extern "C" fn read_scroll() {
             msg_str("you hear a high pitched humming noise");
         }
         ScrollType::Protect => {
-            if !EQUIPMENT.armor().is_null() {
-                (*thing_o(EQUIPMENT.armor())).o_flags.insert(ObjectFlags::PROT);
+            if !PLAYER.armor().is_null() {
+                (*thing_o(PLAYER.armor())).o_flags.insert(ObjectFlags::PROT);
                 msg_str(&format!(
                     "your armor is covered by a shimmering {} shield",
                     pick_color("gold")

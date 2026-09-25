@@ -3,7 +3,7 @@
 //! Ported from `src/c/armor.c` to Rust.
 use crate::daemon::{do_daemons, do_fuses};
 use crate::entity::player::{Thing, ThingObject, ObjectFlags};
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::item::pack::get_item;
 use crate::item::rings::RingType;
 use crate::item::things::{dropcheck, inv_name};
@@ -39,7 +39,7 @@ pub unsafe extern "C" fn wear() {
         return;
     }
 
-    if !EQUIPMENT.armor().is_null() {
+    if !PLAYER.armor().is_null() {
         addmsg_str("you are already wearing some");
         if terse == 0 {
             addmsg_str(".  You'll have to take it off first");
@@ -57,7 +57,7 @@ pub unsafe extern "C" fn wear() {
     waste_time();
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     let sp = inv_name(obj, true as c_uchar);
-    EQUIPMENT.set_armor(obj);
+    PLAYER.set_armor(obj);
     if terse == 0 {
         addmsg_str("you are now ");
     }
@@ -67,7 +67,7 @@ pub unsafe extern "C" fn wear() {
 /// Removes currently worn armor after curse/drop checks.
 #[no_mangle]
 pub unsafe extern "C" fn take_off() {
-    let obj = EQUIPMENT.armor();
+    let obj = PLAYER.armor();
     if obj.is_null() {
         after = false as c_uchar;
         if terse != 0 {
@@ -78,11 +78,11 @@ pub unsafe extern "C" fn take_off() {
         return;
     }
 
-    if dropcheck(EQUIPMENT.armor()) == 0 {
+    if dropcheck(PLAYER.armor()) == 0 {
         return;
     }
 
-    EQUIPMENT.set_armor(std::ptr::null_mut());
+    PLAYER.set_armor(std::ptr::null_mut());
     if terse != 0 {
         addmsg_str("was");
     } else {
@@ -117,8 +117,8 @@ pub unsafe extern "C" fn rust_armor(arm: *mut Thing) {
     }
 
     if (*thing_o(arm)).o_flags.contains(ObjectFlags::PROT)
-        || ring_is(EQUIPMENT.left_ring(), RingType::SustainArmor)
-        || ring_is(EQUIPMENT.right_ring(), RingType::SustainArmor)
+        || ring_is(PLAYER.left_ring(), RingType::SustainArmor)
+        || ring_is(PLAYER.right_ring(), RingType::SustainArmor)
     {
         if to_death == 0 {
             msg_str("the rust vanishes instantly");

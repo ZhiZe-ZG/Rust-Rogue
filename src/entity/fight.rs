@@ -12,7 +12,7 @@ use crate::rnd::rnd;
 
 use crate::entity::chase::{runto, see_monst};
 use crate::entity::monsters::save;
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::init::pick_color;
 use crate::item::armor::rust_armor;
 use crate::item::pack::leave_pack;
@@ -163,7 +163,7 @@ unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
 
 #[inline]
 unsafe fn iswearing(ring_type: RingType) -> bool {
-    isring(EQUIPMENT.left_ring(), ring_type) || isring(EQUIPMENT.right_ring(), ring_type)
+    isring(PLAYER.left_ring(), ring_type) || isring(PLAYER.right_ring(), ring_type)
 }
 
 #[inline]
@@ -314,7 +314,7 @@ pub unsafe extern "C" fn attack(mp: *mut Thing) -> c_int {
             let mtype = (*thing_t(mp)).t_type;
             if mtype == b'A' {
                 // Aquator: corrode armor
-                rust_armor(EQUIPMENT.armor());
+                rust_armor(PLAYER.armor());
             } else if mtype == b'I' {
                 // Ice monster: freeze player
                 (*thing_t(crate::game::player_ptr()))
@@ -436,10 +436,10 @@ pub unsafe extern "C" fn attack(mp: *mut Thing) -> c_int {
                 let mut obj = crate::entity::player::thing_pack(crate::game::player_ptr());
                 while !obj.is_null() {
                     let obj_next = crate::entity::player::thing_next(obj);
-                    if obj != EQUIPMENT.armor()
-                        && obj != EQUIPMENT.weapon()
-                        && obj != EQUIPMENT.left_ring()
-                        && obj != EQUIPMENT.right_ring()
+                    if obj != PLAYER.armor()
+                        && obj != PLAYER.weapon()
+                        && obj != PLAYER.left_ring()
+                        && obj != PLAYER.right_ring()
                         && is_magic_item(obj) != 0
                     {
                         nobj += 1;
@@ -565,30 +565,30 @@ pub unsafe extern "C" fn roll_em(
     } else {
         let mut hp = (*thing_o(weap)).o_hplus;
         let mut dp = (*thing_o(weap)).o_dplus;
-        if weap == EQUIPMENT.weapon() {
-            if isring(EQUIPMENT.left_ring(), RingType::AddDamage) {
-                dp += (*thing_o(EQUIPMENT.left_ring())).o_arm;
-            } else if isring(EQUIPMENT.left_ring(), RingType::AddHit) {
-                hp += (*thing_o(EQUIPMENT.left_ring())).o_arm;
+        if weap == PLAYER.weapon() {
+            if isring(PLAYER.left_ring(), RingType::AddDamage) {
+                dp += (*thing_o(PLAYER.left_ring())).o_arm;
+            } else if isring(PLAYER.left_ring(), RingType::AddHit) {
+                hp += (*thing_o(PLAYER.left_ring())).o_arm;
             }
-            if isring(EQUIPMENT.right_ring(), RingType::AddDamage) {
-                dp += (*thing_o(EQUIPMENT.right_ring())).o_arm;
-            } else if isring(EQUIPMENT.right_ring(), RingType::AddHit) {
-                hp += (*thing_o(EQUIPMENT.right_ring())).o_arm;
+            if isring(PLAYER.right_ring(), RingType::AddDamage) {
+                dp += (*thing_o(PLAYER.right_ring())).o_arm;
+            } else if isring(PLAYER.right_ring(), RingType::AddHit) {
+                hp += (*thing_o(PLAYER.right_ring())).o_arm;
             }
         }
         if hurl != 0 {
             if (*thing_o(weap)).o_flags.contains(ObjectFlags::MISL)
-                && !EQUIPMENT.weapon().is_null()
-                && (*thing_o(EQUIPMENT.weapon())).o_which == (*thing_o(weap)).o_launch
+                && !PLAYER.weapon().is_null()
+                && (*thing_o(PLAYER.weapon())).o_which == (*thing_o(weap)).o_launch
             {
                 let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr() as *mut c_char;
                 return roll_em_inner(
                     thatt,
                     thdef,
                     hurldmg_ptr,
-                    hp + (*thing_o(EQUIPMENT.weapon())).o_hplus,
-                    dp + (*thing_o(EQUIPMENT.weapon())).o_dplus,
+                    hp + (*thing_o(PLAYER.weapon())).o_hplus,
+                    dp + (*thing_o(PLAYER.weapon())).o_dplus,
                 );
             } else if (*thing_o(weap)).o_launch < 0 {
                 let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr() as *mut c_char;
@@ -619,14 +619,14 @@ unsafe fn roll_em_inner(
     let player_is_def = thdef as *const u8 == (crate::game::player_ptr()) as *const u8;
     let mut def_arm = def_arm_base;
     if player_is_def {
-        if !EQUIPMENT.armor().is_null() {
-            def_arm = (*thing_o(EQUIPMENT.armor())).o_arm;
+        if !PLAYER.armor().is_null() {
+            def_arm = (*thing_o(PLAYER.armor())).o_arm;
         }
-        if isring(EQUIPMENT.left_ring(), RingType::Protection) {
-            def_arm -= (*thing_o(EQUIPMENT.left_ring())).o_arm;
+        if isring(PLAYER.left_ring(), RingType::Protection) {
+            def_arm -= (*thing_o(PLAYER.left_ring())).o_arm;
         }
-        if isring(EQUIPMENT.right_ring(), RingType::Protection) {
-            def_arm -= (*thing_o(EQUIPMENT.right_ring())).o_arm;
+        if isring(PLAYER.right_ring(), RingType::Protection) {
+            def_arm -= (*thing_o(PLAYER.right_ring())).o_arm;
         }
     }
 

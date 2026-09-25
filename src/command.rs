@@ -15,7 +15,7 @@ use crate::entity::chase::{diag_ok, see_monst};
 use crate::entity::player::{
     do_move, do_run, Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags,
 };
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::help::{help, identify};
 use crate::item::armor::{take_off, wear};
@@ -670,17 +670,17 @@ pub unsafe extern "C" fn command() {
                     }
                     b')' => {
                         current(
-                            EQUIPMENT.weapon(),
+                            PLAYER.weapon(),
                             c"wielding".as_ptr(),
                             std::ptr::null_mut(),
                         );
                     }
                     b']' => {
-                        current(EQUIPMENT.armor(), c"wearing".as_ptr(), std::ptr::null_mut());
+                        current(PLAYER.armor(), c"wearing".as_ptr(), std::ptr::null_mut());
                     }
                     b'=' => {
                         current(
-                            EQUIPMENT.left_ring(),
+                            PLAYER.left_ring(),
                             c"wearing".as_ptr(),
                             if terse != 0 {
                                 c"(L)".as_ptr()
@@ -689,7 +689,7 @@ pub unsafe extern "C" fn command() {
                             },
                         );
                         current(
-                            EQUIPMENT.right_ring(),
+                            PLAYER.right_ring(),
                             c"wearing".as_ptr(),
                             if terse != 0 {
                                 c"(R)".as_ptr()
@@ -765,7 +765,7 @@ pub unsafe extern "C" fn command() {
                                     (*thing_o(obj)).o_hplus = 1;
                                     (*thing_o(obj)).o_dplus = 1;
                                     add_pack(obj, true as c_uchar);
-                                    EQUIPMENT.set_weapon(obj);
+                                    PLAYER.set_weapon(obj);
                                     /*
                                      * And his suit of armor
                                      */
@@ -776,7 +776,7 @@ pub unsafe extern "C" fn command() {
                                     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
                                     (*thing_o(obj)).o_count = 1;
                                     (*thing_o(obj)).o_group = 0;
-                                    EQUIPMENT.set_armor(obj);
+                                    PLAYER.set_armor(obj);
                                     add_pack(obj, true as c_uchar);
                                 }
                                 b'*' => pr_list(),
@@ -807,14 +807,14 @@ pub unsafe extern "C" fn command() {
 
     do_daemons(AFTER);
     do_fuses(AFTER);
-    if isring(EQUIPMENT.left_ring(), RingType::Searching) {
+    if isring(PLAYER.left_ring(), RingType::Searching) {
         search();
-    } else if isring(EQUIPMENT.left_ring(), RingType::Teleport) && rnd(50) == 0 {
+    } else if isring(PLAYER.left_ring(), RingType::Teleport) && rnd(50) == 0 {
         teleport();
     }
-    if isring(EQUIPMENT.right_ring(), RingType::Searching) {
+    if isring(PLAYER.right_ring(), RingType::Searching) {
         search();
-    } else if isring(EQUIPMENT.right_ring(), RingType::Teleport) && rnd(50) == 0 {
+    } else if isring(PLAYER.right_ring(), RingType::Teleport) && rnd(50) == 0 {
         teleport();
     }
 }

@@ -38,7 +38,7 @@ use crate::daemons::{doctor, nohaste, rollwand, sight, stomach, swander, unconfu
 use crate::entity::chase::runners;
 use crate::game::{MLIST, MONSTER_MAP};
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject};
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::globals::{
     arm_info, monsters, pot_info, ring_info, scr_info, things, weap_info, ws_info, CMonster,
     CObjInfo,
@@ -2423,10 +2423,10 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 
     let _ = rs_write_thing(savef, crate::game::player_ptr());
     let player_pack = crate::entity::player::thing_pack(crate::game::player_ptr());
-    let _ = rs_write_object_reference(savef, player_pack, EQUIPMENT.armor());
-    let _ = rs_write_object_reference(savef, player_pack, EQUIPMENT.left_ring());
-    let _ = rs_write_object_reference(savef, player_pack, EQUIPMENT.right_ring());
-    let _ = rs_write_object_reference(savef, player_pack, EQUIPMENT.weapon());
+    let _ = rs_write_object_reference(savef, player_pack, PLAYER.armor());
+    let _ = rs_write_object_reference(savef, player_pack, PLAYER.left_ring());
+    let _ = rs_write_object_reference(savef, player_pack, PLAYER.right_ring());
+    let _ = rs_write_object_reference(savef, player_pack, PLAYER.weapon());
     let _ = rs_write_object_reference(savef, player_pack, l_last_pick);
     let _ = rs_write_object_reference(savef, player_pack, last_pick);
 
@@ -2621,13 +2621,13 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let player_pack = crate::entity::player::thing_pack(crate::game::player_ptr());
     let mut equipment_item = std::ptr::null_mut();
     let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
-    EQUIPMENT.set_armor(equipment_item);
+    PLAYER.set_armor(equipment_item);
     let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
-    EQUIPMENT.set_left_ring(equipment_item);
+    PLAYER.set_left_ring(equipment_item);
     let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
-    EQUIPMENT.set_right_ring(equipment_item);
+    PLAYER.set_right_ring(equipment_item);
     let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
-    EQUIPMENT.set_weapon(equipment_item);
+    PLAYER.set_weapon(equipment_item);
     let _ = rs_read_object_reference(inf, player_pack, &raw mut l_last_pick);
     let _ = rs_read_object_reference(inf, player_pack, &raw mut last_pick);
 

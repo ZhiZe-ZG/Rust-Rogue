@@ -1,7 +1,7 @@
 //! Object information tables and object naming/inventory helpers.
 //!
 //! Ported from `src/c/things.c` to Rust.
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::item::armor::waste_time;
 use crate::item::pack::{get_item, leave_pack};
 use crate::misc::chg_str;
@@ -192,15 +192,15 @@ pub unsafe extern "C" fn inv_name(obj: *mut Thing, drop: c_uchar) -> *mut c_char
     };
 
     if inv_describe != 0 {
-        if obj == EQUIPMENT.armor() {
+        if obj == PLAYER.armor() {
             name.push_str(" (being worn)");
         }
-        if obj == EQUIPMENT.weapon() {
+        if obj == PLAYER.weapon() {
             name.push_str(" (weapon in hand)");
         }
-        if obj == EQUIPMENT.left_ring() {
+        if obj == PLAYER.left_ring() {
             name.push_str(" (on left hand)");
-        } else if obj == EQUIPMENT.right_ring() {
+        } else if obj == PLAYER.right_ring() {
             name.push_str(" (on right hand)");
         }
     }
@@ -214,10 +214,10 @@ pub unsafe extern "C" fn dropcheck(obj: *mut Thing) -> c_uchar {
     if obj.is_null() {
         return true as c_uchar;
     }
-    if obj != EQUIPMENT.armor()
-        && obj != EQUIPMENT.weapon()
-        && obj != EQUIPMENT.left_ring()
-        && obj != EQUIPMENT.right_ring()
+    if obj != PLAYER.armor()
+        && obj != PLAYER.weapon()
+        && obj != PLAYER.left_ring()
+        && obj != PLAYER.right_ring()
     {
         return true as c_uchar;
     }
@@ -225,16 +225,16 @@ pub unsafe extern "C" fn dropcheck(obj: *mut Thing) -> c_uchar {
         msg_str("you can't.  It appears to be cursed");
         return false as c_uchar;
     }
-    if obj == EQUIPMENT.weapon() {
-        EQUIPMENT.set_weapon(std::ptr::null_mut());
-    } else if obj == EQUIPMENT.armor() {
+    if obj == PLAYER.weapon() {
+        PLAYER.set_weapon(std::ptr::null_mut());
+    } else if obj == PLAYER.armor() {
         waste_time();
-        EQUIPMENT.set_armor(std::ptr::null_mut());
+        PLAYER.set_armor(std::ptr::null_mut());
     } else {
-        if obj == EQUIPMENT.left_ring() {
-            EQUIPMENT.set_left_ring(std::ptr::null_mut());
+        if obj == PLAYER.left_ring() {
+            PLAYER.set_left_ring(std::ptr::null_mut());
         } else {
-            EQUIPMENT.set_right_ring(std::ptr::null_mut());
+            PLAYER.set_right_ring(std::ptr::null_mut());
         }
         match (*thing_o(obj)).o_which {
             0 => chg_str(-(*thing_o(obj)).o_arm),

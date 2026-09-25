@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 use crate::config::GameConfig;
 use crate::entity::player::{Stats, Thing, ThingMonster};
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::terminal as cur;
 use crate::ui::Window;
@@ -331,8 +331,8 @@ pub unsafe fn status() {
     let pstats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
     let level = crate::game::current_depth();
     let max_hp = pstats.max_hit_points;
-    let mut temp = if !EQUIPMENT.armor().is_null() {
-        (*crate::entity::player::thing_o(EQUIPMENT.armor())).o_arm
+    let mut temp = if !PLAYER.armor().is_null() {
+        (*crate::entity::player::thing_o(PLAYER.armor())).o_arm
     } else {
         pstats.armor
     };

@@ -5,7 +5,7 @@ use crate::entity::chase::{cansee, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject, ObjectFlags};
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::globals::ws_info;
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
@@ -208,8 +208,8 @@ pub unsafe extern "C" fn do_zap() {
             (*thing_o(&mut bolt)).o_hplus = 100;
             (*thing_o(&mut bolt)).o_dplus = 1;
             (*thing_o(&mut bolt)).o_flags = ObjectFlags::MISL;
-            if !EQUIPMENT.weapon().is_null() {
-                (*thing_o(&mut bolt)).o_launch = (*thing_o(EQUIPMENT.weapon())).o_which;
+            if !PLAYER.weapon().is_null() {
+                (*thing_o(&mut bolt)).o_launch = (*thing_o(PLAYER.weapon())).o_which;
             }
             do_motion(&mut bolt, delta.y, delta.x);
             let bolt_pos = (*thing_o(&mut bolt)).o_pos;

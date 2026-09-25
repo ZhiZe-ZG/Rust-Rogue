@@ -7,7 +7,7 @@ use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach_pack, new_actor};
 use crate::item::things::new_thing;
@@ -124,10 +124,10 @@ unsafe fn player_has(flag: MonsterFlags) -> bool {
 
 #[inline]
 unsafe fn iswearing(which: RingType) -> bool {
-    (!EQUIPMENT.left_ring().is_null()
-        && RingType::from_raw((*thing_o(EQUIPMENT.left_ring())).o_which) == Some(which))
-        || (!EQUIPMENT.right_ring().is_null()
-            && RingType::from_raw((*thing_o(EQUIPMENT.right_ring())).o_which) == Some(which))
+    (!PLAYER.left_ring().is_null()
+        && RingType::from_raw((*thing_o(PLAYER.left_ring())).o_which) == Some(which))
+        || (!PLAYER.right_ring().is_null()
+            && RingType::from_raw((*thing_o(PLAYER.right_ring())).o_which) == Some(which))
 }
 
 /// Picks an appropriate monster glyph for the current depth.
@@ -335,17 +335,17 @@ pub unsafe extern "C" fn save_throw(which: c_int, tp: *mut Thing) -> c_int {
 pub unsafe extern "C" fn save(which: c_int) -> c_int {
     let mut adj = which;
     if which == VS_MAGIC {
-        if !EQUIPMENT.left_ring().is_null()
-            && RingType::from_raw((*thing_o(EQUIPMENT.left_ring())).o_which)
+        if !PLAYER.left_ring().is_null()
+            && RingType::from_raw((*thing_o(PLAYER.left_ring())).o_which)
                 == Some(RingType::Protection)
         {
-            adj -= (*thing_o(EQUIPMENT.left_ring())).o_arm;
+            adj -= (*thing_o(PLAYER.left_ring())).o_arm;
         }
-        if !EQUIPMENT.right_ring().is_null()
-            && RingType::from_raw((*thing_o(EQUIPMENT.right_ring())).o_which)
+        if !PLAYER.right_ring().is_null()
+            && RingType::from_raw((*thing_o(PLAYER.right_ring())).o_which)
                 == Some(RingType::Protection)
         {
-            adj -= (*thing_o(EQUIPMENT.right_ring())).o_arm;
+            adj -= (*thing_o(PLAYER.right_ring())).o_arm;
         }
     }
     save_throw(adj, crate::game::player_ptr())

@@ -8,7 +8,7 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
 };
@@ -333,7 +333,7 @@ pub unsafe extern "C" fn init_player() {
     (*thing_o(obj)).o_arm = a_class[RING_MAIL as usize] - 1;
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     (*thing_o(obj)).o_count = 1;
-    EQUIPMENT.set_armor(obj);
+    PLAYER.set_armor(obj);
     add_pack(obj, true as c_uchar);
 
     // A +1 mace
@@ -343,7 +343,7 @@ pub unsafe extern "C" fn init_player() {
     (*thing_o(obj)).o_dplus = 1;
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     add_pack(obj, true as c_uchar);
-    EQUIPMENT.set_weapon(obj);
+    PLAYER.set_weapon(obj);
 
     // A +1 bow
     let obj = new_item();

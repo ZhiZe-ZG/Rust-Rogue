@@ -5,8 +5,7 @@
 //!
 //! * the **live dungeon level** — the [`Level`](crate::level::Level) singleton
 //!   (tile map, flags, rooms, passages, and floor items) for the current depth;
-//! * the **player** — the stable actor and equipment handles ([`PLAYER`] /
-//!   [`EQUIPMENT`]);
+//! * the **player** — the stable actor and its [`Equipment`](crate::game::Player::equipment);
 //! * the **monster list** — the [`MLIST`] head of the live monster linked list;
 //! * the **monster map** — the [`MONSTER_MAP`] per-cell monster occupancy grid.
 //!
@@ -21,4 +20,4 @@ mod player;
 pub use game::*;
 pub use monster_list::{MonsterId, MonsterList, MLIST};
 pub use monster_map::{MonsterMap, MONSTER_MAP};
-pub use player::{player_ptr, player_remove_flag, Equipment, Player, EQUIPMENT, PLAYER};
+pub use player::{player_ptr, player_remove_flag, Player, PLAYER};

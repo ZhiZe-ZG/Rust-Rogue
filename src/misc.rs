@@ -7,7 +7,7 @@ use crate::globals::CObjInfo;
 use crate::daemon::{extinguish, fuse};
 use crate::daemons::nohaste;
 use crate::entity::chase::runto;
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::item::pack::{get_item, leave_pack, reset_last};
 use crate::options::get_str;
 use crate::rnd::rnd;
@@ -24,7 +24,6 @@ use crate::startup::roll;
 const PASSAGE: c_char = b'#' as c_char;
 const DOOR: c_char = b'+' as c_char;
 const FLOOR: c_char = b'.' as c_char;
-const PLAYER: c_char = b'@' as c_char;
 const TRAP: c_char = b'^' as c_char;
 const STAIRS: c_char = b'%' as c_char;
 const GOLD: c_char = b'*' as c_char;
@@ -161,8 +160,8 @@ pub unsafe extern "C" fn eat() {
         food_left = STOMACHSIZE;
     }
     hungry_state = 0;
-    if obj == EQUIPMENT.weapon() {
-        EQUIPMENT.set_weapon(std::ptr::null_mut());
+    if obj == PLAYER.weapon() {
+        PLAYER.set_weapon(std::ptr::null_mut());
     }
     if (*thing_o(obj)).o_which == 1 {
         msg_str(&format!(
@@ -213,14 +212,14 @@ pub unsafe extern "C" fn chg_str(amt: c_int) {
     stats.strength = new_strength as c_uint;
     let mut comp = stats.strength;
 
-    if !EQUIPMENT.left_ring().is_null() {
-        let ring = EQUIPMENT.left_ring();
+    if !PLAYER.left_ring().is_null() {
+        let ring = PLAYER.left_ring();
         let bonus = (*thing_o(ring)).o_arm as c_int;
         let reduced = comp as c_int - bonus;
         comp = if reduced < 3 { 3 } else { reduced as c_uint };
     }
-    if !EQUIPMENT.right_ring().is_null() {
-        let ring = EQUIPMENT.right_ring();
+    if !PLAYER.right_ring().is_null() {
+        let ring = PLAYER.right_ring();
         let bonus = (*thing_o(ring)).o_arm as c_int;
         let reduced = comp as c_int - bonus;
         comp = if reduced < 3 { 3 } else { reduced as c_uint };
@@ -277,10 +276,10 @@ pub unsafe fn is_current(obj: *mut Thing) -> bool {
     if obj.is_null() {
         return false;
     }
-    if obj == EQUIPMENT.armor()
-        || obj == EQUIPMENT.weapon()
-        || obj == EQUIPMENT.left_ring()
-        || obj == EQUIPMENT.right_ring()
+    if obj == PLAYER.armor()
+        || obj == PLAYER.weapon()
+        || obj == PLAYER.left_ring()
+        || obj == PLAYER.right_ring()
     {
         if terse == 0 {
             addmsg_str("That's already ");

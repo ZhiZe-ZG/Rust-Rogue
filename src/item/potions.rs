@@ -12,7 +12,7 @@ use crate::draw::look;
 use crate::entity::chase::see_monst;
 use crate::game::MLIST;
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::globals::pot_info;
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
@@ -264,8 +264,8 @@ pub unsafe extern "C" fn quaff() {
         }
         return;
     }
-    if obj == EQUIPMENT.weapon() {
-        EQUIPMENT.set_weapon(ptr::null_mut());
+    if obj == PLAYER.weapon() {
+        PLAYER.set_weapon(ptr::null_mut());
     }
 
     discardit = (*thing_o(obj)).o_count == 1;
@@ -283,8 +283,8 @@ pub unsafe extern "C" fn quaff() {
         ),
         PotionType::Poison => {
             (*pot_info.as_mut_ptr().add(PotionType::Poison.index())).oi_know = true;
-            if ring_is(EQUIPMENT.left_ring(), RingType::SustainStrength)
-                || ring_is(EQUIPMENT.right_ring(), RingType::SustainStrength)
+            if ring_is(PLAYER.left_ring(), RingType::SustainStrength)
+                || ring_is(PLAYER.right_ring(), RingType::SustainStrength)
             {
                 msg_str("you feel momentarily sick");
             } else {
@@ -429,31 +429,31 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::Restore => {
             let stats = thing_t(crate::game::player_ptr());
-            if ring_is(EQUIPMENT.left_ring(), RingType::AddStrength) {
+            if ring_is(PLAYER.left_ring(), RingType::AddStrength) {
                 add_str(
                     &mut (*stats).t_stats.strength,
-                    -(*thing_o(EQUIPMENT.left_ring())).o_arm,
+                    -(*thing_o(PLAYER.left_ring())).o_arm,
                 );
             }
-            if ring_is(EQUIPMENT.right_ring(), RingType::AddStrength) {
+            if ring_is(PLAYER.right_ring(), RingType::AddStrength) {
                 add_str(
                     &mut (*stats).t_stats.strength,
-                    -(*thing_o(EQUIPMENT.right_ring())).o_arm,
+                    -(*thing_o(PLAYER.right_ring())).o_arm,
                 );
             }
             if (*stats).t_stats.strength < max_stats.strength {
                 (*stats).t_stats.strength = max_stats.strength;
             }
-            if ring_is(EQUIPMENT.left_ring(), RingType::AddStrength) {
+            if ring_is(PLAYER.left_ring(), RingType::AddStrength) {
                 add_str(
                     &mut (*stats).t_stats.strength,
-                    (*thing_o(EQUIPMENT.left_ring())).o_arm,
+                    (*thing_o(PLAYER.left_ring())).o_arm,
                 );
             }
-            if ring_is(EQUIPMENT.right_ring(), RingType::AddStrength) {
+            if ring_is(PLAYER.right_ring(), RingType::AddStrength) {
                 add_str(
                     &mut (*stats).t_stats.strength,
-                    (*thing_o(EQUIPMENT.right_ring())).o_arm,
+                    (*thing_o(PLAYER.right_ring())).o_arm,
                 );
             }
             msg_str("hey, this tastes great.  It make you feel warm all over");

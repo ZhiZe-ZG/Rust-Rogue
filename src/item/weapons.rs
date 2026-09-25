@@ -3,7 +3,7 @@
 //! Ported from `src/c/weapons.c` to Rust.
 use crate::entity::chase::cansee;
 use crate::entity::fight::fight;
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::item::pack::{get_item, leave_pack};
 use crate::misc::{is_current, show_floor};
 use crate::rnd::rnd;
@@ -305,12 +305,12 @@ pub unsafe extern "C" fn num(n1: c_int, n2: c_int, obj_type: c_char) -> *mut c_c
 /// Equips a selected weapon after validating curses and item type constraints.
 #[no_mangle]
 pub unsafe extern "C" fn wield() {
-    let oweapon = EQUIPMENT.weapon();
-    if dropcheck(EQUIPMENT.weapon()) == 0 {
-        EQUIPMENT.set_weapon(oweapon);
+    let oweapon = PLAYER.weapon();
+    if dropcheck(PLAYER.weapon()) == 0 {
+        PLAYER.set_weapon(oweapon);
         return;
     }
-    EQUIPMENT.set_weapon(oweapon);
+    PLAYER.set_weapon(oweapon);
 
     let obj = get_item(c"wield".as_ptr(), WEAPON as c_int);
     if obj.is_null() {
@@ -329,7 +329,7 @@ pub unsafe extern "C" fn wield() {
     }
 
     let sp = inv_name(obj, true as c_uchar);
-    EQUIPMENT.set_weapon(obj);
+    PLAYER.set_weapon(obj);
     if terse == 0 {
         addmsg_str("you are now ");
     }

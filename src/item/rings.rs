@@ -7,7 +7,7 @@ use crate::rnd::rnd;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::item::pack::get_item;
 use crate::item::things::{dropcheck, inv_name};
 use crate::item::weapons::num;
@@ -120,15 +120,15 @@ pub unsafe extern "C" fn ring_on() {
         return;
     }
 
-    let left_hand = if EQUIPMENT.left_ring().is_null() && EQUIPMENT.right_ring().is_null() {
+    let left_hand = if PLAYER.left_ring().is_null() && PLAYER.right_ring().is_null() {
         let hand = gethand();
         if hand < 0 {
             return;
         }
         hand as usize == LEFT
-    } else if EQUIPMENT.left_ring().is_null() {
+    } else if PLAYER.left_ring().is_null() {
         true
-    } else if EQUIPMENT.right_ring().is_null() {
+    } else if PLAYER.right_ring().is_null() {
         false
     } else {
         if terse == 0 {
@@ -140,9 +140,9 @@ pub unsafe extern "C" fn ring_on() {
     };
 
     if left_hand {
-        EQUIPMENT.set_left_ring(obj);
+        PLAYER.set_left_ring(obj);
     } else {
-        EQUIPMENT.set_right_ring(obj);
+        PLAYER.set_right_ring(obj);
     }
 
     match RingType::from_raw((*thing_o(obj)).o_which) {
@@ -165,16 +165,16 @@ pub unsafe extern "C" fn ring_on() {
 /// Removes a worn ring from the chosen hand after passing drop constraints.
 #[no_mangle]
 pub unsafe extern "C" fn ring_off() {
-    let left_hand = if EQUIPMENT.left_ring().is_null() && EQUIPMENT.right_ring().is_null() {
+    let left_hand = if PLAYER.left_ring().is_null() && PLAYER.right_ring().is_null() {
         if terse != 0 {
             msg_str("no rings");
         } else {
             msg_str("you aren't wearing any rings");
         }
         return;
-    } else if EQUIPMENT.left_ring().is_null() {
+    } else if PLAYER.left_ring().is_null() {
         false
-    } else if EQUIPMENT.right_ring().is_null() {
+    } else if PLAYER.right_ring().is_null() {
         true
     } else {
         let hand = gethand();
@@ -186,9 +186,9 @@ pub unsafe extern "C" fn ring_off() {
 
     mpos = 0;
     let obj = if left_hand {
-        EQUIPMENT.left_ring()
+        PLAYER.left_ring()
     } else {
-        EQUIPMENT.right_ring()
+        PLAYER.right_ring()
     };
     if obj.is_null() {
         msg_str("not wearing such a ring");
@@ -244,8 +244,8 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
     }
 
     let ring = match hand_idx {
-        LEFT => EQUIPMENT.left_ring(),
-        RIGHT => EQUIPMENT.right_ring(),
+        LEFT => PLAYER.left_ring(),
+        RIGHT => PLAYER.right_ring(),
         _ => return 0,
     };
     if ring.is_null() {

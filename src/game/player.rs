@@ -2,59 +2,71 @@
 //!
 //! The legacy C engine kept the hero in a single global `player` variable and
 //! the equipped armor/rings/weapon in individual globals. This module groups
-//! those into stable, process-lifetime owners:
+//! them into one stable, process-lifetime owner:
 //!
 //! * [`PLAYER`] — the boxed hero [`Thing`] whose address never changes, reached
-//!   through [`player_ptr`];
-//! * [`EQUIPMENT`] — non-owning handles to the objects currently equipped by
-//!   the player (the objects themselves remain owned by the player's pack).
+//!   through [`player_ptr`], plus the [`Equipment`] currently in use (the
+//!   equipped objects themselves remain owned by the player's pack).
+//!
+//! Equipment slots and the hero address are stored as [`NonNull`] handles
+//! rather than raw pointers: a slot simply holds `None` when empty, so there is
+//! no null-pointer sentinel to dereference.
 
+use std::ptr::NonNull;
 use std::sync::{OnceLock, RwLock};
 
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingMonster};
 use glam::IVec2;
 
-/// A non-owning, interior-mutable cell for a raw [`Thing`] pointer.
+/// Interior-mutable, lock-guarded slot holding an optional [`Thing`] handle.
 ///
-/// The game is single-threaded, but these pointers are shared through
-/// `static`s (which must be `Sync`). The raw pointer itself is neither `Send`
-/// nor `Sync`, so this wrapper opts in explicitly and exposes lock-guarded
-/// access.
-struct PtrCell(RwLock<*mut Thing>);
+/// The game is single-threaded, but the slot is reachable through the
+/// process-wide [`PLAYER`] `static` (which must be `Sync`). [`NonNull`] is
+/// neither `Send` nor `Sync`, so this wrapper opts in explicitly and only ever
+/// dereferences the handle from the owning (single-threaded) game logic.
+#[derive(Default)]
+struct Slot(RwLock<Option<NonNull<Thing>>>);
 
-// SAFETY: access to the pointer is always guarded by the inner `RwLock`, and
-// the pointer is only dereferenced by the owning (single-threaded) game logic.
-unsafe impl Send for PtrCell {}
-unsafe impl Sync for PtrCell {}
+// SAFETY: access to the handle is always guarded by the inner `RwLock`, and the
+// handle is only dereferenced by the single-threaded gameplay loop.
+unsafe impl Send for Slot {}
+unsafe impl Sync for Slot {}
 
-impl PtrCell {
+impl Slot {
     const fn new() -> Self {
-        Self(RwLock::new(std::ptr::null_mut()))
+        Self(RwLock::new(None))
     }
 
     #[inline]
     fn get(&self) -> *mut Thing {
-        *self.0.read().unwrap_or_else(|poison| poison.into_inner())
+        self.0
+            .read()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .map_or(std::ptr::null_mut(), NonNull::as_ptr)
     }
 
     #[inline]
     fn set(&self, ptr: *mut Thing) {
-        *self.0.write().unwrap_or_else(|poison| poison.into_inner()) = ptr;
+        *self.0.write().unwrap_or_else(|poison| poison.into_inner()) = NonNull::new(ptr);
     }
 }
 
-/// Non-owning pointers to the objects currently equipped by the player.
+/// The player's equipped objects.
+///
+/// Holds non-owning handles to the armor, the two rings, and the weapon the
+/// player currently has in hand. A `null` handle means the slot is empty; the
+/// objects remain owned by the player's pack (or the item arena).
 pub struct Equipment {
-    armor: PtrCell,
-    rings: [PtrCell; 2],
-    weapon: PtrCell,
+    armor: Slot,
+    rings: [Slot; 2],
+    weapon: Slot,
 }
 
 impl Equipment {
     const EMPTY: Self = Self {
-        armor: PtrCell::new(),
-        rings: [PtrCell::new(), PtrCell::new()],
-        weapon: PtrCell::new(),
+        armor: Slot::new(),
+        rings: [Slot::new(), Slot::new()],
+        weapon: Slot::new(),
     };
 
     #[inline]
@@ -98,9 +110,6 @@ impl Equipment {
     }
 }
 
-/// Current player equipment. Items remain owned by the player's pack.
-pub static EQUIPMENT: Equipment = Equipment::EMPTY;
-
 /// The zero-valued actor [`Thing`] used to seed the global player.
 fn default_player() -> Thing {
     Thing::Monster {
@@ -129,16 +138,18 @@ fn default_player() -> Thing {
     }
 }
 
-/// A safe, process-wide holder for the player's actor [`Thing`].
+/// A safe, process-wide owner for the hero actor and its equipment.
 ///
 /// The game is single-threaded, but the player must be reachable from many
 /// modules as one stable, process-lifetime object whose address never changes
 /// (chase targets and save code keep raw pointers to `t_pos`/`t_stats`). The
-/// `Thing` is boxed and initialized exactly once, so its heap address is
+/// hero [`Thing`] is boxed and initialized exactly once, so its heap address is
 /// stable and [`Player::ptr`] always hands back the same `*mut Thing`. It
-/// replaces the legacy `#[no_mangle] static mut player` global.
+/// replaces the legacy `#[no_mangle] static mut player` global and folds in the
+/// former `EQUIPMENT` global.
 pub struct Player {
-    thing: OnceLock<Box<Thing>>,
+    hero: OnceLock<Box<Thing>>,
+    equipment: Equipment,
 }
 
 // SAFETY: the game runs on a single thread, and the boxed `Thing` is only ever
@@ -147,12 +158,13 @@ unsafe impl Sync for Player {}
 
 impl Player {
     const EMPTY: Self = Self {
-        thing: OnceLock::new(),
+        hero: OnceLock::new(),
+        equipment: Equipment::EMPTY,
     };
 
     #[inline]
     fn get(&self) -> &Thing {
-        self.thing.get_or_init(|| Box::new(default_player()))
+        self.hero.get_or_init(|| Box::new(default_player()))
     }
 
     /// A stable, process-lifetime pointer to the player `Thing`.
@@ -160,9 +172,69 @@ impl Player {
     pub fn ptr(&self) -> *mut Thing {
         self.get() as *const Thing as *mut Thing
     }
+
+    /// The player's equipped objects.
+    #[inline]
+    pub fn equipment(&self) -> &Equipment {
+        &self.equipment
+    }
+
+    /// The armor the player is wearing (or a null handle).
+    #[inline]
+    pub fn armor(&self) -> *mut Thing {
+        self.equipment.armor()
+    }
+
+    /// Set (or clear) the armor the player is wearing.
+    #[inline]
+    pub fn set_armor(&self, armor: *mut Thing) {
+        self.equipment.set_armor(armor);
+    }
+
+    /// The ring on the player's left hand (or a null handle).
+    #[inline]
+    pub fn left_ring(&self) -> *mut Thing {
+        self.equipment.left_ring()
+    }
+
+    /// The ring on the player's right hand (or a null handle).
+    #[inline]
+    pub fn right_ring(&self) -> *mut Thing {
+        self.equipment.right_ring()
+    }
+
+    /// Set (or clear) the ring on the player's left hand.
+    #[inline]
+    pub fn set_left_ring(&self, ring: *mut Thing) {
+        self.equipment.set_left_ring(ring);
+    }
+
+    /// Set (or clear) the ring on the player's right hand.
+    #[inline]
+    pub fn set_right_ring(&self, ring: *mut Thing) {
+        self.equipment.set_right_ring(ring);
+    }
+
+    /// The weapon the player is wielding (or a null handle).
+    #[inline]
+    pub fn weapon(&self) -> *mut Thing {
+        self.equipment.weapon()
+    }
+
+    /// Set (or clear) the weapon the player is wielding.
+    #[inline]
+    pub fn set_weapon(&self, weapon: *mut Thing) {
+        self.equipment.set_weapon(weapon);
+    }
+
+    /// Remove `flag` from the player's actor flags.
+    #[inline]
+    pub fn remove_flag(&self, flag: MonsterFlags) {
+        unsafe { (*crate::entity::player::thing_t(self.ptr())).t_flags.remove(flag) }
+    }
 }
 
-/// Process-wide owner of the player's actor [`Thing`].
+/// Process-wide owner of the player's actor and equipment.
 pub static PLAYER: Player = Player::EMPTY;
 
 /// A stable, process-lifetime pointer to the global player [`Thing`].
@@ -178,7 +250,7 @@ pub fn player_ptr() -> *mut Thing {
 /// Remove `flag` from the global player's actor flags.
 #[inline]
 pub fn player_remove_flag(flag: MonsterFlags) {
-    unsafe { (*crate::entity::player::thing_t(player_ptr())).t_flags.remove(flag) }
+    PLAYER.remove_flag(flag);
 }
 
 #[cfg(test)]
@@ -206,5 +278,13 @@ mod tests {
         let first = player.ptr();
         let second = player.ptr();
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn equipment_is_a_player_component() {
+        let player = Player::EMPTY;
+        assert!(player.equipment().weapon().is_null());
+        player.equipment().set_weapon(std::ptr::null_mut());
+        assert!(player.equipment().armor().is_null());
     }
 }

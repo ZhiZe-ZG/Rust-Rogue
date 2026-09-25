@@ -22,7 +22,7 @@ use crate::entity::chase::{cansee, see_monst};
 use crate::game::MLIST;
 use crate::entity::monsters::wanderer;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
-use crate::game::EQUIPMENT;
+use crate::game::PLAYER;
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
 use crate::rip::death;
@@ -99,10 +99,10 @@ pub unsafe extern "C" fn doctor() {
     } else if quiet >= 3 {
         (*thing_t(crate::game::player_ptr())).t_stats.hit_points += rnd(lv - 7) + 1;
     }
-    if isring(EQUIPMENT.left_ring(), RingType::Regeneration) {
+    if isring(PLAYER.left_ring(), RingType::Regeneration) {
         (*thing_t(crate::game::player_ptr())).t_stats.hit_points += 1;
     }
-    if isring(EQUIPMENT.right_ring(), RingType::Regeneration) {
+    if isring(PLAYER.right_ring(), RingType::Regeneration) {
         (*thing_t(crate::game::player_ptr())).t_stats.hit_points += 1;
     }
     if ohp != (*thing_t(crate::game::player_ptr())).t_stats.hit_points {
