@@ -4,8 +4,8 @@
 //! `PLACE`, and `COORD` layouts the rest of the port relies on.
 use crate::config::GameConfig;
 use crate::draw::{
-    enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room,
-    turnref as draw_turnref, winat,
+    enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room, turnref as draw_turnref,
+    winat,
 };
 use crate::entity::chase::{diag_ok, roomin};
 use crate::entity::fight::{fight, swing};
@@ -18,12 +18,12 @@ use crate::item::rings::RingType;
 use crate::item::thing_list::new_item;
 use crate::item::weapons::{fall, init_weapon};
 use crate::level::new_level;
-use crate::tile::{TrapType, TrapHit};
 use crate::machdep::flush_type;
 use crate::misc::{chg_str, spread};
 use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
+use crate::tile::{TrapHit, TrapType};
 use crate::ui::output;
 use crate::ui::output::msg_str;
 use crate::wizard::teleport;
@@ -497,7 +497,9 @@ pub unsafe fn set_thing_dest_hero(tp: *mut Thing) {
 /// Read the actor's pack head as a raw pointer (null when empty).
 #[inline]
 pub unsafe fn thing_pack(tp: *mut Thing) -> *mut Thing {
-    (*thing_t(tp)).t_pack.map_or(std::ptr::null_mut(), |p| p.as_ptr())
+    (*thing_t(tp))
+        .t_pack
+        .map_or(std::ptr::null_mut(), |p| p.as_ptr())
 }
 
 /// Set the actor's pack head from a raw pointer.

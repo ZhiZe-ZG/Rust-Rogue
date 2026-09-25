@@ -171,10 +171,10 @@ fn read_raw() -> i32 {
                     mode = M_TRAIL;
                 }
                 // PuTTY ESC O sequences.
-                0x44 => ch = ctrl('H'),    // 'D'
-                0x43 => ch = ctrl('L'),    // 'C'
-                0x41 => ch = ctrl('K'),    // 'A'
-                0x42 => ch = ctrl('J'),    // 'B'
+                0x44 => ch = ctrl('H'),  // 'D'
+                0x43 => ch = ctrl('L'),  // 'C'
+                0x41 => ch = ctrl('K'),  // 'A'
+                0x42 => ch = ctrl('J'),  // 'B'
                 0x74 => ch = 'h' as i32, // 't'
                 0x76 => ch = 'l' as i32, // 'v'
                 0x78 => ch = 'k' as i32, // 'x'

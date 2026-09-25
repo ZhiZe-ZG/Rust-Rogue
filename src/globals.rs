@@ -3,9 +3,7 @@
 //! Mirrors the process-wide storage the original C code declared in
 //! `extern.c` and `init.c`: material tables, monster state, and other globals.
 use crate::config::GameConfig;
-use crate::entity::player::{
-    Thing as PlayerCThing,
-};
+use crate::entity::player::Thing as PlayerCThing;
 use crate::entity::stats::Stats;
 use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
@@ -204,7 +202,7 @@ pub static mut a_class: [c_int; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
 #[no_mangle]
 pub static mut count: c_int = 0;
 #[no_mangle]
-pub static mut scoreboard: *mut crate::score::CFile = std::ptr::null_mut();
+pub static mut scoreboard: *mut crate::ffi::CFile = std::ptr::null_mut();
 #[no_mangle]
 pub static mut food_left: c_int = 0;
 #[no_mangle]
@@ -1309,11 +1307,7 @@ pub fn set_huh_string(text: &str) {
     unsafe {
         let bytes = text.as_bytes();
         let copy_len = bytes.len().min(MAXSTR - 1);
-        std::ptr::copy_nonoverlapping(
-            bytes.as_ptr().cast::<c_char>(),
-            huh.as_mut_ptr(),
-            copy_len,
-        );
+        std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), huh.as_mut_ptr(), copy_len);
         huh[copy_len] = 0;
     }
 }

@@ -19,9 +19,9 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon, Daemon};
 use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
-use crate::game::MONSTER_LIST;
 use crate::entity::monsters::wanderer;
-use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
+use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
+use crate::game::MONSTER_LIST;
 use crate::game::PLAYER;
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
@@ -153,11 +153,7 @@ pub unsafe extern "C" fn unconfuse() {
 pub unsafe extern "C" fn unsee() {
     for id in MONSTER_LIST.ids() {
         if let Some(th) = MONSTER_LIST.handle(id) {
-            if (*thing_t(th))
-                .t_flags
-                .contains(MonsterFlags::INVIS)
-                && see_monst(th) != 0
-            {
+            if (*thing_t(th)).t_flags.contains(MonsterFlags::INVIS) && see_monst(th) != 0 {
                 output::write_glyph_at(
                     IVec2::new((*thing_t(th)).t_pos.x, (*thing_t(th)).t_pos.y),
                     ((*thing_t(th)).t_oldch as u8) as char,
@@ -357,9 +353,7 @@ pub unsafe extern "C" fn visuals() {
         if let Some(tp) = MONSTER_LIST.handle(id) {
             output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
             if see_monst(tp) != 0 {
-                if (*thing_t(tp)).t_type == b'X'
-                    && (*thing_t(tp)).t_disguise != b'X'
-                {
+                if (*thing_t(tp)).t_type == b'X' && (*thing_t(tp)).t_disguise != b'X' {
                     output::write_glyph((rnd_thing() as u8) as char);
                 } else {
                     output::write_glyph((rnd(26) as u8 + b'A') as char);

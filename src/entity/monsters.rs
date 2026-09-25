@@ -5,7 +5,8 @@ use crate::config::GameConfig;
 use crate::daemon::{fuse, lengthen, Daemon};
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
-use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
+use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
+use crate::ffi::{abort, strcmp};
 use crate::game::PLAYER;
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach_pack, new_actor};
@@ -91,9 +92,6 @@ static WAND_MONS: [c_char; 26] = [
 unsafe extern "C" {
     static mut max_level: c_int;
     static mut wizard: c_int;
-
-    fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
-    fn abort() -> !;
 }
 
 #[inline]

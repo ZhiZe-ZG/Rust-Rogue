@@ -2,7 +2,7 @@
 //!
 //! Ported from `src/c/armor.c` to Rust.
 use crate::daemon::{do_daemons, do_fuses};
-use crate::entity::player::{Thing, ThingObject, ObjectFlags};
+use crate::entity::player::{ObjectFlags, Thing, ThingObject};
 use crate::game::PLAYER;
 use crate::item::pack::get_item;
 use crate::item::rings::RingType;

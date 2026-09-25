@@ -14,14 +14,14 @@ Recorded on the initial `HEAD` (`a0da05f`) before any Stage 1+ edits.
 | `cargo test --all-targets` | **36 passed; 0 failed** |
 | `cargo clippy --all-targets` | **3 errors** (`clippy::eq_op`), **809** lib warnings |
 
-### Stage 1 progress (typed daemon callbacks + latent-bug fixes)
+### Stage 1 progress
 
-| Command | Before | After Stage 1 daemon slice |
+| Command | Baseline | After Stage 1 |
 | --- | --- | --- |
-| `cargo check --all-targets` warnings | 455 | **447** |
+| `cargo check --all-targets` warnings | 455 | **439** |
 | `cargo clippy --all-targets` errors | 3 | **0** |
 | `cargo test --all-targets` | 36 passed | **38 passed** (2 new daemon tests) |
-| `cargo fmt --check` diffs | 77 | 77 (no new drift introduced) |
+| `cargo fmt --check` diffs | 77 | **0 (repo is now rustfmt-clean)** |
 
 Landed in this slice:
 

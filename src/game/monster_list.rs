@@ -56,7 +56,9 @@ impl MonsterList {
     }
 
     fn lock(&self) -> MutexGuard<'_, Vec<Option<Box<Thing>>>> {
-        self.slots.lock().unwrap_or_else(|poison| poison.into_inner())
+        self.slots
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
     }
 
     /// Store `thing` and return its handle, reusing a freed slot when possible.

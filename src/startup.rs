@@ -8,7 +8,8 @@ use crate::command::command;
 use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
 use crate::entity::chase::roomin;
-use crate::entity::player::{Thing, ThingMonster, MonsterFlags};
+use crate::entity::player::{MonsterFlags, Thing, ThingMonster};
+use crate::ffi::{exit, fflush, printf, putchar, setbuf, signal, time, CFile};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
@@ -38,18 +39,18 @@ static mut LEAVE_BUF: [c_char; BUFSIZ] = [0; BUFSIZ];
 
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
-    static mut __stdoutp: *mut c_void;
-    static mut __stderrp: *mut c_void;
+    static mut __stdoutp: *mut CFile;
+    static mut __stderrp: *mut CFile;
 }
 
 #[cfg(not(target_os = "macos"))]
 unsafe extern "C" {
-    static mut stdout: *mut c_void;
-    static mut stderr: *mut c_void;
+    static mut stdout: *mut CFile;
+    static mut stderr: *mut CFile;
 }
 
 #[inline]
-unsafe fn c_stdout() -> *mut c_void {
+unsafe fn c_stdout() -> *mut CFile {
     #[cfg(target_os = "macos")]
     {
         __stdoutp
@@ -61,7 +62,7 @@ unsafe fn c_stdout() -> *mut c_void {
 }
 
 #[inline]
-unsafe fn c_stderr() -> *mut c_void {
+unsafe fn c_stderr() -> *mut CFile {
     #[cfg(target_os = "macos")]
     {
         __stderrp
@@ -98,16 +99,6 @@ unsafe extern "C" {
     static mut see_floor: c_uchar;
     static mut terse: c_uchar;
     static mut to_death: c_uchar;
-
-    fn time(timer: *mut c_long) -> c_long;
-
-    // ── Terminal, curses, and machdep functions used by game control ──────
-    fn exit(status: c_int) -> !;
-    fn fflush(stream: *mut c_void) -> c_int;
-    fn printf(fmt: *const c_char, ...) -> c_int;
-    fn putchar(c: c_int) -> c_int;
-    fn setbuf(stream: *mut c_void, buf: *mut c_char);
-    fn signal(sig: c_int, handler: usize) -> usize;
 }
 
 #[inline]

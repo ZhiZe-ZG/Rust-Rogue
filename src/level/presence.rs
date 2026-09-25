@@ -15,10 +15,10 @@ use crate::config::GameConfig;
 use crate::daemons::visuals;
 use crate::draw::enter_room;
 use crate::entity::chase::roomin;
-use crate::game::{self, with_current_level, with_current_level_mut};
-use crate::game::MONSTER_LIST;
 use crate::entity::monsters::{give_pack, new_monster, randmonster};
-use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::game::MONSTER_LIST;
+use crate::game::{self, with_current_level, with_current_level_mut};
 use crate::globals::{amulet, max_level, ntraps, seenstairs};
 use crate::item::potions::turn_see;
 use crate::item::thing_list::{new_actor, new_item};
@@ -92,8 +92,9 @@ pub(crate) fn find_floor(room_idx: Option<usize>, limit: i32, monst: bool) -> Op
         let tile = with_current_level(|current| current.tile_at(pos.y as usize, pos.x as usize));
 
         if monst {
-            let occupied =
-                game::MONSTER_MAP.at(pos.y as usize, pos.x as usize).is_some();
+            let occupied = game::MONSTER_MAP
+                .at(pos.y as usize, pos.x as usize)
+                .is_some();
             if !occupied && tile.is_walkable() {
                 return Some(pos);
             }
@@ -265,9 +266,8 @@ unsafe fn place_traps() {
         let stairs = loop {
             match find_floor(None, 0, false) {
                 Some(pos) => {
-                    if with_current_level(|current| {
-                        current.tile_at(pos.y as usize, pos.x as usize)
-                    }) == Tile::Floor
+                    if with_current_level(|current| current.tile_at(pos.y as usize, pos.x as usize))
+                        == Tile::Floor
                     {
                         break pos;
                     }

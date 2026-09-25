@@ -13,7 +13,8 @@ use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::entity::player::{Thing, ThingMonster, ThingObject, ObjectFlags};
+use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::ffi::snprintf;
 use crate::globals::weap_info;
 use crate::item::thing_list::discard;
 use crate::item::things::{dropcheck, inv_name};
@@ -108,8 +109,6 @@ unsafe extern "C" {
     static mut terse: c_uchar;
     static mut after: c_uchar;
     static mut has_hit: c_uchar;
-
-    fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
 use std::os::raw::{c_short, c_uint};

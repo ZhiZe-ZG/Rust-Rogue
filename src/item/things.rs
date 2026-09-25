@@ -10,7 +10,7 @@ use crate::ui::output::msg_str;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
-use crate::entity::player::{Thing, ThingObject, ObjectFlags};
+use crate::entity::player::{ObjectFlags, Thing, ThingObject};
 use crate::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
 };
@@ -52,11 +52,12 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 
 #[inline]
 fn starts_with_article(name: &str) -> &'static str {
-    if name
-        .as_bytes()
-        .first()
-        .is_some_and(|ch| matches!(*ch, b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U'))
-    {
+    if name.as_bytes().first().is_some_and(|ch| {
+        matches!(
+            *ch,
+            b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U'
+        )
+    }) {
         "an "
     } else {
         "a "
@@ -82,7 +83,11 @@ unsafe fn item_name(typ: c_int, which: c_int) -> &'static str {
 unsafe fn copy_to_prbuf(text: &str) -> *mut c_char {
     let bytes = text.as_bytes();
     let copy_len = bytes.len().min(MAXSTR - 1);
-    std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), prbuf.as_mut_ptr(), copy_len);
+    std::ptr::copy_nonoverlapping(
+        bytes.as_ptr().cast::<c_char>(),
+        prbuf.as_mut_ptr(),
+        copy_len,
+    );
     prbuf[copy_len] = 0;
     prbuf.as_mut_ptr()
 }
@@ -249,8 +254,16 @@ pub unsafe extern "C" fn new_thing() -> *mut Thing {
     let cur = new_item();
     (*thing_o(cur)).o_hplus = 0;
     (*thing_o(cur)).o_dplus = 0;
-    std::ptr::copy_nonoverlapping(c"0x0".as_ptr().cast::<u8>(), (*thing_o(cur)).o_damage.as_mut_ptr(), 4);
-    std::ptr::copy_nonoverlapping(c"0x0".as_ptr().cast::<u8>(), (*thing_o(cur)).o_hurldmg.as_mut_ptr(), 4);
+    std::ptr::copy_nonoverlapping(
+        c"0x0".as_ptr().cast::<u8>(),
+        (*thing_o(cur)).o_damage.as_mut_ptr(),
+        4,
+    );
+    std::ptr::copy_nonoverlapping(
+        c"0x0".as_ptr().cast::<u8>(),
+        (*thing_o(cur)).o_hurldmg.as_mut_ptr(),
+        4,
+    );
     (*thing_o(cur)).o_arm = 11;
     (*thing_o(cur)).o_count = 1;
     (*thing_o(cur)).o_group = 0;
@@ -454,4 +467,3 @@ unsafe fn set_order(order: *mut c_int, numthings: c_int) {
         *order.add(r as usize) = t;
     }
 }
-

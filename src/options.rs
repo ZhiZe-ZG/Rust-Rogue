@@ -6,6 +6,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
 use crate::draw::{erase_lamp, look};
 use crate::entity::player::{Thing, ThingMonster};
+use crate::ffi::{isalpha, isprint, strcpy, strlen, strncmp, toupper};
 use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::{output, Window};
 use glam::IVec2;
@@ -46,13 +47,6 @@ unsafe extern "C" {
     static mut tombstone: c_uchar;
     static mut whoami: [c_char; MAXSTR];
 
-    fn isalpha(c: c_int) -> c_int;
-    fn isprint(c: c_int) -> c_int;
-    fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-    fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
-    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
-    fn strlen(s: *const c_char) -> usize;
-    fn toupper(c: c_int) -> c_int;
 }
 
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {

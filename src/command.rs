@@ -13,8 +13,9 @@ use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
 use crate::entity::player::{
-    do_move, do_run, Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags,
+    do_move, do_run, MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject,
 };
+use crate::ffi::strcpy;
 use crate::game::PLAYER;
 use crate::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::help::{help, identify};
@@ -180,12 +181,7 @@ unsafe extern "C" {
 
 // ─── Extern C functions called from this module ───────────────────────────────
 
-unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-    fn malloc(size: usize) -> *mut c_void;
-    fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-    fn strlen(s: *const c_char) -> usize;
-}
+unsafe extern "C" {}
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
 
@@ -478,7 +474,8 @@ pub unsafe extern "C" fn command() {
                             delta.y += hero.y;
                             delta.x += hero.x;
                             mp = moat_at(delta.y, delta.x);
-                            if mp.is_null() || (see_monst(mp) == 0 && !player_has(MonsterFlags::SEEMONST))
+                            if mp.is_null()
+                                || (see_monst(mp) == 0 && !player_has(MonsterFlags::SEEMONST))
                             {
                                 if terse == 0 {
                                     addmsg_str("I see ");
@@ -666,11 +663,7 @@ pub unsafe extern "C" fn command() {
                         }
                     }
                     b')' => {
-                        current(
-                            PLAYER.weapon(),
-                            c"wielding".as_ptr(),
-                            std::ptr::null_mut(),
-                        );
+                        current(PLAYER.weapon(), c"wielding".as_ptr(), std::ptr::null_mut());
                     }
                     b']' => {
                         current(PLAYER.armor(), c"wearing".as_ptr(), std::ptr::null_mut());
@@ -714,7 +707,10 @@ pub unsafe extern "C" fn command() {
                                     msg_str(&format!("inpack = {}", inpack));
                                 }
                                 CTRL_G => {
-                                    let _ = inventory(crate::game::with_current_level(|level| level.items.head()), 0);
+                                    let _ = inventory(
+                                        crate::game::with_current_level(|level| level.items.head()),
+                                        0,
+                                    );
                                 }
                                 CTRL_W => whatis(false as c_uchar, 0),
                                 CTRL_D => {
@@ -1033,7 +1029,9 @@ pub unsafe extern "C" fn call() {
             }
         }
         if get_str(prbuf.as_mut_ptr().cast(), Window::Stdscr) == NORM {
-            let text = CStr::from_ptr(prbuf.as_ptr()).to_string_lossy().into_owned();
+            let text = CStr::from_ptr(prbuf.as_ptr())
+                .to_string_lossy()
+                .into_owned();
             (*thing_o(obj)).o_label = Some(text);
         }
         return;
@@ -1085,7 +1083,9 @@ pub unsafe extern "C" fn call() {
         strcpy(prbuf.as_mut_ptr(), elsewise);
     }
     if get_str(prbuf.as_mut_ptr().cast(), Window::Stdscr) == NORM {
-        let text = CStr::from_ptr(prbuf.as_ptr()).to_string_lossy().into_owned();
+        let text = CStr::from_ptr(prbuf.as_ptr())
+            .to_string_lossy()
+            .into_owned();
         (*op).oi_guess = Some(text);
     }
 }

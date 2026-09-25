@@ -12,10 +12,10 @@ use super::passages::{
     number_passages, plan_corridor, Passage, PassageLinks,
 };
 use super::roomgraph::RoomGraph;
-use crate::structure::{Room, Structure};
-use crate::tile::{Tile, TrapType};
 use crate::config::GameConfig;
 use crate::item::item_list::ItemList;
+use crate::structure::{Room, Structure};
+use crate::tile::{Tile, TrapType};
 
 /// Upper bound for the roll that removes rooms at the start of a new level.
 const GONE_ROOM_ROLLS: i32 = 4;
@@ -336,8 +336,7 @@ impl Level {
         bsze: IVec2,
     ) -> [Room; GameConfig::MAX_ROOMS] {
         generate_rooms(&mut rooms, bsze, self.depth);
-        let gone: [bool; GameConfig::MAX_ROOMS] =
-            std::array::from_fn(|i| rooms[i].is_gone());
+        let gone: [bool; GameConfig::MAX_ROOMS] = std::array::from_fn(|i| rooms[i].is_gone());
         self.room_graph.generate(&gone);
 
         let generated_rooms = build_generated_rooms(rooms);
@@ -499,8 +498,8 @@ fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room>
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::passages::{stamp_door, stamp_passage};
+    use super::*;
 
     /// A door placed through [`stamp_door`] registers an entry point on the
     /// room and stamps the tile map.

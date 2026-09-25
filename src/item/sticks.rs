@@ -4,7 +4,7 @@
 use crate::entity::chase::{cansee, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};
-use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject, ObjectFlags};
+use crate::entity::player::{ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
 use crate::globals::ws_info;
 use crate::item::pack::get_item;
@@ -316,5 +316,3 @@ unsafe fn charge_str(obj: *mut Thing) -> *mut c_char {
     }
     BUF.as_mut_ptr() as *mut c_char
 }
-
-

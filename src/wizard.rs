@@ -7,10 +7,11 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 use std::ptr;
 
 use crate::config::GameConfig;
-use crate::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
-use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::ffi::isdigit;
+use crate::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::item::pack::{add_pack, floor_at, get_item};
 use crate::item::sticks::fix_stick;
 use crate::item::thing_list::new_item;
@@ -96,8 +97,6 @@ unsafe extern "C" {
     static mut running: c_uchar;
     static mut vf_hit: c_int;
 
-    fn isdigit(ch: c_int) -> c_int;
-    fn free(ptr: *mut std::ffi::c_void);
 }
 
 #[no_mangle]

@@ -1,7 +1,8 @@
 //! Rings: putting them on, taking them off, and their magical effects.
 //!
 //! Ported from `src/c/rings.c` to Rust.
-use crate::entity::player::{Thing, ThingObject, ObjectFlags};
+use crate::entity::player::{ObjectFlags, Thing, ThingObject};
+use crate::ffi::snprintf;
 use crate::item::potions::invis_on;
 use crate::rnd::rnd;
 use std::ffi::CStr;
@@ -89,8 +90,6 @@ const USES: [c_int; RingType::COUNT] = [
 unsafe extern "C" {
     static mut terse: c_uchar;
     static mut mpos: c_int;
-
-    fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
 static mut RING_NUM_BUF: [c_char; 10] = [0; 10];

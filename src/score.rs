@@ -2,17 +2,14 @@
 //!
 //! Ported from `src/c/score.c` to Rust; reads and writes the legacy on-disk
 //! top-ten score-file format.
+use crate::ffi::{fread, fwrite, rewind, snprintf, sscanf};
 use crate::globals::{numscores, scoreboard};
 use std::os::raw::{c_char, c_int, c_uint, c_ushort};
 
 const MAXSTR: usize = 1024;
 const SCORELINE_LEN: usize = 100;
 
-#[repr(C)]
-pub struct CFile {
-    _private: [u8; 0],
-}
-
+/// On-disk scoreboard entry layout (legacy score-file representation).
 #[repr(C)]
 pub struct Score {
     pub sc_uid: c_uint,
@@ -22,14 +19,6 @@ pub struct Score {
     pub sc_name: [c_char; MAXSTR],
     pub sc_level: c_int,
     pub sc_time: c_uint,
-}
-
-unsafe extern "C" {
-    fn rewind(stream: *mut CFile);
-    fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
-    fn fwrite(ptr: *const u8, size: usize, n: usize, stream: *mut CFile) -> usize;
-    fn sscanf(buf: *const c_char, fmt: *const c_char, ...) -> c_int;
-    fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
 /// Reads the on-disk scoreboard into the caller-provided score array using the legacy file format.

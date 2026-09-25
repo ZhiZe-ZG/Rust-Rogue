@@ -10,11 +10,12 @@ use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
-use crate::globals::monsters;
-use crate::game::MONSTER_LIST;
-use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::entity::player::{set_thing_dest, set_thing_dest_hero, thing_dest};
+use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::entity::rndmove::rndmove;
+use crate::ffi::abort;
+use crate::game::MONSTER_LIST;
+use crate::globals::monsters;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
 use crate::item::thing_list::attach_pack;
@@ -61,8 +62,6 @@ unsafe extern "C" {
     static mut kamikaze: c_uchar;
     static mut see_floor: c_uchar;
     static mut delta: IVec2;
-
-    fn abort() -> !;
 }
 
 #[inline]
@@ -141,7 +140,12 @@ pub unsafe extern "C" fn runners() {
                 }
                 let hero = hero_pos();
                 if monster_has(tp, MonsterFlags::FLY)
-                    && dist(hero.y, hero.x, (*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) >= 3
+                    && dist(
+                        hero.y,
+                        hero.x,
+                        (*thing_t(tp)).t_pos.y,
+                        (*thing_t(tp)).t_pos.x,
+                    ) >= 3
                 {
                     move_monst(tp);
                 }
@@ -363,8 +367,7 @@ pub unsafe extern "C" fn set_oldch(tp: *mut Thing, cp: *mut IVec2) {
     }
 
     let sch = (*thing_t(tp)).t_oldch;
-    (*thing_t(tp)).t_oldch =
-        output::glyph_at(IVec2::new((*cp).x, (*cp).y)) as u8 & 0x7f;
+    (*thing_t(tp)).t_oldch = output::glyph_at(IVec2::new((*cp).x, (*cp).y)) as u8 & 0x7f;
     if !player_has(MonsterFlags::BLIND) {
         if (sch == FLOOR as u8 || (*thing_t(tp)).t_oldch == FLOOR as u8)
             && crate::game::room_dark((*thing_t(tp)).t_room)

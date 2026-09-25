@@ -8,7 +8,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 use crate::config::GameConfig;
 use crate::draw::{look, map_cell_reveal};
 use crate::entity::monsters::{new_monster, randmonster};
-use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::game;
 use crate::game::PLAYER;
 use crate::globals::{scr_info, weap_info};
@@ -178,7 +178,9 @@ pub unsafe extern "C" fn read_scroll() {
         ScrollType::Armor => {
             if !PLAYER.armor().is_null() {
                 (*thing_o(PLAYER.armor())).o_arm -= 1;
-                (*thing_o(PLAYER.armor())).o_flags.remove(ObjectFlags::CURSED);
+                (*thing_o(PLAYER.armor()))
+                    .o_flags
+                    .remove(ObjectFlags::CURSED);
                 msg_str(&format!(
                     "your armor glows {} for a moment",
                     pick_color("silver")
@@ -327,7 +329,9 @@ pub unsafe extern "C" fn read_scroll() {
             if PLAYER.weapon().is_null() || (*thing_o(PLAYER.weapon())).o_type != WEAPON {
                 msg_str("you feel a strange sense of loss");
             } else {
-                (*thing_o(PLAYER.weapon())).o_flags.remove(ObjectFlags::CURSED);
+                (*thing_o(PLAYER.weapon()))
+                    .o_flags
+                    .remove(ObjectFlags::CURSED);
                 if rnd(2) == 0 {
                     (*thing_o(PLAYER.weapon())).o_hplus += 1;
                 } else {

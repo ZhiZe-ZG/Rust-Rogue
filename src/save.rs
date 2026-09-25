@@ -20,14 +20,14 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr;
 
+use crate::ffi::{
+    access, exit, fclose, fflush, fopen, fread, fwrite, perror, putchar, sscanf, strcmp, strerror,
+    strlen, CFile,
+};
+
 const MAXSTR: usize = 1024;
 const ESCAPE: c_int = 27;
 const QUIT: c_int = 1;
-
-#[repr(C)]
-pub struct CFile {
-    _private: [u8; 0],
-}
 
 extern "C" {
     static mut mpos: c_int;
@@ -36,20 +36,6 @@ extern "C" {
     static mut wizard: c_int;
     static mut environ: *mut *mut c_char;
     static mut master_mode_enabled: c_uchar;
-
-    fn putchar(c: c_int) -> c_int;
-    fn perror(s: *const c_char);
-    fn strlen(s: *const c_char) -> usize;
-    fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
-    fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
-    fn sscanf(buf: *const c_char, fmt: *const c_char, ...) -> c_int;
-    fn fopen(path: *const c_char, mode: *const c_char) -> *mut CFile;
-    fn access(path: *const c_char, mode: c_int) -> c_int;
-    fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
-    fn strerror(errnum: c_int) -> *const c_char;
-    fn fflush(stream: *mut CFile) -> c_int;
-    fn fclose(stream: *mut CFile) -> c_int;
-    fn exit(status: c_int) -> !;
 }
 
 #[cfg(target_os = "macos")]

@@ -4,10 +4,11 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_ushort};
 
+use crate::ffi::printf;
 use crate::globals::{allscore, monsters, numscores, Numname};
 use crate::item::things::inv_name;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
-use crate::mdport::{md_getuid, md_raw_standend, md_raw_standout};
+use crate::mdport::md_getuid;
 use crate::score::{rd_score, wr_score};
 use crate::startup::my_exit;
 use crate::ui::input::wait_for;
@@ -56,11 +57,7 @@ unsafe extern "C" {
     static mut tombstone: c_uchar;
     static mut whoami: [c_char; MAXSTR];
     static mut wizard: c_int;
-    static mut scoreboard: *mut crate::score::CFile;
-
-    fn getuid() -> c_uint;
-    fn printf(fmt: *const c_char, ...) -> c_int;
-    fn signal(sig: c_int, handler: usize) -> usize;
+    static mut scoreboard: *mut crate::ffi::CFile;
 }
 
 #[inline]

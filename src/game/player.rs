@@ -187,12 +187,18 @@ impl Player {
     #[inline]
     fn ensure_initialized(&self) {
         {
-            let hero = self.hero.read().unwrap_or_else(|poison| poison.into_inner());
+            let hero = self
+                .hero
+                .read()
+                .unwrap_or_else(|poison| poison.into_inner());
             if hero.is_some() {
                 return;
             }
         }
-        let mut hero = self.hero.write().unwrap_or_else(|poison| poison.into_inner());
+        let mut hero = self
+            .hero
+            .write()
+            .unwrap_or_else(|poison| poison.into_inner());
         if hero.is_none() {
             *hero = Some(default_player());
         }
@@ -201,13 +207,17 @@ impl Player {
     #[inline]
     fn read_hero(&self) -> RwLockReadGuard<'_, Option<Thing>> {
         self.ensure_initialized();
-        self.hero.read().unwrap_or_else(|poison| poison.into_inner())
+        self.hero
+            .read()
+            .unwrap_or_else(|poison| poison.into_inner())
     }
 
     #[inline]
     fn write_hero(&self) -> RwLockWriteGuard<'_, Option<Thing>> {
         self.ensure_initialized();
-        self.hero.write().unwrap_or_else(|poison| poison.into_inner())
+        self.hero
+            .write()
+            .unwrap_or_else(|poison| poison.into_inner())
     }
 
     /// Run `operation` with immutable access to the hero.

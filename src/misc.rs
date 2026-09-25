@@ -3,10 +3,11 @@
 //! Ported from `src/c/misc.c` to Rust: gold, hunger, the floor map, and other
 //! helpers shared across the game loop.
 use crate::config::GameConfig;
-use crate::globals::CObjInfo;
 use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
+use crate::ffi::{isupper, tolower};
 use crate::game::PLAYER;
+use crate::globals::CObjInfo;
 use crate::item::pack::{get_item, leave_pack, reset_last};
 use crate::options::get_str;
 use crate::rnd::rnd;
@@ -16,8 +17,8 @@ use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
+use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game::MONSTER_LIST;
-use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::startup::roll;
 
 const PASSAGE: c_char = b'#' as c_char;
@@ -72,10 +73,6 @@ unsafe extern "C" {
     static mut see_floor: bool;
     static mut terse: c_uchar;
 
-    fn isupper(c: c_int) -> c_int;
-    fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-    fn strlen(s: *const c_char) -> usize;
-    fn tolower(c: c_int) -> c_int;
 }
 
 #[inline]
@@ -399,7 +396,9 @@ pub unsafe extern "C" fn call_it(info: &mut CObjInfo) {
             msg_str("what do you want to call it? ");
         }
         if get_str(prbuf.as_mut_ptr().cast(), crate::ui::Window::Stdscr) == NORM {
-            let text = CStr::from_ptr(prbuf.as_ptr()).to_string_lossy().into_owned();
+            let text = CStr::from_ptr(prbuf.as_ptr())
+                .to_string_lossy()
+                .into_owned();
             info.oi_guess = Some(text);
         }
     }

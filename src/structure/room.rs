@@ -5,8 +5,8 @@
 use crate::rnd::rnd;
 use glam::IVec2;
 
-use super::structure::Structure;
 use super::super::tile::Tile;
+use super::structure::Structure;
 
 /// Logical room model used by Rust-side level generation.
 ///
@@ -305,4 +305,3 @@ mod tests {
         assert_eq!(room.structure.get(2, 2), Some(Tile::Floor));
     }
 }
-

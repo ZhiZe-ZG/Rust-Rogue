@@ -55,11 +55,7 @@ fn plan_connections(gone: &[bool]) -> Vec<(usize, usize)> {
 ///
 /// "Gone" rooms act as pass-through cells in the 3x3 grid: they may appear in
 /// the tree, but only non-gone rooms must become reachable.
-fn build_spanning_tree(
-    gone: &[bool],
-    live_rooms: usize,
-    connections: &mut Vec<(usize, usize)>,
-) {
+fn build_spanning_tree(gone: &[bool], live_rooms: usize, connections: &mut Vec<(usize, usize)>) {
     let mut in_graph = [false; GameConfig::MAX_ROOMS];
     let mut current = pick_random(|idx| !gone[idx]);
     in_graph[current] = true;
@@ -99,7 +95,9 @@ fn next_unreached(from: usize, in_graph: &[bool; GameConfig::MAX_ROOMS]) -> Opti
 
 /// Pick a uniformly random adjacent room with no dug connection to `from` yet.
 fn next_unconnected(from: usize, connections: &[(usize, usize)]) -> Option<usize> {
-    pick_unconnected(neighbors(from), |room| is_connected(connections, from, room))
+    pick_unconnected(neighbors(from), |room| {
+        is_connected(connections, from, room)
+    })
 }
 
 fn is_connected(connections: &[(usize, usize)], a: usize, b: usize) -> bool {

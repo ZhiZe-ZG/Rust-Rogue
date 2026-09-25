@@ -8,10 +8,11 @@ use std::ptr;
 use crate::daemon::{fuse, lengthen, start_daemon, Daemon};
 use crate::daemons::{come_down, land, sight, unconfuse, unsee, visuals};
 use crate::draw::look;
+use crate::ffi::snprintf;
 
 use crate::entity::chase::see_monst;
+use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::game::MONSTER_LIST;
-use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::game::PLAYER;
 use crate::globals::pot_info;
 use crate::item::pack::{get_item, leave_pack};
@@ -118,8 +119,6 @@ unsafe extern "C" {
     static mut prbuf: [c_char; 2048];
     static mut max_stats: Stats;
     static mut e_levels: [c_int; 21];
-
-    fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
 /// Cast a generic thing pointer to the monster portion of the union.
@@ -270,14 +269,7 @@ pub unsafe extern "C" fn quaff() {
 
     let potion = PotionType::from_raw((*thing_o(obj)).o_which);
     match potion {
-        PotionType::Confuse => do_pot_impl(
-            PotionType::Confuse,
-            if trip {
-                false
-            } else {
-                true
-            },
-        ),
+        PotionType::Confuse => do_pot_impl(PotionType::Confuse, if trip { false } else { true }),
         PotionType::Poison => {
             (*pot_info.as_mut_ptr().add(PotionType::Poison.index())).oi_know = true;
             if ring_is(PLAYER.left_ring(), RingType::SustainStrength)
@@ -309,7 +301,12 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::MonsterFind => {
             crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
-            fuse(Daemon::TurnSee, true as c_uchar as c_int, HUHDURATION, AFTER);
+            fuse(
+                Daemon::TurnSee,
+                true as c_uchar as c_int,
+                HUHDURATION,
+                AFTER,
+            );
             if turn_see(false as c_uchar) == 0 {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
@@ -332,8 +329,7 @@ pub unsafe extern "C" fn quaff() {
                             IVec2::new((*thing_o(tp)).o_pos.x, (*thing_o(tp)).o_pos.y),
                         );
                         output::write_window_glyph(window, (MAGIC as u8) as char);
-                        (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know =
-                            true;
+                        (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know = true;
                     }
                     tp = next_thing(tp);
                 }
@@ -355,8 +351,7 @@ pub unsafe extern "C" fn quaff() {
                 }
             }
             if show {
-                (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know =
-                    true;
+                (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know = true;
                 show_win("You sense the presence of magic on this level.--More--");
             } else {
                 msg_str(&format!(
@@ -396,8 +391,7 @@ pub unsafe extern "C" fn quaff() {
             raise_level();
         }
         PotionType::ExtraHealing => {
-            (*pot_info.as_mut_ptr().add(PotionType::ExtraHealing.index())).oi_know =
-                true;
+            (*pot_info.as_mut_ptr().add(PotionType::ExtraHealing.index())).oi_know = true;
             crate::game::PLAYER.with_stats_mut(|stats| {
                 stats.hit_points += roll(stats.level, 8);
                 if stats.hit_points > stats.max_hit_points {
@@ -575,8 +569,7 @@ pub unsafe extern "C" fn seen_stairs() -> c_uchar {
 #[no_mangle]
 pub unsafe extern "C" fn raise_level() {
     let level = crate::game::PLAYER.level();
-    crate::game::PLAYER
-        .with_stats_mut(|stats| stats.experience = e_levels[level as usize - 1] + 1);
+    crate::game::PLAYER.with_stats_mut(|stats| stats.experience = e_levels[level as usize - 1] + 1);
     check_level();
 }
 

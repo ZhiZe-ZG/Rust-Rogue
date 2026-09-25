@@ -8,6 +8,7 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
+use crate::ffi::{malloc, strcpy, strlen};
 use crate::game::PLAYER;
 use crate::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
@@ -16,7 +17,7 @@ use crate::rnd::rnd;
 
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 
-use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::item::pack::add_pack;
 use crate::item::thing_list::new_item;
 use crate::item::weapons::init_weapon;
@@ -292,14 +293,6 @@ unsafe extern "C" {
     static mut prbuf: [c_char; MAXSTR];
 }
 
-// ─── Extern C functions ──────────────────────────────────────────────────────
-
-unsafe extern "C" {
-    fn malloc(size: usize) -> *mut c_void;
-    fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-    fn strlen(s: *const c_char) -> usize;
-}
-
 // ─── Private helpers ─────────────────────────────────────────────────────────
 
 #[inline]
@@ -495,8 +488,7 @@ pub unsafe extern "C" fn init_probs() {
 /// Return a random colour if the player is hallucinating, otherwise
 /// return the supplied colour unchanged.
 pub unsafe fn pick_color(col: &'static str) -> &'static str {
-    if crate::game::PLAYER.has_flag(MonsterFlags::HALU)
-    {
+    if crate::game::PLAYER.has_flag(MonsterFlags::HALU) {
         crate::colors::random_color()
     } else {
         col

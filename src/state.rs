@@ -34,9 +34,10 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 
 use crate::daemon::{CDelayedAction, Daemon, D_LIST};
-use crate::game::{MONSTER_LIST, MONSTER_MAP};
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject};
+use crate::ffi::{fread, free, fwrite, malloc, strcmp, strlen, CFile};
 use crate::game::PLAYER;
+use crate::game::{MONSTER_LIST, MONSTER_MAP};
 use crate::globals::{
     arm_info, monsters, pot_info, ring_info, scr_info, things, weap_info, ws_info, CMonster,
     CObjInfo,
@@ -112,11 +113,8 @@ unsafe fn read_stat() -> c_int {
 
 // ─── C ABI mirror types ──────────────────────────────────────────────────────
 
-#[repr(C)]
-pub struct CFile {
-    _private: [u8; 0],
-}
-
+/// C layout of a `struct stone { char *st_name; int st_value; }` entry, used
+/// only while reading/writing the ring-stone table in the save stream.
 #[repr(C)]
 pub struct CStone {
     pub st_name: *const c_char,
@@ -229,14 +227,6 @@ unsafe extern "C" {
     static mut cNSTONES: c_int;
     static mut cNWOOD: c_int;
     static mut cNMETAL: c_int;
-
-    // libc / curses
-    fn malloc(size: usize) -> *mut c_void;
-    fn free(ptr: *mut c_void);
-    fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
-    fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
-    fn strlen(s: *const c_char) -> usize;
-    fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1892,7 +1882,10 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut Thing) -> c_int {
             let _ = rs_write_int(savef, 1);
             let _ = rs_write_int(savef, i);
         } else {
-            i = find_object_coord(crate::game::with_current_level(|level| level.items.head()), t_dest);
+            i = find_object_coord(
+                crate::game::with_current_level(|level| level.items.head()),
+                t_dest,
+            );
 
             if i >= 0 {
                 let _ = rs_write_int(savef, 2);
@@ -1984,15 +1977,24 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut Thing) -> c_int {
         (*thing_t(t)).t_reserved = index;
     } else if listid == 2 {
         /* object */
-        let item = get_list_item(crate::game::with_current_level(|level| level.items.head()), index);
+        let item = get_list_item(
+            crate::game::with_current_level(|level| level.items.head()),
+            index,
+        );
 
         if !item.is_null() {
-            crate::entity::player::set_thing_dest(t, (&raw mut (*thing_o(item)).o_pos) as *mut IVec2);
+            crate::entity::player::set_thing_dest(
+                t,
+                (&raw mut (*thing_o(item)).o_pos) as *mut IVec2,
+            );
         }
     } else if listid == 3 {
         /* gold */
         if (index as usize) < crate::config::GameConfig::MAX_ROOMS {
-            crate::entity::player::set_thing_dest(t, crate::game::room_gold_ptr(Some(index as usize)));
+            crate::entity::player::set_thing_dest(
+                t,
+                crate::game::room_gold_ptr(Some(index as usize)),
+            );
         } else {
             crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
         }
@@ -2386,7 +2388,10 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_object_reference(savef, player_pack, l_last_pick);
     let _ = rs_write_object_reference(savef, player_pack, last_pick);
 
-    let _ = rs_write_object_list(savef, crate::game::with_current_level(|level| level.items.head()));
+    let _ = rs_write_object_list(
+        savef,
+        crate::game::with_current_level(|level| level.items.head()),
+    );
     let _ = rs_write_thing_list(savef, MONSTER_LIST.head());
 
     let _ = rs_write_places(

@@ -23,7 +23,8 @@ use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
-use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::ffi::{atoi, isupper, sprintf, strchr, strcpy, toascii, toupper};
 use crate::globals::{monsters, weap_info};
 use crate::item::rings::RingType;
 use crate::item::thing_list::{attach_pack, detach_pack, discard, new_item};
@@ -124,19 +125,6 @@ unsafe extern "C" {
     static mut max_hit: c_int;
     static mut purse: c_int;
     static mut max_level: c_int;
-}
-
-// ─── Extern C functions ───────────────────────────────────────────────────────
-
-unsafe extern "C" {
-    fn isupper(c: c_int) -> c_int;
-    fn toupper(c: c_int) -> c_int;
-    fn toascii(c: c_int) -> c_int;
-    fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-    fn strchr(s: *const c_char, c: c_int) -> *mut c_char;
-    fn atoi(s: *const c_char) -> c_int;
-    fn sprintf(s: *mut c_char, fmt: *const c_char, ...) -> c_int;
-
 }
 
 // ─── Inline helpers ───────────────────────────────────────────────────────────

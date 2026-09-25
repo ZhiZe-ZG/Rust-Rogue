@@ -19,13 +19,13 @@ use std::os::raw::{c_char, c_int, c_uchar};
 use crate::config::GameConfig;
 use crate::entity::chase::{roomin, see_monst};
 use crate::entity::monsters::wake_monster;
-use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
+use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game;
-use crate::tile::TrapType;
 use crate::level::{door_open, with_current_level, with_current_level_mut};
-use crate::tile::Tile;
 use crate::misc::find_obj;
 use crate::rnd::rnd;
+use crate::tile::Tile;
+use crate::tile::TrapType;
 use crate::ui::{output, Window};
 use glam::IVec2;
 
@@ -54,7 +54,6 @@ pub const F_PNUM: c_char = 0x0fu8 as c_char;
 pub const F_TMASK: c_char = 0x07u8 as c_char;
 
 // ─── Player/monster flags ─────────────────────────────────────────────────────
-
 
 // ─── Screen geometry ───────────────────────────────────────────────────────────
 
@@ -207,7 +206,11 @@ pub(crate) unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
         if lvl.flags.real[idx] {
             f |= F_REAL as u8;
         }
-        f |= (lvl.map.get(y as usize, x as usize).unwrap_or(Tile::Empty).trap() as u8)
+        f |= (lvl
+            .map
+            .get(y as usize, x as usize)
+            .unwrap_or(Tile::Empty)
+            .trap() as u8)
             & (F_TMASK as u8);
         f as c_char
     })

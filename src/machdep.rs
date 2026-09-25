@@ -13,6 +13,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::ffi::{fclose, fflush, fgets, fopen, fprintf, printf, rewind, strerror, CFile};
 use crate::globals::{fruit, got_ltc, orig_dsusp, prbuf, scoreboard, whoami};
 use crate::mdport::{
     md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
@@ -33,22 +34,22 @@ const LOCKFILE: &[u8] = b"rogue.lck";
 const ENOENT: c_int = 2;
 
 /// `FILE *lfd` from mach_dep.c -- handle of the scoreboard lock file.
-static mut LFD: *mut crate::score::CFile = ptr::null_mut();
+static mut LFD: *mut CFile = ptr::null_mut();
 
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
-    static mut __stdinp: *mut c_void;
-    static mut __stderrp: *mut c_void;
+    static mut __stdinp: *mut CFile;
+    static mut __stderrp: *mut CFile;
 }
 
 #[cfg(not(target_os = "macos"))]
 unsafe extern "C" {
-    static mut stdin: *mut c_void;
-    static mut stderr: *mut c_void;
+    static mut stdin: *mut CFile;
+    static mut stderr: *mut CFile;
 }
 
 #[inline]
-unsafe fn c_stdin() -> *mut c_void {
+unsafe fn c_stdin() -> *mut CFile {
     #[cfg(target_os = "macos")]
     {
         __stdinp
@@ -60,7 +61,7 @@ unsafe fn c_stdin() -> *mut c_void {
 }
 
 #[inline]
-unsafe fn c_stderr() -> *mut c_void {
+unsafe fn c_stderr() -> *mut CFile {
     #[cfg(target_os = "macos")]
     {
         __stderrp
@@ -69,18 +70,6 @@ unsafe fn c_stderr() -> *mut c_void {
     {
         stderr
     }
-}
-
-unsafe extern "C" {
-    fn fopen(path: *const c_char, mode: *const c_char) -> *mut crate::score::CFile;
-    fn fclose(stream: *mut crate::score::CFile) -> c_int;
-    fn fgets(buf: *mut c_char, n: c_int, stream: *mut c_void) -> *mut c_char;
-    fn fflush(stream: *mut c_void) -> c_int;
-    fn fprintf(stream: *mut c_void, fmt: *const c_char, ...) -> c_int;
-    fn printf(fmt: *const c_char, ...) -> c_int;
-    fn rewind(stream: *mut crate::score::CFile);
-    fn strerror(errnum: c_int) -> *const c_char;
-
 }
 
 #[cfg(target_os = "macos")]
