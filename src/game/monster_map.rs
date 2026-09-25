@@ -1,7 +1,8 @@
 //! Per-cell monster occupancy for the current level.
 
 use crate::config::GameConfig;
-use crate::game::MonsterId;
+
+use super::MonsterId;
 
 /// Per-cell monster occupancy grid for the current level.
 ///

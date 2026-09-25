@@ -11,11 +11,11 @@ use super::passages::{
     apply_passage, build_passage, collect_corridor_end, corridor_tiles, mark_passages,
     number_passages, plan_corridor, Passage, PassageLinks,
 };
-use super::monster_map::MonsterMap;
 use super::roomgraph::RoomGraph;
 use super::structure::{Room, Structure};
 use super::tile::{Tile, TrapType};
 use crate::config::GameConfig;
+use crate::game::MonsterMap;
 use crate::item::item_list::ItemList;
 
 /// Upper bound for the roll that removes rooms at the start of a new level.
