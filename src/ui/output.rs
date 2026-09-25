@@ -1,19 +1,20 @@
 //! Message, status, and overlay output policy for the terminal UI.
 
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
 use std::sync::Mutex;
 
 use crate::config::GameConfig;
-use crate::entity::player::{Stats, Thing, ThingMonster};
 use crate::game::PLAYER;
+use crate::globals::{
+    get_hungry_state, get_max_stats, get_mpos, get_purse, lower_msg_enabled, msg_esc_enabled,
+    save_msg_enabled, set_huh_string, set_mpos, stat_msg_enabled,
+};
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::terminal as cur;
 use crate::ui::Window;
 use glam::IVec2;
 
 const ESCAPE: i32 = 27;
-const MAXSTR: usize = 1024;
 const MAXMSG: usize = GameConfig::SCREEN_COLS as usize - 9;
 const STATLINE: i32 = 23;
 
@@ -35,7 +36,6 @@ static MESSAGE_STATE: Mutex<MessageState> = Mutex::new(MessageState {
     next_position: 0,
 });
 
-#[cfg(not(test))]
 fn split_message_at(text: &str, limit: usize) -> usize {
     if text.len() <= limit {
         return text.len();
@@ -49,81 +49,59 @@ fn split_message_at(text: &str, limit: usize) -> usize {
         .unwrap_or_else(|| text.chars().next().map_or(0, char::len_utf8))
 }
 
-unsafe extern "C" {
-    static mut hungry_state: c_int;
-    static mut huh: [c_char; MAXSTR];
-    static mut max_stats: Stats;
-    static mut mpos: c_int;
-    static mut msg_esc: bool;
-    static mut purse: c_int;
-    static mut save_msg: c_uchar;
-    static mut lower_msg: c_uchar;
-    static mut stat_msg: c_uchar;
-}
-
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
 /// Move the standard-screen cursor.
 pub fn move_cursor(position: IVec2) {
-    unsafe {
-        cur::move_cursor(position);
-    }
+    cur::move_cursor(position);
 }
 
 /// Write one glyph at the current cursor position.
 pub fn write_glyph(glyph: char) {
-    unsafe {
-        cur::write_glyph(glyph);
-    }
+    cur::write_glyph(glyph);
 }
 
 /// Move to a position and write one glyph.
 pub fn write_glyph_at(position: IVec2, glyph: char) {
-    unsafe {
-        cur::write_glyph_at(position, glyph);
-    }
+    cur::write_glyph_at(position, glyph);
 }
 
 /// Read the glyph currently displayed under the standard-screen cursor.
 pub fn glyph_at_cursor() -> char {
-    unsafe { cur::glyph_at_cursor() }
+    cur::glyph_at_cursor()
 }
 
 /// Read the glyph displayed at a position on the standard screen.
 pub fn glyph_at(position: IVec2) -> char {
-    unsafe { cur::glyph_at(position) }
+    cur::glyph_at(position)
 }
 
 /// Enable or disable standout output on the standard screen.
 pub fn set_standout(enabled: bool) {
-    unsafe { cur::set_standout(enabled) }
+    cur::set_standout(enabled);
 }
 
 /// Flush pending standard-screen changes to the terminal.
 pub fn refresh() {
-    unsafe { cur::refresh() }
+    cur::refresh();
 }
 
 /// Clear the standard screen.
 pub fn clear_screen() {
-    unsafe { cur::clear() }
+    cur::clear();
 }
 
 /// Clear from the cursor to the end of its line.
 pub fn clear_to_end_of_line() {
-    unsafe { cur::clear_to_end_of_line() }
+    cur::clear_to_end_of_line();
 }
 
 /// Write UTF-8 text at the current cursor position.
 pub fn write_text(text: &str) {
-    unsafe { cur::write_text(text) }
+    cur::write_text(text);
 }
 
 /// Move to a position and write UTF-8 text.
 pub fn write_text_at(position: IVec2, text: &str) {
-    unsafe { cur::write_text_at(position, text) }
+    cur::write_text_at(position, text);
 }
 
 /// Control whether the terminal may leave the physical cursor after refresh.
@@ -134,7 +112,7 @@ pub fn set_leave_cursor(_window: Window, _enabled: bool) {}
 
 /// Return the current cursor position.
 pub fn window_cursor(_window: Window) -> IVec2 {
-    unsafe { cur::cursor_pos() }
+    cur::cursor_pos()
 }
 
 /// Clear the screen for the given (aliased) window.
@@ -193,8 +171,7 @@ pub fn format_key(key: u8) -> String {
     }
 }
 
-#[cfg(not(test))]
-unsafe fn append_message(text: &str) {
+fn append_message(text: &str) {
     let mut remaining = text;
     while !remaining.is_empty() {
         let available = {
@@ -226,12 +203,11 @@ unsafe fn append_message(text: &str) {
     }
 }
 
-#[cfg(not(test))]
-unsafe fn display_message(text: &str) -> MessageResult {
+fn display_message(text: &str) -> MessageResult {
     if text.is_empty() {
         move_cursor(IVec2::new(0, 0));
         clear_to_end_of_line();
-        mpos = 0;
+        set_mpos(0);
         return MessageResult::Displayed;
     }
 
@@ -239,10 +215,10 @@ unsafe fn display_message(text: &str) -> MessageResult {
     endmsg()
 }
 
-/// Display a Rust-formatted message, bypassing the legacy variadic `msg()`
-/// shim. Returns the message result (useful for `--More--` escape detection).
+/// Display a Rust-formatted message. Returns the message result (useful for
+/// `--More--` escape detection).
 #[inline]
-pub unsafe fn msg_str(text: &str) -> MessageResult {
+pub fn msg_str(text: &str) -> MessageResult {
     #[cfg(not(test))]
     {
         display_message(text)
@@ -256,7 +232,7 @@ pub unsafe fn msg_str(text: &str) -> MessageResult {
 
 /// Append a Rust-formatted message segment.
 #[inline]
-pub unsafe fn addmsg_str(text: &str) {
+pub fn addmsg_str(text: &str) {
     #[cfg(not(test))]
     {
         append_message(text);
@@ -269,7 +245,7 @@ pub unsafe fn addmsg_str(text: &str) {
 
 /// Flush the pending message and handle pagination.
 #[cfg(not(test))]
-pub unsafe fn endmsg() -> MessageResult {
+pub fn endmsg() -> MessageResult {
     let (mut pending, next_position) = {
         let mut state = MESSAGE_STATE
             .lock()
@@ -277,18 +253,16 @@ pub unsafe fn endmsg() -> MessageResult {
         (std::mem::take(&mut state.pending), state.next_position)
     };
 
-    if save_msg != false as c_uchar {
-        let bytes = pending.as_bytes();
-        let copy_len = bytes.len().min(MAXSTR - 1);
-        std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), huh.as_mut_ptr(), copy_len);
-        huh[copy_len] = 0;
+    if save_msg_enabled() {
+        set_huh_string(&pending);
     }
 
+    let mpos = get_mpos();
     if mpos != 0 {
         write_text_at(IVec2::new(mpos, 0), "--More--");
         refresh();
 
-        if !msg_esc {
+        if !msg_esc_enabled() {
             wait_for(' ');
         } else {
             loop {
@@ -298,7 +272,7 @@ pub unsafe fn endmsg() -> MessageResult {
                 }
                 if ch == ESCAPE {
                     pending.clear();
-                    mpos = 0;
+                    set_mpos(0);
                     let mut state = MESSAGE_STATE
                         .lock()
                         .unwrap_or_else(|lock| lock.into_inner());
@@ -309,7 +283,7 @@ pub unsafe fn endmsg() -> MessageResult {
         }
     }
 
-    if lower_msg == false as c_uchar && pending.len() > 1 {
+    if !lower_msg_enabled() && pending.len() > 1 {
         if let Some(first) = pending.get_mut(0..1) {
             first.make_ascii_uppercase();
         }
@@ -317,7 +291,7 @@ pub unsafe fn endmsg() -> MessageResult {
 
     write_text_at(IVec2::new(0, 0), &pending);
     clear_to_end_of_line();
-    mpos = next_position;
+    set_mpos(next_position);
     let mut state = MESSAGE_STATE
         .lock()
         .unwrap_or_else(|lock| lock.into_inner());
@@ -326,65 +300,71 @@ pub unsafe fn endmsg() -> MessageResult {
     MessageResult::Displayed
 }
 
+// ─── Status line cache (single-threaded; atomics avoid `static mut`) ─────────
+
+static HPWIDTH: AtomicI32 = AtomicI32::new(0);
+static S_HUNGRY: AtomicI32 = AtomicI32::new(0);
+static S_LVL: AtomicI32 = AtomicI32::new(0);
+static S_PUR: AtomicI32 = AtomicI32::new(-1);
+static S_HP: AtomicI32 = AtomicI32::new(0);
+static S_ARM: AtomicI32 = AtomicI32::new(0);
+static S_STR: AtomicU32 = AtomicU32::new(0);
+static S_EXP: AtomicI32 = AtomicI32::new(0);
+
+const STATE_NAMES: [&str; 4] = ["", "Hungry", "Weak", "Faint"];
+
 #[cfg(not(test))]
-pub unsafe fn status() {
-    let pstats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
+pub fn status() {
+    let pstats = PLAYER.stats();
     let level = crate::game::current_depth();
     let max_hp = pstats.max_hit_points;
-    let mut temp = if !PLAYER.armor().is_null() {
-        (*crate::entity::player::thing_o(PLAYER.armor())).o_arm
-    } else {
-        pstats.armor
-    };
+    let temp = PLAYER.armor_value().unwrap_or(pstats.armor);
 
-    static mut hpwidth: c_int = 0;
-    static mut s_hungry: c_int = 0;
-    static mut s_lvl: c_int = 0;
-    static mut s_pur: c_int = -1;
-    static mut s_hp: c_int = 0;
-    static mut s_arm: c_int = 0;
-    static mut s_str: c_uint = 0;
-    static mut s_exp: c_int = 0;
+    let hungry_state = get_hungry_state();
+    let purse = get_purse();
+    let stat_msg = stat_msg_enabled();
 
-    let state_name = [
-        c"".as_ptr(),
-        c"Hungry".as_ptr(),
-        c"Weak".as_ptr(),
-        c"Faint".as_ptr(),
-    ];
-
-    if s_hp == pstats.hit_points
-        && s_exp == pstats.experience
-        && s_pur == purse
-        && s_arm == temp
-        && s_str == pstats.strength
-        && s_lvl == level
-        && s_hungry == hungry_state
-        && stat_msg == false as c_uchar
+    if S_HP.load(Ordering::Relaxed) == pstats.hit_points
+        && S_EXP.load(Ordering::Relaxed) == pstats.experience
+        && S_PUR.load(Ordering::Relaxed) == purse
+        && S_ARM.load(Ordering::Relaxed) == temp
+        && S_STR.load(Ordering::Relaxed) == pstats.strength
+        && S_LVL.load(Ordering::Relaxed) == level
+        && S_HUNGRY.load(Ordering::Relaxed) == hungry_state
+        && !stat_msg
     {
         return;
     }
 
-    s_arm = temp;
+    S_ARM.store(temp, Ordering::Relaxed);
     let old_cursor = window_cursor(Window::Stdscr);
-    if s_hp != max_hp {
+    if S_HP.load(Ordering::Relaxed) != max_hp {
         let mut temp_hp = max_hp;
-        s_hp = max_hp;
-        hpwidth = 0;
+        S_HP.store(max_hp, Ordering::Relaxed);
+        let mut hpwidth = 0;
         while temp_hp != 0 {
             hpwidth += 1;
             temp_hp /= 10;
         }
+        HPWIDTH.store(hpwidth, Ordering::Relaxed);
     }
 
-    s_lvl = level;
-    s_pur = purse;
-    s_hp = pstats.hit_points;
-    s_str = pstats.strength;
-    s_exp = pstats.experience;
-    s_hungry = hungry_state;
+    S_LVL.store(level, Ordering::Relaxed);
+    S_PUR.store(purse, Ordering::Relaxed);
+    S_HP.store(pstats.hit_points, Ordering::Relaxed);
+    S_STR.store(pstats.strength, Ordering::Relaxed);
+    S_EXP.store(pstats.experience, Ordering::Relaxed);
+    S_HUNGRY.store(hungry_state, Ordering::Relaxed);
 
-    if stat_msg != false as c_uchar {
+    let hpwidth = HPWIDTH.load(Ordering::Relaxed);
+    let s_arm = S_ARM.load(Ordering::Relaxed);
+    let max_stats = get_max_stats();
+    let state_name = STATE_NAMES
+        .get(hungry_state.max(0) as usize)
+        .copied()
+        .unwrap_or("");
+
+    if stat_msg {
         move_cursor(IVec2::new(0, 0));
         msg_str(&format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
@@ -397,7 +377,7 @@ pub unsafe fn status() {
             10 - s_arm,
             pstats.level,
             pstats.experience,
-            CStr::from_ptr(state_name[hungry_state as usize]).to_string_lossy(),
+            state_name,
             w = hpwidth as usize,
         ));
     } else {
@@ -413,7 +393,7 @@ pub unsafe fn status() {
             10 - s_arm,
             pstats.level,
             pstats.experience,
-            CStr::from_ptr(state_name[hungry_state as usize]).to_string_lossy(),
+            state_name,
             w = hpwidth as usize,
         );
         write_text(&line);
@@ -424,12 +404,12 @@ pub unsafe fn status() {
 }
 
 #[cfg(not(test))]
-pub unsafe fn show_win(message: &str) {
+pub fn show_win(message: &str) {
     let window = Window::Stdscr;
     move_window_cursor(window, IVec2::new(0, 0));
     write_window_text(window, message);
     touch_window(window);
-    let hero = (*thing_t(crate::game::player_ptr())).t_pos;
+    let hero = PLAYER.pos();
     move_window_cursor(window, IVec2::new(hero.x, hero.y));
     refresh_window(window);
     wait_for(' ');
@@ -439,15 +419,15 @@ pub unsafe fn show_win(message: &str) {
 }
 
 #[cfg(test)]
-pub unsafe fn endmsg() -> MessageResult {
+pub fn endmsg() -> MessageResult {
     MessageResult::Displayed
 }
 
 #[cfg(test)]
-pub unsafe fn status() {}
+pub fn status() {}
 
 #[cfg(test)]
-pub unsafe fn show_win(_message: &str) {}
+pub fn show_win(_message: &str) {}
 
 #[cfg(test)]
 mod tests {

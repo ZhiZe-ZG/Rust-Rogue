@@ -1239,3 +1239,81 @@ pub static mut ws_info: [CObjInfo; MAXSTICKS] = [
         oi_know: false,
     },
 ];
+
+// ─── Safe accessors for globals consumed by the UI layer ─────────────────────
+//
+// The statics above remain `static mut` (they are still shared with the
+// save/restore layer), but UI code reads and writes them through these small
+// wrappers so it does not have to open `unsafe` blocks itself.
+
+/// The player's hunger state (`0` = not hungry).
+#[inline]
+pub fn get_hungry_state() -> i32 {
+    unsafe { hungry_state }
+}
+
+/// The player's current gold.
+#[inline]
+pub fn get_purse() -> i32 {
+    unsafe { purse }
+}
+
+/// The current message cursor column used for `--More--` pagination.
+#[inline]
+pub fn get_mpos() -> i32 {
+    unsafe { mpos }
+}
+
+/// Set the message cursor column.
+#[inline]
+pub fn set_mpos(value: i32) {
+    unsafe {
+        mpos = value;
+    }
+}
+
+/// Whether the player may leave the message display; when false only the first
+/// message line is shown.
+#[inline]
+pub fn msg_esc_enabled() -> bool {
+    unsafe { msg_esc }
+}
+
+/// Whether messages should be saved into the `huh` history buffer.
+#[inline]
+pub fn save_msg_enabled() -> bool {
+    unsafe { save_msg != 0 }
+}
+
+/// Whether messages are displayed in lower case.
+#[inline]
+pub fn lower_msg_enabled() -> bool {
+    unsafe { lower_msg != 0 }
+}
+
+/// Whether the status line is being shown through the message line.
+#[inline]
+pub fn stat_msg_enabled() -> bool {
+    unsafe { stat_msg != 0 }
+}
+
+/// The player's maximum stats (the "max_stats" table).
+#[inline]
+pub fn get_max_stats() -> Stats {
+    unsafe { max_stats }
+}
+
+/// Copy `text` into the `huh` message-history buffer (NUL-terminated, capped at
+/// `MAXSTR - 1` bytes).
+pub fn set_huh_string(text: &str) {
+    unsafe {
+        let bytes = text.as_bytes();
+        let copy_len = bytes.len().min(MAXSTR - 1);
+        std::ptr::copy_nonoverlapping(
+            bytes.as_ptr().cast::<c_char>(),
+            huh.as_mut_ptr(),
+            copy_len,
+        );
+        huh[copy_len] = 0;
+    }
+}

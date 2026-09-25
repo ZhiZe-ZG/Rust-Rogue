@@ -32,18 +32,11 @@ pub fn screen_size() -> IVec2 {
 /// Read one cell from the retained screen grid (row, column).
 ///
 /// Used by save/restore to dump and reload the visible screen.
-///
-/// # Safety
-/// The terminal backend owns a process-wide grid; callers must not hold other
-/// references to it.
-pub unsafe fn screen_cell(y: i32, x: i32) -> u8 {
+pub fn screen_cell(y: i32, x: i32) -> u8 {
     terminal::read_cell(y, x)
 }
 
 /// Write one cell into the retained screen grid (row, column).
-///
-/// # Safety
-/// See [`screen_cell`].
-pub unsafe fn set_screen_cell(y: i32, x: i32, ch: u8) {
+pub fn set_screen_cell(y: i32, x: i32, ch: u8) {
     terminal::write_cell(y, x, ch);
 }

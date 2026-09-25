@@ -7,7 +7,13 @@
 //! plus a single shared cursor.
 //!
 //! All windows in this game are full-screen aliases of the same grid, so there
-//! is no per-window state and no curses C ABI to preserve.
+//! is no per-window state and no curses C ABI to preserve. The backend state
+//! lives in ordinary process-wide statics (locks and atomics) rather than
+//! `static mut`, so the whole module is safe.
+
+use std::io::Write;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::Mutex;
 
 use glam::IVec2;
 
@@ -32,23 +38,30 @@ const BLANK_CELL: ScreenCell = ScreenCell {
 };
 
 /// The retained screen grid, indexed `grid[y][x]`.
-static mut GRID: [[ScreenCell; NCOLS]; NROWS] = [[BLANK_CELL; NCOLS]; NROWS];
+static GRID: Mutex<[[ScreenCell; NCOLS]; NROWS]> = Mutex::new([[BLANK_CELL; NCOLS]; NROWS]);
 
 /// The single shared cursor position (row, column).
-static mut CURSOR: IVec2 = IVec2::ZERO;
+static CURSOR: Mutex<IVec2> = Mutex::new(IVec2::ZERO);
 
 /// Current standout mode for subsequent writes (curses `standout`/`standend`).
-static mut STANDOUT: bool = false;
+static STANDOUT: AtomicBool = AtomicBool::new(false);
 
 /// Input timeout in tenths of a second (`0`/negative means block indefinitely).
-static mut INPUT_TIMEOUT: i32 = -1;
+static INPUT_TIMEOUT: AtomicI32 = AtomicI32::new(-1);
 
 /// Whether the terminal has been shut down (`endwin` called).
-static mut SHUTDOWN: bool = true;
+static SHUTDOWN: AtomicBool = AtomicBool::new(true);
 
 /// The ratatui terminal handle. Kept alive for the process lifetime; raw mode
 /// is toggled independently so shell escapes/suspension can restore it.
-static mut TERMINAL: Option<Terminal<CrosstermBackend<Box<dyn std::io::Write>>>> = None;
+type Backend = CrosstermBackend<Box<dyn Write + Send>>;
+static TERMINAL: Mutex<Option<Terminal<Backend>>> = Mutex::new(None);
+
+/// Lock a `Mutex`, recovering from poisoning instead of panicking.
+#[inline]
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poison| poison.into_inner())
+}
 
 // ─── Curses key codes (mirrors ncurses `keys.h`) ──────────────────────────────
 
@@ -71,11 +84,6 @@ pub(crate) const fn screen_size() -> IVec2 {
 }
 
 #[inline]
-unsafe fn grid_mut() -> &'static mut [[ScreenCell; NCOLS]; NROWS] {
-    &mut *std::ptr::addr_of_mut!(GRID)
-}
-
-#[inline]
 fn in_bounds(y: i32, x: i32) -> bool {
     y >= 0 && x >= 0 && (y as usize) < NROWS && (x as usize) < NCOLS
 }
@@ -84,11 +92,12 @@ fn in_bounds(y: i32, x: i32) -> bool {
 ///
 /// The alternate screen is entered exactly once (when the terminal is first
 /// created / recreated after a suspension). Raw mode toggling is idempotent.
-unsafe fn ensure_terminal() {
-    if TERMINAL.is_none() {
-        let stdout: Box<dyn std::io::Write> = Box::new(std::io::stdout());
+fn ensure_terminal() {
+    let mut guard = lock(&TERMINAL);
+    if guard.is_none() {
+        let stdout: Box<dyn Write + Send> = Box::new(std::io::stdout());
         let backend = CrosstermBackend::new(stdout);
-        TERMINAL = Some(Terminal::new(backend).expect("failed to initialize ratatui terminal"));
+        *guard = Some(Terminal::new(backend).expect("failed to initialize ratatui terminal"));
         let _ = crossterm::execute!(
             std::io::stdout(),
             crossterm::cursor::Hide,
@@ -96,12 +105,12 @@ unsafe fn ensure_terminal() {
         );
     }
     let _ = crossterm::terminal::enable_raw_mode();
-    SHUTDOWN = false;
+    SHUTDOWN.store(false, Ordering::Relaxed);
 }
 
 /// Drop back to the host terminal.
-unsafe fn deinit_terminal() {
-    if let Some(mut terminal) = TERMINAL.take() {
+fn deinit_terminal() {
+    if let Some(mut terminal) = lock(&TERMINAL).take() {
         let _ = terminal.show_cursor();
     }
     let _ = crossterm::execute!(
@@ -113,15 +122,17 @@ unsafe fn deinit_terminal() {
         crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
     );
     let _ = crossterm::terminal::disable_raw_mode();
-    SHUTDOWN = true;
+    SHUTDOWN.store(true, Ordering::Relaxed);
 }
 
 /// Render the retained grid to the real terminal as one frame.
-unsafe fn render() {
-    if SHUTDOWN {
+fn render() {
+    if SHUTDOWN.load(Ordering::Relaxed) {
         return;
     }
-    if let Some(terminal) = TERMINAL.as_mut() {
+    let grid = lock(&GRID);
+    let mut guard = lock(&TERMINAL);
+    if let Some(terminal) = guard.as_mut() {
         let _ = terminal.draw(|frame| {
             let area = frame.area();
             let buf = frame.buffer_mut();
@@ -130,7 +141,7 @@ unsafe fn render() {
                     if (x as u16) >= area.width || (y as u16) >= area.height {
                         continue;
                     }
-                    let cell = grid_mut()[y][x];
+                    let cell = grid[y][x];
                     let symbol = (cell.ch as char).to_string();
                     if let Some(target) = buf.cell_mut((x as u16, y as u16)) {
                         target.set_symbol(&symbol);
@@ -147,29 +158,30 @@ unsafe fn render() {
 }
 
 #[inline]
-unsafe fn set_cell(y: i32, x: i32, ch: u8, standout: bool) {
+fn set_cell(y: i32, x: i32, ch: u8, standout: bool) {
     if in_bounds(y, x) {
-        grid_mut()[y as usize][x as usize] = ScreenCell { ch, standout };
+        lock(&GRID)[y as usize][x as usize] = ScreenCell { ch, standout };
     }
 }
 
 #[inline]
-unsafe fn cell_at(y: i32, x: i32) -> u8 {
+fn cell_at(y: i32, x: i32) -> u8 {
     if in_bounds(y, x) {
-        grid_mut()[y as usize][x as usize].ch
+        lock(&GRID)[y as usize][x as usize].ch
     } else {
         b' '
     }
 }
 
 #[inline]
-unsafe fn advance_cursor() {
-    CURSOR.x += 1;
-    if CURSOR.x >= NCOLS as i32 {
-        CURSOR.x = 0;
-        CURSOR.y += 1;
-        if CURSOR.y >= NROWS as i32 {
-            CURSOR.y = 0;
+fn advance_cursor() {
+    let mut cursor = lock(&CURSOR);
+    cursor.x += 1;
+    if cursor.x >= NCOLS as i32 {
+        cursor.x = 0;
+        cursor.y += 1;
+        if cursor.y >= NROWS as i32 {
+            cursor.y = 0;
         }
     }
 }
@@ -204,117 +216,136 @@ fn map_key(event: &crossterm::event::KeyEvent) -> i32 {
 
 // ─── Screen functions ────────────────────────────────────────────────────────
 
-pub(crate) unsafe fn init() {
+pub(crate) fn init() {
     ensure_terminal();
 }
 
-pub(crate) unsafe fn shutdown() {
+pub(crate) fn shutdown() {
     deinit_terminal();
 }
 
-pub(crate) unsafe fn is_shutdown() -> bool {
-    SHUTDOWN
+pub(crate) fn is_shutdown() -> bool {
+    SHUTDOWN.load(Ordering::Relaxed)
 }
 
-pub(crate) unsafe fn clear() {
-    for row in grid_mut().iter_mut() {
+pub(crate) fn clear() {
+    for row in lock(&GRID).iter_mut() {
         for cell in row.iter_mut() {
             *cell = BLANK_CELL;
         }
     }
-    CURSOR = IVec2::ZERO;
+    *lock(&CURSOR) = IVec2::ZERO;
 }
 
-pub(crate) unsafe fn clear_to_end_of_line() {
-    if in_bounds(CURSOR.y, 0) {
-        for x in CURSOR.x.max(0) as usize..NCOLS {
-            grid_mut()[CURSOR.y as usize][x] = BLANK_CELL;
+pub(crate) fn clear_to_end_of_line() {
+    let cursor = *lock(&CURSOR);
+    if in_bounds(cursor.y, 0) {
+        let mut grid = lock(&GRID);
+        for x in cursor.x.max(0) as usize..NCOLS {
+            grid[cursor.y as usize][x] = BLANK_CELL;
         }
     }
 }
 
-pub(crate) unsafe fn refresh() {
+pub(crate) fn refresh() {
     render();
 }
 
-pub(crate) unsafe fn set_standout(enabled: bool) {
-    STANDOUT = enabled;
+pub(crate) fn set_standout(enabled: bool) {
+    STANDOUT.store(enabled, Ordering::Relaxed);
 }
 
-pub(crate) unsafe fn move_cursor(pos: IVec2) {
-    CURSOR = pos;
+pub(crate) fn move_cursor(pos: IVec2) {
+    *lock(&CURSOR) = pos;
 }
 
-pub(crate) unsafe fn cursor_pos() -> IVec2 {
-    CURSOR
+pub(crate) fn cursor_pos() -> IVec2 {
+    *lock(&CURSOR)
 }
 
-pub(crate) unsafe fn write_glyph(ch: char) {
-    set_cell(CURSOR.y, CURSOR.x, ch as u8, STANDOUT);
+pub(crate) fn write_glyph(ch: char) {
+    let cursor = *lock(&CURSOR);
+    set_cell(
+        cursor.y,
+        cursor.x,
+        ch as u8,
+        STANDOUT.load(Ordering::Relaxed),
+    );
     advance_cursor();
 }
 
-pub(crate) unsafe fn write_glyph_at(pos: IVec2, ch: char) {
-    CURSOR = pos;
+pub(crate) fn write_glyph_at(pos: IVec2, ch: char) {
+    move_cursor(pos);
     write_glyph(ch);
 }
 
-pub(crate) unsafe fn glyph_at_cursor() -> char {
-    cell_at(CURSOR.y, CURSOR.x) as char
+pub(crate) fn glyph_at_cursor() -> char {
+    let cursor = *lock(&CURSOR);
+    cell_at(cursor.y, cursor.x) as char
 }
 
-pub(crate) unsafe fn glyph_at(pos: IVec2) -> char {
+pub(crate) fn glyph_at(pos: IVec2) -> char {
     cell_at(pos.y, pos.x) as char
 }
 
-pub(crate) unsafe fn write_text(text: &str) {
+pub(crate) fn write_text(text: &str) {
+    let standout = STANDOUT.load(Ordering::Relaxed);
+    let mut cursor = lock(&CURSOR);
     for byte in text.bytes() {
         match byte {
             b'\n' => {
-                CURSOR.x = 0;
-                CURSOR.y += 1;
-                if CURSOR.y >= NROWS as i32 {
-                    CURSOR.y = 0;
+                cursor.x = 0;
+                cursor.y += 1;
+                if cursor.y >= NROWS as i32 {
+                    cursor.y = 0;
                 }
             }
             ch => {
-                set_cell(CURSOR.y, CURSOR.x, ch, STANDOUT);
-                advance_cursor();
+                if in_bounds(cursor.y, cursor.x) {
+                    lock(&GRID)[cursor.y as usize][cursor.x as usize] = ScreenCell { ch, standout };
+                }
+                cursor.x += 1;
+                if cursor.x >= NCOLS as i32 {
+                    cursor.x = 0;
+                    cursor.y += 1;
+                    if cursor.y >= NROWS as i32 {
+                        cursor.y = 0;
+                    }
+                }
             }
         }
     }
 }
 
-pub(crate) unsafe fn write_text_at(pos: IVec2, text: &str) {
-    CURSOR = pos;
+pub(crate) fn write_text_at(pos: IVec2, text: &str) {
+    move_cursor(pos);
     write_text(text);
 }
 
 // ─── Direct grid access for save/restore (state.rs) ─────────────────────────
 
-pub(crate) unsafe fn read_cell(y: i32, x: i32) -> u8 {
+pub(crate) fn read_cell(y: i32, x: i32) -> u8 {
     cell_at(y, x)
 }
 
-pub(crate) unsafe fn write_cell(y: i32, x: i32, ch: u8) {
+pub(crate) fn write_cell(y: i32, x: i32, ch: u8) {
     set_cell(y, x, ch, false);
 }
 
 // ─── Input / terminal-mode controls ─────────────────────────────────────────
 
-pub(crate) unsafe fn getch() -> i32 {
+pub(crate) fn getch() -> i32 {
     use crossterm::event::{self, Event};
 
-    if SHUTDOWN {
+    if SHUTDOWN.load(Ordering::Relaxed) {
         ensure_terminal();
     }
 
-    let wait = if INPUT_TIMEOUT <= 0 {
+    let timeout = INPUT_TIMEOUT.load(Ordering::Relaxed);
+    let wait = if timeout <= 0 {
         None
     } else {
-        Some(std::time::Duration::from_millis(
-            (INPUT_TIMEOUT as u64) * 100,
-        ))
+        Some(std::time::Duration::from_millis((timeout as u64) * 100))
     };
 
     if let Some(duration) = wait {
@@ -330,40 +361,40 @@ pub(crate) unsafe fn getch() -> i32 {
     }
 }
 
-pub(crate) unsafe fn set_escape_delay(_milliseconds: i32) {}
+pub(crate) fn set_escape_delay(_milliseconds: i32) {}
 
-pub(crate) unsafe fn raw() {
-    INPUT_TIMEOUT = -1;
+pub(crate) fn raw() {
+    INPUT_TIMEOUT.store(-1, Ordering::Relaxed);
     ensure_terminal();
 }
 
-pub(crate) unsafe fn nocbreak() {}
+pub(crate) fn nocbreak() {}
 
-pub(crate) unsafe fn echo() {}
+pub(crate) fn echo() {}
 
-pub(crate) unsafe fn noecho() {}
+pub(crate) fn noecho() {}
 
-pub(crate) unsafe fn halfdelay(tenths: i32) {
-    INPUT_TIMEOUT = tenths;
+pub(crate) fn halfdelay(tenths: i32) {
+    INPUT_TIMEOUT.store(tenths, Ordering::Relaxed);
 }
 
-pub(crate) unsafe fn erasechar() -> u8 {
+pub(crate) fn erasechar() -> u8 {
     0x7f
 }
 
-pub(crate) unsafe fn killchar() -> u8 {
+pub(crate) fn killchar() -> u8 {
     0x15
 }
 
-pub(crate) unsafe fn flushinp() {
-    use crossterm::event::{self, Event};
+pub(crate) fn flushinp() {
+    use crossterm::event;
     while event::poll(std::time::Duration::ZERO).unwrap_or(false) {
         let _ = event::read();
     }
 }
 
-pub(crate) unsafe fn baudrate() -> i32 {
+pub(crate) fn baudrate() -> i32 {
     9600
 }
 
-pub(crate) unsafe fn move_physical_cursor(_from: IVec2, _to: IVec2) {}
+pub(crate) fn move_physical_cursor(_from: IVec2, _to: IVec2) {}

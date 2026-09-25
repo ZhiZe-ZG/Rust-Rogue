@@ -173,6 +173,18 @@ impl Player {
         self.get() as *const Thing as *mut Thing
     }
 
+    /// The player's current statistics.
+    #[inline]
+    pub fn stats(&self) -> &Stats {
+        unsafe { &(*crate::entity::player::thing_t(self.ptr())).t_stats }
+    }
+
+    /// The player's current map position.
+    #[inline]
+    pub fn pos(&self) -> IVec2 {
+        unsafe { (*crate::entity::player::thing_t(self.ptr())).t_pos }
+    }
+
     /// The player's equipped objects.
     #[inline]
     pub fn equipment(&self) -> &Equipment {
@@ -183,6 +195,18 @@ impl Player {
     #[inline]
     pub fn armor(&self) -> *mut Thing {
         self.equipment.armor()
+    }
+
+    /// The protection value of the currently worn armor, or `None` when the
+    /// player is not wearing any armor.
+    #[inline]
+    pub fn armor_value(&self) -> Option<i32> {
+        let armor = self.armor();
+        if armor.is_null() {
+            None
+        } else {
+            Some(unsafe { (*crate::entity::player::thing_o(armor)).o_arm })
+        }
     }
 
     /// Set (or clear) the armor the player is wearing.
