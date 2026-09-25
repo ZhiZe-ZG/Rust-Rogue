@@ -153,19 +153,19 @@ pub unsafe extern "C" fn unconfuse() {
 /// Turn off the ability to see invisible.
 #[no_mangle]
 pub unsafe extern "C" fn unsee() {
-    let mut th = MLIST.head();
-    while !th.is_null() {
-        if (*thing_t(th))
-            .t_flags
-            .contains(MonsterFlags::INVIS)
-            && see_monst(th) != 0
-        {
-            output::write_glyph_at(
-                IVec2::new((*thing_t(th)).t_pos.x, (*thing_t(th)).t_pos.y),
-                ((*thing_t(th)).t_oldch as u8) as char,
-            );
+    for id in MLIST.ids() {
+        if let Some(th) = MLIST.handle(id) {
+            if (*thing_t(th))
+                .t_flags
+                .contains(MonsterFlags::INVIS)
+                && see_monst(th) != 0
+            {
+                output::write_glyph_at(
+                    IVec2::new((*thing_t(th)).t_pos.x, (*thing_t(th)).t_pos.y),
+                    ((*thing_t(th)).t_oldch as u8) as char,
+                );
+            }
         }
-        th = crate::entity::player::thing_next(th);
     }
     (*thing_t(crate::game::player_ptr()))
         .t_flags
@@ -325,26 +325,26 @@ pub unsafe extern "C" fn come_down() {
     let seemonst = (*thing_t(crate::game::player_ptr()))
         .t_flags
         .contains(MonsterFlags::SEEMONST);
-    let mut tp = MLIST.head();
-    while !tp.is_null() {
-        output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
-        if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
-            if !(*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS)
-                || (*thing_t(crate::game::player_ptr()))
-                    .t_flags
-                    .contains(MonsterFlags::CANSEE)
-            {
-                output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
+    for id in MLIST.ids() {
+        if let Some(tp) = MLIST.handle(id) {
+            output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
+            if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
+                if !(*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS)
+                    || (*thing_t(crate::game::player_ptr()))
+                        .t_flags
+                        .contains(MonsterFlags::CANSEE)
+                {
+                    output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
+                }
+                // If invisible and player can't see invisible, skip (original code
+                // falls through to the else-if, but cansee returned true here,
+                // so seemonst branch is not reached — matching C behavior).
+            } else if seemonst {
+                output::set_standout(true);
+                output::write_glyph(((*thing_t(tp)).t_type as u8) as char);
+                output::set_standout(false);
             }
-            // If invisible and player can't see invisible, skip (original code
-            // falls through to the else-if, but cansee returned true here,
-            // so seemonst branch is not reached — matching C behavior).
-        } else if seemonst {
-            output::set_standout(true);
-            output::write_glyph(((*thing_t(tp)).t_type as u8) as char);
-            output::set_standout(false);
         }
-        tp = crate::entity::player::thing_next(tp);
     }
 
     msg_str("Everything looks SO boring now.");
@@ -381,23 +381,23 @@ pub unsafe extern "C" fn visuals() {
     let seemonst = (*thing_t(crate::game::player_ptr()))
         .t_flags
         .contains(MonsterFlags::SEEMONST);
-    let mut tp = MLIST.head();
-    while !tp.is_null() {
-        output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
-        if see_monst(tp) != 0 {
-            if (*thing_t(tp)).t_type == b'X'
-                && (*thing_t(tp)).t_disguise != b'X'
-            {
-                output::write_glyph((rnd_thing() as u8) as char);
-            } else {
+    for id in MLIST.ids() {
+        if let Some(tp) = MLIST.handle(id) {
+            output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
+            if see_monst(tp) != 0 {
+                if (*thing_t(tp)).t_type == b'X'
+                    && (*thing_t(tp)).t_disguise != b'X'
+                {
+                    output::write_glyph((rnd_thing() as u8) as char);
+                } else {
+                    output::write_glyph((rnd(26) as u8 + b'A') as char);
+                }
+            } else if seemonst {
+                output::set_standout(true);
                 output::write_glyph((rnd(26) as u8 + b'A') as char);
+                output::set_standout(false);
             }
-        } else if seemonst {
-            output::set_standout(true);
-            output::write_glyph((rnd(26) as u8 + b'A') as char);
-            output::set_standout(false);
         }
-        tp = crate::entity::player::thing_next(tp);
     }
 }
 

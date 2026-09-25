@@ -351,6 +351,14 @@ pub enum Thing {
     Object { link: ThingLink, data: ThingObject },
 }
 
+// SAFETY: the game is single-threaded. `Thing` embeds `NonNull` handles (list
+// links and pack heads) that make it neither `Send` nor `Sync` by default, but
+// the game only ever mutates things from one thread. This marker lets the safe
+// [`crate::game::MonsterList`] own monsters inside a `Mutex` without raw-pointer
+// fields of its own.
+unsafe impl Send for Thing {}
+unsafe impl Sync for Thing {}
+
 impl Thing {
     /// Build an actor thing with an empty list header.
     pub const fn actor(data: ThingMonster) -> Self {

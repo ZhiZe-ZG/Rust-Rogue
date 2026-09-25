@@ -231,12 +231,15 @@ pub unsafe extern "C" fn add_pack(obj: *mut Thing, silent: c_uchar) {
 
     (*thing_o(item)).o_flags.insert(ObjectFlags::FOUND);
 
-    op = MLIST.head();
-    while !op.is_null() {
-        if crate::entity::player::thing_dest(op) == &raw mut (*thing_o(item)).o_pos {
-            crate::entity::player::set_thing_dest(op, &raw mut (*thing_t(crate::game::player_ptr())).t_pos);
+    for id in MLIST.ids() {
+        if let Some(op) = MLIST.handle(id) {
+            if crate::entity::player::thing_dest(op) == &raw mut (*thing_o(item)).o_pos {
+                crate::entity::player::set_thing_dest(
+                    op,
+                    &raw mut (*thing_t(crate::game::player_ptr())).t_pos,
+                );
+            }
         }
-        op = next_item(op);
     }
 
     if (*thing_o(item)).o_type == AMULET as c_int {

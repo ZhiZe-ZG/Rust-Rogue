@@ -99,6 +99,11 @@ pub unsafe fn free_list(list: *mut *mut Thing) {
 }
 
 pub unsafe fn discard(item: *mut Thing) {
+    // Monsters are owned by the pointer-free `MonsterList`; objects by the arena.
+    if let Some(id) = crate::game::MLIST.find(item) {
+        crate::game::MLIST.remove(id);
+        return;
+    }
     let mut things = things().lock().expect("thing store poisoned");
     if let Some(index) = things
         .iter()
@@ -118,13 +123,16 @@ pub unsafe fn new_object() -> *mut Thing {
     pointer
 }
 
-/// Allocate an actor (monster/player) thing in the arena.
+/// Allocate an actor (monster) thing.
+///
+/// Monsters are owned by the safe [`crate::game::MonsterList`] rather than this
+/// arena; the returned raw handle is the monster's stable address and stays
+/// valid until the monster is discarded.
 pub unsafe fn new_actor() -> *mut Thing {
-    let mut item = OwnedThing(Box::new(Thing::actor(ThingMonster::default())));
-    let pointer = (&mut *item.0) as *mut Thing;
-    things().lock().expect("thing store poisoned").push(item);
-    TOTAL.fetch_add(1, Ordering::Relaxed);
-    pointer
+    let id = crate::game::MLIST.spawn_actor();
+    crate::game::MLIST
+        .handle(id)
+        .unwrap_or(std::ptr::null_mut())
 }
 
 /// Allocate an object thing; the historical item-allocation entry point.

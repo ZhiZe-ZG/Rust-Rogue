@@ -39,13 +39,12 @@ unsafe fn reset_level() {
 }
 
 unsafe fn clear_previous_level_items() {
-    let mut monster = MLIST.head();
-    while !monster.is_null() {
-        let next = crate::entity::player::thing_next(monster);
-        crate::item::thing_list::free_pack(monster);
-        monster = next;
+    for id in MLIST.ids() {
+        if let Some(monster) = MLIST.handle(id) {
+            crate::item::thing_list::free_pack(monster);
+        }
     }
-    MLIST.free_list();
+    MLIST.clear();
     with_current_level_mut(|current| current.items.clear());
 }
 

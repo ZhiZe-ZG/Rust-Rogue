@@ -6,7 +6,6 @@ use crate::daemon::{fuse, lengthen};
 use crate::daemons::unconfuse;
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
-use crate::game::MLIST;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::game::EQUIPMENT;
 use crate::item::rings::RingType;
@@ -160,7 +159,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut Thing, monster_type: c_char, cp: *
         lev_add = 0;
     }
 
-    MLIST.attach(tp);
+    // `tp` was already allocated into `MLIST` by `new_actor`; no attach needed.
 
     (*thing_t(tp)).t_type = monster_type as u8;
     (*thing_t(tp)).t_disguise = monster_type as u8;

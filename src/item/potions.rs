@@ -346,21 +346,21 @@ pub unsafe extern "C" fn quaff() {
                     }
                     tp = next_thing(tp);
                 }
-                mp = MLIST.head();
-                while !mp.is_null() {
-                    tp = crate::entity::player::thing_pack(mp);
-                    while !tp.is_null() {
-                        if is_magic_local(tp) {
-                            show = true;
-                            output::move_window_cursor(
-                                window,
-                                IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
-                            );
-                            output::write_window_glyph(window, (MAGIC as u8) as char);
+                for id in MLIST.ids() {
+                    if let Some(mp) = MLIST.handle(id) {
+                        tp = crate::entity::player::thing_pack(mp);
+                        while !tp.is_null() {
+                            if is_magic_local(tp) {
+                                show = true;
+                                output::move_window_cursor(
+                                    window,
+                                    IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
+                                );
+                                output::write_window_glyph(window, (MAGIC as u8) as char);
+                            }
+                            tp = next_thing(tp);
                         }
-                        tp = next_thing(tp);
                     }
-                    mp = next_thing(mp);
                 }
             }
             if show {
@@ -491,19 +491,21 @@ pub unsafe extern "C" fn is_magic(obj: *mut Thing) -> c_uchar {
 /// Turn on the ability to see invisible.
 #[no_mangle]
 pub unsafe extern "C" fn invis_on() {
-    let mut mp = MLIST.head();
     (*thing_t(crate::game::player_ptr()))
         .t_flags
         .insert(MonsterFlags::CANSEE);
-    while !mp.is_null() {
-        if thing_has(mp, MonsterFlags::INVIS) && see_monst(mp) != 0 && !player_has(MonsterFlags::HALU)
-        {
-            output::write_glyph_at(
-                IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
-                ((*thing_t(mp)).t_disguise as u8) as char,
-            );
+    for id in MLIST.ids() {
+        if let Some(mp) = MLIST.handle(id) {
+            if thing_has(mp, MonsterFlags::INVIS)
+                && see_monst(mp) != 0
+                && !player_has(MonsterFlags::HALU)
+            {
+                output::write_glyph_at(
+                    IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
+                    ((*thing_t(mp)).t_disguise as u8) as char,
+                );
+            }
         }
-        mp = next_thing(mp);
     }
 }
 
@@ -511,31 +513,31 @@ pub unsafe extern "C" fn invis_on() {
 /// Put on or off seeing monsters on this level.
 #[no_mangle]
 pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
-    let mut mp = MLIST.head();
     let mut add_new = 0;
 
-    while !mp.is_null() {
-        output::move_cursor(IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y));
-        let can_see = see_monst(mp) != 0;
-        if turn_off != 0 {
-            if !can_see {
-                output::write_glyph(((*thing_t(mp)).t_oldch as u8) as char);
-            }
-        } else {
-            if !can_see {
-                output::set_standout(true);
-            }
-            if !player_has(MonsterFlags::HALU) {
-                output::write_glyph(((*thing_t(mp)).t_type as u8) as char);
+    for id in MLIST.ids() {
+        if let Some(mp) = MLIST.handle(id) {
+            output::move_cursor(IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y));
+            let can_see = see_monst(mp) != 0;
+            if turn_off != 0 {
+                if !can_see {
+                    output::write_glyph(((*thing_t(mp)).t_oldch as u8) as char);
+                }
             } else {
-                output::write_glyph((rnd(26) as u8 + b'A') as char);
-            }
-            if !can_see {
-                output::set_standout(false);
-                add_new += 1;
+                if !can_see {
+                    output::set_standout(true);
+                }
+                if !player_has(MonsterFlags::HALU) {
+                    output::write_glyph(((*thing_t(mp)).t_type as u8) as char);
+                } else {
+                    output::write_glyph((rnd(26) as u8 + b'A') as char);
+                }
+                if !can_see {
+                    output::set_standout(false);
+                    add_new += 1;
+                }
             }
         }
-        mp = next_thing(mp);
     }
 
     if turn_off != 0 {

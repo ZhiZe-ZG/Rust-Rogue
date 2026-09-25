@@ -265,10 +265,10 @@ pub unsafe fn add_haste(potion: bool) -> bool {
 
 #[no_mangle]
 pub unsafe extern "C" fn aggravate() {
-    let mut mp = MLIST.head();
-    while !mp.is_null() {
-        runto(&mut (*thing_t(mp)).t_pos);
-        mp = crate::entity::player::thing_next(mp);
+    for id in MLIST.ids() {
+        if let Some(mp) = MLIST.handle(id) {
+            runto(&mut (*thing_t(mp)).t_pos);
+        }
     }
 }
 

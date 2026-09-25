@@ -226,16 +226,24 @@ impl CurrentLevel {
     }
 }
 
-/// Read the monster at `(y, x)`, or null.
+/// Read the monster at `(y, x)` as a raw handle, or null.
+///
+/// The per-cell map stores a pointer-free [`MonsterId`]; this resolves it to the
+/// monster's stable raw address for the legacy engine boundary.
 #[inline]
 pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut Thing {
-    with_current_level(|level| level.monsters.at(y as usize, x as usize))
+    let id = with_current_level(|level| level.monsters.at(y as usize, x as usize));
+    match id {
+        Some(id) => crate::game::MLIST.handle(id).unwrap_or(std::ptr::null_mut()),
+        None => std::ptr::null_mut(),
+    }
 }
 
 /// Place `tp` at `(y, x)` in the per-cell monster occupancy map.
 #[inline]
 pub unsafe fn set_monster(y: c_int, x: c_int, tp: *mut Thing) {
-    with_current_level_mut(|level| level.monsters.set(y as usize, x as usize, tp));
+    let id = crate::game::MLIST.find(tp);
+    with_current_level_mut(|level| level.monsters.set(y as usize, x as usize, id));
 }
 
 /// Read the monster map at `(y, x)` (equivalent to [`monster_at`]).

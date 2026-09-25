@@ -11,7 +11,6 @@
 use crate::rnd::rnd;
 
 use crate::entity::chase::{runto, see_monst};
-use crate::game::MLIST;
 use crate::entity::monsters::save;
 use crate::game::EQUIPMENT;
 use crate::init::pick_color;
@@ -800,8 +799,6 @@ pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: c_u
     // Re-draw the underlying character.
     let oldch = (*thing_t(tp)).t_oldch;
     output::write_glyph_at(IVec2::new((*mp).x, (*mp).y), (oldch as u8) as char);
-
-    MLIST.detach(tp);
 
     if on_p(tp, MonsterFlags::TARGET) {
         kamikaze = false as c_uchar;

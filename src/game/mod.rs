@@ -16,4 +16,4 @@ mod game;
 mod monster_list;
 
 pub use game::*;
-pub use monster_list::{MonsterList, MLIST};
+pub use monster_list::{MonsterId, MonsterList, MLIST};

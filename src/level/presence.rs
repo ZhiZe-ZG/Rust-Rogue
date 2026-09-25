@@ -328,11 +328,11 @@ unsafe fn place_stairs() {
 
 /// Link every monster on the level to the room its position falls in.
 pub(crate) unsafe fn link_monsters_to_rooms() {
-    let mut tp = MLIST.head();
-    while !tp.is_null() {
-        let t = thing_t(tp);
-        (*t).t_room = roomin(&raw mut (*t).t_pos);
-        tp = crate::entity::player::thing_next(tp);
+    for id in MLIST.ids() {
+        if let Some(tp) = MLIST.handle(id) {
+            let t = thing_t(tp);
+            (*t).t_room = roomin(&raw mut (*t).t_pos);
+        }
     }
 }
 

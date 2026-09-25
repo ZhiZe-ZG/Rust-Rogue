@@ -121,28 +121,25 @@ unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut Thing) {
 /// Uses globals: mlist, hero, to_death, has_hit.
 #[no_mangle]
 pub unsafe extern "C" fn runners() {
-    let mut tp = MLIST.head();
-    while !tp.is_null() {
-        // remember this in case the monster's "next" is changed
-        let next = crate::entity::player::thing_next(tp);
-        if !monster_has(tp, MonsterFlags::HELD) && monster_has(tp, MonsterFlags::RUN) {
-            let orig_pos = (*thing_t(tp)).t_pos;
-            let wastarget = monster_has(tp, MonsterFlags::TARGET);
-            if move_monst(tp) == -1 {
-                tp = next;
-                continue;
-            }
-            if monster_has(tp, MonsterFlags::FLY)
-                && dist_cp(hero_ptr(), &raw mut (*thing_t(tp)).t_pos) >= 3
-            {
-                move_monst(tp);
-            }
-            if wastarget && !coord_eq(orig_pos, (*thing_t(tp)).t_pos) {
-                (*thing_t(tp)).t_flags.remove(MonsterFlags::TARGET);
-                to_death = false as c_uchar;
+    for id in MLIST.ids() {
+        if let Some(tp) = MLIST.handle(id) {
+            if !monster_has(tp, MonsterFlags::HELD) && monster_has(tp, MonsterFlags::RUN) {
+                let orig_pos = (*thing_t(tp)).t_pos;
+                let wastarget = monster_has(tp, MonsterFlags::TARGET);
+                if move_monst(tp) == -1 {
+                    continue;
+                }
+                if monster_has(tp, MonsterFlags::FLY)
+                    && dist_cp(hero_ptr(), &raw mut (*thing_t(tp)).t_pos) >= 3
+                {
+                    move_monst(tp);
+                }
+                if wastarget && !coord_eq(orig_pos, (*thing_t(tp)).t_pos) {
+                    (*thing_t(tp)).t_flags.remove(MonsterFlags::TARGET);
+                    to_death = false as c_uchar;
+                }
             }
         }
-        tp = next;
     }
     if has_hit != 0 {
         endmsg();
@@ -625,15 +622,18 @@ pub unsafe extern "C" fn find_dest(tp: *mut Thing) -> *mut IVec2 {
             continue;
         }
         if roomin(&raw mut (*thing_o(obj)).o_pos) == (*thing_t(tp)).t_room && rnd(100) < prob {
-            let mut m = MLIST.head();
-            while !m.is_null() {
-                if thing_dest(m) == &raw mut (*thing_o(obj)).o_pos {
-                    break;
+            let obj_pos_ptr = &raw mut (*thing_o(obj)).o_pos;
+            let mut taken = false;
+            for mid in MLIST.ids() {
+                if let Some(m) = MLIST.handle(mid) {
+                    if thing_dest(m) == obj_pos_ptr {
+                        taken = true;
+                        break;
+                    }
                 }
-                m = crate::entity::player::thing_next(m);
             }
-            if m.is_null() {
-                return &raw mut (*thing_o(obj)).o_pos;
+            if !taken {
+                return obj_pos_ptr;
             }
         }
         obj = crate::entity::player::thing_next(obj);

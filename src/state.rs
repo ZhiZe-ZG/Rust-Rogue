@@ -1856,16 +1856,14 @@ unsafe fn find_room_coord(c: *mut IVec2) -> c_int {
     -1
 }
 
-unsafe fn find_thing_coord(monlist: *mut Thing, c: *mut IVec2) -> c_int {
-    let mut mitem: *mut Thing = monlist;
-    let mut i: c_int = 0;
-
-    while !mitem.is_null() {
-        if c == (&raw mut (*thing_t(mitem)).t_pos) as *mut IVec2 {
-            return i;
+unsafe fn find_thing_coord(_monlist: *mut Thing, c: *mut IVec2) -> c_int {
+    // Monsters live in `MLIST`; resolve the chase target by traversal position.
+    for (i, id) in MLIST.ids().iter().enumerate() {
+        if let Some(mitem) = MLIST.handle(*id) {
+            if c == (&raw mut (*thing_t(mitem)).t_pos) as *mut IVec2 {
+                return i as c_int;
+            }
         }
-        i += 1;
-        mitem = crate::entity::player::thing_next(mitem);
     }
 
     -1
@@ -2067,21 +2065,22 @@ unsafe fn rs_fix_thing(t: *mut Thing) {
         return;
     }
 
-    let item = get_list_item(MLIST.head(), (*thing_t(t)).t_reserved);
+    let id = MLIST.nth((*thing_t(t)).t_reserved as usize);
 
-    if !item.is_null() {
+    if let Some(item) = id.and_then(|id| MLIST.handle(id)) {
         crate::entity::player::set_thing_dest(t, (&raw mut (*thing_t(item)).t_pos) as *mut IVec2);
     }
 }
 
-unsafe fn rs_write_thing_list(savef: *mut CFile, mut l: *mut Thing) -> c_int {
+unsafe fn rs_write_thing_list(savef: *mut CFile, _l: *mut Thing) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
     let _ = rs_write_marker(savef, RSID_MONSTERLIST);
 
-    let cnt = list_size(l);
+    let ids = MLIST.ids();
+    let cnt = ids.len() as c_int;
 
     let _ = rs_write_int(savef, cnt);
 
@@ -2089,19 +2088,17 @@ unsafe fn rs_write_thing_list(savef: *mut CFile, mut l: *mut Thing) -> c_int {
         return WRITE_ERROR;
     }
 
-    while !l.is_null() {
-        let _ = rs_write_thing(savef, l);
-        l = crate::entity::player::thing_next(l);
+    for id in ids {
+        if let Some(tp) = MLIST.handle(id) {
+            let _ = rs_write_thing(savef, tp);
+        }
     }
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_thing_list(inf: *mut CFile, list: *mut *mut Thing) -> c_int {
+unsafe fn rs_read_thing_list(inf: *mut CFile, _list: *mut *mut Thing) -> c_int {
     let mut cnt: c_int = 0;
-    let mut l: *mut Thing = std::ptr::null_mut();
-    let mut previous: *mut Thing = std::ptr::null_mut();
-    let mut head: *mut Thing = std::ptr::null_mut();
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -2112,66 +2109,52 @@ unsafe fn rs_read_thing_list(inf: *mut CFile, list: *mut *mut Thing) -> c_int {
 
     let mut i: c_int = 0;
     while i < cnt {
-        l = new_actor();
-
-        crate::entity::player::set_thing_prev(l, previous);
-
-        if !previous.is_null() {
-            crate::entity::player::set_thing_next(previous, l);
-        }
-
+        let l = new_actor();
         let _ = rs_read_thing(inf, l);
-
-        if previous.is_null() {
-            head = l;
-        }
-
-        previous = l;
         i += 1;
     }
-
-    if !l.is_null() {
-        crate::entity::player::set_thing_next(l, std::ptr::null_mut());
-    }
-
-    *list = head;
 
     read_stat()
 }
 
-unsafe fn rs_fix_thing_list(list: *mut Thing) {
-    let mut item: *mut Thing = list;
-
-    while !item.is_null() {
-        rs_fix_thing(item);
-        item = crate::entity::player::thing_next(item);
+unsafe fn rs_fix_thing_list(_list: *mut Thing) {
+    for id in MLIST.ids() {
+        if let Some(item) = MLIST.handle(id) {
+            rs_fix_thing(item);
+        }
     }
 }
 
 unsafe fn rs_write_thing_reference(
     savef: *mut CFile,
-    list: *mut Thing,
+    _list: *mut Thing,
     item: *mut Thing,
 ) -> c_int {
-    let mut i: c_int;
-
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    if item.is_null() {
-        let _ = rs_write_int(savef, -1);
+    // Monsters are indexed by position in the safe `MLIST`, so resolve the
+    // position from the handle rather than walking intrusive links.
+    let index = if item.is_null() {
+        -1
     } else {
-        i = find_list_ptr(list, item as *const c_void);
-        let _ = rs_write_int(savef, i);
-    }
+        let mut found = -1;
+        for (pos, id) in MLIST.ids().iter().enumerate() {
+            if MLIST.handle(*id).map_or(false, |h| h == item) {
+                found = pos as c_int;
+                break;
+            }
+        }
+        found
+    };
 
-    WRITE_ERROR
+    rs_write_int(savef, index)
 }
 
 unsafe fn rs_read_thing_reference(
     inf: *mut CFile,
-    list: *mut Thing,
+    _list: *mut Thing,
     item: *mut *mut Thing,
 ) -> c_int {
     let mut i: c_int = 0;
@@ -2182,10 +2165,13 @@ unsafe fn rs_read_thing_reference(
 
     let _ = rs_read_int(inf, &mut i);
 
-    if i == -1 {
+    if i < 0 {
         *item = std::ptr::null_mut();
     } else {
-        *item = get_list_item(list, i);
+        *item = MLIST
+            .nth(i as usize)
+            .and_then(|id| MLIST.handle(id))
+            .unwrap_or(std::ptr::null_mut());
     }
 
     read_stat()
@@ -2258,11 +2244,12 @@ unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
             let _ = rs_write_char(savef, lvl.flags.passnum[idx] as c_char);
             let _ = rs_write_char(savef, tile.trap() as u8 as c_char);
             // Per-cell monster occupancy.
-            let _ = rs_write_thing_reference(
-                savef,
-                MLIST.head(),
-                lvl.monsters.at(y as usize, x as usize),
-            );
+            let monst = lvl
+                .monsters
+                .at(y as usize, x as usize)
+                .and_then(|id| MLIST.handle(id))
+                .unwrap_or(std::ptr::null_mut());
+            let _ = rs_write_thing_reference(savef, MLIST.head(), monst);
             i += 1;
         }
 
@@ -2317,7 +2304,8 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
             lvl.flags.passnum[idx] = passnum as u8;
 
             // Per-cell monster occupancy.
-            lvl.monsters.set(y as usize, x as usize, monst);
+            lvl.monsters
+                .set(y as usize, x as usize, MLIST.find(monst));
             i += 1;
         }
 
@@ -2649,7 +2637,6 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     crate::game::with_current_level_mut(|level| level.items.set_head(items_head));
     let mut mlist: *mut Thing = std::ptr::null_mut();
     let _ = rs_read_thing_list(inf, &raw mut mlist);
-    MLIST.set_head(mlist);
     rs_fix_thing(crate::game::player_ptr());
     rs_fix_thing_list(mlist);
 
