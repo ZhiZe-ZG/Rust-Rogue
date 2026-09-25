@@ -4,10 +4,10 @@
 //! in globals:
 //!
 //! * the **live dungeon level** — the [`Level`](crate::level::Level) singleton
-//!   (tile map, flags, rooms, passages, floor items, and per-cell monster
-//!   occupancy) for the current depth, together with the current equipment and
-//!   the stable player actor;
-//! * the **monster list** — the [`MLIST`] head of the live monster linked list.
+//!   (tile map, flags, rooms, passages, and floor items) for the current depth,
+//!   together with the current equipment and the stable player actor;
+//! * the **monster list** — the [`MLIST`] head of the live monster linked list;
+//! * the **monster map** — the [`MONSTER_MAP`] per-cell monster occupancy grid.
 //!
 //! The sub-modules are private, matching the [`crate::level`] layout; the
 //! public items are re-exported here so callers keep using `crate::game::…`.
@@ -18,4 +18,4 @@ mod monster_map;
 
 pub use game::*;
 pub use monster_list::{MonsterId, MonsterList, MLIST};
-pub use monster_map::MonsterMap;
+pub use monster_map::{MonsterMap, MONSTER_MAP};

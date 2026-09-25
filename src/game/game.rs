@@ -4,8 +4,7 @@
 //! in globals:
 //!
 //! * the **current level** — the [`Level`] singleton (tile map, flags, rooms,
-//!   passages, floor items, and per-cell monster occupancy) for the live
-//!   dungeon depth;
+//!   passages, and floor items) for the live dungeon depth;
 //! * the **current equipment** — non-owning pointers to the armor, rings, and
 //!   weapon selected from the player's pack.
 //!
@@ -22,6 +21,8 @@ use crate::entity::player::{Thing, ThingMonster, Stats};
 use crate::level::Level;
 use crate::tile::Tile;
 use glam::IVec2;
+
+use crate::game::MONSTER_MAP;
 
 /// A non-owning, interior-mutable cell for a raw [`CThing`] pointer.
 ///
@@ -233,8 +234,7 @@ impl CurrentLevel {
 /// monster's stable raw address for the legacy engine boundary.
 #[inline]
 pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut Thing {
-    let id = with_current_level(|level| level.monsters.at(y as usize, x as usize));
-    match id {
+    match MONSTER_MAP.at(y as usize, x as usize) {
         Some(id) => crate::game::MLIST.handle(id).unwrap_or(std::ptr::null_mut()),
         None => std::ptr::null_mut(),
     }
@@ -244,7 +244,7 @@ pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut Thing {
 #[inline]
 pub unsafe fn set_monster(y: c_int, x: c_int, tp: *mut Thing) {
     let id = crate::game::MLIST.find(tp);
-    with_current_level_mut(|level| level.monsters.set(y as usize, x as usize, id));
+    MONSTER_MAP.set(y as usize, x as usize, id);
 }
 
 /// Read the monster map at `(y, x)` (equivalent to [`monster_at`]).
@@ -261,7 +261,7 @@ pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut Thing) {
 
 /// Clear every cell's monster pointer for a fresh level.
 pub unsafe fn clear_level() {
-    with_current_level_mut(|level| level.monsters.clear());
+    MONSTER_MAP.clear();
 }
 
 /// Whether the cell at `(y, x)` can be entered: no monster stands there and the

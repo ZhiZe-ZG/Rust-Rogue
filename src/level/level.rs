@@ -15,7 +15,6 @@ use super::roomgraph::RoomGraph;
 use crate::structure::{Room, Structure};
 use crate::tile::{Tile, TrapType};
 use crate::config::GameConfig;
-use crate::game::MonsterMap;
 use crate::item::item_list::ItemList;
 
 /// Upper bound for the roll that removes rooms at the start of a new level.
@@ -79,8 +78,6 @@ pub struct Level {
     /// Floor items (objects) resting on the level, replacing the legacy C
     /// `lvl_obj` global.
     pub items: ItemList,
-    /// Per-cell monster occupancy, replacing the legacy C `places` grid.
-    pub monsters: MonsterMap,
 }
 
 impl Level {
@@ -101,7 +98,6 @@ impl Level {
             flags: LevelFlags::cleared(),
             passage_links: Vec::new(),
             items: ItemList::new(),
-            monsters: MonsterMap::new(),
         }
     }
 
