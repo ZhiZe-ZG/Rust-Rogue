@@ -76,7 +76,7 @@ impl CurrentLevel {
 #[inline]
 pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut Thing {
     match MONSTER_MAP.at(y as usize, x as usize) {
-        Some(id) => crate::game::MLIST.handle(id).unwrap_or(std::ptr::null_mut()),
+        Some(id) => crate::game::MONSTER_LIST.handle(id).unwrap_or(std::ptr::null_mut()),
         None => std::ptr::null_mut(),
     }
 }
@@ -84,7 +84,7 @@ pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut Thing {
 /// Place `tp` at `(y, x)` in the per-cell monster occupancy map.
 #[inline]
 pub unsafe fn set_monster(y: c_int, x: c_int, tp: *mut Thing) {
-    let id = crate::game::MLIST.find(tp);
+    let id = crate::game::MONSTER_LIST.find(tp);
     MONSTER_MAP.set(y as usize, x as usize, id);
 }
 

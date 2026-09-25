@@ -10,7 +10,7 @@ use crate::daemons::{come_down, land, sight, unconfuse, unsee, visuals};
 use crate::draw::look;
 
 use crate::entity::chase::see_monst;
-use crate::game::MLIST;
+use crate::game::MONSTER_LIST;
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::game::PLAYER;
 use crate::globals::pot_info;
@@ -346,8 +346,8 @@ pub unsafe extern "C" fn quaff() {
                     }
                     tp = next_thing(tp);
                 }
-                for id in MLIST.ids() {
-                    if let Some(mp) = MLIST.handle(id) {
+                for id in MONSTER_LIST.ids() {
+                    if let Some(mp) = MONSTER_LIST.handle(id) {
                         tp = crate::entity::player::thing_pack(mp);
                         while !tp.is_null() {
                             if is_magic_local(tp) {
@@ -494,8 +494,8 @@ pub unsafe extern "C" fn invis_on() {
     (*thing_t(crate::game::player_ptr()))
         .t_flags
         .insert(MonsterFlags::CANSEE);
-    for id in MLIST.ids() {
-        if let Some(mp) = MLIST.handle(id) {
+    for id in MONSTER_LIST.ids() {
+        if let Some(mp) = MONSTER_LIST.handle(id) {
             if thing_has(mp, MonsterFlags::INVIS)
                 && see_monst(mp) != 0
                 && !player_has(MonsterFlags::HALU)
@@ -515,8 +515,8 @@ pub unsafe extern "C" fn invis_on() {
 pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
     let mut add_new = 0;
 
-    for id in MLIST.ids() {
-        if let Some(mp) = MLIST.handle(id) {
+    for id in MONSTER_LIST.ids() {
+        if let Some(mp) = MONSTER_LIST.handle(id) {
             output::move_cursor(IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y));
             let can_see = see_monst(mp) != 0;
             if turn_off != 0 {

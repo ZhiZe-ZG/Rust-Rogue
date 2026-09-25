@@ -11,7 +11,7 @@ use crate::draw::winat;
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::MonsterFlags;
 use crate::game::{self, clear_level, with_current_level_mut};
-use crate::game::MLIST;
+use crate::game::MONSTER_LIST;
 use crate::globals::{max_level, no_food};
 use crate::ui::output;
 
@@ -31,12 +31,12 @@ unsafe fn reset_level() {
 }
 
 unsafe fn clear_previous_level_items() {
-    for id in MLIST.ids() {
-        if let Some(monster) = MLIST.handle(id) {
+    for id in MONSTER_LIST.ids() {
+        if let Some(monster) = MONSTER_LIST.handle(id) {
             crate::item::thing_list::free_pack(monster);
         }
     }
-    MLIST.clear();
+    MONSTER_LIST.clear();
     with_current_level_mut(|current| current.items.clear());
 }
 

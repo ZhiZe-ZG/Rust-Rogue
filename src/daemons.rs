@@ -19,7 +19,7 @@ use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon};
 use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
-use crate::game::MLIST;
+use crate::game::MONSTER_LIST;
 use crate::entity::monsters::wanderer;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::game::PLAYER;
@@ -153,8 +153,8 @@ pub unsafe extern "C" fn unconfuse() {
 /// Turn off the ability to see invisible.
 #[no_mangle]
 pub unsafe extern "C" fn unsee() {
-    for id in MLIST.ids() {
-        if let Some(th) = MLIST.handle(id) {
+    for id in MONSTER_LIST.ids() {
+        if let Some(th) = MONSTER_LIST.handle(id) {
             if (*thing_t(th))
                 .t_flags
                 .contains(MonsterFlags::INVIS)
@@ -325,8 +325,8 @@ pub unsafe extern "C" fn come_down() {
     let seemonst = (*thing_t(crate::game::player_ptr()))
         .t_flags
         .contains(MonsterFlags::SEEMONST);
-    for id in MLIST.ids() {
-        if let Some(tp) = MLIST.handle(id) {
+    for id in MONSTER_LIST.ids() {
+        if let Some(tp) = MONSTER_LIST.handle(id) {
             output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
             if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
                 if !(*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS)
@@ -381,8 +381,8 @@ pub unsafe extern "C" fn visuals() {
     let seemonst = (*thing_t(crate::game::player_ptr()))
         .t_flags
         .contains(MonsterFlags::SEEMONST);
-    for id in MLIST.ids() {
-        if let Some(tp) = MLIST.handle(id) {
+    for id in MONSTER_LIST.ids() {
+        if let Some(tp) = MONSTER_LIST.handle(id) {
             output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
             if see_monst(tp) != 0 {
                 if (*thing_t(tp)).t_type == b'X'

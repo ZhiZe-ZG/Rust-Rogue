@@ -17,7 +17,7 @@ use glam::IVec2;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
-use crate::game::MLIST;
+use crate::game::MONSTER_LIST;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::startup::roll;
 
@@ -264,8 +264,8 @@ pub unsafe fn add_haste(potion: bool) -> bool {
 
 #[no_mangle]
 pub unsafe extern "C" fn aggravate() {
-    for id in MLIST.ids() {
-        if let Some(mp) = MLIST.handle(id) {
+    for id in MONSTER_LIST.ids() {
+        if let Some(mp) = MONSTER_LIST.handle(id) {
             runto(&mut (*thing_t(mp)).t_pos);
         }
     }

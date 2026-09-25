@@ -182,4 +182,4 @@ impl MonsterList {
 }
 
 /// The monster list for the live level.
-pub static MLIST: MonsterList = MonsterList::new();
+pub static MONSTER_LIST: MonsterList = MonsterList::new();

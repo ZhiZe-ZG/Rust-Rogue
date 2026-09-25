@@ -18,6 +18,6 @@ mod monster_map;
 mod player;
 
 pub use game::*;
-pub use monster_list::{MonsterId, MonsterList, MLIST};
+pub use monster_list::{MonsterId, MonsterList, MONSTER_LIST};
 pub use monster_map::{MonsterMap, MONSTER_MAP};
 pub use player::{player_ptr, player_remove_flag, Player, PLAYER};

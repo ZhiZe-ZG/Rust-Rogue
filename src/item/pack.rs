@@ -5,7 +5,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 
-use crate::game::MLIST;
+use crate::game::MONSTER_LIST;
 use crate::entity::player::{Thing, MonsterFlags, ObjectFlags};
 use crate::item::scrolls::ScrollType;
 use crate::item::thing_list::{detach, discard, new_item};
@@ -231,8 +231,8 @@ pub unsafe extern "C" fn add_pack(obj: *mut Thing, silent: c_uchar) {
 
     (*thing_o(item)).o_flags.insert(ObjectFlags::FOUND);
 
-    for id in MLIST.ids() {
-        if let Some(op) = MLIST.handle(id) {
+    for id in MONSTER_LIST.ids() {
+        if let Some(op) = MONSTER_LIST.handle(id) {
             if crate::entity::player::thing_dest(op) == &raw mut (*thing_o(item)).o_pos {
                 crate::entity::player::set_thing_dest(
                     op,

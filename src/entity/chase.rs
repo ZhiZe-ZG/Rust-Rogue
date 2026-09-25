@@ -11,7 +11,7 @@ use std::os::raw::{c_char, c_int, c_uchar};
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
 use crate::globals::monsters;
-use crate::game::MLIST;
+use crate::game::MONSTER_LIST;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
 use crate::entity::player::{set_thing_dest, thing_dest};
 use crate::entity::rndmove::rndmove;
@@ -121,8 +121,8 @@ unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut Thing) {
 /// Uses globals: mlist, hero, to_death, has_hit.
 #[no_mangle]
 pub unsafe extern "C" fn runners() {
-    for id in MLIST.ids() {
-        if let Some(tp) = MLIST.handle(id) {
+    for id in MONSTER_LIST.ids() {
+        if let Some(tp) = MONSTER_LIST.handle(id) {
             if !monster_has(tp, MonsterFlags::HELD) && monster_has(tp, MonsterFlags::RUN) {
                 let orig_pos = (*thing_t(tp)).t_pos;
                 let wastarget = monster_has(tp, MonsterFlags::TARGET);
@@ -624,8 +624,8 @@ pub unsafe extern "C" fn find_dest(tp: *mut Thing) -> *mut IVec2 {
         if roomin(&raw mut (*thing_o(obj)).o_pos) == (*thing_t(tp)).t_room && rnd(100) < prob {
             let obj_pos_ptr = &raw mut (*thing_o(obj)).o_pos;
             let mut taken = false;
-            for mid in MLIST.ids() {
-                if let Some(m) = MLIST.handle(mid) {
+            for mid in MONSTER_LIST.ids() {
+                if let Some(m) = MONSTER_LIST.handle(mid) {
                     if thing_dest(m) == obj_pos_ptr {
                         taken = true;
                         break;

@@ -16,7 +16,7 @@ use crate::daemons::visuals;
 use crate::draw::enter_room;
 use crate::entity::chase::roomin;
 use crate::game::{self, with_current_level, with_current_level_mut};
-use crate::game::MLIST;
+use crate::game::MONSTER_LIST;
 use crate::entity::monsters::{give_pack, new_monster, randmonster};
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags, ObjectFlags};
 use crate::globals::{amulet, max_level, ntraps, seenstairs};
@@ -303,8 +303,8 @@ unsafe fn place_stairs() {
 
 /// Link every monster on the level to the room its position falls in.
 pub(crate) unsafe fn link_monsters_to_rooms() {
-    for id in MLIST.ids() {
-        if let Some(tp) = MLIST.handle(id) {
+    for id in MONSTER_LIST.ids() {
+        if let Some(tp) = MONSTER_LIST.handle(id) {
             let t = thing_t(tp);
             (*t).t_room = roomin(&raw mut (*t).t_pos);
         }

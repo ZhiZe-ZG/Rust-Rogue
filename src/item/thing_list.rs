@@ -100,8 +100,8 @@ pub unsafe fn free_list(list: *mut *mut Thing) {
 
 pub unsafe fn discard(item: *mut Thing) {
     // Monsters are owned by the pointer-free `MonsterList`; objects by the arena.
-    if let Some(id) = crate::game::MLIST.find(item) {
-        crate::game::MLIST.remove(id);
+    if let Some(id) = crate::game::MONSTER_LIST.find(item) {
+        crate::game::MONSTER_LIST.remove(id);
         return;
     }
     let mut things = things().lock().expect("thing store poisoned");
@@ -129,8 +129,8 @@ pub unsafe fn new_object() -> *mut Thing {
 /// arena; the returned raw handle is the monster's stable address and stays
 /// valid until the monster is discarded.
 pub unsafe fn new_actor() -> *mut Thing {
-    let id = crate::game::MLIST.spawn_actor();
-    crate::game::MLIST
+    let id = crate::game::MONSTER_LIST.spawn_actor();
+    crate::game::MONSTER_LIST
         .handle(id)
         .unwrap_or(std::ptr::null_mut())
 }
