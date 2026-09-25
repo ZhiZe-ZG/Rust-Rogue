@@ -228,18 +228,6 @@ impl Level {
         );
     }
 
-    /// Borrow the room slot `index`.
-    #[inline]
-    pub fn room(&self, index: usize) -> Option<&Room> {
-        self.rooms.get(index)
-    }
-
-    /// Borrow a passage component's door links.
-    #[inline]
-    pub fn passage_links(&self, index: usize) -> Option<&PassageLinks> {
-        self.passage_links.get(index)
-    }
-
     /// Whether `room` resolves to a dark room.
     #[inline]
     pub fn room_dark(&self, room: Option<usize>) -> bool {
@@ -256,12 +244,6 @@ impl Level {
     #[inline]
     pub fn room_maze(&self, room: Option<usize>) -> bool {
         room.and_then(|i| self.rooms.get(i)).is_some_and(|r| r.maze)
-    }
-
-    /// The gold-stash position of `room` (or `None`).
-    #[inline]
-    pub fn room_gold(&self, room: Option<usize>) -> Option<IVec2> {
-        room.and_then(|i| self.rooms.get(i)).map(|r| r.gold)
     }
 
     /// The value of the gold stash of `room`.
@@ -305,20 +287,6 @@ impl Level {
             }
         }
         None
-    }
-
-    /// Compute the passage index for the cell at `(y, x)`.
-    pub fn passage_at(&self, y: i32, x: i32) -> Option<usize> {
-        if y < 0
-            || x < 0
-            || y >= GameConfig::LEVEL_HEIGHT as i32
-            || x >= GameConfig::LEVEL_WIDTH as i32
-        {
-            return None;
-        }
-        let idx = y as usize * GameConfig::LEVEL_WIDTH + x as usize;
-        let passnum = self.flags.passnum[idx];
-        (passnum > 0).then_some((passnum - 1) as usize)
     }
 
     /// Absolute door-exit coordinates for a room index.
@@ -528,9 +496,6 @@ fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room>
         Some(Room::new(position, size))
     }
 }
-
-/// Scoped live-level access is owned by the game-state module.
-pub use crate::game::{with_current_level, with_current_level_mut};
 
 #[cfg(test)]
 mod tests {

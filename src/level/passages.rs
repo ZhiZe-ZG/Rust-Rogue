@@ -1,13 +1,9 @@
-//! Corridor/passage digging helpers, Rust-side per-cell flags, and the C
-//! global mirroring.
+//! Corridor/passage digging helpers and Rust-side per-cell flags.
 //!
 //! Level generation writes per-cell flags into [`LevelFlags`] and the door
 //! exits of each numbered passage component into `Level::passage_links` (see
-//! [`mark_passages`] and [`number_passages`]) instead of poking the C
-//! `places`/`rooms`/`passages` globals directly. Once the whole level is
-//! generated, `crate::level::mirror::copy_flags_to_c` /
-//! `crate::level::mirror::sync_rooms_to_c` / `crate::level::mirror::sync_passages_to_c`
-//! translate those Rust structures into the C arrays the engine consumes.
+//! [`mark_passages`] and [`number_passages`]). The tile map itself is the
+//! canonical record of the emitted cells; no separate C array is maintained.
 
 use glam::IVec2;
 
@@ -309,8 +305,7 @@ pub(crate) fn build_passage(tiles: Vec<IVec2>, entry_points: Vec<IVec2>) -> Opti
 /// Stamp a passage tile at absolute map position `pos`.
 ///
 /// Marks the cell as [`Tile::Passage`] in the level map so it becomes part of
-/// the canonical grid (mirrored to the C `places` grid by
-/// `crate::level::mirror::copy_flags_to_c`).
+/// the canonical grid.
 pub(crate) fn stamp_passage(map: &mut Structure, flags: &mut LevelFlags, pos: IVec2) {
     let (y, x) = (pos.y, pos.x);
     if let Some(idx) = cell_index(y, x) {
@@ -403,11 +398,10 @@ pub(crate) fn apply_passage(
 
 /// Mark `map`'s passage cells on the Rust flag grids.
 ///
-/// Sets `passage` on every passage tile so [`number_passages`] and the C-side
-/// screen redraw (`crate::level::redraw::add_pass`) can find it. Matching the
-/// legacy `putpass`, a cell is occasionally hidden by clearing `real` so it
-/// renders as a wall glyph (`-`/`|`) instead of `#`. Pure Rust: the C
-/// `places` grid is only written later by `crate::level::mirror::copy_flags_to_c`.
+/// Sets `passage` on every passage tile so [`number_passages`] and the screen
+/// redraw can find it. Matching the legacy `putpass`, a cell is occasionally
+/// hidden by clearing `real` so it renders as a wall glyph (`-`/`|`) instead
+/// of `#`. Pure Rust: only the level's own flag grids are touched.
 pub(crate) fn mark_passages(map: &Structure, flags: &mut LevelFlags, depth: i32) {
     for y in 0..map.height() {
         for x in 0..map.width() {
@@ -453,8 +447,7 @@ impl PassageScan {
 ///
 /// Flood-fills from each room's entry points using [`number_passage`],
 /// assigning every contiguous component a number stored in `flags.passnum`
-/// and a door-exit table in `links` (index-aligned with the C `passages`
-/// array, copied over by `crate::level::mirror::sync_passages_to_c`).
+/// and a door-exit table in `links`.
 pub(crate) fn number_passages(
     map: &Structure,
     flags: &mut LevelFlags,

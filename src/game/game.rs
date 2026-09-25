@@ -185,6 +185,12 @@ pub fn player_ptr() -> *mut Thing {
     PLAYER.ptr()
 }
 
+/// Remove `flag` from the global player's actor flags.
+#[inline]
+pub fn player_remove_flag(flag: crate::entity::player::MonsterFlags) {
+    unsafe { (*crate::entity::player::thing_t(player_ptr())).t_flags.remove(flag) }
+}
+
 /// Lazily initialized owner of the live dungeon level.
 pub struct CurrentLevel {
     level: RwLock<Option<Level>>,

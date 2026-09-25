@@ -214,10 +214,10 @@ pub unsafe extern "C" fn exp_add(tp: *mut Thing) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn wanderer() {
     let tp = new_actor();
-    let mut cp = IVec2 { x: 0, y: 0 };
+    let mut cp;
 
     loop {
-        let _ = find_floor(None, &mut cp, 0, true);
+        cp = find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
         if roomin(&mut cp) != (*player_t()).t_room {
             break;
         }

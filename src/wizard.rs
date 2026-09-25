@@ -260,11 +260,10 @@ pub unsafe extern "C" fn create_obj() {
 
 #[no_mangle]
 pub unsafe extern "C" fn teleport() {
-    let mut c = IVec2 { x: 0, y: 0 };
+    let mut c = find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
     let mut hero = hero();
 
     output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
-    find_floor(None, &mut c, 0, true);
     if roomin(&mut c) != proom() {
         leave_room(&mut hero);
         hero = c;

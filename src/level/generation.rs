@@ -8,28 +8,20 @@ use glam::IVec2;
 
 use crate::config::GameConfig;
 use crate::draw::winat;
-use crate::game::MLIST;
 use crate::entity::monsters::wake_monster;
-use crate::entity::player::{Thing, ThingMonster, MonsterFlags};
-use crate::game::{clear_level, with_current_level_mut};
+use crate::entity::player::MonsterFlags;
+use crate::game::{self, clear_level, with_current_level_mut};
+use crate::game::MLIST;
 use crate::globals::{max_level, no_food};
 use crate::ui::output;
 
 use super::presence::populate_level;
 use crate::structure::Room;
 
-/// Interpret `tp` as a monster (`CThingMonster`).
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
 unsafe fn reset_level() {
     let depth = with_current_level_mut(|current| current.reset_for_new_level());
 
-    (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .remove(MonsterFlags::HELD);
+    game::player_remove_flag(MonsterFlags::HELD);
     if depth > max_level {
         max_level = depth;
     }
