@@ -78,8 +78,8 @@ unsafe fn thing_o(
 }
 
 #[inline]
-unsafe fn pack_ptr() -> *mut crate::entity::player::Thing {
-    crate::entity::player::thing_pack(crate::game::player_ptr())
+fn pack_ptr() -> *mut crate::entity::player::Thing {
+    crate::game::PLAYER.pack()
 }
 
 #[inline]

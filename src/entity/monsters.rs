@@ -108,18 +108,13 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 }
 
 #[inline]
-unsafe fn player_t() -> *mut ThingMonster {
-    crate::entity::player::thing_t(crate::game::player_ptr())
-}
-
-#[inline]
 unsafe fn has_flag(tp: *mut Thing, flag: MonsterFlags) -> bool {
     (*thing_t(tp)).t_flags.contains(flag)
 }
 
 #[inline]
-unsafe fn player_has(flag: MonsterFlags) -> bool {
-    (*player_t()).t_flags.contains(flag)
+fn player_has(flag: MonsterFlags) -> bool {
+    crate::game::PLAYER.has_flag(flag)
 }
 
 #[inline]
@@ -218,7 +213,7 @@ pub unsafe extern "C" fn wanderer() {
 
     loop {
         cp = find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
-        if roomin(&mut cp) != (*player_t()).t_room {
+        if roomin(&mut cp) != crate::game::PLAYER.room() {
             break;
         }
     }
@@ -263,7 +258,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
         && !iswearing(RingType::Stealth)
         && !player_has(MonsterFlags::LEVIT)
     {
-        crate::entity::player::set_thing_dest(tp, &mut (*player_t()).t_pos);
+        crate::entity::player::set_thing_dest_hero(tp);
         (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
     }
 
@@ -274,10 +269,9 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
         && !has_flag(tp, MonsterFlags::CANCELLED)
         && has_flag(tp, MonsterFlags::RUN)
     {
-        let rp = (*player_t()).t_room;
-        if (rp.is_some() && !crate::game::room_dark(rp))
-            || dist(y, x, (*player_t()).t_pos.y, (*player_t()).t_pos.x) < LAMPDIST
-        {
+        let rp = crate::game::PLAYER.room();
+        let hero = crate::game::PLAYER.pos();
+        if (rp.is_some() && !crate::game::room_dark(rp)) || dist(y, x, hero.y, hero.x) < LAMPDIST {
             (*thing_t(tp)).t_flags.insert(MonsterFlags::FOUND);
             if save(VS_MAGIC) == 0 {
                 if player_has(MonsterFlags::HUH) {
@@ -285,7 +279,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
                 } else {
                     fuse(unconfuse as *const c_void, 0, spread(HUHDURATION), AFTER);
                 }
-                (*player_t()).t_flags.insert(MonsterFlags::HUH);
+                crate::game::PLAYER.add_flag(MonsterFlags::HUH);
                 let mname = set_mname(tp);
                 addmsg_str(&CStr::from_ptr(mname).to_string_lossy());
                 if strcmp(mname, c"it".as_ptr()) != 0 {
@@ -298,11 +292,11 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
 
     if has_flag(tp, MonsterFlags::GREED) && !has_flag(tp, MonsterFlags::RUN) {
         (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
-        let pr = (*player_t()).t_room;
+        let pr = crate::game::PLAYER.room();
         if pr.is_some() && crate::game::room_goldval(pr) != 0 {
             crate::entity::player::set_thing_dest(tp, crate::game::room_gold_ptr(pr));
         } else {
-            crate::entity::player::set_thing_dest(tp, &mut (*player_t()).t_pos);
+            crate::entity::player::set_thing_dest_hero(tp);
         }
     }
 
@@ -322,8 +316,15 @@ pub unsafe extern "C" fn give_pack(tp: *mut Thing) {
 /// Rolls a saving throw for any creature against an effect category.
 #[no_mangle]
 pub unsafe extern "C" fn save_throw(which: c_int, tp: *mut Thing) -> c_int {
-    let need = 14 + which - (*thing_t(tp)).t_stats.level / 2;
-    if roll(1, 20) >= need {
+    save_throw_for_level(which, (*thing_t(tp)).t_stats.level)
+}
+
+/// Roll a saving throw using an explicit caster level (used for the hero, whose
+/// `Thing` is no longer reachable as a raw pointer).
+#[inline]
+fn save_throw_for_level(which: c_int, level: c_int) -> c_int {
+    let need = 14 + which - level / 2;
+    if unsafe { roll(1, 20) } >= need {
         1
     } else {
         0
@@ -348,5 +349,5 @@ pub unsafe extern "C" fn save(which: c_int) -> c_int {
             adj -= (*thing_o(PLAYER.right_ring())).o_arm;
         }
     }
-    save_throw(adj, crate::game::player_ptr())
+    save_throw_for_level(adj, PLAYER.level())
 }

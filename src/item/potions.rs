@@ -135,13 +135,13 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 }
 
 #[inline]
-unsafe fn hero() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
+fn hero() -> IVec2 {
+    crate::game::PLAYER.pos()
 }
 
 #[inline]
-unsafe fn player_has(flag: MonsterFlags) -> bool {
-    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
+fn player_has(flag: MonsterFlags) -> bool {
+    crate::game::PLAYER.has_flag(flag)
 }
 
 #[inline]
@@ -233,7 +233,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
 
     let t = spread(base_time);
     if !player_has(flags) {
-        (*thing_t(crate::game::player_ptr())).t_flags.insert(flags);
+        crate::game::PLAYER.add_flag(flags);
         fuse(daemon, 0, t, AFTER);
         look(false as c_uchar);
     } else {
@@ -294,13 +294,14 @@ pub unsafe extern "C" fn quaff() {
             }
         }
         PotionType::Healing => {
-            let stats = thing_t(crate::game::player_ptr());
             (*pot_info.as_mut_ptr().add(PotionType::Healing.index())).oi_know = true;
-            (*stats).t_stats.hit_points += roll((*stats).t_stats.level, 4);
-            if (*stats).t_stats.hit_points > (*stats).t_stats.max_hit_points {
-                (*stats).t_stats.max_hit_points += 1;
-                (*stats).t_stats.hit_points = (*stats).t_stats.max_hit_points;
-            }
+            crate::game::PLAYER.with_stats_mut(|stats| {
+                stats.hit_points += roll(stats.level, 4);
+                if stats.hit_points > stats.max_hit_points {
+                    stats.max_hit_points += 1;
+                    stats.hit_points = stats.max_hit_points;
+                }
+            });
             sight();
             msg_str("you begin to feel better");
         }
@@ -310,9 +311,7 @@ pub unsafe extern "C" fn quaff() {
             msg_str("you feel stronger, now.  What bulging muscles!");
         }
         PotionType::MonsterFind => {
-            (*thing_t(crate::game::player_ptr()))
-                .t_flags
-                .insert(MonsterFlags::SEEMONST);
+            crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
             fuse(
                 turn_see as *const c_void,
                 true as c_uchar as c_int,
@@ -405,17 +404,18 @@ pub unsafe extern "C" fn quaff() {
             raise_level();
         }
         PotionType::ExtraHealing => {
-            let stats = thing_t(crate::game::player_ptr());
             (*pot_info.as_mut_ptr().add(PotionType::ExtraHealing.index())).oi_know =
                 true;
-            (*stats).t_stats.hit_points += roll((*stats).t_stats.level, 8);
-            if (*stats).t_stats.hit_points > (*stats).t_stats.max_hit_points {
-                if (*stats).t_stats.hit_points > (*stats).t_stats.max_hit_points + (*stats).t_stats.level + 1 {
-                    (*stats).t_stats.max_hit_points += 1;
+            crate::game::PLAYER.with_stats_mut(|stats| {
+                stats.hit_points += roll(stats.level, 8);
+                if stats.hit_points > stats.max_hit_points {
+                    if stats.hit_points > stats.max_hit_points + stats.level + 1 {
+                        stats.max_hit_points += 1;
+                    }
+                    stats.max_hit_points += 1;
+                    stats.hit_points = stats.max_hit_points;
                 }
-                (*stats).t_stats.max_hit_points += 1;
-                (*stats).t_stats.hit_points = (*stats).t_stats.max_hit_points;
-            }
+            });
             sight();
             come_down();
             msg_str("you begin to feel much better");
@@ -428,34 +428,33 @@ pub unsafe extern "C" fn quaff() {
             }
         }
         PotionType::Restore => {
-            let stats = thing_t(crate::game::player_ptr());
-            if ring_is(PLAYER.left_ring(), RingType::AddStrength) {
-                add_str(
-                    &mut (*stats).t_stats.strength,
-                    -(*thing_o(PLAYER.left_ring())).o_arm,
-                );
-            }
-            if ring_is(PLAYER.right_ring(), RingType::AddStrength) {
-                add_str(
-                    &mut (*stats).t_stats.strength,
-                    -(*thing_o(PLAYER.right_ring())).o_arm,
-                );
-            }
-            if (*stats).t_stats.strength < max_stats.strength {
-                (*stats).t_stats.strength = max_stats.strength;
-            }
-            if ring_is(PLAYER.left_ring(), RingType::AddStrength) {
-                add_str(
-                    &mut (*stats).t_stats.strength,
-                    (*thing_o(PLAYER.left_ring())).o_arm,
-                );
-            }
-            if ring_is(PLAYER.right_ring(), RingType::AddStrength) {
-                add_str(
-                    &mut (*stats).t_stats.strength,
-                    (*thing_o(PLAYER.right_ring())).o_arm,
-                );
-            }
+            let left_bonus = if ring_is(PLAYER.left_ring(), RingType::AddStrength) {
+                (*thing_o(PLAYER.left_ring())).o_arm
+            } else {
+                0
+            };
+            let right_bonus = if ring_is(PLAYER.right_ring(), RingType::AddStrength) {
+                (*thing_o(PLAYER.right_ring())).o_arm
+            } else {
+                0
+            };
+            crate::game::PLAYER.with_stats_mut(|stats| {
+                if left_bonus != 0 {
+                    add_str(&mut stats.strength, -left_bonus);
+                }
+                if right_bonus != 0 {
+                    add_str(&mut stats.strength, -right_bonus);
+                }
+                if stats.strength < max_stats.strength {
+                    stats.strength = max_stats.strength;
+                }
+                if left_bonus != 0 {
+                    add_str(&mut stats.strength, left_bonus);
+                }
+                if right_bonus != 0 {
+                    add_str(&mut stats.strength, right_bonus);
+                }
+            });
             msg_str("hey, this tastes great.  It make you feel warm all over");
         }
         PotionType::Blind => do_pot_impl(PotionType::Blind, true),
@@ -491,9 +490,7 @@ pub unsafe extern "C" fn is_magic(obj: *mut Thing) -> c_uchar {
 /// Turn on the ability to see invisible.
 #[no_mangle]
 pub unsafe extern "C" fn invis_on() {
-    (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .insert(MonsterFlags::CANSEE);
+    crate::game::PLAYER.add_flag(MonsterFlags::CANSEE);
     for id in MONSTER_LIST.ids() {
         if let Some(mp) = MONSTER_LIST.handle(id) {
             if thing_has(mp, MonsterFlags::INVIS)
@@ -541,13 +538,9 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
     }
 
     if turn_off != 0 {
-        (*thing_t(crate::game::player_ptr()))
-            .t_flags
-            .remove(MonsterFlags::SEEMONST);
+        crate::game::PLAYER.remove_flag(MonsterFlags::SEEMONST);
     } else {
-        (*thing_t(crate::game::player_ptr()))
-            .t_flags
-            .insert(MonsterFlags::SEEMONST);
+        crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
     }
 
     if add_new != 0 {
@@ -589,8 +582,9 @@ pub unsafe extern "C" fn seen_stairs() -> c_uchar {
 /// The player just magically went up a level.
 #[no_mangle]
 pub unsafe extern "C" fn raise_level() {
-    (*thing_t(crate::game::player_ptr())).t_stats.experience =
-        e_levels[(*thing_t(crate::game::player_ptr())).t_stats.level as usize - 1] + 1;
+    let level = crate::game::PLAYER.level();
+    crate::game::PLAYER
+        .with_stats_mut(|stats| stats.experience = e_levels[level as usize - 1] + 1);
     check_level();
 }
 

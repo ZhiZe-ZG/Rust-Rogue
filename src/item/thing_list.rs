@@ -32,6 +32,27 @@ pub unsafe fn attach_pack(owner: *mut Thing, item: *mut Thing) {
     crate::entity::player::set_thing_pack(owner, item);
 }
 
+/// Unlink `item` from the global player's pack list.
+///
+/// The player is not reachable as a `*mut Thing` anymore, so this mirrors
+/// [`detach_pack`] against the safe [`crate::game::PLAYER`] pack accessors.
+pub unsafe fn detach_pack_from_player(item: *mut Thing) {
+    let prev = crate::entity::player::thing_prev(item);
+    let next = crate::entity::player::thing_next(item);
+
+    if crate::game::PLAYER.pack() == item {
+        crate::game::PLAYER.set_pack(next);
+    }
+    if !prev.is_null() {
+        crate::entity::player::set_thing_next(prev, next);
+    }
+    if !next.is_null() {
+        crate::entity::player::set_thing_prev(next, prev);
+    }
+    crate::entity::player::set_thing_next(item, std::ptr::null_mut());
+    crate::entity::player::set_thing_prev(item, std::ptr::null_mut());
+}
+
 /// Unlink `item` from the actor `owner`'s pack list.
 pub unsafe fn detach_pack(owner: *mut Thing, item: *mut Thing) {
     let prev = crate::entity::player::thing_prev(item);

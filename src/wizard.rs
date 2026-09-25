@@ -49,13 +49,13 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 }
 
 #[inline]
-unsafe fn hero() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
+fn hero() -> IVec2 {
+    crate::game::PLAYER.pos()
 }
 
 #[inline]
-unsafe fn proom() -> Option<usize> {
-    (*thing_t(crate::game::player_ptr())).t_room
+fn proom() -> Option<usize> {
+    crate::game::PLAYER.room()
 }
 
 #[inline]
@@ -102,7 +102,7 @@ unsafe extern "C" {
 
 #[no_mangle]
 pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
-    let pack = crate::entity::player::thing_pack(crate::game::player_ptr());
+    let pack = crate::game::PLAYER.pack();
     if pack.is_null() {
         msg_str("you don't have anything in your pack to identify");
         return;
@@ -272,16 +272,11 @@ pub unsafe extern "C" fn teleport() {
         hero = c;
         look(true as c_uchar);
     }
-    (*thing_t(crate::game::player_ptr())).t_pos = hero;
+    crate::game::PLAYER.set_pos(hero);
     output::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
 
-    if (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .contains(MonsterFlags::HELD)
-    {
-        (*thing_t(crate::game::player_ptr()))
-            .t_flags
-            .remove(MonsterFlags::HELD);
+    if crate::game::PLAYER.has_flag(MonsterFlags::HELD) {
+        crate::game::PLAYER.remove_flag(MonsterFlags::HELD);
         vf_hit = 0;
         let dmg = b"000x0\0";
         std::ptr::copy_nonoverlapping(

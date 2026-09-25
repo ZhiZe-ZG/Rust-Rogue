@@ -1922,10 +1922,9 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut Thing) -> c_int {
         the current location of what we are chasing.
     */
 
-    let hero_pos_ptr = (&raw mut (*thing_t(crate::game::player_ptr())).t_pos) as *mut IVec2;
     let t_dest = crate::entity::player::thing_dest(t);
 
-    if t_dest == hero_pos_ptr {
+    if crate::entity::player::is_thing_dest_hero(t) {
         let _ = rs_write_int(savef, 0);
         let _ = rs_write_int(savef, 1);
     } else if !t_dest.is_null() {
@@ -2017,10 +2016,7 @@ unsafe fn rs_read_thing(inf: *mut CFile, t: *mut Thing) -> c_int {
     if listid == 0 {
         /* hero or NULL */
         if index == 1 {
-            crate::entity::player::set_thing_dest(
-                t,
-                (&raw mut (*thing_t(crate::game::player_ptr())).t_pos) as *mut IVec2,
-            );
+            crate::entity::player::set_thing_dest_hero(t);
         } else {
             crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
         }
@@ -2421,8 +2417,10 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_coord(savef, oldpos);
     let _ = rs_write_coord(savef, crate::game::stairs());
 
-    let _ = rs_write_thing(savef, crate::game::player_ptr());
-    let player_pack = crate::entity::player::thing_pack(crate::game::player_ptr());
+    crate::game::PLAYER.with_mut(|hero| {
+        let _ = rs_write_thing(savef, hero as *mut Thing);
+    });
+    let player_pack = crate::game::PLAYER.pack();
     let _ = rs_write_object_reference(savef, player_pack, PLAYER.armor());
     let _ = rs_write_object_reference(savef, player_pack, PLAYER.left_ring());
     let _ = rs_write_object_reference(savef, player_pack, PLAYER.right_ring());
@@ -2617,8 +2615,10 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_coord(inf, &mut stairs);
     crate::game::set_stairs(stairs);
 
-    let _ = rs_read_thing(inf, crate::game::player_ptr());
-    let player_pack = crate::entity::player::thing_pack(crate::game::player_ptr());
+    crate::game::PLAYER.with_mut(|hero| {
+        let _ = rs_read_thing(inf, hero as *mut Thing);
+    });
+    let player_pack = crate::game::PLAYER.pack();
     let mut equipment_item = std::ptr::null_mut();
     let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
     PLAYER.set_armor(equipment_item);
@@ -2636,7 +2636,7 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     crate::game::with_current_level_mut(|level| level.items.set_head(items_head));
     let mut mlist: *mut Thing = std::ptr::null_mut();
     let _ = rs_read_thing_list(inf, &raw mut mlist);
-    rs_fix_thing(crate::game::player_ptr());
+    crate::game::PLAYER.with_mut(|hero| rs_fix_thing(hero as *mut Thing));
     rs_fix_thing_list(mlist);
 
     let _ = rs_read_places(

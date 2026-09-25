@@ -4,16 +4,20 @@
 //! the equipped armor/rings/weapon in individual globals. This module groups
 //! them into one stable, process-lifetime owner:
 //!
-//! * [`PLAYER`] — the boxed hero [`Thing`] whose address never changes, reached
-//!   through [`player_ptr`], plus the [`Equipment`] currently in use (the
-//!   equipped objects themselves remain owned by the player's pack).
+//! * [`PLAYER`] — the hero [`Thing`] plus the [`Equipment`] currently in use
+//!   (the equipped objects themselves remain owned by the player's pack).
 //!
-//! Equipment slots and the hero address are stored as [`NonNull`] handles
-//! rather than raw pointers: a slot simply holds `None` when empty, so there is
-//! no null-pointer sentinel to dereference.
+//! The hero is stored behind an [`RwLock`] and reached only through scoped
+//! `with`/`with_mut` closures plus a set of value accessors. There is no public
+//! raw hero pointer: callers read or mutate individual fields through safe
+//! methods, so the previous `player_ptr`/`Player::ptr` bridge is gone.
+//!
+//! Equipment slots are stored as [`NonNull`] handles rather than raw pointers: a
+//! slot simply holds `None` when empty, so there is no null-pointer sentinel to
+//! dereference.
 
 use std::ptr::NonNull;
-use std::sync::{OnceLock, RwLock};
+use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingMonster};
 use glam::IVec2;
@@ -121,6 +125,7 @@ fn default_player() -> Thing {
             t_disguise: 0,
             t_oldch: 0,
             t_dest: None,
+            t_dest_hero: false,
             t_flags: MonsterFlags::NONE,
             t_stats: Stats {
                 strength: 0,
@@ -138,51 +143,187 @@ fn default_player() -> Thing {
     }
 }
 
+/// Borrow the actor payload of a hero `Thing`.
+///
+/// The global player is always constructed as a monster, so the object arm is
+/// unreachable in practice.
+#[inline]
+fn hero_monster(thing: &Thing) -> &ThingMonster {
+    match thing {
+        Thing::Monster { data, .. } => data,
+        Thing::Object { .. } => unreachable!("the player is always an actor"),
+    }
+}
+
+/// Mutably borrow the actor payload of a hero `Thing`.
+#[inline]
+fn hero_monster_mut(thing: &mut Thing) -> &mut ThingMonster {
+    match thing {
+        Thing::Monster { data, .. } => data,
+        Thing::Object { .. } => unreachable!("the player is always an actor"),
+    }
+}
+
 /// A safe, process-wide owner for the hero actor and its equipment.
 ///
 /// The game is single-threaded, but the player must be reachable from many
-/// modules as one stable, process-lifetime object whose address never changes
-/// (chase targets and save code keep raw pointers to `t_pos`/`t_stats`). The
-/// hero [`Thing`] is boxed and initialized exactly once, so its heap address is
-/// stable and [`Player::ptr`] always hands back the same `*mut Thing`. It
-/// replaces the legacy `#[no_mangle] static mut player` global and folds in the
-/// former `EQUIPMENT` global.
+/// modules as one stable, process-lifetime object. The hero [`Thing`] lives
+/// behind an `RwLock`; callers use the scoped [`Player::with`] /
+/// [`Player::with_mut`] closures or the value accessors below, so no raw hero
+/// pointer escapes the module. It replaces the legacy `#[no_mangle] static mut
+/// player` global and folds in the former `EQUIPMENT` global.
 pub struct Player {
-    hero: OnceLock<Box<Thing>>,
+    hero: RwLock<Option<Thing>>,
     equipment: Equipment,
 }
 
-// SAFETY: the game runs on a single thread, and the boxed `Thing` is only ever
-// reached through the stable raw pointer returned by `ptr`.
-unsafe impl Sync for Player {}
-
 impl Player {
     const EMPTY: Self = Self {
-        hero: OnceLock::new(),
+        hero: RwLock::new(None),
         equipment: Equipment::EMPTY,
     };
 
+    /// Ensure the hero exists, initializing it on first access.
     #[inline]
-    fn get(&self) -> &Thing {
-        self.hero.get_or_init(|| Box::new(default_player()))
+    fn ensure_initialized(&self) {
+        {
+            let hero = self.hero.read().unwrap_or_else(|poison| poison.into_inner());
+            if hero.is_some() {
+                return;
+            }
+        }
+        let mut hero = self.hero.write().unwrap_or_else(|poison| poison.into_inner());
+        if hero.is_none() {
+            *hero = Some(default_player());
+        }
     }
 
-    /// A stable, process-lifetime pointer to the player `Thing`.
     #[inline]
-    pub fn ptr(&self) -> *mut Thing {
-        self.get() as *const Thing as *mut Thing
+    fn read_hero(&self) -> RwLockReadGuard<'_, Option<Thing>> {
+        self.ensure_initialized();
+        self.hero.read().unwrap_or_else(|poison| poison.into_inner())
     }
 
-    /// The player's current statistics.
     #[inline]
-    pub fn stats(&self) -> &Stats {
-        unsafe { &(*crate::entity::player::thing_t(self.ptr())).t_stats }
+    fn write_hero(&self) -> RwLockWriteGuard<'_, Option<Thing>> {
+        self.ensure_initialized();
+        self.hero.write().unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Run `operation` with immutable access to the hero.
+    ///
+    /// The closure must not call back into [`Player`] (the read lock is held
+    /// for its duration); copy values out instead.
+    #[inline]
+    pub fn with<R>(&self, operation: impl FnOnce(&Thing) -> R) -> R {
+        let hero = self.read_hero();
+        operation(hero.as_ref().expect("hero initialized"))
+    }
+
+    /// Run `operation` with mutable access to the hero.
+    ///
+    /// The closure must not call back into [`Player`] (the write lock is held
+    /// for its duration).
+    #[inline]
+    pub fn with_mut<R>(&self, operation: impl FnOnce(&mut Thing) -> R) -> R {
+        let mut hero = self.write_hero();
+        operation(hero.as_mut().expect("hero initialized"))
+    }
+
+    /// Run `operation` with immutable access to the hero's actor payload.
+    #[inline]
+    pub fn with_monster<R>(&self, operation: impl FnOnce(&ThingMonster) -> R) -> R {
+        self.with(|thing| operation(hero_monster(thing)))
+    }
+
+    /// Run `operation` with mutable access to the hero's actor payload.
+    #[inline]
+    pub fn with_monster_mut<R>(&self, operation: impl FnOnce(&mut ThingMonster) -> R) -> R {
+        self.with_mut(|thing| operation(hero_monster_mut(thing)))
     }
 
     /// The player's current map position.
     #[inline]
     pub fn pos(&self) -> IVec2 {
-        unsafe { (*crate::entity::player::thing_t(self.ptr())).t_pos }
+        self.with_monster(|hero| hero.t_pos)
+    }
+
+    /// Set the player's current map position.
+    #[inline]
+    pub fn set_pos(&self, pos: IVec2) {
+        self.with_monster_mut(|hero| hero.t_pos = pos);
+    }
+
+    /// The player's current room reference.
+    #[inline]
+    pub fn room(&self) -> Option<usize> {
+        self.with_monster(|hero| hero.t_room)
+    }
+
+    /// Set the player's current room reference.
+    #[inline]
+    pub fn set_room(&self, room: Option<usize>) {
+        self.with_monster_mut(|hero| hero.t_room = room);
+    }
+
+    /// The player's actor flags.
+    #[inline]
+    pub fn flags(&self) -> MonsterFlags {
+        self.with_monster(|hero| hero.t_flags)
+    }
+
+    /// Whether `flag` is set on the player.
+    #[inline]
+    pub fn has_flag(&self, flag: MonsterFlags) -> bool {
+        self.with_monster(|hero| hero.t_flags.contains(flag))
+    }
+
+    /// Add `flag` to the player's actor flags.
+    #[inline]
+    pub fn add_flag(&self, flag: MonsterFlags) {
+        self.with_monster_mut(|hero| hero.t_flags.insert(flag));
+    }
+
+    /// Remove `flag` from the player's actor flags.
+    #[inline]
+    pub fn remove_flag(&self, flag: MonsterFlags) {
+        self.with_monster_mut(|hero| hero.t_flags.remove(flag));
+    }
+
+    /// The player's current statistics (copied).
+    #[inline]
+    pub fn stats(&self) -> Stats {
+        self.with_monster(|hero| hero.t_stats)
+    }
+
+    /// Replace the player's statistics.
+    #[inline]
+    pub fn set_stats(&self, stats: Stats) {
+        self.with_monster_mut(|hero| hero.t_stats = stats);
+    }
+
+    /// Run `operation` with mutable access to the player's statistics.
+    #[inline]
+    pub fn with_stats_mut<R>(&self, operation: impl FnOnce(&mut Stats) -> R) -> R {
+        self.with_monster_mut(|hero| operation(&mut hero.t_stats))
+    }
+
+    /// The player's current experience level.
+    #[inline]
+    pub fn level(&self) -> i32 {
+        self.with_monster(|hero| hero.t_stats.level)
+    }
+
+    /// The player's pack head as a raw handle (or null when empty).
+    #[inline]
+    pub fn pack(&self) -> *mut Thing {
+        self.with_monster(|hero| hero.t_pack.map_or(std::ptr::null_mut(), |p| p.as_ptr()))
+    }
+
+    /// Set the player's pack head from a raw handle.
+    #[inline]
+    pub fn set_pack(&self, pack: *mut Thing) {
+        self.with_monster_mut(|hero| hero.t_pack = NonNull::new(pack));
     }
 
     /// The player's equipped objects.
@@ -250,26 +391,10 @@ impl Player {
     pub fn set_weapon(&self, weapon: *mut Thing) {
         self.equipment.set_weapon(weapon);
     }
-
-    /// Remove `flag` from the player's actor flags.
-    #[inline]
-    pub fn remove_flag(&self, flag: MonsterFlags) {
-        unsafe { (*crate::entity::player::thing_t(self.ptr())).t_flags.remove(flag) }
-    }
 }
 
 /// Process-wide owner of the player's actor and equipment.
 pub static PLAYER: Player = Player::EMPTY;
-
-/// A stable, process-lifetime pointer to the global player [`Thing`].
-///
-/// This is the safe replacement for the legacy `&raw mut player` accesses: the
-/// `Thing` is boxed once inside [`PLAYER`], so the returned address never
-/// changes.
-#[inline]
-pub fn player_ptr() -> *mut Thing {
-    PLAYER.ptr()
-}
 
 /// Remove `flag` from the global player's actor flags.
 #[inline]
@@ -280,7 +405,7 @@ pub fn player_remove_flag(flag: MonsterFlags) {
 #[cfg(test)]
 mod tests {
     use super::{Equipment, Player};
-    use crate::entity::player::Thing;
+    use crate::entity::player::{MonsterFlags, Thing};
     use std::mem::MaybeUninit;
 
     #[test]
@@ -297,11 +422,16 @@ mod tests {
     }
 
     #[test]
-    fn player_pointer_is_stable() {
+    fn player_defaults_and_mutates_through_accessors() {
         let player = Player::EMPTY;
-        let first = player.ptr();
-        let second = player.ptr();
-        assert_eq!(first, second);
+        player.set_pos(glam::IVec2 { x: 3, y: 4 });
+        assert_eq!(player.pos(), glam::IVec2 { x: 3, y: 4 });
+        player.add_flag(MonsterFlags::BLIND);
+        assert!(player.has_flag(MonsterFlags::BLIND));
+        player.remove_flag(MonsterFlags::BLIND);
+        assert!(!player.has_flag(MonsterFlags::BLIND));
+        player.with_stats_mut(|stats| stats.hit_points = 7);
+        assert_eq!(player.stats().hit_points, 7);
     }
 
     #[test]

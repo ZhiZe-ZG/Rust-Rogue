@@ -314,27 +314,17 @@ pub(crate) unsafe fn link_monsters_to_rooms() {
 /// Place the hero on an open floor cell and finalize the screen.
 unsafe fn place_hero() {
     if let Some(pos) = find_floor(None, 0, true) {
-        (*thing_t(crate::game::player_ptr())).t_pos = pos;
+        crate::game::PLAYER.set_pos(pos);
     }
 
-    enter_room(&raw mut (*thing_t(crate::game::player_ptr())).t_pos);
-    output::write_glyph_at(
-        IVec2::new(
-            (*thing_t(crate::game::player_ptr())).t_pos.x,
-            (*thing_t(crate::game::player_ptr())).t_pos.y,
-        ),
-        PLAYER as char,
-    );
-    if (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .contains(MonsterFlags::SEEMONST)
-    {
+    let mut hero_pos = crate::game::PLAYER.pos();
+    enter_room(&raw mut hero_pos);
+    let hero_pos = crate::game::PLAYER.pos();
+    output::write_glyph_at(IVec2::new(hero_pos.x, hero_pos.y), PLAYER as char);
+    if crate::game::PLAYER.has_flag(MonsterFlags::SEEMONST) {
         turn_see(false as u8);
     }
-    if (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .contains(MonsterFlags::HALU)
-    {
+    if crate::game::PLAYER.has_flag(MonsterFlags::HALU) {
         visuals();
     }
 }

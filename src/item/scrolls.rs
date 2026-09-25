@@ -116,13 +116,13 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 }
 
 #[inline]
-unsafe fn hero() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
+fn hero() -> IVec2 {
+    crate::game::PLAYER.pos()
 }
 
 #[inline]
-unsafe fn proom() -> Option<usize> {
-    (*thing_t(crate::game::player_ptr())).t_room
+fn proom() -> Option<usize> {
+    crate::game::PLAYER.room()
 }
 
 #[inline]
@@ -136,8 +136,8 @@ unsafe fn on_flag(tp: *mut Thing, flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn player_has(flag: MonsterFlags) -> bool {
-    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
+fn player_has(flag: MonsterFlags) -> bool {
+    crate::game::PLAYER.has_flag(flag)
 }
 
 // Map reveal now lives in `crate::draw::map_cell_reveal`, operating directly
@@ -172,9 +172,7 @@ pub unsafe extern "C" fn read_scroll() {
     let scroll_type = ScrollType::from_raw((*thing_o(obj)).o_which);
     match scroll_type {
         ScrollType::Confuse => {
-            (*thing_t(crate::game::player_ptr()))
-                .t_flags
-                .insert(MonsterFlags::CANHUH);
+            crate::game::PLAYER.add_flag(MonsterFlags::CANHUH);
             msg_str(&format!("your hands begin to glow {}", pick_color("red")));
         }
         ScrollType::Armor => {
@@ -225,9 +223,7 @@ pub unsafe extern "C" fn read_scroll() {
         ScrollType::Sleep => {
             scr_info[ScrollType::Sleep.index()].oi_know = true;
             no_command += rnd(SLEEPTIME) + 4;
-            (*thing_t(crate::game::player_ptr()))
-                .t_flags
-                .remove(MonsterFlags::RUN);
+            crate::game::PLAYER.remove_flag(MonsterFlags::RUN);
             msg_str("you fall asleep");
         }
         ScrollType::CreateMonster => {

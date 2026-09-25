@@ -13,7 +13,7 @@ use crate::entity::fight::attack;
 use crate::globals::monsters;
 use crate::game::MONSTER_LIST;
 use crate::entity::player::{Thing, ThingMonster, ThingObject, MonsterFlags};
-use crate::entity::player::{set_thing_dest, thing_dest};
+use crate::entity::player::{set_thing_dest, set_thing_dest_hero, thing_dest};
 use crate::entity::rndmove::rndmove;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
@@ -76,18 +76,28 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 }
 
 #[inline]
-unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
+fn hero_pos() -> IVec2 {
+    crate::game::PLAYER.pos()
 }
 
 #[inline]
-unsafe fn hero_ptr() -> *mut IVec2 {
-    &mut (*thing_t(crate::game::player_ptr())).t_pos
+fn player_has(flag: MonsterFlags) -> bool {
+    crate::game::PLAYER.has_flag(flag)
 }
 
+/// The effective chase destination of `th`: the hero's live position when the
+/// actor is chasing the hero, otherwise its stored coordinate.
 #[inline]
-unsafe fn player_has(flag: MonsterFlags) -> bool {
-    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
+unsafe fn dest_coord(th: *mut Thing) -> IVec2 {
+    if crate::entity::player::is_thing_dest_hero(th) {
+        return hero_pos();
+    }
+    let d = thing_dest(th);
+    if d.is_null() {
+        hero_pos()
+    } else {
+        *d
+    }
 }
 
 #[inline]
@@ -129,8 +139,9 @@ pub unsafe extern "C" fn runners() {
                 if move_monst(tp) == -1 {
                     continue;
                 }
+                let hero = hero_pos();
                 if monster_has(tp, MonsterFlags::FLY)
-                    && dist_cp(hero_ptr(), &raw mut (*thing_t(tp)).t_pos) >= 3
+                    && dist(hero.y, hero.x, (*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) >= 3
                 {
                     move_monst(tp);
                 }
@@ -190,7 +201,7 @@ pub unsafe extern "C" fn relocate(th: *mut Thing, new_loc: *mut IVec2) {
         );
 
         if oroom != (*thing_t(th)).t_room {
-            set_thing_dest(th, find_dest(th));
+            update_dest(th);
         }
         (*thing_t(th)).t_pos = *new_loc;
         set_moat_at((*new_loc).y, (*new_loc).x, th);
@@ -220,11 +231,11 @@ pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
 
     let rer = (*thing_t(th)).t_room; // Find room of chaser
     if monster_has(th, MonsterFlags::GREED) && crate::game::room_goldval(rer) == 0 {
-        set_thing_dest(th, hero_ptr()); // If gold has been taken, run after hero
+        set_thing_dest_hero(th); // If gold has been taken, run after hero
     }
-    let ree = if thing_dest(th) == hero_ptr() {
+    let ree = if crate::entity::player::is_thing_dest_hero(th) {
         // Find room of chasee
-        (*thing_t(crate::game::player_ptr())).t_room
+        crate::game::PLAYER.room()
     } else {
         roomin(thing_dest(th))
     };
@@ -238,9 +249,10 @@ pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
     let loop_ree = ree;
     loop {
         if loop_rer != loop_ree {
+            let dest = dest_coord(th);
             let exits = crate::game::room_exits(loop_rer);
             for cp in exits.iter() {
-                curdist = dist_cp(thing_dest(th), cp as *const IVec2 as *mut IVec2);
+                curdist = dist(dest.y, dest.x, cp.y, cp.x);
                 if curdist < mindist {
                     THIS = *cp;
                     mindist = curdist;
@@ -251,7 +263,7 @@ pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
                     (flat_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x) & F_PNUM) as usize;
                 let passage_exits = crate::game::passage_exits(Some(pnum));
                 for cp in passage_exits.iter() {
-                    curdist = dist_cp(thing_dest(th), cp as *const IVec2 as *mut IVec2);
+                    curdist = dist(dest.y, dest.x, cp.y, cp.x);
                     if curdist < mindist {
                         THIS = *cp;
                         mindist = curdist;
@@ -262,21 +274,27 @@ pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
                 continue;
             }
         } else {
-            THIS = *thing_dest(th);
+            THIS = dest_coord(th);
             // For dragons check and see if (a) the hero is on a straight
             // line from it, and (b) that it is within shooting distance,
             // but outside of striking range.
+            let hero = hero_pos();
             if (*thing_t(th)).t_type == b'D'
-                && ((*thing_t(th)).t_pos.y == hero_pos().y
-                    || (*thing_t(th)).t_pos.x == hero_pos().x
-                    || ((*thing_t(th)).t_pos.y - hero_pos().y).abs()
-                        == ((*thing_t(th)).t_pos.x - hero_pos().x).abs())
-                && dist_cp(&raw mut (*thing_t(th)).t_pos, hero_ptr()) <= BOLT_LENGTH * BOLT_LENGTH
+                && ((*thing_t(th)).t_pos.y == hero.y
+                    || (*thing_t(th)).t_pos.x == hero.x
+                    || ((*thing_t(th)).t_pos.y - hero.y).abs()
+                        == ((*thing_t(th)).t_pos.x - hero.x).abs())
+                && dist(
+                    (*thing_t(th)).t_pos.y,
+                    (*thing_t(th)).t_pos.x,
+                    hero.y,
+                    hero.x,
+                ) <= BOLT_LENGTH * BOLT_LENGTH
                 && !monster_has(th, MonsterFlags::CANCELLED)
                 && rnd(DRAGONSHOT) == 0
             {
-                let dy = hero_pos().y - (*thing_t(th)).t_pos.y;
-                let dx = hero_pos().x - (*thing_t(th)).t_pos.x;
+                let dy = hero.y - (*thing_t(th)).t_pos.y;
+                let dx = hero.x - (*thing_t(th)).t_pos.x;
                 delta.y = sign(dy);
                 delta.x = sign(dx);
                 if has_hit != 0 {
@@ -306,7 +324,7 @@ pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
     if chase(th, &raw mut THIS) == false as c_uchar {
         if coord_eq(THIS, hero_pos()) {
             return attack(th);
-        } else if coord_eq(THIS, *thing_dest(th)) {
+        } else if coord_eq(THIS, dest_coord(th)) {
             obj = crate::game::with_current_level(|level| level.items.head());
             while !obj.is_null() {
                 if thing_dest(th) == &raw mut (*thing_o(obj)).o_pos {
@@ -314,7 +332,7 @@ pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
                     attach_pack(th, obj);
                     // Objects render from the `lvl_obj` list; the floor glyph
                     // under a picked-up object is then the terrain char.
-                    set_thing_dest(th, find_dest(th));
+                    update_dest(th);
                     break;
                 }
                 obj = crate::entity::player::thing_next(obj);
@@ -328,7 +346,7 @@ pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
     }
     relocate(th, &raw mut CH_RET);
     // And stop running if need be
-    if stoprun && coord_eq((*thing_t(th)).t_pos, *thing_dest(th)) {
+    if stoprun && coord_eq((*thing_t(th)).t_pos, dest_coord(th)) {
         (*thing_t(th)).t_flags.remove(MonsterFlags::RUN);
     }
     0
@@ -352,7 +370,7 @@ pub unsafe extern "C" fn set_oldch(tp: *mut Thing, cp: *mut IVec2) {
             && crate::game::room_dark((*thing_t(tp)).t_room)
         {
             (*thing_t(tp)).t_oldch = b' ';
-        } else if dist_cp(cp, hero_ptr()) <= LAMPDIST && see_floor != 0 {
+        } else if dist((*cp).y, (*cp).x, hero_pos().y, hero_pos().x) <= LAMPDIST && see_floor != 0 {
             (*thing_t(tp)).t_oldch = crate::draw::cell_glyph((*cp).y, (*cp).x) as u8;
         }
     }
@@ -382,7 +400,7 @@ pub unsafe extern "C" fn see_monst(mp: *mut Thing) -> c_uchar {
         }
         return true as c_uchar;
     }
-    if (*thing_t(mp)).t_room != (*thing_t(crate::game::player_ptr())).t_room {
+    if (*thing_t(mp)).t_room != crate::game::PLAYER.room() {
         return false as c_uchar;
     }
     if crate::game::room_dark((*thing_t(mp)).t_room) {
@@ -414,7 +432,7 @@ pub unsafe extern "C" fn runto(runner: *mut IVec2) {
     // Start the beastie running
     (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
     (*thing_t(tp)).t_flags.remove(MonsterFlags::HELD);
-    set_thing_dest(tp, find_dest(tp));
+    update_dest(tp);
 }
 
 /// chase:
@@ -593,25 +611,30 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
     CANSEE_TP.y = y;
     CANSEE_TP.x = x;
     let rer = roomin(&raw mut CANSEE_TP);
-    if rer == (*thing_t(crate::game::player_ptr())).t_room && !crate::game::room_dark(rer) {
+    if rer == crate::game::PLAYER.room() && !crate::game::room_dark(rer) {
         true as c_uchar
     } else {
         false as c_uchar
     }
 }
 
-/// find_dest:
-/// find the proper destination for the monster
+/// update_dest:
+/// Set the proper destination for the monster.
+///
+/// Chases the hero (recorded symbolically, never as a raw pointer) when the
+/// monster carries nothing, is in the hero's room, or can see the hero;
+/// otherwise it may target a nearby floor object it wants to pick up.
 ///
 /// Uses globals: monsters, hero, proom, lvl_obj, mlist.
 #[no_mangle]
-pub unsafe extern "C" fn find_dest(tp: *mut Thing) -> *mut IVec2 {
+pub unsafe extern "C" fn update_dest(tp: *mut Thing) {
     let prob = monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry;
     if prob <= 0
-        || (*thing_t(tp)).t_room == (*thing_t(crate::game::player_ptr())).t_room
+        || (*thing_t(tp)).t_room == crate::game::PLAYER.room()
         || see_monst(tp) != false as c_uchar
     {
-        return hero_ptr();
+        set_thing_dest_hero(tp);
+        return;
     }
     let mut obj = crate::game::with_current_level(|level| level.items.head());
     while !obj.is_null() {
@@ -633,12 +656,13 @@ pub unsafe extern "C" fn find_dest(tp: *mut Thing) -> *mut IVec2 {
                 }
             }
             if !taken {
-                return obj_pos_ptr;
+                set_thing_dest(tp, obj_pos_ptr);
+                return;
             }
         }
         obj = crate::entity::player::thing_next(obj);
     }
-    hero_ptr()
+    set_thing_dest_hero(tp);
 }
 
 /// dist:

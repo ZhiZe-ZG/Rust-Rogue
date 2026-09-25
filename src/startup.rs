@@ -227,8 +227,9 @@ pub unsafe extern "C" fn playit() {
         parse_opts(options.as_ptr() as *mut c_char);
     }
 
-    oldpos = (*thing_t(crate::game::player_ptr())).t_pos;
-    oldrp = roomin(&raw mut (*thing_t(crate::game::player_ptr())).t_pos);
+    oldpos = crate::game::PLAYER.pos();
+    let mut hero_pos = crate::game::PLAYER.pos();
+    oldrp = roomin(&raw mut hero_pos);
     while playing != false as c_uchar {
         command(); /* Command execution */
     }
@@ -354,9 +355,7 @@ pub unsafe extern "C" fn rogue_main(
 
     if master_mode_enabled != 0 && argc >= 2 && *arg_at(argv, 1) == 0 {
         wizard = 1;
-        (*crate::entity::player::thing_t(crate::game::player_ptr()))
-            .t_flags
-            .insert(MonsterFlags::SEEMONST);
+        crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
         argv = argv.add(1);
         argc -= 1;
     }

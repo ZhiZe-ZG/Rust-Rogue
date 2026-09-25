@@ -317,7 +317,7 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 /// Roll up the starting player: give food, armor, weapons, and arrows.
 #[no_mangle]
 pub unsafe extern "C" fn init_player() {
-    (*thing_t(crate::game::player_ptr())).t_stats = max_stats;
+    crate::game::PLAYER.set_stats(max_stats);
     food_left = HUNGERTIME;
 
     // Give her some food
@@ -495,9 +495,7 @@ pub unsafe extern "C" fn init_probs() {
 /// Return a random colour if the player is hallucinating, otherwise
 /// return the supplied colour unchanged.
 pub unsafe fn pick_color(col: &'static str) -> &'static str {
-    if (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .contains(MonsterFlags::HALU)
+    if crate::game::PLAYER.has_flag(MonsterFlags::HALU)
     {
         crate::colors::random_color()
     } else {

@@ -10,7 +10,6 @@ use crate::draw::{
 use crate::entity::chase::{diag_ok, roomin};
 use crate::entity::fight::{fight, swing};
 use crate::entity::monsters::save;
-use crate::entity::rndmove::rndmove;
 use crate::game;
 use crate::game::PLAYER;
 use crate::item::armor::rust_armor;
@@ -295,7 +294,14 @@ pub struct ThingMonster {
     pub t_type: u8,
     pub t_disguise: u8,
     pub t_oldch: u8,
+    /// Chase destination for non-hero targets (monster, item, or room gold);
+    /// `None` when the destination is the hero (see [`Self::t_dest_hero`]) or unset.
     pub t_dest: Option<NonNull<IVec2>>,
+    /// Whether the actor is chasing the hero rather than a stored [`Self::t_dest`].
+    ///
+    /// The hero's position is read live through [`crate::game::PLAYER`], so no
+    /// raw pointer to the hero is ever stored.
+    pub t_dest_hero: bool,
     pub t_flags: MonsterFlags,
     pub t_stats: Stats,
     pub t_room: Option<usize>,
@@ -387,6 +393,7 @@ impl Default for ThingMonster {
             t_disguise: 0,
             t_oldch: 0,
             t_dest: None,
+            t_dest_hero: false,
             t_flags: MonsterFlags::NONE,
             t_stats: Stats::default(),
             t_room: None,
@@ -463,9 +470,28 @@ pub unsafe fn thing_dest(tp: *mut Thing) -> *mut IVec2 {
 }
 
 /// Set the actor's chase destination from a raw pointer.
+///
+/// A non-null `value` clears the "chasing the hero" marker; a null value leaves
+/// the marker untouched so callers can clear [`set_thing_dest_hero`] separately.
 #[inline]
 pub unsafe fn set_thing_dest(tp: *mut Thing, value: *mut IVec2) {
     (*thing_t(tp)).t_dest = NonNull::new(value);
+    if !value.is_null() {
+        (*thing_t(tp)).t_dest_hero = false;
+    }
+}
+
+/// Whether the actor is chasing the hero.
+#[inline]
+pub unsafe fn is_thing_dest_hero(tp: *mut Thing) -> bool {
+    (*thing_t(tp)).t_dest_hero
+}
+
+/// Make the actor chase the hero (clearing any stored coordinate).
+#[inline]
+pub unsafe fn set_thing_dest_hero(tp: *mut Thing) {
+    (*thing_t(tp)).t_dest = None;
+    (*thing_t(tp)).t_dest_hero = true;
 }
 
 /// Read the actor's pack head as a raw pointer (null when empty).
@@ -528,23 +554,13 @@ pub unsafe fn thing_link(tp: *mut Thing) -> *mut ThingLink {
 }
 
 #[inline]
-unsafe fn hero_ptr() -> *mut IVec2 {
-    &mut (*thing_t(crate::game::player_ptr())).t_pos
-}
-
-#[inline]
-unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
-}
-
-#[inline]
 unsafe fn ring_is(ring: *mut Thing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
 #[inline]
-unsafe fn player_has(flag: MonsterFlags) -> bool {
-    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
+fn player_has(flag: MonsterFlags) -> bool {
+    PLAYER.has_flag(flag)
 }
 
 #[inline]
@@ -573,12 +589,12 @@ pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
 
 #[inline]
 unsafe fn move_stuff(next_pos: &mut IVec2, fl: c_char) {
-    let hero = hero_pos();
+    let hero = PLAYER.pos();
     output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
     if (fl as u8 & F_PASS as u8) != 0 && crate::game::is_door_at(oldpos.y, oldpos.x) {
         draw_leave_room(next_pos);
     }
-    *hero_ptr() = *next_pos;
+    PLAYER.set_pos(*next_pos);
 }
 
 /// Applies the trap at the given map cell, returning the trap kind that fired.
@@ -591,10 +607,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
     let trap =
         crate::level::with_current_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
 
-    if (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .contains(MonsterFlags::LEVIT)
-    {
+    if PLAYER.has_flag(MonsterFlags::LEVIT) {
         return TrapType::Rust;
     }
 
@@ -617,15 +630,13 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
         TrapType::Mystery => {}
         TrapType::Sleep => {
             no_command += spread(5);
-            (*thing_t(crate::game::player_ptr()))
-                .t_flags
-                .remove(MonsterFlags::RUN);
+            PLAYER.remove_flag(MonsterFlags::RUN);
         }
         TrapType::Arrow => {
-            let stats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
+            let stats = PLAYER.stats();
             if swing(stats.level - 1, stats.armor, 1) != 0 {
-                stats.hit_points -= roll(1, 6);
-                hit = if stats.hit_points <= 0 {
+                PLAYER.with_stats_mut(|stats| stats.hit_points -= roll(1, 6));
+                hit = if PLAYER.stats().hit_points <= 0 {
                     TrapHit::Kill
                 } else {
                     TrapHit::Hit
@@ -634,7 +645,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
                 let arrow = new_item();
                 init_weapon(arrow, ARROW);
                 (*thing_o(arrow)).o_count = 1;
-                (*thing_o(arrow)).o_pos = hero_pos();
+                (*thing_o(arrow)).o_pos = PLAYER.pos();
                 fall(arrow, false as c_uchar);
                 hit = TrapHit::Miss;
             }
@@ -643,12 +654,12 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
             teleport();
         }
         TrapType::Dart => {
-            let stats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
+            let stats = PLAYER.stats();
             if swing(stats.level + 1, stats.armor, 1) == 0 {
                 hit = TrapHit::Miss;
             } else {
-                stats.hit_points -= roll(1, 4);
-                if stats.hit_points <= 0 {
+                PLAYER.with_stats_mut(|stats| stats.hit_points -= roll(1, 4));
+                if PLAYER.stats().hit_points <= 0 {
                     hit = TrapHit::Kill;
                 } else {
                     if !ring_is(PLAYER.left_ring(), RingType::SustainStrength)
@@ -691,7 +702,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
 
 #[inline]
 unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
-    let current_room = (*thing_t(crate::game::player_ptr())).t_room;
+    let current_room = PLAYER.room();
     if passgo == 0
         || running == 0
         || current_room.is_none()
@@ -701,7 +712,7 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
         return false;
     }
 
-    let hero = hero_pos();
+    let hero = PLAYER.pos();
     if runch == b'h' as c_char || runch == b'l' as c_char {
         let b1 = hero.y != 1 && turn_ok(hero.y - 1, hero.x) != 0;
         let b2 = hero.y != GameConfig::SCREEN_LINES - 2 && turn_ok(hero.y + 1, hero.x) != 0;
@@ -759,7 +770,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     let mut next_pos = IVec2 { x: 0, y: 0 };
     let mut current_dy = dy;
     let mut current_dx = dx;
-    let hero = hero_pos();
+    let hero = PLAYER.pos();
     let mut ch: c_char;
     let fl: c_char;
 
@@ -771,7 +782,7 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
     }
 
     if player_has(MonsterFlags::HUH) && rnd(5) != 0 {
-        next_pos = *rndmove(crate::game::player_ptr());
+        next_pos = crate::entity::rndmove::rndmove_from(hero);
         if coord_eq(next_pos, hero) {
             after = false as c_uchar;
             running = false as c_uchar;
@@ -801,7 +812,8 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
         break;
     }
 
-    if diag_ok(hero_ptr(), &mut next_pos) == 0 {
+    let mut hero_copy = hero;
+    if diag_ok(&raw mut hero_copy, &mut next_pos) == 0 {
         after = false as c_uchar;
         running = false as c_uchar;
         return;
@@ -845,12 +857,13 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
             move_stuff(&mut next_pos, fl);
         }
         PASSAGE => {
-            (*thing_t(crate::game::player_ptr())).t_room = roomin(hero_ptr());
+            let mut hero_copy = hero;
+            PLAYER.set_room(roomin(&raw mut hero_copy));
             move_stuff(&mut next_pos, fl);
         }
         FLOOR => {
             if (fl as u8 & F_REAL as u8) == 0 {
-                be_trapped(hero_pos());
+                be_trapped(PLAYER.pos());
             }
             move_stuff(&mut next_pos, fl);
         }

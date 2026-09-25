@@ -95,8 +95,8 @@ unsafe fn on(thing: *mut Thing, flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
+fn player_has(flag: MonsterFlags) -> bool {
+    PLAYER.has_flag(flag)
 }
 
 #[inline]
@@ -115,10 +115,10 @@ unsafe fn first_is_vowel(s: *const c_char) -> bool {
 /// Returns whether the floor of the player's room should be displayed.
 #[no_mangle]
 pub unsafe fn show_floor() -> bool {
-    let player_room = (*thing_t(crate::game::player_ptr())).t_room;
+    let player_room = PLAYER.room();
     if crate::game::room_dark(player_room)
         && !crate::game::room_gone(player_room)
-        && !on(crate::game::player_ptr(), MonsterFlags::BLIND)
+        && !player_has(MonsterFlags::BLIND)
     {
         return see_floor;
     }
@@ -169,7 +169,7 @@ pub unsafe extern "C" fn eat() {
             CStr::from_ptr(fruit.as_ptr()).to_string_lossy()
         ));
     } else if rnd(100) > 70 {
-        (*thing_t(crate::game::player_ptr())).t_stats.experience += 1;
+        PLAYER.with_stats_mut(|stats| stats.experience += 1);
         msg_str("bummer, this food tastes awful");
     } else {
         msg_str("yum, that tasted good");
@@ -179,20 +179,23 @@ pub unsafe extern "C" fn eat() {
 
 #[no_mangle]
 pub unsafe extern "C" fn check_level() {
+    let experience = PLAYER.stats().experience;
     let mut i: c_int = 0;
     while e_levels[i as usize] != 0 {
-        if e_levels[i as usize] > (*thing_t(crate::game::player_ptr())).t_stats.experience {
+        if e_levels[i as usize] > experience {
             break;
         }
         i += 1;
     }
     i += 1;
-    let olevel = (*thing_t(crate::game::player_ptr())).t_stats.level;
-    (*thing_t(crate::game::player_ptr())).t_stats.level = i;
+    let olevel = PLAYER.level();
+    PLAYER.with_stats_mut(|stats| stats.level = i);
     if i > olevel {
         let add = roll(i - olevel, 10);
-        (*thing_t(crate::game::player_ptr())).t_stats.max_hit_points += add;
-        (*thing_t(crate::game::player_ptr())).t_stats.hit_points += add;
+        PLAYER.with_stats_mut(|stats| {
+            stats.max_hit_points += add;
+            stats.hit_points += add;
+        });
         msg_str(&format!("welcome to level {}", i));
     }
 }
@@ -202,15 +205,14 @@ pub unsafe extern "C" fn chg_str(amt: c_int) {
     if amt == 0 {
         return;
     }
-    let stats = &mut (*thing_t(crate::game::player_ptr())).t_stats;
-    let mut new_strength = stats.strength as c_int + amt;
+    let mut new_strength = PLAYER.stats().strength as c_int + amt;
     if new_strength < 3 {
         new_strength = 3;
     } else if new_strength > 31 {
         new_strength = 31;
     }
-    stats.strength = new_strength as c_uint;
-    let mut comp = stats.strength;
+    PLAYER.with_stats_mut(|stats| stats.strength = new_strength as c_uint);
+    let mut comp = PLAYER.stats().strength;
 
     if !PLAYER.left_ring().is_null() {
         let ring = PLAYER.left_ring();
@@ -243,19 +245,15 @@ pub unsafe extern "C" fn add_str(sp: *mut c_uint, amt: c_int) {
 
 #[no_mangle]
 pub unsafe fn add_haste(potion: bool) -> bool {
-    if on(crate::game::player_ptr(), MonsterFlags::HASTE) {
+    if player_has(MonsterFlags::HASTE) {
         no_command += rnd(8);
-        (*thing_t(crate::game::player_ptr()))
-            .t_flags
-            .remove(MonsterFlags::RUN | MonsterFlags::HASTE);
+        PLAYER.remove_flag(MonsterFlags::RUN | MonsterFlags::HASTE);
         extinguish(nohaste as *const c_void);
         msg_str("you faint from exhaustion");
         return false;
     }
 
-    (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .insert(MonsterFlags::HASTE);
+    PLAYER.add_flag(MonsterFlags::HASTE);
     if potion {
         fuse(nohaste as *const c_void, 0, rnd(4) + 4, AFTER);
     }
@@ -362,7 +360,7 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
         last_delt.x = delta.x;
     }
 
-    if on(crate::game::player_ptr(), MonsterFlags::HUH) && rnd(5) == 0 {
+    if player_has(MonsterFlags::HUH) && rnd(5) == 0 {
         loop {
             delta.y = rnd(3) - 1;
             delta.x = rnd(3) - 1;
@@ -423,7 +421,7 @@ pub unsafe extern "C" fn rnd_thing() -> c_char {
 
 #[no_mangle]
 pub unsafe extern "C" fn choose_str(ts: *const c_char, ns: *const c_char) -> *mut c_char {
-    if on(crate::game::player_ptr(), MonsterFlags::HALU) {
+    if player_has(MonsterFlags::HALU) {
         ts as *mut c_char
     } else {
         ns as *mut c_char

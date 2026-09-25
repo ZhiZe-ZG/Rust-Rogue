@@ -125,8 +125,8 @@ unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
 }
 
 #[inline]
-unsafe fn hero() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
+fn hero() -> IVec2 {
+    crate::game::PLAYER.pos()
 }
 
 #[inline]

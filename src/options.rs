@@ -60,11 +60,11 @@ unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
 }
 
 unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
+    crate::game::PLAYER.pos()
 }
 
 unsafe fn proom_ptr() -> Option<usize> {
-    (*thing_t(crate::game::player_ptr())).t_room
+    crate::game::PLAYER.room()
 }
 
 unsafe fn option_list() -> [OPTION; 10] {

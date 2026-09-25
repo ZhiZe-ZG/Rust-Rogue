@@ -90,10 +90,7 @@ unsafe fn copy_cstr(dst: *mut c_char, src: *const c_char, max: usize) {
 
 /// Checks the restored player state and reports whether the saved game is already dead.
 unsafe fn restore_player_dead() -> bool {
-    (*crate::entity::player::thing_t(crate::game::player_ptr()))
-        .t_stats
-        .hit_points
-        <= 0
+    crate::game::PLAYER.stats().hit_points <= 0
 }
 
 /// Implements the interactive save command flow and then delegates the actual write to save_file.

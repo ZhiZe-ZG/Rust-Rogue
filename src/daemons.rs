@@ -89,26 +89,26 @@ pub static mut between: c_int = 0;
 /// A healing daemon that restores hit points after rest.
 #[no_mangle]
 pub unsafe extern "C" fn doctor() {
-    let lv = (*thing_t(crate::game::player_ptr())).t_stats.level;
-    let ohp = (*thing_t(crate::game::player_ptr())).t_stats.hit_points;
+    let lv = PLAYER.level();
+    let ohp = PLAYER.stats().hit_points;
     quiet += 1;
     if lv < 8 {
         if quiet + (lv << 1) > 20 {
-            (*thing_t(crate::game::player_ptr())).t_stats.hit_points += 1;
+            PLAYER.with_stats_mut(|stats| stats.hit_points += 1);
         }
     } else if quiet >= 3 {
-        (*thing_t(crate::game::player_ptr())).t_stats.hit_points += rnd(lv - 7) + 1;
+        PLAYER.with_stats_mut(|stats| stats.hit_points += rnd(lv - 7) + 1);
     }
     if isring(PLAYER.left_ring(), RingType::Regeneration) {
-        (*thing_t(crate::game::player_ptr())).t_stats.hit_points += 1;
+        PLAYER.with_stats_mut(|stats| stats.hit_points += 1);
     }
     if isring(PLAYER.right_ring(), RingType::Regeneration) {
-        (*thing_t(crate::game::player_ptr())).t_stats.hit_points += 1;
+        PLAYER.with_stats_mut(|stats| stats.hit_points += 1);
     }
-    if ohp != (*thing_t(crate::game::player_ptr())).t_stats.hit_points {
-        let max = (*thing_t(crate::game::player_ptr())).t_stats.max_hit_points;
-        if (*thing_t(crate::game::player_ptr())).t_stats.hit_points > max {
-            (*thing_t(crate::game::player_ptr())).t_stats.hit_points = max;
+    if ohp != PLAYER.stats().hit_points {
+        let max = PLAYER.stats().max_hit_points;
+        if PLAYER.stats().hit_points > max {
+            PLAYER.with_stats_mut(|stats| stats.hit_points = max);
         }
         quiet = 0;
     }
@@ -140,9 +140,7 @@ pub unsafe extern "C" fn rollwand() {
 /// Release the poor player from his confusion.
 #[no_mangle]
 pub unsafe extern "C" fn unconfuse() {
-    (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .remove(MonsterFlags::HUH);
+    PLAYER.remove_flag(MonsterFlags::HUH);
     msg_str(&format!(
         "you feel less {} now",
         CStr::from_ptr(choose_str(c"trippy".as_ptr(), c"confused".as_ptr())).to_string_lossy()
@@ -167,26 +165,20 @@ pub unsafe extern "C" fn unsee() {
             }
         }
     }
-    (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .remove(MonsterFlags::CANSEE);
+    PLAYER.remove_flag(MonsterFlags::CANSEE);
 }
 
 /// sight:
 /// He gets his sight back.
 #[no_mangle]
 pub unsafe extern "C" fn sight() {
-    if (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .contains(MonsterFlags::BLIND)
-    {
+    if PLAYER.has_flag(MonsterFlags::BLIND) {
         extinguish(sight as *const c_void);
-        (*thing_t(crate::game::player_ptr()))
-            .t_flags
-            .remove(MonsterFlags::BLIND);
-        let proom = (*thing_t(crate::game::player_ptr())).t_room;
+        PLAYER.remove_flag(MonsterFlags::BLIND);
+        let proom = PLAYER.room();
         if !crate::game::room_gone(proom) {
-            enter_room(&mut (*thing_t(crate::game::player_ptr())).t_pos);
+            let mut pos = PLAYER.pos();
+            enter_room(&mut pos);
         }
         msg_str(
             &CStr::from_ptr(choose_str(
@@ -202,9 +194,7 @@ pub unsafe extern "C" fn sight() {
 /// End the hasting.
 #[no_mangle]
 pub unsafe extern "C" fn nohaste() {
-    (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .remove(MonsterFlags::HASTE);
+    PLAYER.remove_flag(MonsterFlags::HASTE);
     msg_str("you feel yourself slowing down");
 }
 
@@ -276,9 +266,7 @@ pub unsafe extern "C" fn stomach() {
     }
 
     if hungry_state != orig_hungry {
-        (*thing_t(crate::game::player_ptr()))
-            .t_flags
-            .remove(MonsterFlags::RUN);
+        PLAYER.remove_flag(MonsterFlags::RUN);
         running = false as c_uchar;
         to_death = false as c_uchar;
         count = 0;
@@ -289,22 +277,14 @@ pub unsafe extern "C" fn stomach() {
 /// Take the hero down off her acid trip.
 #[no_mangle]
 pub unsafe extern "C" fn come_down() {
-    if !(*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .contains(MonsterFlags::HALU)
-    {
+    if !PLAYER.has_flag(MonsterFlags::HALU) {
         return;
     }
 
     kill_daemon(visuals as *const c_void);
-    (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .remove(MonsterFlags::HALU);
+    PLAYER.remove_flag(MonsterFlags::HALU);
 
-    if (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .contains(MonsterFlags::BLIND)
-    {
+    if PLAYER.has_flag(MonsterFlags::BLIND) {
         return;
     }
 
@@ -322,18 +302,13 @@ pub unsafe extern "C" fn come_down() {
     }
 
     // Undo the monsters.
-    let seemonst = (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .contains(MonsterFlags::SEEMONST);
+    let seemonst = PLAYER.has_flag(MonsterFlags::SEEMONST);
+    let cansee_invis = PLAYER.has_flag(MonsterFlags::CANSEE);
     for id in MONSTER_LIST.ids() {
         if let Some(tp) = MONSTER_LIST.handle(id) {
             output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
             if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
-                if !(*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS)
-                    || (*thing_t(crate::game::player_ptr()))
-                        .t_flags
-                        .contains(MonsterFlags::CANSEE)
-                {
+                if !(*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS) || cansee_invis {
                     output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
                 }
                 // If invisible and player can't see invisible, skip (original code
@@ -346,7 +321,6 @@ pub unsafe extern "C" fn come_down() {
             }
         }
     }
-
     msg_str("Everything looks SO boring now.");
 }
 
@@ -378,9 +352,7 @@ pub unsafe extern "C" fn visuals() {
     }
 
     // Change the monsters.
-    let seemonst = (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .contains(MonsterFlags::SEEMONST);
+    let seemonst = PLAYER.has_flag(MonsterFlags::SEEMONST);
     for id in MONSTER_LIST.ids() {
         if let Some(tp) = MONSTER_LIST.handle(id) {
             output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
@@ -405,9 +377,7 @@ pub unsafe extern "C" fn visuals() {
 /// Land from a levitation potion.
 #[no_mangle]
 pub unsafe extern "C" fn land() {
-    (*thing_t(crate::game::player_ptr()))
-        .t_flags
-        .remove(MonsterFlags::LEVIT);
+    PLAYER.remove_flag(MonsterFlags::LEVIT);
     msg_str(
         &CStr::from_ptr(choose_str(
             c"bummer!  You've hit the ground".as_ptr(),

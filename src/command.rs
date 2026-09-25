@@ -200,18 +200,13 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 }
 
 #[inline]
-unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
+fn hero_pos() -> IVec2 {
+    crate::game::PLAYER.pos()
 }
 
 #[inline]
-unsafe fn hero_ptr() -> *mut IVec2 {
-    &mut (*thing_t(crate::game::player_ptr())).t_pos
-}
-
-#[inline]
-unsafe fn player_has(flag: MonsterFlags) -> bool {
-    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
+fn player_has(flag: MonsterFlags) -> bool {
+    crate::game::PLAYER.has_flag(flag)
 }
 
 #[inline]
@@ -316,8 +311,7 @@ pub unsafe extern "C" fn command() {
         if no_command != 0 {
             no_command -= 1;
             if no_command == 0 {
-                let tp = thing_t(crate::game::player_ptr());
-                (*tp).t_flags.insert(MonsterFlags::RUN);
+                crate::game::PLAYER.add_flag(MonsterFlags::RUN);
                 msg_str("you can move again");
             }
         } else {
@@ -491,7 +485,10 @@ pub unsafe extern "C" fn command() {
                                 }
                                 msg_str("no monster there");
                                 after = false as c_uchar;
-                            } else if diag_ok(hero_ptr(), &raw mut delta) != 0 {
+                            } else if {
+                                let mut hero_copy = hero_pos();
+                                diag_ok(&raw mut hero_copy, &raw mut delta) != 0
+                            } {
                                 to_death = true as c_uchar;
                                 max_hit = 0;
                                 (*thing_t(mp)).t_flags.insert(MonsterFlags::TARGET);
@@ -527,7 +524,7 @@ pub unsafe extern "C" fn command() {
                     }
                     b'i' => {
                         after = false as c_uchar;
-                        inventory(crate::entity::player::thing_pack(crate::game::player_ptr()), 0);
+                        inventory(crate::game::PLAYER.pack(), 0);
                     }
                     b'I' => {
                         after = false as c_uchar;

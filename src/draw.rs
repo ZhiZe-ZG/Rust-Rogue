@@ -89,13 +89,13 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 }
 
 #[inline]
-unsafe fn hero_pos() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
+fn hero_pos() -> IVec2 {
+    crate::game::PLAYER.pos()
 }
 
 #[inline]
-unsafe fn player_has(flag: MonsterFlags) -> bool {
-    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
+fn player_has(flag: MonsterFlags) -> bool {
+    crate::game::PLAYER.has_flag(flag)
 }
 
 #[inline]
@@ -371,7 +371,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
     if !(oldpos.x == hero.x && oldpos.y == hero.y) {
         erase_lamp(&raw mut oldpos, oldrp);
         oldpos = hero;
-        oldrp = (*thing_t(crate::game::player_ptr())).t_room;
+        oldrp = crate::game::PLAYER.room();
     }
 
     ey = hero.y + 1;
@@ -451,7 +451,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
             }
 
             output::move_cursor(IVec2::new(x, y));
-            let player_room = (*thing_t(crate::game::player_ptr())).t_room;
+            let player_room = crate::game::PLAYER.room();
             if player_room.is_some()
                 && crate::game::room_dark(player_room)
                 && !crate::game::room_gone(player_room)
@@ -599,7 +599,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut IVec2) {
         return;
     }
 
-    (*thing_t(crate::game::player_ptr())).t_room = rp;
+    crate::game::PLAYER.set_room(rp);
     door_open(rp);
 
     if crate::game::room_dark(rp) || player_has(MonsterFlags::BLIND) {
@@ -656,7 +656,7 @@ pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
         return;
     }
 
-    let rp = (*thing_t(crate::game::player_ptr())).t_room;
+    let rp = crate::game::PLAYER.room();
     if rp.is_none() {
         return;
     }
@@ -675,7 +675,7 @@ pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
 
     let pnum = (flat_at((*cp).y, (*cp).x) as u8 & F_PNUM as u8) as usize;
     if pnum < GameConfig::MAX_PASSAGES {
-        (*thing_t(crate::game::player_ptr())).t_room = None;
+        crate::game::PLAYER.set_room(None);
     }
 
     let (pos, size) = match crate::game::room_bounds(rp) {

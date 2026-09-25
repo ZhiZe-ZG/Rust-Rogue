@@ -83,23 +83,23 @@ unsafe fn alloc_item() -> *mut Thing {
 }
 
 unsafe fn pack_head() -> *mut Thing {
-    crate::entity::player::thing_pack(crate::game::player_ptr())
+    crate::game::PLAYER.pack()
 }
 
 unsafe fn set_pack_head(value: *mut Thing) {
-    crate::entity::player::set_thing_pack(crate::game::player_ptr(), value);
+    crate::game::PLAYER.set_pack(value);
 }
 
 unsafe fn hero_coord() -> IVec2 {
-    (*thing_t(crate::game::player_ptr())).t_pos
+    crate::game::PLAYER.pos()
 }
 
 unsafe fn proom() -> Option<usize> {
-    (*thing_t(crate::game::player_ptr())).t_room
+    crate::game::PLAYER.room()
 }
 
 unsafe fn player_has(flag: MonsterFlags) -> bool {
-    (*thing_t(crate::game::player_ptr())).t_flags.contains(flag)
+    crate::game::PLAYER.has_flag(flag)
 }
 
 unsafe fn floor_char_for_room() -> c_char {
@@ -234,10 +234,8 @@ pub unsafe extern "C" fn add_pack(obj: *mut Thing, silent: c_uchar) {
     for id in MONSTER_LIST.ids() {
         if let Some(op) = MONSTER_LIST.handle(id) {
             if crate::entity::player::thing_dest(op) == &raw mut (*thing_o(item)).o_pos {
-                crate::entity::player::set_thing_dest(
-                    op,
-                    &raw mut (*thing_t(crate::game::player_ptr())).t_pos,
-                );
+                let mut hero_pos = crate::game::PLAYER.pos();
+                crate::entity::player::set_thing_dest(op, &raw mut hero_pos);
             }
         }
     }
@@ -315,7 +313,7 @@ pub unsafe extern "C" fn leave_pack(
     } else {
         last_pick = std::ptr::null_mut();
         pack_used[(*thing_o(obj)).o_packch as usize - 'a' as usize] = false as c_uchar;
-        crate::item::thing_list::detach_pack(crate::game::player_ptr(), obj);
+        crate::item::thing_list::detach_pack_from_player(obj);
     }
     nobj
 }
