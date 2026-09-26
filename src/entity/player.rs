@@ -847,7 +847,6 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
 }
 
 /// Global "next hero position" used by the save/load subsystem (state.c).
-#[no_mangle]
 pub static mut nh: IVec2 = IVec2 { x: 0, y: 0 };
 
 /// do_run:

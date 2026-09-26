@@ -274,7 +274,7 @@ mod tests {
         assert_eq!(IDENT_ITEMS.len(), 18);
 
         let help = HELP_ENTRIES.iter().find(|entry| entry.ch == b'?').unwrap();
-        assert_eq!(help.desc.to_bytes(), b"\tprints help");
+        assert_eq!(help.desc.as_bytes(), b"\tprints help");
 
         let amulet = IDENT_ITEMS.iter().find(|item| item.ch == b',').unwrap();
         assert_eq!(amulet.desc, "the Amulet of Yendor");

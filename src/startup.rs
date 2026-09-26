@@ -264,22 +264,19 @@ pub unsafe fn my_exit(st: c_int) -> ! {
     std::process::exit(st);
 }
 
-/// The C-ABI entry point, kept for the (legacy) `make` link path.
-/// A native Rust `main` in `src/bin/rogue.rs` calls this with
-/// argv/envp built from `std::env::args_os`.
-pub unsafe extern "C" fn rogue_main(
-    mut argc: c_int,
-    mut argv: *mut *mut c_char,
-    envp: *mut *mut c_char,
-) -> c_int {
+/// The game entry point. `args` mirrors the process `argv` (including the
+/// program name at index 0); `src/bin/rogue.rs` calls this with
+/// `std::env::args()`.
+pub unsafe fn rogue_main(args: &[String]) -> c_int {
     md_init();
 
-    if master_mode_enabled != 0 && argc >= 2 && *arg_at(argv, 1) == 0 {
+    let mut argv: Vec<String> = args.to_vec();
+    if master_mode_enabled != 0 && argv.len() >= 2 && argv[1].is_empty() {
         wizard = 1;
         crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
-        argv = argv.add(1);
-        argc -= 1;
+        argv.remove(1);
     }
+    let argc = argv.len() as c_int;
 
     let home_dir = md_gethomedir();
     crate::globals::set_home(home_dir.clone());
@@ -312,13 +309,13 @@ pub unsafe extern "C" fn rogue_main(
     md_normaluser();
 
     if argc == 2 {
-        let argument = CStr::from_ptr(arg_at(argv, 1)).to_bytes();
-        if argument == b"-s" {
+        let argument = argv[1].as_str();
+        if argument == "-s" {
             noscore = 1;
             score(0, -1, 0);
             return 0;
         }
-        if argument == b"-d" {
+        if argument == "-d" {
             dnum = rnd(100);
             while dnum > 1 {
                 dnum -= 1;
@@ -333,9 +330,8 @@ pub unsafe extern "C" fn rogue_main(
         }
     }
 
-    let _ = envp;
     init_check();
-    if argc == 2 && restore(arg_at(argv, 1)) == 0 {
+    if argc == 2 && restore(&argv[1]) == 0 {
         my_exit(1);
     }
 

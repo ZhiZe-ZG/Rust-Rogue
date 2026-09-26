@@ -241,7 +241,7 @@ pub unsafe fn md_normaluser() {
         let gerr = libc::setregid(realgid, realgid) != 0;
         if gerr {
             eprintln!("Could not drop setgid privileges.  Aborting.");
-            libc::exit(1);
+            std::process::exit(1);
         }
 
         // Drop user privileges (one call, R/E/S all set to real uid).
@@ -251,7 +251,7 @@ pub unsafe fn md_normaluser() {
         let uerr = libc::setreuid(realuid, realuid) != 0;
         if uerr {
             eprintln!("Could not drop setuid privileges.  Aborting.");
-            libc::exit(1);
+            std::process::exit(1);
         }
     }
 }
@@ -274,7 +274,7 @@ pub unsafe fn md_getuid() -> c_uint {
 pub unsafe fn md_getpid() -> c_int {
     #[cfg(unix)]
     {
-        libc::getpid() as c_int
+std::process::id() as c_int
     }
     #[cfg(not(unix))]
     {
@@ -341,7 +341,7 @@ pub unsafe fn md_gethomedir() -> String {
 pub unsafe fn md_sleep(s: c_int) {
     #[cfg(unix)]
     {
-        libc::sleep(s as c_uint);
+        std::thread::sleep(std::time::Duration::from_secs(s as u64));
     }
 }
 
@@ -377,7 +377,7 @@ pub unsafe fn md_shellescape() -> c_int {
         let sh = md_getshell();
         let mut pid = libc::fork();
         while pid < 0 {
-            libc::sleep(1);
+            std::thread::sleep(std::time::Duration::from_secs(1));
             pid = libc::fork();
         }
 

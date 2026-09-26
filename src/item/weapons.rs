@@ -98,7 +98,6 @@ static INIT_DAM: [InitWeap; MAXWEAPONS] = [
     },
 ];
 
-#[no_mangle]
 pub static mut group: c_int = 2;
 
 static mut FALL_POS: IVec2 = IVec2 { x: 0, y: 0 };

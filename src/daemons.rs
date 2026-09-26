@@ -68,7 +68,6 @@ unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
 
 /// Counter used by rollwand() to pace wandering-monster checks.
 /// Originally defined in daemons.c as `int between = 0;`.
-#[no_mangle]
 pub static mut between: c_int = 0;
 
 // ─── Daemon / fuse callbacks ──────────────────────────────────────────────────

@@ -56,159 +56,88 @@ pub type CThing = PlayerCThing;
 pub type CThingMonster = crate::entity::player::ThingMonster;
 pub type CThingObject = crate::entity::player::ThingObject;
 
-#[no_mangle]
 pub static mut allscore: c_uchar = 1; // ALLSCORES is enabled in the standard build
-#[no_mangle]
 pub static mut after: c_uchar = 0;
-#[no_mangle]
 pub static mut again: c_uchar = 0;
-#[no_mangle]
 pub static mut noscore: c_int = 0;
-#[no_mangle]
 pub static mut seenstairs: c_uchar = 0;
-#[no_mangle]
 pub static mut amulet: c_uchar = 0;
-#[no_mangle]
 pub static mut door_stop: c_uchar = 0;
-#[no_mangle]
 pub static mut fight_flush: c_uchar = 0;
-#[no_mangle]
 pub static mut firstmove: c_uchar = 0;
-#[no_mangle]
 pub static mut got_ltc: c_uchar = 0;
-#[no_mangle]
 pub static mut has_hit: c_uchar = 0;
-#[no_mangle]
 pub static mut in_shell: c_uchar = 0;
-#[no_mangle]
 pub static mut inv_describe: c_uchar = 1;
-#[no_mangle]
 pub static mut jump: c_uchar = 0;
-#[no_mangle]
 pub static mut kamikaze: c_uchar = 0;
-#[no_mangle]
 pub static mut lower_msg: c_uchar = 0;
-#[no_mangle]
 pub static mut move_on: c_uchar = 0;
-#[no_mangle]
 pub static mut msg_esc: c_uchar = 0;
-#[no_mangle]
 pub static mut passgo: c_uchar = 0;
-#[no_mangle]
 pub static mut playing: c_uchar = 1;
-#[no_mangle]
 pub static mut q_comm: c_uchar = 0;
-#[no_mangle]
 pub static mut running: c_uchar = 0;
-#[no_mangle]
 pub static mut save_msg: c_uchar = 1;
-#[no_mangle]
 pub static mut see_floor: c_uchar = 1;
-#[no_mangle]
 pub static mut stat_msg: c_uchar = 0;
-#[no_mangle]
 pub static mut terse: c_uchar = 0;
-#[no_mangle]
 pub static mut to_death: c_uchar = 0;
-#[no_mangle]
 pub static mut tombstone: c_uchar = 1;
-#[no_mangle]
 pub static master_mode_enabled: c_uchar = 1;
-#[no_mangle]
 pub static mut wizard: c_int = 0;
-#[no_mangle]
 pub static mut pack_used: [c_uchar; 26] = [0; 26];
 
-#[no_mangle]
 pub static mut dir_ch: c_char = 0;
 /// Per-item colour names (`char *p_colors[]`), now Rust string slices.
-#[no_mangle]
 pub static mut p_colors: [&'static str; MAXPOTIONS] = [""; MAXPOTIONS];
 /// Per-ring stone names (`char *r_stones[]`), now Rust string slices.
-#[no_mangle]
 pub static mut r_stones: [&'static str; MAXRINGS] = [""; MAXRINGS];
-#[no_mangle]
 pub static mut runch: c_char = 0;
-#[no_mangle]
 pub static mut take: c_char = 0;
 /// Wand/staff material names (`char *ws_made[]`), now Rust string slices.
-#[no_mangle]
 pub static mut ws_made: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
 /// Wand/staff kind names (`char *ws_type[]`), now Rust string slices.
-#[no_mangle]
 pub static mut ws_type: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
-#[no_mangle]
 pub static mut orig_dsusp: c_int = 0;
-#[no_mangle]
 pub static mut l_last_comm: c_char = 0;
-#[no_mangle]
 pub static mut l_last_dir: c_char = 0;
-#[no_mangle]
 pub static mut last_comm: c_char = 0;
-#[no_mangle]
 pub static mut last_dir: c_char = 0;
-#[no_mangle]
 pub static mut numscores: c_uint = 10; // NUMSCORES from config.h
 /// The number label for the scoreboard (`NUMNAME` from config.h).
 pub const NUMNAME: &str = "Ten";
-#[no_mangle]
 pub static mut n_objs: c_int = 0;
-#[no_mangle]
 pub static mut ntraps: c_int = 0;
-#[no_mangle]
 pub static mut hungry_state: c_int = 0;
-#[no_mangle]
 pub static mut inpack: c_int = 0;
-#[no_mangle]
 pub static mut inv_type: c_int = 0;
-#[no_mangle]
 pub static mut max_hit: c_int = 0;
-#[no_mangle]
 pub static mut max_level: c_int = 0;
-#[no_mangle]
 pub static mut mpos: c_int = 0;
-#[no_mangle]
 pub static mut no_food: c_int = 0;
-#[no_mangle]
 pub static mut a_class: [c_int; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
-#[no_mangle]
 pub static mut count: c_int = 0;
 /// The open score file, or `None` when it is not open.
-#[no_mangle]
 pub static mut scoreboard: Option<std::fs::File> = None;
-#[no_mangle]
 pub static mut food_left: c_int = 0;
-#[no_mangle]
 pub static mut lastscore: c_int = -1;
-#[no_mangle]
 pub static mut no_command: c_int = 0;
-#[no_mangle]
 pub static mut no_move: c_int = 0;
-#[no_mangle]
 pub static mut purse: c_int = 0;
-#[no_mangle]
 pub static mut quiet: c_int = 0;
-#[no_mangle]
 pub static mut vf_hit: c_int = 0;
-#[no_mangle]
 pub static mut dnum: c_int = 0;
-#[no_mangle]
 pub static mut seed: c_int = 0;
-#[no_mangle]
 pub static mut e_levels: [c_int; 21] = [
     10, 20, 40, 80, 160, 320, 640, 1300, 2600, 5200, 13000, 26000, 50000, 100000, 200000, 400000,
     800000, 2000000, 4000000, 8000000, 0,
 ];
-#[no_mangle]
 pub static mut delta: IVec2 = IVec2 { x: 0, y: 0 };
-#[no_mangle]
 pub static mut oldpos: IVec2 = IVec2 { x: 0, y: 0 };
-#[no_mangle]
 pub static mut l_last_pick: *mut CThing = std::ptr::null_mut();
-#[no_mangle]
 pub static mut last_pick: *mut CThing = std::ptr::null_mut();
 
-#[no_mangle]
 pub static mut max_stats: Stats = Stats {
     strength: 16,
     experience: 0,
@@ -218,9 +147,7 @@ pub static mut max_stats: Stats = Stats {
     damage: dmg_string("1x4"),
     max_hit_points: 12,
 };
-#[no_mangle]
 pub static mut oldrp: Option<usize> = None;
-#[no_mangle]
 pub static mut monsters: [CMonster; MAXMONSTERS] = [
     CMonster {
         m_name: "aquator",
@@ -588,7 +515,6 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
     },
 ];
 
-#[no_mangle]
 pub static mut things: [CObjInfo; NUMTHINGS] = [
     CObjInfo {
         oi_name: "potion",
@@ -641,7 +567,6 @@ pub static mut things: [CObjInfo; NUMTHINGS] = [
     },
 ];
 
-#[no_mangle]
 pub static mut arm_info: [CObjInfo; MAXARMORS] = [
     CObjInfo {
         oi_name: "leather armor",
@@ -701,7 +626,6 @@ pub static mut arm_info: [CObjInfo; MAXARMORS] = [
     },
 ];
 
-#[no_mangle]
 pub static mut pot_info: [CObjInfo; MAXPOTIONS] = [
     CObjInfo {
         oi_name: "confusion",
@@ -803,7 +727,6 @@ pub static mut pot_info: [CObjInfo; MAXPOTIONS] = [
     },
 ];
 
-#[no_mangle]
 pub static mut ring_info: [CObjInfo; MAXRINGS] = [
     CObjInfo {
         oi_name: "protection",
@@ -905,7 +828,6 @@ pub static mut ring_info: [CObjInfo; MAXRINGS] = [
     },
 ];
 
-#[no_mangle]
 pub static mut scr_info: [CObjInfo; MAXSCROLLS] = [
     CObjInfo {
         oi_name: "monster confusion",
@@ -1035,7 +957,6 @@ pub static mut scr_info: [CObjInfo; MAXSCROLLS] = [
     },
 ];
 
-#[no_mangle]
 pub static mut weap_info: [CObjInfo; MAXWEAPONS + 1] = [
     CObjInfo {
         oi_name: "mace",
@@ -1109,7 +1030,6 @@ pub static mut weap_info: [CObjInfo; MAXWEAPONS + 1] = [
     },
 ];
 
-#[no_mangle]
 pub static mut ws_info: [CObjInfo; MAXSTICKS] = [
     CObjInfo {
         oi_name: "light",

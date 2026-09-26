@@ -65,7 +65,6 @@ const NWOOD: usize = 33;
 const NMETAL: usize = 22;
 
 /// Ring-stone table.  Exported as `STONE stones[]` for legacy consumers.
-#[no_mangle]
 pub static stones: [CStone; NSTONES] = [
     CStone { st_name: "agate", st_value: 25 },
     CStone { st_name: "alexandrite", st_value: 40 },
@@ -96,7 +95,6 @@ pub static stones: [CStone; NSTONES] = [
 ];
 
 /// Count of entries in `stones`.  Exported as `int cNSTONES` for C.
-#[no_mangle]
 pub static mut cNSTONES: c_int = NSTONES as c_int;
 
 /// Wand / staff wood materials.  Exported as `char *wood[]` for C.

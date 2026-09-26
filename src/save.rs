@@ -142,22 +142,13 @@ pub unsafe fn save_file(savef: &mut File) {
 }
 
 /// Restores a saved game from disk, rebuilds runtime state, and resumes the main game loop.
-pub unsafe fn restore(file: *mut std::os::raw::c_char) -> c_uchar {
+pub unsafe fn restore(file: &str) -> c_uchar {
     let mut in_buf = [0u8; 1024];
     let mut lines: c_int = 0;
     let mut cols: c_int = 0;
 
-    // The caller passes a file argument (typically "-r"); interpret it as Rust text.
-    let mut file_name = if file.is_null() {
-        String::new()
-    } else {
-        let mut len = 0usize;
-        let p = file as *const u8;
-        while *p.add(len) != 0 {
-            len += 1;
-        }
-        String::from_utf8_lossy(std::slice::from_raw_parts(p, len)).into_owned()
-    };
+    // The caller passes a file argument (typically "-r").
+    let mut file_name = file.to_string();
 
     if file_name == "-r" {
         file_name = crate::globals::file_name();
