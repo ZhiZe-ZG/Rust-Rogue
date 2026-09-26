@@ -2,11 +2,11 @@
 //!
 //! Ported from `src/c/potions.c` to Rust.
 use crate::rnd::rnd;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_short, c_uchar, c_void};
 use std::ptr;
 
 use crate::daemon::{fuse, lengthen, start_daemon, Daemon};
-use crate::daemons::{come_down, land, sight, unconfuse, unsee, visuals};
+use crate::daemons::{come_down, sight};
 use crate::draw::look;
 use crate::ffi::snprintf;
 
@@ -20,7 +20,7 @@ use crate::item::rings::RingType;
 use crate::item::thing_list::discard;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
 use crate::startup::roll;
-use crate::ui::output::{self, endmsg, msg_str, show_win, status};
+use crate::ui::output::{self, msg_str, show_win, status};
 use crate::ui::Window;
 use glam::IVec2;
 use std::ffi::CStr;

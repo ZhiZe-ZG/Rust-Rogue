@@ -15,7 +15,7 @@ use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, msg_str};
 use glam::IVec2;
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game::MONSTER_LIST;

@@ -2,7 +2,7 @@
 //!
 //! Ported from `src/c/pack.c` to Rust.
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game::MONSTER_LIST;

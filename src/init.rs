@@ -15,7 +15,7 @@ use crate::globals::{
 };
 use crate::rnd::rnd;
 
-use std::os::raw::{c_char, c_int, c_uchar, c_void};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::item::pack::add_pack;
@@ -47,8 +47,6 @@ const RING_MAIL: c_int = 1;
 const MACE: c_int = 0;
 const BOW: c_int = 2;
 const ARROW: c_int = 3;
-
-use std::os::raw::c_short;
 
 /// Matches the C `STONE` typedef used for ring stone names and values.
 #[repr(C)]

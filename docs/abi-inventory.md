@@ -59,6 +59,23 @@ split into reviewable slices:
   arena and intrusive `l_next`/`l_prev` ordering, and migrating callers off raw
   `*mut Thing` handles.
 
+### Stage 5 progress (dead-code reduction)
+
+| Command | After Stage 1 | After Stage 5 slice |
+| --- | --- | --- |
+| `cargo check --all-targets` warnings | 434 | **411** |
+| `cargo test --all-targets` | 41 passed | **41 passed** |
+| `cargo clippy --all-targets` errors | 0 | **0** |
+| `cargo fmt --check` diffs | 0 | **0** |
+
+Landed: removed the compiler-verified dead imports (unused `c_uint`/`c_void`/
+`c_short`/`c_char`, unused `CObjInfo`/`Stats`/`ThingMonster`/`spread`, and the
+now-unused daemon-fn/`cansee`/`runto`/`set_mname`/`endmsg` imports) across
+`command`, `daemons`, `entity/fight`, `entity/monsters`, `init`, `item/{armor,
+pack, potions, scrolls, sticks, thing_list, weapons}`, `machdep`, `misc`,
+`options`, `save`, `startup`, and `wizard`. Only imports the compiler flagged as
+unused were removed; no behavior changed.
+
 ### `cargo check` warning categories (top groups)
 
 | Count | Warning | Owning stage |

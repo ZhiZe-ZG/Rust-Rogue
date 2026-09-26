@@ -2,8 +2,8 @@
 //!
 //! Ported from `src/c/scrolls.c` to Rust.
 use crate::rnd::rnd;
-use std::ffi::{c_void, CStr};
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::config::GameConfig;
 use crate::draw::{look, map_cell_reveal};

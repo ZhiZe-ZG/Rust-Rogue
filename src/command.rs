@@ -17,7 +17,7 @@ use crate::entity::player::{
 };
 use crate::ffi::strcpy;
 use crate::game::PLAYER;
-use crate::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
+use crate::globals::{pot_info, ring_info, scr_info, ws_info};
 use crate::help::{help, identify};
 use crate::item::armor::{take_off, wear};
 use crate::item::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
@@ -41,7 +41,7 @@ use crate::ui::Window;
 use crate::wizard::{create_obj, show_map, teleport, whatis};
 use glam::IVec2;
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

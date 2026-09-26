@@ -2,7 +2,7 @@
 //!
 //! Ported from `src/c/options.c` to Rust.
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_void};
 
 use crate::draw::{erase_lamp, look};
 use crate::entity::player::{Thing, ThingMonster};

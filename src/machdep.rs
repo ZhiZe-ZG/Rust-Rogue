@@ -9,7 +9,7 @@
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_uchar, c_void};
+use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 

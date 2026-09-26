@@ -10,7 +10,7 @@ use crate::item::things::{dropcheck, inv_name};
 use crate::misc::spread;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
+use std::os::raw::{c_int, c_uchar};
 
 const ARMOR: c_int = ']' as c_int;
 

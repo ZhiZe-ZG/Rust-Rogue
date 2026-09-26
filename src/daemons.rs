@@ -14,7 +14,7 @@ use glam::IVec2;
 
 use crate::ui::output::{addmsg_str, msg_str};
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon, Daemon};
 use crate::draw::enter_room;

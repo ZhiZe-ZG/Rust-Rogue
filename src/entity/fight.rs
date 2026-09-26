@@ -17,11 +17,11 @@ use crate::init::pick_color;
 use crate::item::armor::rust_armor;
 use crate::item::pack::leave_pack;
 use crate::item::potions::is_magic;
-use crate::misc::{check_level, chg_str, choose_str, spread};
+use crate::misc::{check_level, chg_str, choose_str};
 use crate::rip::death;
 use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::ffi::{atoi, isupper, sprintf, strchr, strcpy, toascii, toupper};

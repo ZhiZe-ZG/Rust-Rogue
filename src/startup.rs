@@ -2,7 +2,7 @@
 
 use std::ffi::{CStr, CString};
 use std::io::Write;
-use std::os::raw::{c_char, c_int, c_long, c_uchar, c_void};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::command::command;
 use crate::config::GameConfig;

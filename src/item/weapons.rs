@@ -111,8 +111,6 @@ unsafe extern "C" {
     static mut has_hit: c_uchar;
 }
 
-use std::os::raw::{c_short, c_uint};
-
 #[inline]
 unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)

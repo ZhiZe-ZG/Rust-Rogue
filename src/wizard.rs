@@ -3,7 +3,7 @@
 //! Ported from `src/c/wizard.c` to Rust.
 use crate::rnd::rnd;
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr;
 
 use crate::config::GameConfig;

@@ -19,8 +19,8 @@ use crate::ui::output;
 use crate::ui::output::{addmsg_str, msg_str};
 use crate::ui::runtime;
 use glam::IVec2;
-use std::ffi::{c_void, CStr};
-use std::os::raw::{c_char, c_int, c_uchar};
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int};
 
 use crate::globals::monsters;
 

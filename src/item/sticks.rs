@@ -1,10 +1,8 @@
 //! Wands and staves (the legacy `sticks`): zapping and their bolt effects.
 //!
 //! Ported from `src/c/sticks.c` to Rust.
-use crate::entity::chase::{cansee, runto};
-use crate::entity::fight::set_mname;
 use crate::entity::monsters::{save, save_throw};
-use crate::entity::player::{ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
+use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
 use crate::globals::ws_info;
 use crate::item::pack::get_item;
@@ -13,7 +11,7 @@ use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
 use crate::ui::output;
-use crate::ui::output::{endmsg, msg_str};
+use crate::ui::output::msg_str;
 use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
