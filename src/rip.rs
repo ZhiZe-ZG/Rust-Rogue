@@ -5,7 +5,7 @@ use std::ffi::{CStr, CString};
 use std::io::Write;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_ushort};
 
-use crate::globals::{allscore, monsters, numscores, CMonster, Numname};
+use crate::globals::{allscore, monsters, numscores, CMonster, NUMNAME};
 use crate::item::things::inv_name;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
 use crate::mdport::md_getuid;
@@ -53,9 +53,7 @@ unsafe extern "C" {
     static mut noscore: c_int;
     static mut pack: *mut crate::entity::player::Thing;
     static mut purse: c_int;
-    static mut prbuf: [c_char; MAXSTR];
     static mut tombstone: c_uchar;
-    static mut whoami: [c_char; MAXSTR];
     static mut wizard: c_int;
     static mut scoreboard: *mut crate::ffi::CFile;
 }
@@ -262,9 +260,7 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
                 slot -= 1;
             }
 
-            let mut name = CStr::from_ptr(std::ptr::addr_of!(whoami).cast::<c_char>())
-                .to_string_lossy()
-                .to_string();
+            let mut name = crate::globals::whoami();
             if name.len() >= MAXSTR {
                 name.truncate(MAXSTR - 1);
             }
@@ -293,8 +289,7 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
     }
 
     let mode = if allscore != 0 { "Scores" } else { "Rogueists" };
-    let numname = CStr::from_ptr(Numname).to_string_lossy();
-    println!("Top {} {}:", numname, mode);
+    println!("Top {} {}:", NUMNAME, mode);
     println!("   Score Name");
 
     for (idx, entry) in top_ten.iter().enumerate() {
@@ -409,11 +404,10 @@ pub unsafe extern "C" fn death(monst: c_char) {
                 output::write_text_at(IVec2::new(33, 16), &phrase);
             }
         }
-        let hero_name =
-            CStr::from_ptr(std::ptr::addr_of!(whoami).cast::<c_char>()).to_string_lossy();
+        let hero_name = crate::globals::whoami();
         output::write_text_at(
-            IVec2::new(center_string(hero_name.as_ref()) as c_int, 14),
-            hero_name.as_ref(),
+            IVec2::new(center_string(&hero_name) as c_int, 14),
+            &hero_name,
         );
         let score_text = format!("{} Au", std::ptr::addr_of!(purse).read());
         output::move_cursor(IVec2::new(center_string(&score_text) as c_int, 15));
@@ -471,7 +465,7 @@ pub unsafe extern "C" fn total_winner() {
             worth = 0;
         }
         let packch = (*thing_o(obj)).o_packch as c_char;
-        let item_name = CStr::from_ptr(inv_name(obj, 0)).to_string_lossy();
+        let item_name = inv_name(obj, 0);
         let line = format!("{} ) {:5}  {}\n", packch, worth, item_name);
         output::write_text(&line);
         purse += worth;

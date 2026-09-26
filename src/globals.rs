@@ -5,24 +5,23 @@
 use crate::entity::player::Thing as PlayerCThing;
 use crate::entity::stats::Stats;
 use glam::IVec2;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+use std::os::raw::{c_int, c_uchar, c_uint};
 use std::sync::{Mutex, MutexGuard};
 
 const MAXSTR: usize = 1024;
 
-const fn fill_c_string<const N: usize>(s: &str) -> [c_char; N] {
-    let bytes = s.as_bytes();
-    let mut out = [0 as c_char; N];
+const fn fill_bytes<const N: usize>(s: &[u8]) -> [u8; N] {
+    let mut out = [0u8; N];
     let mut i = 0usize;
-    while i < bytes.len() && i < N {
-        out[i] = bytes[i] as c_char;
+    while i < s.len() && i < N {
+        out[i] = s[i];
         i += 1;
     }
     out
 }
 
-const fn dmg_string(s: &str) -> [c_char; 13] {
-    fill_c_string::<13>(s)
+const fn dmg_string(s: &str) -> [u8; 13] {
+    fill_bytes::<13>(s.as_bytes())
 }
 
 const MAXPOTIONS: usize = 14;
@@ -121,45 +120,37 @@ pub static mut wizard: c_int = 0;
 pub static mut pack_used: [c_uchar; 26] = [0; 26];
 
 #[no_mangle]
-pub static mut dir_ch: c_char = 0;
+pub static mut dir_ch: u8 = 0;
+/// Per-item colour names (`char *p_colors[]`), now Rust string slices.
 #[no_mangle]
-pub static mut file_name: [c_char; MAXSTR] = [0; MAXSTR];
+pub static mut p_colors: [&'static str; MAXPOTIONS] = [""; MAXPOTIONS];
+/// Per-ring stone names (`char *r_stones[]`), now Rust string slices.
 #[no_mangle]
-pub static mut huh: [c_char; MAXSTR] = [0; MAXSTR];
+pub static mut r_stones: [&'static str; MAXRINGS] = [""; MAXRINGS];
 #[no_mangle]
-pub static mut p_colors: [*mut c_char; MAXPOTIONS] = [std::ptr::null_mut(); MAXPOTIONS];
+pub static mut runch: u8 = 0;
 #[no_mangle]
-pub static mut prbuf: [c_char; 2 * MAXSTR] = [0; 2 * MAXSTR];
+pub static mut take: u8 = 0;
+/// Wand/staff material names (`char *ws_made[]`), now Rust string slices.
 #[no_mangle]
-pub static mut r_stones: [*mut c_char; MAXRINGS] = [std::ptr::null_mut(); MAXRINGS];
+pub static mut ws_made: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
+/// Wand/staff kind names (`char *ws_type[]`), now Rust string slices.
 #[no_mangle]
-pub static mut runch: c_char = 0;
-#[no_mangle]
-pub static mut take: c_char = 0;
-#[no_mangle]
-pub static mut whoami: [c_char; MAXSTR] = [0; MAXSTR];
-#[no_mangle]
-pub static mut ws_made: [*mut c_char; MAXSTICKS] = [std::ptr::null_mut(); MAXSTICKS];
-#[no_mangle]
-pub static mut ws_type: [*mut c_char; MAXSTICKS] = [std::ptr::null_mut(); MAXSTICKS];
+pub static mut ws_type: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
 #[no_mangle]
 pub static mut orig_dsusp: c_int = 0;
 #[no_mangle]
-pub static mut fruit: [c_char; MAXSTR] = fill_c_string("slime-mold");
+pub static mut l_last_comm: u8 = 0;
 #[no_mangle]
-pub static mut home: [c_char; MAXSTR] = [0; MAXSTR];
+pub static mut l_last_dir: u8 = 0;
 #[no_mangle]
-pub static mut l_last_comm: c_char = 0;
+pub static mut last_comm: u8 = 0;
 #[no_mangle]
-pub static mut l_last_dir: c_char = 0;
-#[no_mangle]
-pub static mut last_comm: c_char = 0;
-#[no_mangle]
-pub static mut last_dir: c_char = 0;
+pub static mut last_dir: u8 = 0;
 #[no_mangle]
 pub static mut numscores: c_uint = 10; // NUMSCORES from config.h
-#[no_mangle]
-pub static mut Numname: *mut c_char = b"Ten\0".as_ptr() as *mut c_char; // NUMNAME from config.h
+/// The number label for the scoreboard (`NUMNAME` from config.h).
+pub const NUMNAME: &str = "Ten";
 #[no_mangle]
 pub static mut n_objs: c_int = 0;
 #[no_mangle]
@@ -1282,19 +1273,87 @@ pub fn get_max_stats() -> Stats {
     unsafe { max_stats }
 }
 
-/// Copy `text` into the `huh` message-history buffer (NUL-terminated, capped at
-/// `MAXSTR - 1` bytes).
-pub fn set_huh_string(text: &str) {
-    unsafe {
-        let bytes = text.as_bytes();
-        let copy_len = bytes.len().min(MAXSTR - 1);
-        std::ptr::copy_nonoverlapping(
-            bytes.as_ptr().cast::<c_char>(),
-            std::ptr::addr_of_mut!(huh).cast::<c_char>(),
-            copy_len,
-        );
-        huh[copy_len] = 0;
+// ─── Rust-owned string globals ───────────────────────────────────────────────
+//
+// `whoami`, `fruit`, `home`, `file_name`, `huh` and the shared `prbuf` scratch
+// buffer were previously `char[N]` buffers written through `strcpy`/`CStr`.
+// They are now owned Rust `String`s behind a `Mutex`, read/written through the
+// accessors below.
+
+static WHOAMI: Mutex<String> = Mutex::new(String::new());
+static FRUIT: Mutex<String> = Mutex::new(String::new());
+static HOME: Mutex<String> = Mutex::new(String::new());
+static FILE_NAME: Mutex<String> = Mutex::new(String::new());
+static HUH: Mutex<String> = Mutex::new(String::new());
+static PRBUF: Mutex<String> = Mutex::new(String::new());
+
+/// The player's name (`char whoami[]`). Empty until set.
+pub fn whoami() -> String {
+    lock(&WHOAMI).clone()
+}
+
+/// Replace the player's name.
+pub fn set_whoami(name: String) {
+    *lock(&WHOAMI) = name;
+}
+
+/// Run `op` with the player's name borrowed.
+pub fn with_whoami<R>(op: impl FnOnce(&str) -> R) -> R {
+    op(&lock(&WHOAMI))
+}
+
+/// The player's fruit name (`char fruit[]`); defaults to `"slime-mold"`.
+pub fn fruit() -> String {
+    let mut value = lock(&FRUIT);
+    if value.is_empty() {
+        *value = "slime-mold".to_owned();
     }
+    value.clone()
+}
+
+/// Replace the player's fruit name.
+pub fn set_fruit(name: String) {
+    *lock(&FRUIT) = name;
+}
+
+/// The player's home directory (`char home[]`). Empty until set.
+pub fn get_home() -> String {
+    lock(&HOME).clone()
+}
+
+/// Replace the home directory.
+pub fn set_home(value: String) {
+    *lock(&HOME) = value;
+}
+
+/// The current save-file name (`char file_name[]`). Empty until set.
+pub fn file_name() -> String {
+    lock(&FILE_NAME).clone()
+}
+
+/// Replace the save-file name.
+pub fn set_file_name(value: String) {
+    *lock(&FILE_NAME) = value;
+}
+
+/// The message-history buffer (`char huh[]`).
+pub fn huh_string() -> String {
+    lock(&HUH).clone()
+}
+
+/// Copy `text` into the message-history buffer.
+pub fn set_huh_string(text: &str) {
+    *lock(&HUH) = text.to_owned();
+}
+
+/// The shared scratch string buffer (`char prbuf[]`).
+pub fn prbuf() -> String {
+    lock(&PRBUF).clone()
+}
+
+/// Replace the shared scratch string buffer.
+pub fn set_prbuf(value: String) {
+    *lock(&PRBUF) = value;
 }
 
 // ─── Rust-owned string tables ────────────────────────────────────────────────

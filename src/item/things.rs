@@ -42,7 +42,6 @@ unsafe extern "C" {
     static mut a_class: [c_int; 26];
     static mut inv_describe: c_uchar;
     static mut no_food: c_int;
-    static mut prbuf: [c_char; MAXSTR];
 }
 
 #[inline]
@@ -80,16 +79,8 @@ unsafe fn item_name(typ: c_int, which: c_int) -> &'static str {
     }
 }
 
-unsafe fn copy_to_prbuf(text: &str) -> *mut c_char {
-    let bytes = text.as_bytes();
-    let copy_len = bytes.len().min(MAXSTR - 1);
-    std::ptr::copy_nonoverlapping(
-        bytes.as_ptr().cast::<c_char>(),
-        std::ptr::addr_of_mut!(prbuf).cast::<c_char>(),
-        copy_len,
-    );
-    prbuf[copy_len] = 0;
-    std::ptr::addr_of_mut!(prbuf).cast::<c_char>()
+unsafe fn copy_to_prbuf(text: &str) -> String {
+    text.to_owned()
 }
 
 fn adjust_inventory_case(name: &mut String, drop: c_uchar) {
@@ -122,9 +113,9 @@ unsafe fn pick_one(info: *mut CObjInfo, nitems: c_int) -> c_int {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn inv_name(obj: *mut Thing, drop: c_uchar) -> *mut c_char {
+pub unsafe fn inv_name(obj: *mut Thing, drop: c_uchar) -> String {
     if obj.is_null() {
-        return std::ptr::addr_of_mut!(prbuf).cast::<c_char>();
+        return String::new();
     }
 
     let which = (*thing_o(obj)).o_which;
@@ -395,24 +386,12 @@ pub unsafe extern "C" fn discovered() {}
 
 unsafe fn print_disc(_type: c_char) {}
 
-#[no_mangle]
-pub unsafe extern "C" fn add_line(fmt: *mut c_char, arg: *mut c_char) -> c_char {
-    if fmt.is_null() {
-        return 0;
-    }
-    // The caller passes C-style format strings (e.g. `%s` or `a) %s`)
-    // together with a single string argument. Substitute the lone string
-    // argument for the `%s` conversion, then hand the finished text to
-    // `rogue_msg_str` directly, bypassing the legacy variadic `msg()` shim.
-    let fmt_str = CStr::from_ptr(fmt).to_string_lossy();
-    let text = if arg.is_null() {
-        fmt_str.to_string()
-    } else {
-        let arg_str = CStr::from_ptr(arg).to_string_lossy();
-        match fmt_str.find("%s") {
-            Some(idx) => format!("{}{}{}", &fmt_str[..idx], arg_str, &fmt_str[idx + 2..]),
-            None => fmt_str.to_string(),
-        }
+/// Formats a single `%s` substitution from `fmt` and `arg` and hands the
+/// result to `msg_str`, mirroring the legacy `add_line` helper.
+pub unsafe fn add_line(fmt: &str, arg: &str) -> c_char {
+    let text = match fmt.find("%s") {
+        Some(idx) => format!("{}{}{}", &fmt[..idx], arg, &fmt[idx + 2..]),
+        None => fmt.to_string(),
     };
     msg_str(&text);
     0
@@ -420,7 +399,7 @@ pub unsafe extern "C" fn add_line(fmt: *mut c_char, arg: *mut c_char) -> c_char 
 
 unsafe fn end_line() {}
 
-unsafe fn nothing(_type: c_char) -> *mut c_char {
+unsafe fn nothing(_type: c_char) -> String {
     copy_to_prbuf("Nothing found")
 }
 

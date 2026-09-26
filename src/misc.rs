@@ -5,11 +5,9 @@
 use crate::config::GameConfig;
 use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
-use crate::ffi::{isupper, tolower};
 use crate::game::PLAYER;
 use crate::globals::CObjInfo;
 use crate::item::pack::{get_item, leave_pack, reset_last};
-use crate::options::get_str;
 use crate::rnd::rnd;
 use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, msg_str};
@@ -56,7 +54,6 @@ unsafe extern "C" {
     static mut e_levels: [c_int; 21];
     static mut firstmove: c_uchar;
     static mut food_left: c_int;
-    static mut fruit: [c_char; MAXSTR];
     static mut hungry_state: c_int;
     static mut jump: c_uchar;
     static mut last_dir: c_char;
@@ -66,7 +63,6 @@ unsafe extern "C" {
     static mut no_move: c_int;
     static mut oldpos: IVec2;
     static mut passgo: c_uchar;
-    static mut prbuf: [c_char; MAXSTR];
     static mut runch: c_char;
     static mut running: c_uchar;
     static mut seenstairs: c_uchar;
@@ -160,10 +156,7 @@ pub unsafe extern "C" fn eat() {
         PLAYER.set_weapon(std::ptr::null_mut());
     }
     if (*thing_o(obj)).o_which == 1 {
-        msg_str(&format!(
-            "my, that was a yummy {}",
-            CStr::from_ptr(std::ptr::addr_of!(fruit).cast()).to_string_lossy()
-        ));
+        msg_str(&format!("my, that was a yummy {}", crate::globals::fruit()));
     } else if rnd(100) > 70 {
         PLAYER.with_stats_mut(|stats| stats.experience += 1);
         msg_str("bummer, this food tastes awful");
@@ -348,8 +341,8 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
                 break;
             }
         }
-        if isupper(dir_ch as c_int) != 0 {
-            dir_ch = tolower(dir_ch as c_int) as c_char;
+        if (dir_ch as u8).is_ascii_uppercase() {
+            dir_ch = (dir_ch as u8).to_ascii_lowercase() as c_char;
         }
         last_dir = dir_ch;
         last_delt.y = delta.y;
@@ -395,14 +388,7 @@ pub unsafe extern "C" fn call_it(info: &mut CObjInfo) {
         } else {
             msg_str("what do you want to call it? ");
         }
-        if get_str(
-            std::ptr::addr_of_mut!(prbuf).cast(),
-            crate::ui::Window::Stdscr,
-        ) == NORM
-        {
-            let text = CStr::from_ptr(std::ptr::addr_of!(prbuf).cast())
-                .to_string_lossy()
-                .into_owned();
+        if let Some(text) = crate::options::read_line("", crate::ui::Window::Stdscr) {
             info.oi_guess = Some(text);
         }
     }
@@ -421,19 +407,24 @@ pub unsafe extern "C" fn rnd_thing() -> c_char {
     thing_list[idx as usize]
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn choose_str(ts: *const c_char, ns: *const c_char) -> *mut c_char {
+/// Return `ts` when the player is hallucinating, otherwise `ns`.
+pub fn choose_str(ts: &'static str, ns: &'static str) -> &'static str {
     if player_has(MonsterFlags::HALU) {
-        ts as *mut c_char
+        ts
     } else {
-        ns as *mut c_char
+        ns
     }
 }
 
-unsafe fn vowelstr(str: *mut c_char) -> *mut c_char {
-    if first_is_vowel(str) {
-        c"n".as_ptr() as *mut c_char
+/// Returns a newline string borrowed for the given argument.
+#[allow(dead_code)]
+fn vowelstr(s: &str) -> &'static str {
+    if matches!(
+        s.as_bytes().first(),
+        Some(b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U')
+    ) {
+        "n"
     } else {
-        c"".as_ptr() as *mut c_char
+        ""
     }
 }

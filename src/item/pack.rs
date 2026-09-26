@@ -250,7 +250,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut Thing, silent: c_uchar) {
         }
         msg_str(&format!(
             "{} ({})",
-            CStr::from_ptr(inv_name(item, if terse == 0 { 0 } else { 1 })).to_string_lossy(),
+            inv_name(item, if terse == 0 { 0 } else { 1 }),
             (*thing_o(item)).o_packch as char,
         ));
     }
@@ -347,21 +347,12 @@ pub unsafe extern "C" fn inventory(list: *mut Thing, type_: c_int) -> c_uchar {
 
         n_objs += 1;
         msg_esc = true;
-        let mut inv_temp = [0 as c_char; MAXSTR];
-        if (*thing_o(cur)).o_packch == 0 {
-            std::ptr::copy_nonoverlapping(c"%s".as_ptr(), inv_temp.as_mut_ptr(), 3);
+        let format = if (*thing_o(cur)).o_packch == 0 {
+            "%s".to_string()
         } else {
-            let format = [
-                (*thing_o(cur)).o_packch as c_char,
-                b')' as c_char,
-                b' ' as c_char,
-                b'%' as c_char,
-                b's' as c_char,
-                0,
-            ];
-            std::ptr::copy_nonoverlapping(format.as_ptr(), inv_temp.as_mut_ptr(), format.len());
-        }
-        let _ = add_line(inv_temp.as_mut_ptr(), inv_name(cur, false as c_uchar));
+            format!("{}) %s", (*thing_o(cur)).o_packch as char)
+        };
+        let _ = add_line(&format, &inv_name(cur, false as c_uchar));
         msg_esc = false;
         cur = next_item(cur);
     }
@@ -517,10 +508,7 @@ pub unsafe extern "C" fn move_msg(obj: *mut Thing) {
     if terse == 0 {
         addmsg_str("you ");
     }
-    msg_str(&format!(
-        "moved onto {}",
-        CStr::from_ptr(inv_name(obj, true as c_uchar)).to_string_lossy()
-    ));
+    msg_str(&format!("moved onto {}", inv_name(obj, true as c_uchar)));
 }
 
 #[no_mangle]
@@ -528,10 +516,7 @@ pub unsafe extern "C" fn picky_inven() {
     if pack_head().is_null() {
         msg_str("you aren't carrying anything");
     } else if next_item(pack_head()).is_null() {
-        msg_str(&format!(
-            "a) {}",
-            CStr::from_ptr(inv_name(pack_head(), false as c_uchar)).to_string_lossy()
-        ));
+        msg_str(&format!("a) {}", inv_name(pack_head(), false as c_uchar)));
     } else {
         msg_str(if terse != 0 {
             "item: "
@@ -550,7 +535,7 @@ pub unsafe extern "C" fn picky_inven() {
                 msg_str(&format!(
                     "{}) {}",
                     mch as u8 as char,
-                    CStr::from_ptr(inv_name(obj, false as c_uchar)).to_string_lossy()
+                    inv_name(obj, false as c_uchar)
                 ));
                 return;
             }

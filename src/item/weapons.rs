@@ -14,7 +14,6 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
-use crate::ffi::snprintf;
 use crate::globals::weap_info;
 use crate::entity::player::discard;
 use crate::item::things::{dropcheck, inv_name};
@@ -102,7 +101,6 @@ static INIT_DAM: [InitWeap; MAXWEAPONS] = [
 #[no_mangle]
 pub static mut group: c_int = 2;
 
-static mut NUMBUF: [c_char; 10] = [0; 10];
 static mut FALL_POS: IVec2 = IVec2 { x: 0, y: 0 };
 
 unsafe extern "C" {
@@ -283,20 +281,12 @@ pub unsafe extern "C" fn hit_monster(y: c_int, x: c_int, obj: *mut Thing) -> c_i
 }
 
 /// Formats signed enchantment numbers for armor and weapons.
-#[no_mangle]
-pub unsafe extern "C" fn num(n1: c_int, n2: c_int, obj_type: c_char) -> *mut c_char {
+pub fn num(n1: c_int, n2: c_int, obj_type: c_char) -> String {
     if obj_type == WEAPON {
-        let _ = snprintf(
-            (&raw mut NUMBUF) as *mut c_char,
-            10,
-            c"%+d,%+d".as_ptr(),
-            n1,
-            n2,
-        );
+        format!("{:+},{:+}", n1, n2)
     } else {
-        let _ = snprintf((&raw mut NUMBUF) as *mut c_char, 10, c"%+d".as_ptr(), n1);
+        format!("{:+}", n1)
     }
-    (&raw mut NUMBUF) as *mut c_char
 }
 
 /// Equips a selected weapon after validating curses and item type constraints.
@@ -332,7 +322,7 @@ pub unsafe extern "C" fn wield() {
     }
     msg_str(&format!(
         "wielding {} ({})",
-        CStr::from_ptr(sp).to_string_lossy(),
+        sp,
         (*thing_o(obj)).o_packch as char,
     ));
 }

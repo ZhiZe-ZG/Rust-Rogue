@@ -353,13 +353,10 @@ pub unsafe extern "C" fn read_scroll() {
             uncurse(PLAYER.weapon());
             uncurse(PLAYER.left_ring());
             uncurse(PLAYER.right_ring());
-            msg_str(
-                &CStr::from_ptr(choose_str(
-                    c"you feel in touch with the Universal Onenes".as_ptr(),
-                    c"you feel as if somebody is watching over you".as_ptr(),
-                ))
-                .to_string_lossy(),
-            );
+            msg_str(choose_str(
+                "you feel in touch with the Universal Onenes",
+                "you feel as if somebody is watching over you",
+            ));
         }
         ScrollType::Aggravate => {
             aggravate();

@@ -143,7 +143,7 @@ pub unsafe extern "C" fn unconfuse() {
     PLAYER.remove_flag(MonsterFlags::HUH);
     msg_str(&format!(
         "you feel less {} now",
-        CStr::from_ptr(choose_str(c"trippy".as_ptr(), c"confused".as_ptr())).to_string_lossy()
+        choose_str("trippy", "confused")
     ));
 }
 
@@ -176,13 +176,10 @@ pub unsafe extern "C" fn sight() {
             let mut pos = PLAYER.pos();
             enter_room(&mut pos);
         }
-        msg_str(
-            &CStr::from_ptr(choose_str(
-                c"far out!  Everything is all cosmic again".as_ptr(),
-                c"the veil of darkness lifts".as_ptr(),
-            ))
-            .to_string_lossy(),
-        );
+        msg_str(choose_str(
+            "far out!  Everything is all cosmic again",
+            "the veil of darkness lifts",
+        ));
     }
 }
 
@@ -214,49 +211,31 @@ pub unsafe extern "C" fn stomach() {
         no_command += rnd(8) + 4;
         hungry_state = 3;
         if terse == 0 {
-            addmsg_str(
-                &CStr::from_ptr(choose_str(
-                    c"the munchies overpower your motor capabilities.  ".as_ptr(),
-                    c"you feel too weak from lack of food.  ".as_ptr(),
-                ))
-                .to_string_lossy(),
-            );
+            addmsg_str(choose_str(
+                "the munchies overpower your motor capabilities.  ",
+                "you feel too weak from lack of food.  ",
+            ));
         }
-        msg_str(
-            &CStr::from_ptr(choose_str(c"You freak out".as_ptr(), c"You faint".as_ptr()))
-                .to_string_lossy(),
-        );
+        msg_str(choose_str("You freak out", "You faint"));
     } else {
         let oldfood = food_left;
         food_left -= ring_eat(LEFT as c_int) + ring_eat(RIGHT as c_int) + 1 - amulet as c_int;
 
         if food_left < MORETIME && oldfood >= MORETIME {
             hungry_state = 2;
-            msg_str(
-                &CStr::from_ptr(choose_str(
-                    c"the munchies are interfering with your motor capabilites".as_ptr(),
-                    c"you are starting to feel weak".as_ptr(),
-                ))
-                .to_string_lossy(),
-            );
+            msg_str(choose_str(
+                "the munchies are interfering with your motor capabilites",
+                "you are starting to feel weak",
+            ));
         } else if food_left < 2 * MORETIME && oldfood >= 2 * MORETIME {
             hungry_state = 1;
             if terse != 0 {
-                msg_str(
-                    &CStr::from_ptr(choose_str(
-                        c"getting the munchies".as_ptr(),
-                        c"getting hungry".as_ptr(),
-                    ))
-                    .to_string_lossy(),
-                );
+                msg_str(choose_str("getting the munchies", "getting hungry"));
             } else {
-                msg_str(
-                    &CStr::from_ptr(choose_str(
-                        c"you are getting the munchies".as_ptr(),
-                        c"you are starting to get hungry".as_ptr(),
-                    ))
-                    .to_string_lossy(),
-                );
+                msg_str(choose_str(
+                    "you are getting the munchies",
+                    "you are starting to get hungry",
+                ));
             }
         }
     }
@@ -372,11 +351,8 @@ pub unsafe extern "C" fn visuals() {
 #[no_mangle]
 pub unsafe extern "C" fn land() {
     PLAYER.remove_flag(MonsterFlags::LEVIT);
-    msg_str(
-        &CStr::from_ptr(choose_str(
-            c"bummer!  You've hit the ground".as_ptr(),
-            c"you float gently to the ground".as_ptr(),
-        ))
-        .to_string_lossy(),
-    );
+    msg_str(choose_str(
+        "bummer!  You've hit the ground",
+        "you float gently to the ground",
+    ));
 }

@@ -15,7 +15,6 @@ use crate::entity::chase::{diag_ok, see_monst};
 use crate::entity::player::{
     do_move, do_run, MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject,
 };
-use crate::ffi::strcpy;
 use crate::game::PLAYER;
 use crate::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::help::{help, identify};
@@ -30,7 +29,7 @@ use crate::item::things::{discovered, drop, inv_name};
 use crate::item::weapons::{init_weapon, missile, wield};
 use crate::level::new_level;
 use crate::misc::{eat, get_dir};
-use crate::options::{get_str, option};
+use crate::options::{option, read_line};
 use crate::rip::total_winner;
 use crate::rnd::rnd;
 use crate::save::save_game;
@@ -142,7 +141,6 @@ unsafe extern "C" {
     static mut firstmove: c_uchar;
     static mut food_left: c_int;
     static mut has_hit: c_uchar;
-    static mut huh: [c_char; MAXSTR];
     static mut inpack: c_int;
     static mut inv_describe: c_uchar;
     static mut jump: c_uchar;
@@ -580,10 +578,7 @@ pub unsafe extern "C" fn command() {
                     }
                     CTRL_P => {
                         after = false as c_uchar;
-                        msg_str(
-                            &CStr::from_ptr(std::ptr::addr_of!(huh).cast::<c_char>())
-                                .to_string_lossy(),
-                        );
+                        msg_str(&crate::globals::huh_string());
                     }
                     CTRL_R => {
                         after = false as c_uchar;
@@ -1027,19 +1022,8 @@ pub unsafe extern "C" fn call() {
             msg_str("what do you want to call it? ");
         }
 
-        let prbuf_ptr = std::ptr::addr_of_mut!(prbuf).cast::<c_char>();
-        match (*thing_o(obj)).o_label.as_ref() {
-            Some(elsewise) => {
-                strcpy(prbuf_ptr, elsewise.as_ptr().cast::<c_char>());
-            }
-            None => {
-                prbuf[0] = 0;
-            }
-        }
-        if get_str(prbuf_ptr.cast(), Window::Stdscr) == NORM {
-            let text = CStr::from_ptr(std::ptr::addr_of!(prbuf).cast::<c_char>())
-                .to_string_lossy()
-                .into_owned();
+        let initial = (*thing_o(obj)).o_label.clone().unwrap_or_default();
+        if let Some(text) = read_line(&initial, Window::Stdscr) {
             (*thing_o(obj)).o_label = Some(text);
         }
         return;
@@ -1091,15 +1075,7 @@ pub unsafe extern "C" fn call() {
         msg_str("what do you want to call it? ");
     }
 
-    let prbuf_ptr = std::ptr::addr_of_mut!(prbuf).cast::<c_char>();
-    let bytes = elsewise.as_bytes();
-    let copy_len = bytes.len().min(2 * MAXSTR - 1);
-    std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), prbuf_ptr, copy_len);
-    prbuf[copy_len] = 0;
-    if get_str(prbuf_ptr.cast(), Window::Stdscr) == NORM {
-        let text = CStr::from_ptr(std::ptr::addr_of!(prbuf).cast::<c_char>())
-            .to_string_lossy()
-            .into_owned();
+    if let Some(text) = read_line(&elsewise, Window::Stdscr) {
         (*op).oi_guess = Some(text);
     }
 }
@@ -1124,7 +1100,7 @@ pub unsafe extern "C" fn current(cur: *mut Thing, how: *const c_char, where_: *c
         addmsg_str(&format!(
             "{}) {}",
             (*thing_o(cur)).o_packch as char,
-            CStr::from_ptr(inv_name(cur, true as c_uchar)).to_string_lossy()
+            inv_name(cur, true as c_uchar)
         ));
         inv_describe = true as c_uchar;
         if !where_.is_null() {
@@ -1159,7 +1135,7 @@ pub unsafe extern "C" fn pr_list() {
         msg_str(&format!(
             "{}) {}",
             (*thing_o(obj)).o_type as u8 as char,
-            CStr::from_ptr(inv_name(obj, false as c_uchar)).to_string_lossy()
+            inv_name(obj, false as c_uchar)
         ));
         obj = crate::entity::player::thing_next(obj);
     }

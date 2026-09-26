@@ -14,7 +14,7 @@ use crate::globals::{
 };
 use crate::rnd::rnd;
 
-use std::os::raw::{c_char, c_int, c_uchar};
+use std::os::raw::{c_int, c_uchar};
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::item::pack::add_pack;
@@ -50,12 +50,12 @@ const ARROW: c_int = 3;
 /// Matches the C `STONE` typedef used for ring stone names and values.
 #[repr(C)]
 pub struct CStone {
-    pub st_name: *const c_char,
+    pub st_name: &'static str,
     pub st_value: c_int,
 }
 
-// Safety: CStone only carries const string pointers (string literals) that are
-// never mutated, so cross-thread sharing is fine.
+// Safety: CStone only carries `&'static str` references (string literals) that
+// are never mutated, so cross-thread sharing is fine.
 unsafe impl Sync for CStone {}
 
 // ─── Exported global data arrays ─────────────────────────────────────────────
@@ -64,113 +64,35 @@ const NSTONES: usize = 26;
 const NWOOD: usize = 33;
 const NMETAL: usize = 22;
 
-/// Ring-stone table.  Exported as `STONE stones[]` for C.
+/// Ring-stone table.  Exported as `STONE stones[]` for legacy consumers.
 #[no_mangle]
 pub static stones: [CStone; NSTONES] = [
-    CStone {
-        st_name: b"agate\0".as_ptr() as *const c_char,
-        st_value: 25,
-    },
-    CStone {
-        st_name: b"alexandrite\0".as_ptr() as *const c_char,
-        st_value: 40,
-    },
-    CStone {
-        st_name: b"amethyst\0".as_ptr() as *const c_char,
-        st_value: 50,
-    },
-    CStone {
-        st_name: b"carnelian\0".as_ptr() as *const c_char,
-        st_value: 40,
-    },
-    CStone {
-        st_name: b"diamond\0".as_ptr() as *const c_char,
-        st_value: 300,
-    },
-    CStone {
-        st_name: b"emerald\0".as_ptr() as *const c_char,
-        st_value: 300,
-    },
-    CStone {
-        st_name: b"germanium\0".as_ptr() as *const c_char,
-        st_value: 225,
-    },
-    CStone {
-        st_name: b"granite\0".as_ptr() as *const c_char,
-        st_value: 5,
-    },
-    CStone {
-        st_name: b"garnet\0".as_ptr() as *const c_char,
-        st_value: 50,
-    },
-    CStone {
-        st_name: b"jade\0".as_ptr() as *const c_char,
-        st_value: 150,
-    },
-    CStone {
-        st_name: b"kryptonite\0".as_ptr() as *const c_char,
-        st_value: 300,
-    },
-    CStone {
-        st_name: b"lapis lazuli\0".as_ptr() as *const c_char,
-        st_value: 50,
-    },
-    CStone {
-        st_name: b"moonstone\0".as_ptr() as *const c_char,
-        st_value: 50,
-    },
-    CStone {
-        st_name: b"obsidian\0".as_ptr() as *const c_char,
-        st_value: 15,
-    },
-    CStone {
-        st_name: b"onyx\0".as_ptr() as *const c_char,
-        st_value: 60,
-    },
-    CStone {
-        st_name: b"opal\0".as_ptr() as *const c_char,
-        st_value: 200,
-    },
-    CStone {
-        st_name: b"pearl\0".as_ptr() as *const c_char,
-        st_value: 220,
-    },
-    CStone {
-        st_name: b"peridot\0".as_ptr() as *const c_char,
-        st_value: 63,
-    },
-    CStone {
-        st_name: b"ruby\0".as_ptr() as *const c_char,
-        st_value: 350,
-    },
-    CStone {
-        st_name: b"sapphire\0".as_ptr() as *const c_char,
-        st_value: 285,
-    },
-    CStone {
-        st_name: b"stibotantalite\0".as_ptr() as *const c_char,
-        st_value: 200,
-    },
-    CStone {
-        st_name: b"tiger eye\0".as_ptr() as *const c_char,
-        st_value: 50,
-    },
-    CStone {
-        st_name: b"topaz\0".as_ptr() as *const c_char,
-        st_value: 60,
-    },
-    CStone {
-        st_name: b"turquoise\0".as_ptr() as *const c_char,
-        st_value: 70,
-    },
-    CStone {
-        st_name: b"taaffeite\0".as_ptr() as *const c_char,
-        st_value: 300,
-    },
-    CStone {
-        st_name: b"zircon\0".as_ptr() as *const c_char,
-        st_value: 80,
-    },
+    CStone { st_name: "agate", st_value: 25 },
+    CStone { st_name: "alexandrite", st_value: 40 },
+    CStone { st_name: "amethyst", st_value: 50 },
+    CStone { st_name: "carnelian", st_value: 40 },
+    CStone { st_name: "diamond", st_value: 300 },
+    CStone { st_name: "emerald", st_value: 300 },
+    CStone { st_name: "germanium", st_value: 225 },
+    CStone { st_name: "granite", st_value: 5 },
+    CStone { st_name: "garnet", st_value: 50 },
+    CStone { st_name: "jade", st_value: 150 },
+    CStone { st_name: "kryptonite", st_value: 300 },
+    CStone { st_name: "lapis lazuli", st_value: 50 },
+    CStone { st_name: "moonstone", st_value: 50 },
+    CStone { st_name: "obsidian", st_value: 15 },
+    CStone { st_name: "onyx", st_value: 60 },
+    CStone { st_name: "opal", st_value: 200 },
+    CStone { st_name: "pearl", st_value: 220 },
+    CStone { st_name: "peridot", st_value: 63 },
+    CStone { st_name: "ruby", st_value: 350 },
+    CStone { st_name: "sapphire", st_value: 285 },
+    CStone { st_name: "stibotantalite", st_value: 200 },
+    CStone { st_name: "tiger eye", st_value: 50 },
+    CStone { st_name: "topaz", st_value: 60 },
+    CStone { st_name: "turquoise", st_value: 70 },
+    CStone { st_name: "taaffeite", st_value: 300 },
+    CStone { st_name: "zircon", st_value: 80 },
 ];
 
 /// Count of entries in `stones`.  Exported as `int cNSTONES` for C.
@@ -179,40 +101,40 @@ pub static mut cNSTONES: c_int = NSTONES as c_int;
 
 /// Wand / staff wood materials.  Exported as `char *wood[]` for C.
 #[no_mangle]
-pub static mut wood: [*mut c_char; NWOOD] = [
-    b"avocado wood\0".as_ptr() as *mut c_char,
-    b"balsa\0".as_ptr() as *mut c_char,
-    b"bamboo\0".as_ptr() as *mut c_char,
-    b"banyan\0".as_ptr() as *mut c_char,
-    b"birch\0".as_ptr() as *mut c_char,
-    b"cedar\0".as_ptr() as *mut c_char,
-    b"cherry\0".as_ptr() as *mut c_char,
-    b"cinnibar\0".as_ptr() as *mut c_char,
-    b"cypress\0".as_ptr() as *mut c_char,
-    b"dogwood\0".as_ptr() as *mut c_char,
-    b"driftwood\0".as_ptr() as *mut c_char,
-    b"ebony\0".as_ptr() as *mut c_char,
-    b"elm\0".as_ptr() as *mut c_char,
-    b"eucalyptus\0".as_ptr() as *mut c_char,
-    b"fall\0".as_ptr() as *mut c_char,
-    b"hemlock\0".as_ptr() as *mut c_char,
-    b"holly\0".as_ptr() as *mut c_char,
-    b"ironwood\0".as_ptr() as *mut c_char,
-    b"kukui wood\0".as_ptr() as *mut c_char,
-    b"mahogany\0".as_ptr() as *mut c_char,
-    b"manzanita\0".as_ptr() as *mut c_char,
-    b"maple\0".as_ptr() as *mut c_char,
-    b"oaken\0".as_ptr() as *mut c_char,
-    b"persimmon wood\0".as_ptr() as *mut c_char,
-    b"pecan\0".as_ptr() as *mut c_char,
-    b"pine\0".as_ptr() as *mut c_char,
-    b"poplar\0".as_ptr() as *mut c_char,
-    b"redwood\0".as_ptr() as *mut c_char,
-    b"rosewood\0".as_ptr() as *mut c_char,
-    b"spruce\0".as_ptr() as *mut c_char,
-    b"teak\0".as_ptr() as *mut c_char,
-    b"walnut\0".as_ptr() as *mut c_char,
-    b"zebrawood\0".as_ptr() as *mut c_char,
+pub static wood: [&'static str; NWOOD] = [
+    "avocado wood",
+    "balsa",
+    "bamboo",
+    "banyan",
+    "birch",
+    "cedar",
+    "cherry",
+    "cinnibar",
+    "cypress",
+    "dogwood",
+    "driftwood",
+    "ebony",
+    "elm",
+    "eucalyptus",
+    "fall",
+    "hemlock",
+    "holly",
+    "ironwood",
+    "kukui wood",
+    "mahogany",
+    "manzanita",
+    "maple",
+    "oaken",
+    "persimmon wood",
+    "pecan",
+    "pine",
+    "poplar",
+    "redwood",
+    "rosewood",
+    "spruce",
+    "teak",
+    "walnut",
+    "zebrawood",
 ];
 
 /// Count of entries in `wood`.  Exported as `int cNWOOD` for C.
@@ -221,29 +143,29 @@ pub static mut cNWOOD: c_int = NWOOD as c_int;
 
 /// Wand metal materials.  Exported as `char *metal[]` for C.
 #[no_mangle]
-pub static mut metal: [*mut c_char; NMETAL] = [
-    b"aluminum\0".as_ptr() as *mut c_char,
-    b"beryllium\0".as_ptr() as *mut c_char,
-    b"bone\0".as_ptr() as *mut c_char,
-    b"brass\0".as_ptr() as *mut c_char,
-    b"bronze\0".as_ptr() as *mut c_char,
-    b"copper\0".as_ptr() as *mut c_char,
-    b"electrum\0".as_ptr() as *mut c_char,
-    b"gold\0".as_ptr() as *mut c_char,
-    b"iron\0".as_ptr() as *mut c_char,
-    b"lead\0".as_ptr() as *mut c_char,
-    b"magnesium\0".as_ptr() as *mut c_char,
-    b"mercury\0".as_ptr() as *mut c_char,
-    b"nickel\0".as_ptr() as *mut c_char,
-    b"pewter\0".as_ptr() as *mut c_char,
-    b"platinum\0".as_ptr() as *mut c_char,
-    b"steel\0".as_ptr() as *mut c_char,
-    b"silver\0".as_ptr() as *mut c_char,
-    b"silicon\0".as_ptr() as *mut c_char,
-    b"tin\0".as_ptr() as *mut c_char,
-    b"titanium\0".as_ptr() as *mut c_char,
-    b"tungsten\0".as_ptr() as *mut c_char,
-    b"zinc\0".as_ptr() as *mut c_char,
+pub static metal: [&'static str; NMETAL] = [
+    "aluminum",
+    "beryllium",
+    "bone",
+    "brass",
+    "bronze",
+    "copper",
+    "electrum",
+    "gold",
+    "iron",
+    "lead",
+    "magnesium",
+    "mercury",
+    "nickel",
+    "pewter",
+    "platinum",
+    "steel",
+    "silver",
+    "silicon",
+    "tin",
+    "titanium",
+    "tungsten",
+    "zinc",
 ];
 
 /// Count of entries in `metal`.  Exported as `int cNMETAL` for C.
@@ -270,7 +192,7 @@ const SYLLS: &[&str] = &[
 // Size = max(potion colours 27, stones 26, wood 33) = 33.
 /// Shared boolean scratch array used by init_colors, init_stones,
 /// and init_materials (mirrors the C-side `static bool used[]`).
-static mut USED: [c_uchar; 33] = [false as c_uchar; 33];
+static mut USED: [c_uchar; 33] = [0; 33];
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
@@ -278,15 +200,6 @@ unsafe extern "C" {
     static mut max_stats: Stats;
     static mut food_left: c_int;
     static mut a_class: [c_int; 26];
-
-    // Per-item colour / material assignments (in extern.c)
-    static mut p_colors: [*mut c_char; MAXPOTIONS];
-    static mut r_stones: [*mut c_char; MAXRINGS];
-    static mut ws_made: [*mut c_char; MAXSTICKS];
-    static mut ws_type: [*mut c_char; MAXSTICKS];
-
-    // Scratch string buffer
-    static mut prbuf: [c_char; MAXSTR];
 }
 
 // ─── Private helpers ─────────────────────────────────────────────────────────
@@ -353,25 +266,25 @@ pub unsafe extern "C" fn init_player() {
 #[no_mangle]
 pub unsafe extern "C" fn init_colors() {
     for i in 0..crate::colors::POTION_COLOR_COUNT {
-        USED[i] = false as c_uchar;
+        USED[i] = 0;
     }
     for i in 0..MAXPOTIONS {
         let j = loop {
             let j = rnd(crate::colors::POTION_COLOR_COUNT as c_int) as usize;
-            if USED[j] == false as c_uchar {
+            if USED[j] == 0 {
                 break j;
             }
         };
-        USED[j] = true as c_uchar;
-        p_colors[i] = crate::colors::POTION_COLORS[j].as_ptr() as *mut c_char;
+        USED[j] = 1;
+        crate::globals::p_colors[i] = crate::colors::POTION_COLORS[j];
     }
 }
 
 /// Generate random pronounceable names for each scroll.
 ///
-/// Builds each name as an owned Rust [`String`] (no `malloc`/`strcpy`) and
-/// stores it in [`crate::globals::SCROLL_NAMES`], preserving the syllable,
-/// word-count, and `MAXNAME` length limits of the original C routine.
+/// Builds each name as an owned Rust [`String`] and stores it in
+/// [`crate::globals::SCROLL_NAMES`], preserving the syllable, word-count, and
+/// `MAXNAME` length limits of the original C routine.
 #[no_mangle]
 pub unsafe extern "C" fn init_names() {
     crate::globals::set_scroll_names(MAXSCROLLS, |_| {
@@ -400,17 +313,17 @@ pub unsafe extern "C" fn init_names() {
 #[no_mangle]
 pub unsafe extern "C" fn init_stones() {
     for i in 0..NSTONES {
-        USED[i] = false as c_uchar;
+        USED[i] = 0;
     }
     for i in 0..MAXRINGS {
         let j = loop {
             let j = rnd(NSTONES as c_int) as usize;
-            if USED[j] == false as c_uchar {
+            if USED[j] == 0 {
                 break j;
             }
         };
-        USED[j] = true as c_uchar;
-        r_stones[i] = stones[j].st_name as *mut c_char;
+        USED[j] = 1;
+        crate::globals::r_stones[i] = stones[j].st_name;
         ring_info[i].oi_worth += stones[j].st_value;
     }
 }
@@ -419,25 +332,25 @@ pub unsafe extern "C" fn init_stones() {
 #[no_mangle]
 pub unsafe extern "C" fn init_materials() {
     for i in 0..NWOOD {
-        USED[i] = false as c_uchar;
+        USED[i] = 0;
     }
-    let mut metused: [c_uchar; NMETAL] = [false as c_uchar; NMETAL];
+    let mut metused: [c_uchar; NMETAL] = [0; NMETAL];
     for i in 0..MAXSTICKS {
         loop {
             if rnd(2) == 0 {
                 let j = rnd(NMETAL as c_int) as usize;
-                if metused[j] == false as c_uchar {
-                    ws_type[i] = b"wand\0".as_ptr() as *mut c_char;
-                    ws_made[i] = metal[j];
-                    metused[j] = true as c_uchar;
+                if metused[j] == 0 {
+                    crate::globals::ws_type[i] = "wand";
+                    crate::globals::ws_made[i] = metal[j];
+                    metused[j] = 1;
                     break;
                 }
             } else {
                 let j = rnd(NWOOD as c_int) as usize;
-                if USED[j] == false as c_uchar {
-                    ws_type[i] = b"staff\0".as_ptr() as *mut c_char;
-                    ws_made[i] = wood[j];
-                    USED[j] = true as c_uchar;
+                if USED[j] == 0 {
+                    crate::globals::ws_type[i] = "staff";
+                    crate::globals::ws_made[i] = wood[j];
+                    USED[j] = 1;
                     break;
                 }
             }

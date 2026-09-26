@@ -8,13 +8,12 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_uchar};
+use std::os::raw::{c_int, c_uchar};
 use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::ffi::{fclose, fopen, rewind, strerror, CFile};
-use crate::globals::{fruit, got_ltc, orig_dsusp, scoreboard, whoami};
+use crate::ffi::{fclose, fopen, rewind, CFile};
+use crate::globals::{got_ltc, orig_dsusp, scoreboard};
 use crate::mdport::{
     md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
 };
@@ -27,8 +26,8 @@ const LOCKFILE_ENABLED: bool = true; // config.h: #define LOCKFILE "rogue.lck"
 const CHECKTIME: bool = false; // config.h: /* #undef CHECKTIME */
 const DUMP: bool = false; // not set in the standard build
 
-const SCOREFILE: &[u8] = b"rogue.scr";
-const LOCKFILE: &[u8] = b"rogue.lck";
+const SCOREFILE: &str = "rogue.scr";
+const LOCKFILE: &str = "rogue.lck";
 const ENOENT: c_int = 2;
 
 /// `FILE *lfd` from mach_dep.c -- handle of the scoreboard lock file.
@@ -66,9 +65,8 @@ fn now_secs() -> i64 {
 
 /// Returns the modification time (in seconds since the epoch) of the file at
 /// `path`, or `None` if the file does not exist / cannot be statted.
-unsafe fn lockfile_mtime(path: *const c_char) -> Option<i64> {
-    let path_str = CStr::from_ptr(path).to_string_lossy();
-    let md = std::fs::metadata(path_str.as_ref()).ok()?;
+unsafe fn lockfile_mtime(path: &str) -> Option<i64> {
+    let md = std::fs::metadata(path).ok()?;
     let modified = md.modified().ok()?;
     modified
         .duration_since(UNIX_EPOCH)
@@ -85,10 +83,7 @@ unsafe fn lockfile_mtime(path: *const c_char) -> Option<i64> {
 /// build (config.h leaves both undefined), so this is a no-op.
 #[no_mangle]
 pub unsafe extern "C" fn init_check() {
-    let _ = (
-        std::ptr::addr_of!(whoami).cast::<c_char>(),
-        std::ptr::addr_of!(fruit).cast::<c_char>(),
-    );
+    let _ = (crate::globals::whoami(), crate::globals::fruit());
 }
 
 /// open_score:
@@ -107,20 +102,21 @@ pub unsafe extern "C" fn open_score() {
         return;
     }
 
-    let scorefile = CString::new(SCOREFILE).unwrap();
-    let scorefile_ptr = scorefile.as_ptr() as *mut c_char;
+    let scorefile_bytes = crate::ffi::to_c_bytes(SCOREFILE);
 
-    scoreboard = fopen(scorefile_ptr, c"r+".as_ptr());
+    scoreboard = fopen(scorefile_bytes.as_ptr(), b"r+\0".as_ptr());
 
     if scoreboard.is_null() && *errno_location() == ENOENT {
-        scoreboard = fopen(scorefile_ptr, c"w+".as_ptr());
-        md_chmod(scorefile_ptr, 0o664);
+        scoreboard = fopen(scorefile_bytes.as_ptr(), b"w+\0".as_ptr());
+        md_chmod(SCOREFILE, 0o664);
     }
 
     if scoreboard.is_null() {
-        let path = CStr::from_ptr(scorefile_ptr).to_string_lossy();
-        let err = CStr::from_ptr(strerror(*errno_location())).to_string_lossy();
-        eprintln!("Could not open {} for writing: {}", path, err);
+        eprintln!(
+            "Could not open {} for writing: error {}",
+            SCOREFILE,
+            *errno_location()
+        );
     }
 }
 
@@ -190,12 +186,9 @@ pub unsafe extern "C" fn start_score() {
 /// is_symlink:
 /// See if the file is not a regular file (i.e. a symbolic link or
 /// special file).
-unsafe fn is_symlink(sp: *mut c_char) -> c_uchar {
-    if sp.is_null() {
-        return false as c_uchar;
-    }
-    let path = CStr::from_ptr(sp).to_string_lossy();
-    match std::fs::symlink_metadata(path.as_ref()) {
+#[allow(dead_code)]
+unsafe fn is_symlink(path: &str) -> c_uchar {
+    match std::fs::symlink_metadata(path) {
         Ok(md) => {
             // Original C: ((sbuf2.st_mode & S_IFMT) != S_IFREG)
             if md.file_type().is_file() {
@@ -219,32 +212,31 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
         return true as c_uchar as c_int;
     }
 
-    let lockfile = CString::new(LOCKFILE).unwrap();
-    let lockfile_ptr = lockfile.as_ptr() as *mut c_char;
+    let lockfile_bytes = crate::ffi::to_c_bytes(LOCKFILE);
 
     'over: loop {
-        LFD = fopen(lockfile_ptr, c"w+".as_ptr());
+        LFD = fopen(lockfile_bytes.as_ptr(), b"w+\0".as_ptr());
         if !LFD.is_null() {
             return true as c_uchar as c_int;
         }
 
         for _ in 0..5 {
             md_sleep(1);
-            LFD = fopen(lockfile_ptr, c"w+".as_ptr());
+            LFD = fopen(lockfile_bytes.as_ptr(), b"w+\0".as_ptr());
             if !LFD.is_null() {
                 return true as c_uchar as c_int;
             }
         }
 
-        match lockfile_mtime(lockfile_ptr) {
+        match lockfile_mtime(LOCKFILE) {
             None => {
                 // stat() failed -- the lock file is gone; try again.
-                LFD = fopen(lockfile_ptr, c"w+".as_ptr());
+                LFD = fopen(lockfile_bytes.as_ptr(), b"w+\0".as_ptr());
                 return true as c_uchar as c_int;
             }
             Some(mtime) => {
                 if now_secs() - mtime > 10 {
-                    if md_unlink(lockfile_ptr) < 0 {
+                    if md_unlink(LOCKFILE) < 0 {
                         return false as c_uchar as c_int;
                     }
                     continue 'over;
@@ -257,18 +249,18 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
                 let _ = std::io::stdin().read_line(&mut answer);
                 if answer.trim_start().starts_with('y') {
                     loop {
-                        LFD = fopen(lockfile_ptr, c"w+".as_ptr());
+                        LFD = fopen(lockfile_bytes.as_ptr(), b"w+\0".as_ptr());
                         if !LFD.is_null() {
                             return true as c_uchar as c_int;
                         }
-                        if let Some(mtime2) = lockfile_mtime(lockfile_ptr) {
+                        if let Some(mtime2) = lockfile_mtime(LOCKFILE) {
                             if now_secs() - mtime2 > 10 {
-                                if md_unlink(lockfile_ptr) < 0 {
+                                if md_unlink(LOCKFILE) < 0 {
                                     return false as c_uchar as c_int;
                                 }
                             }
                         } else {
-                            LFD = fopen(lockfile_ptr, c"w+".as_ptr());
+                            LFD = fopen(lockfile_bytes.as_ptr(), b"w+\0".as_ptr());
                             return true as c_uchar as c_int;
                         }
                         md_sleep(1);
@@ -293,8 +285,7 @@ pub unsafe extern "C" fn unlock_sc() {
         fclose(LFD);
     }
     LFD = ptr::null_mut();
-    let lockfile = CString::new(LOCKFILE).unwrap();
-    md_unlink(lockfile.as_ptr() as *mut c_char);
+    md_unlink(LOCKFILE);
 }
 
 /// flush_type:

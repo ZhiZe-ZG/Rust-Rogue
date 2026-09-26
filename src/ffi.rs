@@ -2,16 +2,14 @@
 //!
 //! `Plan.md` Stage 1.2 requires all foreign calls to be declared in one place,
 //! with game logic kept on native Rust types. This module is that place: it
-//! holds the authoritative [`CFile`] handle and the libc/stdio/string/ctype
-//! declarations that the ported modules used to re-declare locally (and, in the
-//! case of `CFile`, three separate times).
+//! holds the authoritative [`CFile`] handle and the libc process/stdio
+//! declarations that the ported modules used to re-declare locally.
 //!
-//! Only process-portable C library calls live here. The game-state globals
-//! (which are Rust-internal compatibility residue) stay with their modules
-//! until Stage 3 turns them into owned state, and the platform/signal layer
-//! stays in `mdport`/`machdep`.
+//! Only process-portable C library calls live here. There are no C string
+//! helpers or C string types: byte/OS boundaries are expressed with Rust
+//! `u8` pointers, and all string handling happens in Rust.
 
-use std::os::raw::{c_char, c_int, c_long, c_uint};
+use std::os::raw::{c_int, c_long, c_uint};
 
 /// Opaque C stdio stream handle.
 ///
@@ -23,41 +21,33 @@ pub struct CFile {
 }
 
 extern "C" {
-    // ── String / ctype ───────────────────────────────────────────────────
-    pub fn strlen(s: *const c_char) -> usize;
-    pub fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
-    pub fn strncmp(a: *const c_char, b: *const c_char, n: usize) -> c_int;
-    pub fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-    pub fn strerror(errnum: c_int) -> *const c_char;
-    pub fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
-    pub fn sscanf(buf: *const c_char, fmt: *const c_char, ...) -> c_int;
-    pub fn isalpha(c: c_int) -> c_int;
-    pub fn isprint(c: c_int) -> c_int;
-    pub fn isdigit(c: c_int) -> c_int;
-    pub fn isupper(c: c_int) -> c_int;
-    pub fn tolower(c: c_int) -> c_int;
-    pub fn toupper(c: c_int) -> c_int;
-    pub fn toascii(c: c_int) -> c_int;
-    pub fn strchr(s: *const c_char, c: c_int) -> *mut c_char;
-    pub fn atoi(s: *const c_char) -> c_int;
-    pub fn sprintf(s: *mut c_char, fmt: *const c_char, ...) -> c_int;
-
     // ── Process / stdio ──────────────────────────────────────────────────
     pub fn putchar(c: c_int) -> c_int;
-    pub fn perror(s: *const c_char);
     pub fn abort() -> !;
     pub fn exit(status: c_int) -> !;
-    pub fn setbuf(stream: *mut CFile, buf: *mut c_char);
+    pub fn setbuf(stream: *mut CFile, buf: *mut u8);
     pub fn signal(sig: c_int, handler: usize) -> usize;
     pub fn getuid() -> c_uint;
     pub fn time(timer: *mut c_long) -> c_long;
 
     // ── File I/O (legacy save/score formats) ─────────────────────────────
-    pub fn fopen(path: *const c_char, mode: *const c_char) -> *mut CFile;
+    //
+    // Paths/modes are passed as NUL-terminated byte buffers (`*const u8`);
+    // callers build them with [`to_c_bytes`] and keep them alive for the call.
+    pub fn fopen(path: *const u8, mode: *const u8) -> *mut CFile;
     pub fn fclose(stream: *mut CFile) -> c_int;
     pub fn fflush(stream: *mut CFile) -> c_int;
     pub fn rewind(stream: *mut CFile);
     pub fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
     pub fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
-    pub fn access(path: *const c_char, mode: c_int) -> c_int;
+    pub fn access(path: *const u8, mode: c_int) -> c_int;
+}
+
+/// Builds a NUL-terminated byte buffer from a Rust string for use at the
+/// byte-oriented C boundary (`fopen`, `access`, …).
+pub fn to_c_bytes(s: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(s.len() + 1);
+    out.extend_from_slice(s.as_bytes());
+    out.push(0);
+    out
 }

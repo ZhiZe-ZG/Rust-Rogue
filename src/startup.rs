@@ -1,6 +1,6 @@
 //! Process startup sequence, ported from `src/c/main.c`.
 
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::io::Write;
 use std::os::raw::{c_char, c_int, c_uchar};
 
@@ -17,7 +17,7 @@ use crate::mdport::{
     md_gethomedir, md_getpid, md_getusername, md_hasclreol, md_init, md_normaluser, md_shellescape,
     md_tstpresume, md_tstpsignal,
 };
-use crate::options::{parse_opts, strucpy};
+use crate::options::parse_opts;
 use crate::rip::{death, death_monst, score};
 use crate::rnd::{rnd, set_seed};
 use crate::save::restore;
@@ -75,13 +75,10 @@ unsafe fn c_stderr() -> *mut CFile {
 
 unsafe extern "C" {
     static mut dnum: c_int;
-    static mut file_name: [c_char; MAXSTR];
-    static mut home: [c_char; MAXSTR];
     static master_mode_enabled: c_uchar;
     static mut noscore: c_int;
     static mut purse: c_int;
     static mut seed: c_int;
-    static mut whoami: [c_char; MAXSTR];
     static mut wizard: c_int;
 
     // ── Game-control globals from extern.c ────────────────────────────────
@@ -211,10 +208,9 @@ pub unsafe extern "C" fn playit() {
     /*
      * parse environment declaration of options
      */
-    let c_options = std::env::var_os("ROGUEOPTS")
-        .and_then(|value| CString::new(value.into_encoded_bytes()).ok());
+    let c_options = std::env::var("ROGUEOPTS").ok();
     if let Some(options) = c_options.as_ref() {
-        parse_opts(options.as_ptr() as *mut c_char);
+        parse_opts(options);
     }
 
     oldpos = crate::game::PLAYER.pos();
@@ -274,7 +270,7 @@ pub unsafe extern "C" fn leave(sig: c_int) {
 
     setbuf(
         c_stdout(),
-        std::ptr::addr_of_mut!(LEAVE_BUF).cast::<c_char>(),
+        std::ptr::addr_of_mut!(LEAVE_BUF).cast::<u8>(),
     ); /* throw away pending output */
 
     if !runtime::is_shutdown() {
@@ -357,42 +353,18 @@ pub unsafe extern "C" fn rogue_main(
     }
 
     let home_dir = md_gethomedir();
-    let home_len = CStr::from_ptr(home_dir)
-        .to_bytes_with_nul()
-        .len()
-        .min(MAXSTR);
-    std::ptr::copy_nonoverlapping(
-        home_dir,
-        std::ptr::addr_of_mut!(home).cast::<c_char>(),
-        home_len,
-    );
-    std::ptr::copy_nonoverlapping(
-        home_dir,
-        std::ptr::addr_of_mut!(file_name).cast::<c_char>(),
-        home_len,
-    );
-    let save_name = b"rogue.save\0";
-    let name_start = home_len.saturating_sub(1);
-    std::ptr::copy_nonoverlapping(
-        save_name.as_ptr() as *const c_char,
-        std::ptr::addr_of_mut!(file_name)
-            .cast::<c_char>()
-            .add(name_start),
-        save_name.len(),
-    );
+    crate::globals::set_home(home_dir.clone());
+    // Default save file: "<home>rogue.save".
+    let save_name = format!("{}rogue.save", home_dir);
+    crate::globals::set_file_name(save_name);
 
-    let options = std::env::var_os("ROGUEOPTS")
-        .and_then(|value| CString::new(value.into_encoded_bytes()).ok());
+    let options = std::env::var("ROGUEOPTS").ok();
     if let Some(options) = options.as_ref() {
-        parse_opts(options.as_ptr() as *mut c_char);
+        parse_opts(options);
     }
-    if options.is_none() || whoami[0] == 0 {
+    if options.is_none() || crate::globals::whoami().is_empty() {
         let username = md_getusername();
-        strucpy(
-            std::ptr::addr_of_mut!(whoami).cast::<c_char>(),
-            username,
-            CStr::from_ptr(username).to_bytes().len() as c_int,
-        );
+        crate::globals::set_whoami(crate::options::filter_printable(&username));
     }
 
     let clock_seed = time(std::ptr::null_mut()) as c_int + md_getpid();
@@ -431,21 +403,22 @@ pub unsafe extern "C" fn rogue_main(
         }
     }
 
+    let _ = envp;
     init_check();
-    if argc == 2 && restore(arg_at(argv, 1), envp) == 0 {
+    if argc == 2 && restore(arg_at(argv, 1)) == 0 {
         my_exit(1);
     }
 
     if master_mode_enabled != 0 && wizard != 0 {
         print!(
             "Hello {}, welcome to dungeon #{}",
-            CStr::from_ptr(std::ptr::addr_of!(whoami).cast::<c_char>()).to_string_lossy(),
+            crate::globals::whoami(),
             std::ptr::addr_of!(dnum).read()
         );
     } else {
         print!(
             "Hello {}, just a moment while I dig the dungeon...",
-            CStr::from_ptr(std::ptr::addr_of!(whoami).cast::<c_char>()).to_string_lossy()
+            crate::globals::whoami()
         );
     }
     std::io::stdout()

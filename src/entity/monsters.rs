@@ -6,7 +6,7 @@ use crate::daemon::{fuse, lengthen, Daemon};
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
-use crate::ffi::{abort, strcmp};
+use crate::ffi::abort;
 use crate::game::PLAYER;
 use crate::item::rings::RingType;
 use crate::entity::player::attach_pack;
@@ -279,8 +279,9 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
                 }
                 crate::game::PLAYER.add_flag(MonsterFlags::HUH);
                 let mname = set_mname(tp);
-                addmsg_str(&CStr::from_ptr(mname).to_string_lossy());
-                if strcmp(mname, c"it".as_ptr()) != 0 {
+                let mname_str = CStr::from_ptr(mname).to_string_lossy().into_owned();
+                addmsg_str(&mname_str);
+                if mname_str != "it" {
                     addmsg_str("'");
                 }
                 msg_str("s gaze has confused you");

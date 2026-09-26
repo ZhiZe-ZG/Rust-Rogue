@@ -24,7 +24,6 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
-use crate::ffi::{atoi, isupper, sprintf, strchr, strcpy, toascii, toupper};
 use crate::globals::{monsters, weap_info};
 use crate::item::rings::RingType;
 use crate::entity::player::{attach_pack, detach_pack, discard};
@@ -197,13 +196,10 @@ pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: c_uchar
                 (ch as u8) as char,
             );
         }
-        msg_str(
-            &CStr::from_ptr(choose_str(
-                c"heavy!  That's a nasty critter!".as_ptr(),
-                c"wait!  That's a xeroc!".as_ptr(),
-            ))
-            .to_string_lossy(),
-        );
+        msg_str(choose_str(
+            "heavy!  That's a nasty critter!",
+            "wait!  That's a xeroc!",
+        ));
         if thrown == 0 {
             return false as c_uchar as c_int;
         }
@@ -386,14 +382,12 @@ pub unsafe extern "C" fn attack(mp: *mut Thing) -> c_int {
                 // Venus flytrap: holds the player, deals ongoing damage
                 PLAYER.add_flag(MonsterFlags::HELD);
                 vf_hit += 1;
-                sprintf(
-                    monsters[(b'F' as usize) - (b'A' as usize)]
-                        .m_stats
-                        .damage
-                        .as_mut_ptr(),
-                    c"%dx1".as_ptr(),
-                    vf_hit,
-                );
+                let text = format!("{}x1", vf_hit);
+                let bytes = text.as_bytes();
+                let damage = &mut monsters[(b'F' as usize) - (b'A' as usize)].m_stats.damage;
+                let copy_len = bytes.len().min(damage.len() - 1);
+                damage[..copy_len].copy_from_slice(&bytes[..copy_len]);
+                damage[copy_len] = 0;
                 PLAYER.with_stats_mut(|stats| stats.hit_points -= 1);
                 if PLAYER.stats().hit_points <= 0 {
                     death(b'F' as c_char);
@@ -450,10 +444,7 @@ pub unsafe extern "C" fn attack(mp: *mut Thing) -> c_int {
                         false as c_uchar,
                     );
                     leave_pack(steal, false as c_uchar, false as c_uchar);
-                    msg_str(&format!(
-                        "she stole {}!",
-                        CStr::from_ptr(inv_name(steal, true as c_uchar)).to_string_lossy()
-                    ));
+                    msg_str(&format!("she stole {}!", inv_name(steal, true as c_uchar)));
                     discard(steal);
                     count = 0;
                     status();
@@ -513,8 +504,8 @@ pub unsafe extern "C" fn set_mname(tp: *mut Thing) -> *mut c_char {
     let mname: &'static str;
     if player_has(MonsterFlags::HALU) {
         output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
-        let ch = toascii(output::glyph_at_cursor() as c_int);
-        let idx = if isupper(ch) != 0 {
+        let ch = (output::glyph_at_cursor() as u8).to_ascii_uppercase() as c_int;
+        let idx = if (ch as u8).is_ascii_uppercase() {
             (ch - b'A' as c_int) as usize
         } else {
             rnd(26) as usize
@@ -572,12 +563,16 @@ unsafe fn roll_em_impl(
     weap: *mut Thing,
     hurl: c_uchar,
 ) -> c_int {
-    let cp: *mut c_char;
+    let damage: [u8; 8];
     let hplus: c_int;
     let dplus: c_int;
 
     if weap.is_null() {
-        cp = att_stats.damage.as_ptr() as *mut c_char;
+        let src = &att_stats.damage;
+        let mut buf = [0u8; 8];
+        let n = src.len().min(8);
+        buf[..n].copy_from_slice(&src[..n]);
+        damage = buf;
         dplus = 0;
         hplus = 0;
     } else {
@@ -600,26 +595,44 @@ unsafe fn roll_em_impl(
                 && !PLAYER.weapon().is_null()
                 && (*thing_o(PLAYER.weapon())).o_which == (*thing_o(weap)).o_launch
             {
-                let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr() as *mut c_char;
                 return roll_em_inner(
                     att_stats,
                     thdef,
                     def_is_hero,
-                    hurldmg_ptr,
+                    &(*thing_o(weap)).o_hurldmg,
                     hp + (*thing_o(PLAYER.weapon())).o_hplus,
                     dp + (*thing_o(PLAYER.weapon())).o_dplus,
                 );
             } else if (*thing_o(weap)).o_launch < 0 {
-                let hurldmg_ptr = (*thing_o(weap)).o_hurldmg.as_mut_ptr() as *mut c_char;
-                return roll_em_inner(att_stats, thdef, def_is_hero, hurldmg_ptr, hp, dp);
+                return roll_em_inner(att_stats, thdef, def_is_hero, &(*thing_o(weap)).o_hurldmg, hp, dp);
             }
         }
-        cp = (*thing_o(weap)).o_damage.as_mut_ptr() as *mut c_char;
+        damage = (*thing_o(weap)).o_damage;
         hplus = hp;
         dplus = dp;
     }
 
-    roll_em_inner(att_stats, thdef, def_is_hero, cp, hplus, dplus)
+    roll_em_inner(att_stats, thdef, def_is_hero, &damage, hplus, dplus)
+}
+
+/// Parses a legacy damage specification like `"2x4"` or `"1x8/1x8/3x10"`
+/// into `(ndice, nsides)` pairs.
+fn parse_damage(spec: &[u8]) -> Vec<(i32, i32)> {
+    let text: String = spec
+        .iter()
+        .take_while(|b| **b != 0)
+        .map(|b| *b as char)
+        .collect();
+    let mut out = Vec::new();
+    for part in text.split('/') {
+        let mut it = part.split('x');
+        if let (Some(a), Some(b)) = (it.next(), it.next()) {
+            if let (Ok(n), Ok(s)) = (a.trim().parse::<i32>(), b.trim().parse::<i32>()) {
+                out.push((n, s));
+            }
+        }
+    }
+    out
 }
 
 /// Inner roll loop, factored out to handle the hurldmg shortcut cleanly.
@@ -627,7 +640,7 @@ unsafe fn roll_em_inner(
     att_stats: &crate::entity::player::Stats,
     thdef: *mut Thing,
     def_is_hero: bool,
-    mut cp: *mut c_char,
+    damage_spec: &[u8],
     hplus: c_int,
     dplus: c_int,
 ) -> c_int {
@@ -663,28 +676,13 @@ unsafe fn roll_em_inner(
     let mut did_hit = 0i32;
     let mut total_damage = 0i32;
 
-    loop {
-        if cp.is_null() || *cp == 0 {
-            break;
-        }
-        let ndice = atoi(cp);
-        cp = strchr(cp, b'x' as c_int);
-        if cp.is_null() {
-            break;
-        }
-        cp = cp.add(1);
-        let nsides = atoi(cp);
+    for (ndice, nsides) in parse_damage(damage_spec) {
         if swing(att_lvl, def_arm, hplus + STR_PLUS[str_idx]) != 0 {
             let proll = roll(ndice, nsides);
             let damage = dplus + proll + ADD_DAM[str_idx];
             total_damage += if damage > 0 { damage } else { 0 };
             did_hit = 1;
         }
-        cp = strchr(cp, b'/' as c_int);
-        if cp.is_null() {
-            break;
-        }
-        cp = cp.add(1);
     }
 
     if did_hit != 0 {
@@ -701,14 +699,24 @@ unsafe fn roll_em_inner(
 /// The print name of a combatant.
 #[no_mangle]
 pub unsafe extern "C" fn prname(mname: *const c_char, upper: c_uchar) -> *mut c_char {
-    PRNAME_BUF[0] = 0;
-    if mname.is_null() {
-        strcpy(std::ptr::addr_of_mut!(PRNAME_BUF).cast(), c"you".as_ptr());
+    let text: &str = if mname.is_null() {
+        "you"
     } else {
-        strcpy(std::ptr::addr_of_mut!(PRNAME_BUF).cast(), mname);
-    }
+        // Borrow the incoming C string without allocating.
+        let mut len = 0usize;
+        while *mname.add(len) != 0 {
+            len += 1;
+        }
+        std::str::from_utf8_unchecked(std::slice::from_raw_parts(
+            mname as *const u8,
+            len,
+        ))
+    };
+    let buffer = std::ptr::addr_of_mut!(PRNAME_BUF).cast::<c_char>();
+    copy_str_to_c_buffer(buffer, MAXSTR, text);
     if upper != 0 && PRNAME_BUF[0] != 0 {
-        PRNAME_BUF[0] = toupper(PRNAME_BUF[0] as c_uchar as c_int) as c_char;
+        let first = (PRNAME_BUF[0] as u8).to_ascii_uppercase();
+        PRNAME_BUF[0] = first as c_char;
     }
     std::ptr::addr_of_mut!(PRNAME_BUF).cast()
 }
@@ -859,11 +867,8 @@ pub unsafe extern "C" fn killed(tp: *mut Thing, pr: c_uchar) {
         PLAYER.remove_flag(MonsterFlags::HELD);
         vf_hit = 0;
         // Reset damage string to "000x0"
-        let dmg = monsters[(b'F' as usize) - (b'A' as usize)]
-            .m_stats
-            .damage
-            .as_mut_ptr();
-        strcpy(dmg, c"000x0".as_ptr());
+        let damage = &mut monsters[(b'F' as usize) - (b'A' as usize)].m_stats.damage;
+        damage[..b"000x0\0".len()].copy_from_slice(b"000x0\0");
     } else if mtype == b'L' {
         let tp_room = (*thing_t(tp)).t_room;
         let level = crate::game::current_depth();

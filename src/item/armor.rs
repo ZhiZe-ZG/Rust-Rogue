@@ -61,7 +61,7 @@ pub unsafe extern "C" fn wear() {
     if terse == 0 {
         addmsg_str("you are now ");
     }
-    msg_str(&format!("wearing {}", CStr::from_ptr(sp).to_string_lossy()));
+    msg_str(&format!("wearing {}", sp));
 }
 
 /// Removes currently worn armor after curse/drop checks.
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn take_off() {
     msg_str(&format!(
         " wearing {}) {}",
         (*thing_o(obj)).o_packch as char,
-        CStr::from_ptr(inv_name(obj, true as c_uchar)).to_string_lossy()
+        inv_name(obj, true as c_uchar)
     ));
 }
 

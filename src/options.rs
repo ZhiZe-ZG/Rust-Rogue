@@ -1,12 +1,10 @@
 //! Runtime option handling and the option screen.
 //!
 //! Ported from `src/c/options.c` to Rust.
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_void};
+use std::os::raw::{c_int, c_uchar, c_void, c_void as c_void_t};
 
 use crate::draw::{erase_lamp, look};
 use crate::entity::player::{Thing, ThingMonster};
-use crate::ffi::{isalpha, isprint, strcpy, strlen, strncmp, toupper};
 use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::{output, Window};
 use glam::IVec2;
@@ -23,22 +21,29 @@ const INV_CLEAR: c_int = 2;
 /// Number of `inv_t_name` entries (the inventory display styles).
 const INV_T_NAME_LEN: usize = 3;
 
+/// Identifies which owned string an option edits.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum StrTarget {
+    None,
+    Name,
+    Fruit,
+    File,
+}
+
 /// One configurable option: its prompt, the global it edits, and the
 /// callbacks that render and read it on the option screen.
 pub struct OPTION {
-    o_name: *mut c_char,
-    o_prompt: *mut c_char,
+    o_name: &'static str,
+    o_prompt: &'static str,
     o_opt: *mut c_void,
-    o_putfunc: unsafe fn(*mut c_void),
-    o_getfunc: unsafe fn(*mut c_void, Window) -> c_int,
+    o_str: StrTarget,
+    o_putfunc: unsafe fn(&OPTION),
+    o_getfunc: unsafe fn(&OPTION, Window) -> c_int,
 }
 
 unsafe extern "C" {
     static mut after: c_uchar;
-    static mut file_name: [c_char; MAXSTR];
     static mut fight_flush: c_uchar;
-    static mut fruit: [c_char; MAXSTR];
-    static mut home: [c_char; MAXSTR];
     static mut inv_type: c_int;
     static mut jump: c_uchar;
     static mut mpos: c_int;
@@ -46,8 +51,6 @@ unsafe extern "C" {
     static mut see_floor: c_uchar;
     static mut terse: c_uchar;
     static mut tombstone: c_uchar;
-    static mut whoami: [c_char; MAXSTR];
-
 }
 
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
@@ -65,72 +68,82 @@ unsafe fn proom_ptr() -> Option<usize> {
 unsafe fn option_list() -> [OPTION; 10] {
     [
         OPTION {
-            o_name: c"terse".as_ptr() as *mut c_char,
-            o_prompt: c"Terse output".as_ptr() as *mut c_char,
+            o_name: "terse",
+            o_prompt: "Terse output",
             o_opt: (&raw mut terse) as *mut c_void,
+            o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
         },
         OPTION {
-            o_name: c"flush".as_ptr() as *mut c_char,
-            o_prompt: c"Flush typeahead during battle".as_ptr() as *mut c_char,
+            o_name: "flush",
+            o_prompt: "Flush typeahead during battle",
             o_opt: (&raw mut fight_flush) as *mut c_void,
+            o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
         },
         OPTION {
-            o_name: c"jump".as_ptr() as *mut c_char,
-            o_prompt: c"Show position only at end of run".as_ptr() as *mut c_char,
+            o_name: "jump",
+            o_prompt: "Show position only at end of run",
             o_opt: (&raw mut jump) as *mut c_void,
+            o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
         },
         OPTION {
-            o_name: c"seefloor".as_ptr() as *mut c_char,
-            o_prompt: c"Show the lamp-illuminated floor".as_ptr() as *mut c_char,
+            o_name: "seefloor",
+            o_prompt: "Show the lamp-illuminated floor",
             o_opt: (&raw mut see_floor) as *mut c_void,
+            o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_sf,
         },
         OPTION {
-            o_name: c"passgo".as_ptr() as *mut c_char,
-            o_prompt: c"Follow turnings in passageways".as_ptr() as *mut c_char,
+            o_name: "passgo",
+            o_prompt: "Follow turnings in passageways",
             o_opt: (&raw mut passgo) as *mut c_void,
+            o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
         },
         OPTION {
-            o_name: c"tombstone".as_ptr() as *mut c_char,
-            o_prompt: c"Print out tombstone when killed".as_ptr() as *mut c_char,
+            o_name: "tombstone",
+            o_prompt: "Print out tombstone when killed",
             o_opt: (&raw mut tombstone) as *mut c_void,
+            o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
         },
         OPTION {
-            o_name: c"inven".as_ptr() as *mut c_char,
-            o_prompt: c"Inventory style".as_ptr() as *mut c_char,
+            o_name: "inven",
+            o_prompt: "Inventory style",
             o_opt: (&raw mut inv_type) as *mut c_void,
+            o_str: StrTarget::None,
             o_putfunc: put_inv_t,
             o_getfunc: get_inv_t,
         },
         OPTION {
-            o_name: c"name".as_ptr() as *mut c_char,
-            o_prompt: c"Name".as_ptr() as *mut c_char,
-            o_opt: (&raw mut whoami) as *mut c_void,
+            o_name: "name",
+            o_prompt: "Name",
+            o_opt: std::ptr::null_mut(),
+            o_str: StrTarget::Name,
             o_putfunc: put_str,
             o_getfunc: get_str,
         },
         OPTION {
-            o_name: c"fruit".as_ptr() as *mut c_char,
-            o_prompt: c"Fruit".as_ptr() as *mut c_char,
-            o_opt: (&raw mut fruit) as *mut c_void,
+            o_name: "fruit",
+            o_prompt: "Fruit",
+            o_opt: std::ptr::null_mut(),
+            o_str: StrTarget::Fruit,
             o_putfunc: put_str,
             o_getfunc: get_str,
         },
         OPTION {
-            o_name: c"file".as_ptr() as *mut c_char,
-            o_prompt: c"Save file".as_ptr() as *mut c_char,
-            o_opt: (&raw mut file_name) as *mut c_void,
+            o_name: "file",
+            o_prompt: "Save file",
+            o_opt: std::ptr::null_mut(),
+            o_str: StrTarget::File,
             o_putfunc: put_str,
             o_getfunc: get_str,
         },
@@ -141,10 +154,26 @@ unsafe fn paint(win: Window, s: &str) {
     output::write_window_text(win, s);
 }
 
+unsafe fn str_target_value(target: StrTarget) -> String {
+    match target {
+        StrTarget::Name => crate::globals::whoami(),
+        StrTarget::Fruit => crate::globals::fruit(),
+        StrTarget::File => crate::globals::file_name(),
+        StrTarget::None => String::new(),
+    }
+}
+
+unsafe fn set_str_target(target: StrTarget, value: String) {
+    match target {
+        StrTarget::Name => crate::globals::set_whoami(value),
+        StrTarget::Fruit => crate::globals::set_fruit(value),
+        StrTarget::File => crate::globals::set_file_name(value),
+        StrTarget::None => {}
+    }
+}
+
 unsafe fn pr_optname_slot(op: &OPTION) {
-    let prompt = CStr::from_ptr(op.o_prompt).to_string_lossy();
-    let name = CStr::from_ptr(op.o_name).to_string_lossy();
-    let out = format!("{} (\"{}\"): ", prompt, name);
+    let out = format!("{} (\"{}\"): ", op.o_prompt, op.o_name);
     paint(Window::Stdscr, &out);
 }
 
@@ -155,17 +184,17 @@ pub unsafe extern "C" fn option() {
 
     let options_window = Window::Stdscr;
     output::clear_window(options_window);
-    for item in &mut optlist {
+    for item in optlist.iter() {
         pr_optname_slot(item);
-        (item.o_putfunc)(item.o_opt);
+        (item.o_putfunc)(item);
         output::write_window_glyph(options_window, '\n');
     }
 
     output::move_window_cursor(options_window, IVec2::new(0, 0));
     for index in 0..optlist.len() {
-        let item = &mut optlist[index];
+        let item = &optlist[index];
         pr_optname_slot(item);
-        retval = (item.o_getfunc)(item.o_opt, Window::Stdscr);
+        retval = (item.o_getfunc)(item, Window::Stdscr);
         if retval == QUIT {
             break;
         }
@@ -194,26 +223,26 @@ unsafe fn pr_optname(op: *mut OPTION) {
     pr_optname_slot(&*op);
 }
 
-unsafe fn put_bool(vp: *mut c_void) {
-    let bp = vp as *mut c_uchar;
+unsafe fn put_bool(op: &OPTION) {
+    let bp = op.o_opt as *mut c_uchar;
     output::write_window_text(Window::Stdscr, if *bp != 0 { "True" } else { "False" });
 }
 
-unsafe fn put_str(vp: *mut c_void) {
-    let sp = vp as *mut c_char;
-    output::write_window_text(Window::Stdscr, &CStr::from_ptr(sp).to_string_lossy());
+unsafe fn put_str(op: &OPTION) {
+    let text = str_target_value(op.o_str);
+    output::write_window_text(Window::Stdscr, &text);
 }
 
-unsafe fn put_inv_t(vp: *mut c_void) {
-    let ip = vp as *mut c_int;
+unsafe fn put_inv_t(op: &OPTION) {
+    let ip = op.o_opt as *mut c_int;
     let idx = *ip as usize;
     if idx < INV_T_NAME_LEN {
         output::write_window_text(Window::Stdscr, &crate::globals::inv_t_name(idx));
     }
 }
 
-unsafe fn get_bool(vp: *mut c_void, win: Window) -> c_int {
-    let bp = vp as *mut c_uchar;
+unsafe fn get_bool(op: &OPTION, win: Window) -> c_int {
+    let bp = op.o_opt as *mut c_uchar;
     let mut bad = true;
 
     let origin = output::window_cursor(win);
@@ -247,10 +276,10 @@ unsafe fn get_bool(vp: *mut c_void, win: Window) -> c_int {
     NORM
 }
 
-unsafe fn get_sf(vp: *mut c_void, win: Window) -> c_int {
-    let bp = vp as *mut c_uchar;
+unsafe fn get_sf(op: &OPTION, win: Window) -> c_int {
+    let bp = op.o_opt as *mut c_uchar;
     let was_sf = *bp != 0;
-    let retval = get_bool(vp, win);
+    let retval = get_bool(op, win);
     if retval == QUIT {
         return QUIT;
     }
@@ -267,15 +296,14 @@ unsafe fn get_sf(vp: *mut c_void, win: Window) -> c_int {
     NORM
 }
 
-/// Read a line of text into `vopt`, editing within `win`.
-pub unsafe fn get_str(vopt: *mut c_void, win: Window) -> c_int {
-    let opt = vopt as *mut c_char;
-    let mut buf = [0 as c_char; MAXINP];
-    let mut ptr = buf.as_mut_ptr();
-    let mut c: c_int;
+/// Reads a line of text into `win`, starting from `initial`. Returns the
+/// edited text on success, or `None` if the user pressed ESCAPE.
+pub unsafe fn read_line(initial: &str, win: Window) -> Option<String> {
+    let mut buf: Vec<u8> = initial.as_bytes().to_vec();
 
     let origin = output::window_cursor(win);
     output::refresh_window(win);
+    let mut c: c_int;
     loop {
         c = readchar();
         if c == '\n' as c_int || c == '\r' as c_int || c == ESCAPE {
@@ -285,58 +313,54 @@ pub unsafe fn get_str(vopt: *mut c_void, win: Window) -> c_int {
             continue;
         }
         if c == input::erase_key() as c_int {
-            if ptr > buf.as_mut_ptr() {
-                ptr = ptr.sub(1);
-            }
+            buf.pop();
             continue;
         }
         if c == input::kill_key() as c_int {
-            ptr = buf.as_mut_ptr();
+            buf.clear();
             output::move_window_cursor(win, origin);
             continue;
         }
-        if ptr >= buf.as_mut_ptr().add(MAXINP) || !(isprint(c) != 0 || c == ' ' as c_int) {
+        let printable = c as u8;
+        if buf.len() >= MAXINP || !(printable.is_ascii_graphic() || printable == b' ') {
             continue;
         }
-        *ptr = c as c_char;
-        ptr = ptr.add(1);
-        output::write_window_text(win, &output::format_key(c as u8));
+        buf.push(printable);
+        output::write_window_text(win, &output::format_key(printable));
     }
 
-    *ptr = 0;
-    if ptr > buf.as_mut_ptr() {
-        let len = (ptr as usize - buf.as_ptr() as usize) as c_int;
-        let mut tmp = [0 as c_char; MAXSTR];
-        for i in 0..len as usize {
-            tmp[i] = buf[i];
-        }
-        tmp[len as usize] = 0;
-        std::ptr::copy_nonoverlapping(tmp.as_ptr(), opt, len as usize + 1);
-    }
+    let text = String::from_utf8_lossy(&buf).into_owned();
 
-    let msg = if opt.is_null() {
-        String::new()
-    } else {
-        CStr::from_ptr(opt).to_string_lossy().to_string()
-    };
-    let out = format!("{}\n", msg);
+    let out = format!("{}\n", text);
     output::move_window_cursor(win, origin);
     paint(win, &out);
     output::refresh_window(win);
     if win == Window::Stdscr {
-        mpos += (ptr as usize - buf.as_ptr() as usize) as c_int;
+        mpos += buf.len() as c_int;
     }
-    if c == '-' as c_int {
-        return MINUS;
-    }
+
     if c == ESCAPE {
-        return QUIT;
+        None
+    } else {
+        Some(text)
     }
-    NORM
 }
 
-unsafe fn get_inv_t(vp: *mut c_void, win: Window) -> c_int {
-    let ip = vp as *mut c_int;
+/// Read a line of text, editing within `win`, and store it in the option's
+/// target. Returns the legacy `get_str` status code.
+pub unsafe fn get_str(op: &OPTION, win: Window) -> c_int {
+    let initial = str_target_value(op.o_str);
+    match read_line(&initial, win) {
+        None => QUIT,
+        Some(text) => {
+            set_str_target(op.o_str, text);
+            NORM
+        }
+    }
+}
+
+unsafe fn get_inv_t(op: &OPTION, win: Window) -> c_int {
+    let ip = op.o_opt as *mut c_int;
     let mut bad = true;
 
     let origin = output::window_cursor(win);
@@ -379,77 +403,84 @@ unsafe fn get_inv_t(vp: *mut c_void, win: Window) -> c_int {
     NORM
 }
 
+/// Parse a `ROGUEOPTS`-style string, applying each recognised option. The
+/// string is processed as Rust `&str`; no C string calls are used.
 #[no_mangle]
-pub unsafe extern "C" fn parse_opts(str: *mut c_char) {
-    let mut current = str;
-    while !current.is_null() && *current != 0 {
-        let mut p = current;
-        while !p.is_null() && *p != 0 && isalpha(*p as c_int) == 0 {
-            p = p.add(1);
+pub unsafe fn parse_opts(s: &str) {
+    let bytes = s.as_bytes();
+    let mut i = 0usize;
+    let option_list = option_list();
+
+    while i < bytes.len() {
+        // Skip to the next alphabetic character.
+        while i < bytes.len() && !bytes[i].is_ascii_alphabetic() {
+            i += 1;
         }
-        if p.is_null() || *p == 0 {
+        if i >= bytes.len() {
             break;
         }
-        let start = p;
-        while !p.is_null() && *p != 0 && isalpha(*p as c_int) != 0 {
-            p = p.add(1);
+        let start = i;
+        while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+            i += 1;
         }
-        let len = p as usize - start as usize;
+        let name = &s[start..i];
 
         let mut matched = false;
-        for op in option_list().iter() {
-            let name = CStr::from_ptr(op.o_name).to_bytes();
-            if len == name.len() && strncmp(start, op.o_name, len) == 0 {
-                if op.o_putfunc == put_bool {
+        for op in option_list.iter() {
+            if op.o_name == name {
+                if op.o_str == StrTarget::None && op.o_name != "inven" {
+                    // Boolean option: set it true.
                     let bp = op.o_opt as *mut c_uchar;
                     *bp = true as c_uchar;
-                } else {
-                    let mut value = p;
-                    while !value.is_null() && *value == '=' as c_char {
-                        value = value.add(1);
+                } else if op.o_name == "inven" {
+                    // Inventory style: skip '=' then a single letter.
+                    while i < bytes.len() && bytes[i] == b'=' {
+                        i += 1;
                     }
-                    let start_ptr = if !value.is_null() && *value == '~' as c_char {
-                        let home_ptr = std::ptr::addr_of!(home).cast::<c_char>();
-                        strcpy(op.o_opt as *mut c_char, home_ptr);
-                        (op.o_opt as *mut c_char).add(strlen(home_ptr))
-                    } else {
-                        op.o_opt as *mut c_char
-                    };
-                    let mut end = value;
-                    while !end.is_null() && *end != 0 && *end != ',' as c_char {
-                        end = end.add(1);
-                    }
-                    if op.o_putfunc == put_inv_t {
-                        let mut tmp = value;
-                        if !tmp.is_null()
-                            && isalpha(*tmp as c_int) != 0
-                            && *tmp as u8 >= b'a'
-                            && *tmp as u8 <= b'z'
-                        {
-                            *tmp = toupper(*tmp as c_int) as c_char;
+                    if i < bytes.len() {
+                        let mut letter = bytes[i];
+                        i += 1;
+                        if letter.is_ascii_lowercase() {
+                            letter = letter.to_ascii_uppercase();
                         }
-                        for i in 0..INV_T_NAME_LEN {
-                            if !value.is_null() && !end.is_null() {
-                                let len = end as usize - value as usize;
-                                let value_bytes =
-                                    std::slice::from_raw_parts(value as *const u8, len);
-                                let option_name = crate::globals::inv_t_name(i);
-                                if value_bytes == option_name.as_bytes() {
-                                    inv_type = i as c_int;
-                                    break;
-                                }
+                        // Advance to the end of the value token.
+                        while i < bytes.len() && bytes[i] != b',' {
+                            i += 1;
+                        }
+                        let start_idx = i.saturating_sub(1);
+                        let value = &s[start_idx..start_idx + 1];
+                        for idx in 0..INV_T_NAME_LEN {
+                            if value == &crate::globals::inv_t_name(idx)[..1.min(crate::globals::inv_t_name(idx).len())] {
+                                inv_type = idx as c_int;
+                                break;
                             }
                         }
-                    } else {
-                        let limit = if end.is_null() {
-                            0
-                        } else {
-                            end as usize - value as usize
-                        };
-                        if limit > 0 {
-                            strucpy(start_ptr, value, limit as c_int);
-                        }
+                        let _ = letter;
                     }
+                } else {
+                    // String option: skip '=' then copy until ','.
+                    while i < bytes.len() && bytes[i] == b'=' {
+                        i += 1;
+                    }
+                    let mut value_start = i;
+                    // `~` expands to the home directory.
+                    let mut prefix = String::new();
+                    if i < bytes.len() && bytes[i] == b'~' {
+                        prefix = crate::globals::get_home();
+                        value_start = i + 1;
+                    }
+                    let mut end = value_start;
+                    while end < bytes.len() && bytes[end] != b',' {
+                        end += 1;
+                    }
+                    let raw = &s[value_start..end];
+                    let filtered: String = raw
+                        .chars()
+                        .filter(|ch| ch.is_ascii_graphic() || *ch == ' ')
+                        .collect();
+                    let new_value = format!("{}{}", prefix, filtered);
+                    set_str_target(op.o_str, new_value);
+                    i = end;
                 }
                 matched = true;
                 break;
@@ -457,40 +488,26 @@ pub unsafe extern "C" fn parse_opts(str: *mut c_char) {
         }
 
         if !matched {
-            while !p.is_null() && *p != 0 && !isalpha(*p as c_int) != 0 {
-                p = p.add(1);
+            // Skip this unrecognised word's value.
+            while i < bytes.len() && bytes[i] != b',' {
+                i += 1;
             }
-            current = p;
-            continue;
         }
-
-        while !p.is_null() && *p != 0 && *p != ',' as c_char {
-            p = p.add(1);
+        // Skip the trailing comma.
+        if i < bytes.len() && bytes[i] == b',' {
+            i += 1;
         }
-        if !p.is_null() && *p == ',' as c_char {
-            p = p.add(1);
-        }
-        current = p;
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn strucpy(s1: *mut c_char, s2: *const c_char, len: c_int) {
-    let mut remaining = len.max(0) as usize;
-    if remaining > MAXINP {
-        remaining = MAXINP;
-    }
-    let mut dst = s1;
-    let mut src = s2;
-    for _ in 0..remaining {
-        if src.is_null() || *src == 0 {
-            break;
-        }
-        if isprint(*src as c_int) != 0 || *src == ' ' as c_char {
-            *dst = *src;
-            dst = dst.add(1);
-        }
-        src = src.add(1);
-    }
-    *dst = 0;
+/// Filter `src` down to printable characters and spaces, capped at `MAXINP`.
+pub fn filter_printable(src: &str) -> String {
+    src.chars()
+        .take(MAXINP)
+        .filter(|ch| ch.is_ascii_graphic() || *ch == ' ')
+        .collect()
 }
+
+// Silence the unused alias import warning while keeping the type name handy.
+#[allow(dead_code)]
+type Void = c_void_t;

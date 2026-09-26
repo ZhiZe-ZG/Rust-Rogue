@@ -8,7 +8,6 @@ use std::ptr;
 use crate::daemon::{fuse, lengthen, start_daemon, Daemon};
 use crate::daemons::{come_down, sight};
 use crate::draw::look;
-use crate::ffi::snprintf;
 
 use crate::entity::chase::see_monst;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
@@ -187,45 +186,51 @@ unsafe fn is_magic_local(obj: *mut Thing) -> bool {
 /// Shared implementation for potion effects that need the normal fuse/flag
 /// setup and knowledge tracking used by the C version.
 unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
-    let (flags, daemon, base_time, high_msg, straight_msg) = {
-        let taste_ptr = (&raw mut prbuf) as *mut [c_char; 2048] as *mut c_char as *const c_char;
+    let (flags, daemon, base_time, high_msg, straight_msg): (
+        MonsterFlags,
+        Option<Daemon>,
+        c_int,
+        String,
+        String,
+    ) = {
+        let taste = format!("this potion tastes like {} juice", crate::globals::fruit());
         match potion {
             PotionType::Confuse => (
                 MonsterFlags::HUH,
                 Some(Daemon::Unconfuse),
                 HUHDURATION,
-                c"what a tripy feeling!".as_ptr(),
-                c"wait, what's going on here. Huh? What? Who?".as_ptr(),
+                "what a tripy feeling!".to_owned(),
+                "wait, what's going on here. Huh? What? Who?".to_owned(),
             ),
             PotionType::Lsd => (
                 MonsterFlags::HALU,
                 Some(Daemon::ComeDown),
                 SEEDURATION,
-                c"Oh, wow!  Everything seems so cosmic!".as_ptr(),
-                c"Oh, wow!  Everything seems so cosmic!".as_ptr(),
+                "Oh, wow!  Everything seems so cosmic!".to_owned(),
+                "Oh, wow!  Everything seems so cosmic!".to_owned(),
             ),
             PotionType::SeeInvisible => (
                 MonsterFlags::CANSEE,
                 Some(Daemon::Unsee),
                 SEEDURATION,
-                taste_ptr,
-                taste_ptr,
+                taste.clone(),
+                taste,
             ),
             PotionType::Blind => (
                 MonsterFlags::BLIND,
                 Some(Daemon::Sight),
                 SEEDURATION,
-                c"oh, bummer!  Everything is dark!  Help!".as_ptr(),
-                c"a cloak of darkness falls around you".as_ptr(),
+                "oh, bummer!  Everything is dark!  Help!".to_owned(),
+                "a cloak of darkness falls around you".to_owned(),
             ),
             PotionType::Levitate => (
                 MonsterFlags::LEVIT,
                 Some(Daemon::Land),
                 HEALTIME,
-                c"oh, wow!  You're floating in the air!".as_ptr(),
-                c"you start to float in the air".as_ptr(),
+                "oh, wow!  You're floating in the air!".to_owned(),
+                "you start to float in the air".to_owned(),
             ),
-            _ => (MonsterFlags::NONE, None, 0, ptr::null(), ptr::null()),
+            _ => (MonsterFlags::NONE, None, 0, String::new(), String::new()),
         }
     };
 
@@ -246,7 +251,12 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
     } else {
         lengthen(daemon, t);
     }
-    msg_str(&CStr::from_ptr(choose_str(high_msg, straight_msg)).to_string_lossy());
+    let chosen = if player_has(MonsterFlags::HALU) {
+        high_msg
+    } else {
+        straight_msg
+    };
+    msg_str(&chosen);
 }
 
 /// quaff:
@@ -321,8 +331,7 @@ pub unsafe extern "C" fn quaff() {
             if turn_see(false as c_uchar) == 0 {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
-                    CStr::from_ptr(choose_str(c"normal".as_ptr(), c"strange".as_ptr()))
-                        .to_string_lossy()
+                    choose_str("normal", "strange")
                 ));
             }
         }
@@ -367,8 +376,7 @@ pub unsafe extern "C" fn quaff() {
             } else {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
-                    CStr::from_ptr(choose_str(c"normal".as_ptr(), c"strange".as_ptr()))
-                        .to_string_lossy()
+                    choose_str("normal", "strange")
                 ));
             }
         }
@@ -383,12 +391,6 @@ pub unsafe extern "C" fn quaff() {
             do_pot_impl(PotionType::Lsd, true);
         }
         PotionType::SeeInvisible => {
-            let _ = snprintf(
-                std::ptr::addr_of_mut!(prbuf).cast::<c_char>(),
-                2048,
-                c"this potion tastes like %s juice".as_ptr(),
-                std::ptr::addr_of!(fruit).cast::<c_char>(),
-            );
             show = player_has(MonsterFlags::CANSEE);
             do_pot_impl(PotionType::SeeInvisible, false);
             if !show {

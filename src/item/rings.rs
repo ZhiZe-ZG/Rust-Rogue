@@ -2,7 +2,6 @@
 //!
 //! Ported from `src/c/rings.c` to Rust.
 use crate::entity::player::{ObjectFlags, Thing, ThingObject};
-use crate::ffi::snprintf;
 use crate::item::potions::invis_on;
 use crate::rnd::rnd;
 use std::ffi::CStr;
@@ -92,8 +91,6 @@ unsafe extern "C" {
     static mut mpos: c_int;
 }
 
-static mut RING_NUM_BUF: [c_char; 10] = [0; 10];
-
 #[inline]
 unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
@@ -156,7 +153,7 @@ pub unsafe extern "C" fn ring_on() {
     }
     msg_str(&format!(
         "{} ({})",
-        CStr::from_ptr(inv_name(obj, 1)).to_string_lossy(),
+        inv_name(obj, 1),
         (*thing_o(obj)).o_packch as char,
     ));
 }
@@ -197,7 +194,7 @@ pub unsafe extern "C" fn ring_off() {
     if dropcheck(obj) != 0 {
         msg_str(&format!(
             "was wearing {}({})",
-            CStr::from_ptr(inv_name(obj, 1)).to_string_lossy(),
+            inv_name(obj, 1),
             (*thing_o(obj)).o_packch as char,
         ));
     }
@@ -267,27 +264,23 @@ pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
 }
 
 /// Returns bracketed ring bonus text for known stat-modifier rings.
-unsafe fn ring_num(obj: *mut Thing) -> *mut c_char {
+#[allow(dead_code)]
+unsafe fn ring_num(obj: *mut Thing) -> String {
     if obj.is_null() {
-        return c"".as_ptr() as *mut c_char;
+        return String::new();
     }
     if !(*thing_o(obj)).o_flags.contains(ObjectFlags::KNOW) {
-        return c"".as_ptr() as *mut c_char;
+        return String::new();
     }
 
     match RingType::from_raw((*thing_o(obj)).o_which) {
         Some(
             RingType::Protection | RingType::AddStrength | RingType::AddDamage | RingType::AddHit,
         ) => {
-            let _ = snprintf(
-                (&raw mut RING_NUM_BUF) as *mut c_char,
-                10,
-                c" [%s]".as_ptr(),
-                num((*thing_o(obj)).o_arm, 0, RING_TYPE as c_char),
-            );
-            (&raw mut RING_NUM_BUF) as *mut c_char
+            let inner = num((*thing_o(obj)).o_arm, 0, RING_TYPE as c_char);
+            format!(" [{}]", inner)
         }
-        _ => c"".as_ptr() as *mut c_char,
+        _ => String::new(),
     }
 }
 

@@ -10,7 +10,6 @@ use crate::config::GameConfig;
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
-use crate::ffi::isdigit;
 use crate::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::item::pack::{add_pack, floor_at, get_item};
 use crate::item::sticks::fix_stick;
@@ -122,7 +121,7 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
             {
                 msg_str(&format!(
                     "you must identify a {}",
-                    CStr::from_ptr(type_name(item_type)).to_string_lossy()
+                    type_name(item_type)
                 ));
             } else {
                 break;
@@ -145,7 +144,7 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
         _ => {}
     }
 
-    msg_str(&CStr::from_ptr(inv_name(obj, false as c_uchar)).to_string_lossy());
+    msg_str(&inv_name(obj, false as c_uchar));
 }
 
 #[no_mangle]
@@ -161,18 +160,17 @@ pub unsafe extern "C" fn set_know(obj: *mut Thing, info: *mut CObjInfo) {
     item.oi_guess = None;
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn type_name(item_type: c_int) -> *mut c_char {
+pub fn type_name(item_type: c_int) -> &'static str {
     match item_type {
-        x if x == POTION => c"potion".as_ptr() as *mut c_char,
-        x if x == SCROLL => c"scroll".as_ptr() as *mut c_char,
-        x if x == FOOD => c"food".as_ptr() as *mut c_char,
-        x if x == R_OR_S => c"ring, wand or staff".as_ptr() as *mut c_char,
-        x if x == RING => c"ring".as_ptr() as *mut c_char,
-        x if x == STICK => c"wand or staff".as_ptr() as *mut c_char,
-        x if x == WEAPON => c"weapon".as_ptr() as *mut c_char,
-        x if x == ARMOR => c"suit of armor".as_ptr() as *mut c_char,
-        _ => ptr::null_mut(),
+        x if x == POTION => "potion",
+        x if x == SCROLL => "scroll",
+        x if x == FOOD => "food",
+        x if x == R_OR_S => "ring, wand or staff",
+        x if x == RING => "ring",
+        x if x == STICK => "wand or staff",
+        x if x == WEAPON => "weapon",
+        x if x == ARMOR => "suit of armor",
+        _ => "",
     }
 }
 
@@ -193,7 +191,7 @@ pub unsafe extern "C" fn create_obj() {
         (*thing_o(obj)).o_type as u8 as char
     ));
     ch = readchar();
-    (*thing_o(obj)).o_which = if isdigit(ch) != 0 {
+    (*thing_o(obj)).o_which = if (ch as u8).is_ascii_digit() {
         ch - b'0' as c_int
     } else {
         ch - b'a' as c_int + 10
@@ -278,11 +276,8 @@ pub unsafe extern "C" fn teleport() {
         crate::game::PLAYER.remove_flag(MonsterFlags::HELD);
         vf_hit = 0;
         let dmg = b"000x0\0";
-        std::ptr::copy_nonoverlapping(
-            dmg.as_ptr() as *const c_char,
-            (&mut monsters[('F' as u8 - 'A' as u8) as usize].m_stats.damage[0]) as *mut c_char,
-            dmg.len(),
-        );
+        let damage = &mut monsters[(b'F' - b'A') as usize].m_stats.damage;
+        damage[..dmg.len()].copy_from_slice(dmg);
     }
     no_move = 0;
     count = 0;
@@ -320,21 +315,9 @@ mod tests {
 
     #[test]
     fn type_name_matches_expected_strings() {
-        unsafe {
-            let potion = CStr::from_ptr(type_name(POTION))
-                .to_string_lossy()
-                .into_owned();
-            let scroll = CStr::from_ptr(type_name(SCROLL))
-                .to_string_lossy()
-                .into_owned();
-            let armor = CStr::from_ptr(type_name(ARMOR))
-                .to_string_lossy()
-                .into_owned();
-
-            assert_eq!(potion, "potion");
-            assert_eq!(scroll, "scroll");
-            assert_eq!(armor, "suit of armor");
-        }
+        assert_eq!(type_name(POTION), "potion");
+        assert_eq!(type_name(SCROLL), "scroll");
+        assert_eq!(type_name(ARMOR), "suit of armor");
     }
 
     #[test]

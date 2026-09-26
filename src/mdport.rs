@@ -12,12 +12,25 @@
 //! implemented in `src/c/mdport.c`.  The port targets POSIX (Linux/macOS)
 //! and retains the same C ABI so existing Rust callers keep working.
 
-use std::os::raw::{c_char, c_int, c_uint, c_void};
+use std::os::raw::{c_int, c_uint, c_void};
 
 use crate::save::auto_save;
 use crate::startup::{endit, quit, tstp};
 use crate::ui::input;
 use crate::ui::output;
+
+/// Reads a NUL-terminated byte string from a raw pointer into an owned Rust
+/// `String`, without using any C string type.
+unsafe fn c_ptr_to_string(p: *const u8) -> String {
+    if p.is_null() {
+        return String::new();
+    }
+    let mut len = 0usize;
+    while *p.add(len) != 0 {
+        len += 1;
+    }
+    String::from_utf8_lossy(std::slice::from_raw_parts(p, len)).into_owned()
+}
 
 /// Curses key codes used by the keypad/arrow-key reader. These mirror the
 /// ncurses public header (`keys.h`) values so behaviour is identical to the
@@ -185,31 +198,25 @@ pub unsafe extern "C" fn md_raw_standend() {
 /// Unlink an open file.  On POSIX there is nothing special to do beyond
 /// unlinking the path.
 #[no_mangle]
-pub unsafe extern "C" fn md_unlink_open_file(file: *mut c_char, _inf: *mut c_void) -> c_int {
-    if file.is_null() {
-        return -1;
-    }
-    libc::unlink(file)
+pub unsafe fn md_unlink_open_file(file: &str, _inf: *mut c_void) -> c_int {
+    let bytes = crate::ffi::to_c_bytes(file);
+    libc::unlink(bytes.as_ptr() as *const libc::c_char)
 }
 
 /// md_unlink:
 /// Remove a file.
 #[no_mangle]
-pub unsafe extern "C" fn md_unlink(file: *mut c_char) -> c_int {
-    if file.is_null() {
-        return -1;
-    }
-    libc::unlink(file)
+pub unsafe fn md_unlink(file: &str) -> c_int {
+    let bytes = crate::ffi::to_c_bytes(file);
+    libc::unlink(bytes.as_ptr() as *const libc::c_char)
 }
 
 /// md_chmod:
 /// Change file permissions.
 #[no_mangle]
-pub unsafe extern "C" fn md_chmod(filename: *mut c_char, mode: c_int) -> c_int {
-    if filename.is_null() {
-        return -1;
-    }
-    libc::chmod(filename, mode as libc::mode_t)
+pub unsafe fn md_chmod(filename: &str, mode: c_int) -> c_int {
+    let bytes = crate::ffi::to_c_bytes(filename);
+    libc::chmod(bytes.as_ptr() as *const libc::c_char, mode as libc::mode_t)
 }
 
 // -------------------------------------------------------------------------
@@ -288,80 +295,53 @@ pub unsafe extern "C" fn md_getpid() -> c_int {
 /// md_getusername:
 /// Return the login name of the current user.
 #[no_mangle]
-pub unsafe extern "C" fn md_getusername() -> *mut c_char {
-    static mut LOGIN: [c_char; 80] = [0; 80];
-    let mut l: *mut c_char = std::ptr::null_mut();
-
+pub unsafe fn md_getusername() -> String {
     #[cfg(unix)]
     {
         let pw = libc::getpwuid(libc::getuid());
         if !pw.is_null() && !(*pw).pw_name.is_null() {
-            l = (*pw).pw_name;
+            let name = c_ptr_to_string((*pw).pw_name as *const u8);
+            if !name.is_empty() {
+                return name;
+            }
         }
     }
 
-    if l.is_null() || *l == 0 {
-        l = libc::getenv(c"USERNAME".as_ptr());
+    for var in ["USERNAME", "LOGNAME", "USER"] {
+        if let Ok(value) = std::env::var(var) {
+            if !value.is_empty() {
+                return value;
+            }
+        }
     }
-    if l.is_null() || *l == 0 {
-        l = libc::getenv(c"LOGNAME".as_ptr());
-    }
-    if l.is_null() || *l == 0 {
-        l = libc::getenv(c"USER".as_ptr());
-    }
-    if l.is_null() || *l == 0 {
-        l = c"nobody".as_ptr() as *mut c_char;
-    }
-
-    let src = std::ffi::CStr::from_ptr(l);
-    let bytes = src.to_bytes();
-    let n = bytes.len().min(79);
-    for (i, b) in bytes.iter().take(n).enumerate() {
-        LOGIN[i] = *b as c_char;
-    }
-    LOGIN[n] = 0;
-    std::ptr::addr_of_mut!(LOGIN).cast::<c_char>()
+    "nobody".to_string()
 }
 
 /// md_gethomedir:
 /// Return the home directory of the current user, with a trailing slash.
 #[no_mangle]
-pub unsafe extern "C" fn md_gethomedir() -> *mut c_char {
-    static mut HOMEDIR: [c_char; 4096] = [0; 4096];
-    let mut h: *mut c_char = std::ptr::null_mut();
+pub unsafe fn md_gethomedir() -> String {
+    let mut home: Option<String> = None;
 
     #[cfg(unix)]
     {
         let pw = libc::getpwuid(libc::getuid());
         if !pw.is_null() && !(*pw).pw_dir.is_null() {
-            let dir = std::ffi::CStr::from_ptr((*pw).pw_dir);
-            h = (*pw).pw_dir;
-            if dir.to_bytes() == b"/" {
-                h = std::ptr::null_mut();
+            let dir = c_ptr_to_string((*pw).pw_dir as *const u8);
+            // A bare "/" is not a useful home directory; fall back to $HOME.
+            if !dir.is_empty() && dir != "/" {
+                home = Some(dir);
             }
         }
     }
 
-    if h.is_null() {
-        h = libc::getenv(c"HOME".as_ptr());
+    let mut home = home
+        .or_else(|| std::env::var("HOME").ok())
+        .unwrap_or_default();
+    if !home.is_empty() && !home.ends_with('/') {
+        home.push('/');
     }
-
-    HOMEDIR[0] = 0;
-    if !h.is_null() && *h != 0 {
-        let src = std::ffi::CStr::from_ptr(h);
-        let bytes = src.to_bytes();
-        let n = bytes.len().min(4095);
-        for (i, b) in bytes.iter().take(n).enumerate() {
-            HOMEDIR[i] = *b as c_char;
-        }
-        HOMEDIR[n] = 0;
-        if n > 0 && HOMEDIR[n - 1] != b'/' as c_char {
-            HOMEDIR[n] = b'/' as c_char;
-            HOMEDIR[n + 1] = 0;
-        }
-    }
-
-    std::ptr::addr_of_mut!(HOMEDIR).cast::<c_char>()
+    home
 }
 
 /// md_sleep:
@@ -377,39 +357,26 @@ pub unsafe extern "C" fn md_sleep(s: c_int) {
 /// md_getshell:
 /// Return the user's login shell.
 #[no_mangle]
-pub unsafe extern "C" fn md_getshell() -> *mut c_char {
-    static mut SHELL: [c_char; 4096] = [0; 4096];
-    let mut s: *mut c_char = std::ptr::null_mut();
-
+pub unsafe fn md_getshell() -> String {
     #[cfg(unix)]
     {
         let pw = libc::getpwuid(libc::getuid());
         if !pw.is_null() && !(*pw).pw_shell.is_null() {
-            s = (*pw).pw_shell;
+            let sh = c_ptr_to_string((*pw).pw_shell as *const u8);
+            if !sh.is_empty() {
+                return sh;
+            }
         }
     }
 
-    if s.is_null() || *s == 0 {
-        s = libc::getenv(c"COMSPEC".as_ptr());
+    for var in ["COMSPEC", "SHELL", "SystemRoot"] {
+        if let Ok(value) = std::env::var(var) {
+            if !value.is_empty() {
+                return value;
+            }
+        }
     }
-    if s.is_null() || *s == 0 {
-        s = libc::getenv(c"SHELL".as_ptr());
-    }
-    if s.is_null() || *s == 0 {
-        s = libc::getenv(c"SystemRoot".as_ptr());
-    }
-    if s.is_null() || *s == 0 {
-        s = c"/bin/sh".as_ptr() as *mut c_char;
-    }
-
-    let src = std::ffi::CStr::from_ptr(s);
-    let bytes = src.to_bytes();
-    let n = bytes.len().min(4095);
-    for (i, b) in bytes.iter().take(n).enumerate() {
-        SHELL[i] = *b as c_char;
-    }
-    SHELL[n] = 0;
-    std::ptr::addr_of_mut!(SHELL).cast::<c_char>()
+    "/bin/sh".to_string()
 }
 
 /// md_shellescape:
@@ -430,12 +397,12 @@ pub unsafe extern "C" fn md_shellescape() -> c_int {
         if pid == 0 {
             // Shell process: drop privileges then exec the shell.
             md_normaluser();
-            let shell_cstr = std::ffi::CStr::from_ptr(sh);
+            let shell_bytes = crate::ffi::to_c_bytes(&sh);
             libc::execl(
-                shell_cstr.as_ptr(),
+                shell_bytes.as_ptr() as *const libc::c_char,
                 c"shell".as_ptr(),
                 c"-i".as_ptr(),
-                std::ptr::null::<c_char>(),
+                std::ptr::null::<libc::c_char>(),
             );
             libc::perror(c"No shelly".as_ptr());
             libc::_exit(-1);
@@ -463,12 +430,8 @@ pub unsafe extern "C" fn md_shellescape() -> c_int {
 
 /// directory_exists:
 /// Return 1 if the given path is a directory, 0 otherwise.
-unsafe fn directory_exists(dirname: *mut c_char) -> c_int {
-    if dirname.is_null() {
-        return 0;
-    }
-    let path = std::ffi::CStr::from_ptr(dirname);
-    match std::fs::metadata(path.to_str().unwrap_or("")) {
+unsafe fn directory_exists(dirname: &str) -> c_int {
+    match std::fs::metadata(dirname) {
         Ok(md) => {
             if md.is_dir() {
                 1
@@ -483,23 +446,15 @@ unsafe fn directory_exists(dirname: *mut c_char) -> c_int {
 /// md_getrealname:
 /// Return the real (login) name for the given uid, or the numeric uid
 /// string if no passwd entry exists.
-unsafe fn md_getrealname(uid: c_int) -> *mut c_char {
-    static mut UIDSTR: [c_char; 20] = [0; 20];
+unsafe fn md_getrealname(uid: c_int) -> String {
     #[cfg(unix)]
     {
         let pw = libc::getpwuid(uid as libc::uid_t);
         if !pw.is_null() && !(*pw).pw_name.is_null() {
-            return (*pw).pw_name;
+            return c_ptr_to_string((*pw).pw_name as *const u8);
         }
     }
-    let s = std::ffi::CString::new(uid.to_string()).unwrap_or_default();
-    let bytes = s.as_bytes();
-    let n = bytes.len().min(19);
-    for (i, b) in bytes.iter().take(n).enumerate() {
-        UIDSTR[i] = *b as c_char;
-    }
-    UIDSTR[n] = 0;
-    std::ptr::addr_of_mut!(UIDSTR).cast::<c_char>()
+    uid.to_string()
 }
 
 // -------------------------------------------------------------------------

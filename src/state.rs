@@ -34,7 +34,7 @@ use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 
 use crate::daemon::{CDelayedAction, Daemon, D_LIST};
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject};
-use crate::ffi::{fread, fwrite, strcmp, strlen, CFile};
+use crate::ffi::{fread, fwrite, CFile};
 use crate::game::PLAYER;
 use crate::game::{MONSTER_LIST, MONSTER_MAP};
 use crate::globals::{
@@ -157,20 +157,12 @@ unsafe extern "C" {
 
     // chars
     static mut dir_ch: c_char;
-    static mut file_name: [c_char; MAXSTR];
-    static mut huh: [c_char; MAXSTR];
     static mut p_colors: [*mut c_char; MAXPOTIONS];
-    static mut prbuf: [c_char; 2 * MAXSTR];
     static mut r_stones: [*mut c_char; MAXRINGS];
     static mut runch: c_char;
     static mut take: c_char;
-    static mut whoami: [c_char; MAXSTR];
-    static mut ws_made: [*mut c_char; MAXSTICKS];
-    static mut ws_type: [*mut c_char; MAXSTICKS];
 
     static mut orig_dsusp: c_int;
-    static mut fruit: [c_char; MAXSTR];
-    static mut home: [c_char; MAXSTR];
     static mut l_last_comm: c_char;
     static mut l_last_dir: c_char;
     static mut last_comm: c_char;
@@ -640,6 +632,26 @@ unsafe fn rs_read_marker(inf: *mut CFile, id: c_int) -> c_int {
 
 // ─── Strings ─────────────────────────────────────────────────────────────────
 
+/// Writes a fixed-width, NUL-padded string record (`count` bytes) using the
+/// legacy `rs_write_chars` framing (an int length followed by the bytes).
+unsafe fn rs_write_fixed_string(savef: *mut CFile, text: &str, count: usize) -> c_int {
+    let mut buf = vec![0u8; count];
+    let bytes = text.as_bytes();
+    let copy_len = bytes.len().min(count.saturating_sub(1));
+    buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+    let _ = rs_write_chars(savef, buf.as_mut_ptr() as *mut c_char, count as c_int);
+    WRITE_ERROR
+}
+
+/// Reads a fixed-width (`count`-byte) NUL-terminated string record back into
+/// an owned [`String`].
+unsafe fn rs_read_fixed_string(inf: *mut CFile, count: usize) -> String {
+    let mut buf = vec![0u8; count];
+    let _ = rs_read_chars(inf, buf.as_mut_ptr() as *mut c_char, count as c_int);
+    let end = buf.iter().position(|b| *b == 0).unwrap_or(count);
+    String::from_utf8_lossy(&buf[..end]).into_owned()
+}
+
 unsafe fn rs_write_string(savef: *mut CFile, s: *const c_char) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -648,7 +660,11 @@ unsafe fn rs_write_string(savef: *mut CFile, s: *const c_char) -> c_int {
     let len: c_int = if s.is_null() {
         0
     } else {
-        strlen(s) as c_int + 1
+        let mut n = 0usize;
+        while *s.add(n) != 0 {
+            n += 1;
+        }
+        n as c_int + 1
     };
 
     let _ = rs_write_int(savef, len);
@@ -1200,26 +1216,22 @@ unsafe fn rs_write_sticks(savef: *mut CFile) -> c_int {
         return WRITE_ERROR;
     }
 
-    let mut i = 0;
-    while i < MAXSTICKS {
-        if strcmp(ws_type[i], c"staff".as_ptr()) == 0 {
+    for i in 0..MAXSTICKS {
+        if crate::globals::ws_type[i] == "staff" {
             let _ = rs_write_int(savef, 0);
-            let _ = rs_write_string_index(
-                savef,
-                (&raw mut wood) as *mut *mut c_char,
-                cNWOOD,
-                ws_made[i],
-            );
+            let idx = crate::init::wood
+                .iter()
+                .position(|w| *w == crate::globals::ws_made[i])
+                .map_or(-1, |p| p as c_int);
+            let _ = rs_write_int(savef, idx);
         } else {
             let _ = rs_write_int(savef, 1);
-            let _ = rs_write_string_index(
-                savef,
-                (&raw mut metal) as *mut *mut c_char,
-                cNMETAL,
-                ws_made[i],
-            );
+            let idx = crate::init::metal
+                .iter()
+                .position(|m| *m == crate::globals::ws_made[i])
+                .map_or(-1, |p| p as c_int);
+            let _ = rs_write_int(savef, idx);
         }
-        i += 1;
     }
 
     WRITE_ERROR
@@ -1233,30 +1245,23 @@ unsafe fn rs_read_sticks(inf: *mut CFile) -> c_int {
         return read_stat();
     }
 
-    let mut i: c_int = 0;
-    let mut list: c_int = 0;
-
-    while i < MAXSTICKS as c_int {
+    for i in 0..MAXSTICKS {
+        let mut list: c_int = 0;
+        let mut idx: c_int = 0;
         let _ = rs_read_int(inf, &mut list);
+        let _ = rs_read_int(inf, &mut idx);
 
         if list == 0 {
-            let _ = rs_read_string_index(
-                inf,
-                (&raw mut wood) as *mut *mut c_char,
-                cNWOOD,
-                &mut ws_made[i as usize],
-            );
-            ws_type[i as usize] = c"staff".as_ptr() as *mut c_char;
+            crate::globals::ws_type[i] = "staff";
+            if idx >= 0 && (idx as usize) < crate::init::wood.len() {
+                crate::globals::ws_made[i] = crate::init::wood[idx as usize];
+            }
         } else {
-            let _ = rs_read_string_index(
-                inf,
-                (&raw mut metal) as *mut *mut c_char,
-                cNMETAL,
-                &mut ws_made[i as usize],
-            );
-            ws_type[i as usize] = c"wand".as_ptr() as *mut c_char;
+            crate::globals::ws_type[i] = "wand";
+            if idx >= 0 && (idx as usize) < crate::init::metal.len() {
+                crate::globals::ws_made[i] = crate::init::metal[idx as usize];
+            }
         }
-        i += 1;
     }
 
     read_stat()
@@ -2305,25 +2310,21 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     }
     let _ = rs_write_booleans(savef, (&raw mut pack_used) as *mut c_uchar, 26); /* 29 */
     let _ = rs_write_char(savef, dir_ch);
-    let _ = rs_write_chars(savef, (&raw mut file_name) as *mut c_char, MAXSTR as c_int);
-    let _ = rs_write_chars(savef, (&raw mut huh) as *mut c_char, MAXSTR as c_int);
+    let _ = rs_write_fixed_string(savef, &crate::globals::file_name(), MAXSTR);
+    let _ = rs_write_fixed_string(savef, &crate::globals::huh_string(), MAXSTR);
     let _ = rs_write_potions(savef);
-    let _ = rs_write_chars(
-        savef,
-        (&raw mut prbuf) as *mut c_char,
-        (2 * MAXSTR) as c_int,
-    );
+    let _ = rs_write_fixed_string(savef, &crate::globals::prbuf(), 2 * MAXSTR);
     let _ = rs_write_rings(savef);
     let release = crate::vers::release();
     let _ = rs_write_string_opt(savef, Some(&release));
     let _ = rs_write_char(savef, runch);
     let _ = rs_write_scrolls(savef);
     let _ = rs_write_char(savef, take);
-    let _ = rs_write_chars(savef, (&raw mut whoami) as *mut c_char, MAXSTR as c_int);
+    let _ = rs_write_fixed_string(savef, &crate::globals::whoami(), MAXSTR);
     let _ = rs_write_sticks(savef);
     let _ = rs_write_int(savef, orig_dsusp);
-    let _ = rs_write_chars(savef, (&raw mut fruit) as *mut c_char, MAXSTR as c_int);
-    let _ = rs_write_chars(savef, (&raw mut home) as *mut c_char, MAXSTR as c_int);
+    let _ = rs_write_fixed_string(savef, &crate::globals::fruit(), MAXSTR);
+    let _ = rs_write_fixed_string(savef, &crate::globals::get_home(), MAXSTR);
     let inv_names = crate::globals::inv_t_names();
     let _ = rs_write_int(savef, inv_names.len() as c_int);
     for name in &inv_names {
@@ -2516,10 +2517,10 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     }
     let _ = rs_read_booleans(inf, (&raw mut pack_used) as *mut c_uchar, 26); /* 29 */
     let _ = rs_read_char(inf, &mut dir_ch);
-    let _ = rs_read_chars(inf, (&raw mut file_name) as *mut c_char, MAXSTR as c_int);
-    let _ = rs_read_chars(inf, (&raw mut huh) as *mut c_char, MAXSTR as c_int);
+    crate::globals::set_file_name(rs_read_fixed_string(inf, MAXSTR));
+    crate::globals::set_huh_string(&rs_read_fixed_string(inf, MAXSTR));
     let _ = rs_read_potions(inf);
-    let _ = rs_read_chars(inf, (&raw mut prbuf) as *mut c_char, (2 * MAXSTR) as c_int);
+    crate::globals::set_prbuf(rs_read_fixed_string(inf, 2 * MAXSTR));
     let _ = rs_read_rings(inf);
     if let Some(value) = rs_read_string_owned(inf) {
         crate::vers::set_release(value);
@@ -2527,11 +2528,11 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_char(inf, &mut runch);
     let _ = rs_read_scrolls(inf);
     let _ = rs_read_char(inf, &mut take);
-    let _ = rs_read_chars(inf, (&raw mut whoami) as *mut c_char, MAXSTR as c_int);
+    crate::globals::set_whoami(rs_read_fixed_string(inf, MAXSTR));
     let _ = rs_read_sticks(inf);
     let _ = rs_read_int(inf, &mut orig_dsusp);
-    let _ = rs_read_chars(inf, (&raw mut fruit) as *mut c_char, MAXSTR as c_int);
-    let _ = rs_read_chars(inf, (&raw mut home) as *mut c_char, MAXSTR as c_int);
+    crate::globals::set_fruit(rs_read_fixed_string(inf, MAXSTR));
+    crate::globals::set_home(rs_read_fixed_string(inf, MAXSTR));
     {
         let mut count: c_int = 0;
         let _ = rs_read_int(inf, &mut count);

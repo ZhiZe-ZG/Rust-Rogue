@@ -6,7 +6,7 @@ use crate::mdport::{
     md_chmod, md_getpid, md_ignoreallsignals, md_tstphold, md_tstpresume, md_unlink,
     md_unlink_open_file,
 };
-use crate::options::get_str;
+use crate::options::read_line;
 use crate::rnd::set_seed;
 use crate::startup::playit;
 use crate::state::{rs_restore_file, rs_save_file};
@@ -15,25 +15,18 @@ use crate::ui::output::{self, msg_str};
 use crate::ui::runtime;
 use crate::ui::Window;
 use glam::IVec2;
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
-use std::ptr;
+use std::os::raw::{c_int, c_uchar};
 
-use crate::ffi::{
-    access, exit, fclose, fflush, fopen, fread, fwrite, perror, putchar, sscanf, strcmp, strerror,
-    strlen, CFile,
-};
+use crate::ffi::{access, exit, fclose, fflush, fopen, fread, fwrite, putchar, CFile};
 
-const MAXSTR: usize = 1024;
 const ESCAPE: c_int = 27;
-const QUIT: c_int = 1;
 
-extern "C" {
+// The version banner written as the header of saved games (was `char version[]`).
+const VERSION: &[u8] = b"rogue (rogueforge) 09/05/07\0";
+
+unsafe extern "C" {
     static mut mpos: c_int;
-    static mut file_name: c_char;
-    static mut version: c_char;
     static mut wizard: c_int;
-    static mut environ: *mut *mut c_char;
     static mut master_mode_enabled: c_uchar;
 }
 
@@ -59,20 +52,6 @@ unsafe fn errno_location() -> *mut c_int {
     }
 }
 
-/// Copies a C string into a fixed-size destination buffer and always preserves a trailing NUL.
-unsafe fn copy_cstr(dst: *mut c_char, src: *const c_char, max: usize) {
-    let mut i = 0usize;
-    while i + 1 < max {
-        let ch = ptr::read(src.add(i));
-        ptr::write(dst.add(i), ch);
-        if ch == 0 {
-            return;
-        }
-        i += 1;
-    }
-    ptr::write(dst.add(max - 1), 0);
-}
-
 /// Checks the restored player state and reports whether the saved game is already dead.
 unsafe fn restore_player_dead() -> bool {
     crate::game::PLAYER.stats().hit_points <= 0
@@ -83,18 +62,14 @@ unsafe fn restore_player_dead() -> bool {
 pub unsafe extern "C" fn save_game() {
     let mut savef: *mut CFile;
     let mut c: c_int;
-    let mut buf = [0 as c_char; MAXSTR];
-    let file_name_ptr = &raw mut file_name as *mut c_char;
+    let mut buf = crate::globals::file_name();
 
     mpos = 0;
 
     'over: loop {
-        if ptr::read(file_name_ptr) != 0 {
+        if !crate::globals::file_name().is_empty() {
             loop {
-                msg_str(&format!(
-                    "save file ({})? ",
-                    CStr::from_ptr(file_name_ptr).to_string_lossy()
-                ));
+                msg_str(&format!("save file ({})? ", crate::globals::file_name()));
                 c = readchar();
                 mpos = 0;
                 if c == ESCAPE {
@@ -111,28 +86,30 @@ pub unsafe extern "C" fn save_game() {
             if c == 'y' as c_int || c == 'Y' as c_int {
                 output::write_text("Yes\n");
                 output::refresh();
-                copy_cstr(buf.as_mut_ptr(), file_name_ptr, MAXSTR);
-                // Continue to file-open logic using current buffer value.
+                buf = crate::globals::file_name();
             } else {
-                // Fall through to prompt for a new name.
-                buf[0] = 0;
+                buf = String::new();
             }
         } else {
-            buf[0] = 0;
+            buf = String::new();
         }
 
         loop {
-            if buf[0] == 0 {
+            if buf.is_empty() {
                 mpos = 0;
                 msg_str("file name: ");
-                if get_str(buf.as_mut_ptr().cast(), Window::Stdscr) == QUIT {
-                    msg_str("");
-                    return;
+                match read_line("", Window::Stdscr) {
+                    None => {
+                        msg_str("");
+                        return;
+                    }
+                    Some(text) => buf = text,
                 }
                 mpos = 0;
             }
 
-            if access(buf.as_ptr(), 0) == 0 {
+            let buf_bytes = crate::ffi::to_c_bytes(&buf);
+            if access(buf_bytes.as_ptr(), 0) == 0 {
                 loop {
                     msg_str("File exists.  Do you wish to overwrite it?");
                     mpos = 0;
@@ -149,24 +126,19 @@ pub unsafe extern "C" fn save_game() {
                     }
                     msg_str("Please answer Y or N");
                 }
-                msg_str(&format!(
-                    "file name: {}",
-                    CStr::from_ptr(buf.as_ptr()).to_string_lossy()
-                ));
-                md_unlink(file_name_ptr);
+                msg_str(&format!("file name: {}", buf));
+                md_unlink(&buf);
             }
 
-            copy_cstr(file_name_ptr, buf.as_ptr(), MAXSTR);
-            savef = fopen(file_name_ptr, c"w".as_ptr());
+            crate::globals::set_file_name(buf.clone());
+            let name_bytes = crate::ffi::to_c_bytes(&buf);
+            savef = fopen(name_bytes.as_ptr(), b"w\0".as_ptr());
             if !savef.is_null() {
                 save_file(savef);
             }
 
-            msg_str(&format!(
-                "{}",
-                CStr::from_ptr(strerror(*errno_location())).to_string_lossy()
-            ));
-            buf[0] = 0;
+            msg_str(&format!("error {}", *errno_location()));
+            buf = String::new();
         }
     }
 }
@@ -179,20 +151,14 @@ pub unsafe extern "C" fn save_file(savef: *mut CFile) {
     let lines = size.y;
     let cols = size.x;
     let header = format!("{} x {}\n", lines, cols);
-    let version_ptr = &raw const version;
 
     runtime::move_physical_cursor(IVec2::new(cols - 1, 0), IVec2::new(0, lines - 1));
     putchar('\n' as c_int);
     runtime::shutdown();
     resetltchars();
-    md_chmod(&raw mut file_name as *mut c_char, 0o400);
+    md_chmod(&crate::globals::file_name(), 0o400);
 
-    fwrite(
-        version_ptr as *const u8,
-        1,
-        CStr::from_ptr(version_ptr).to_bytes_with_nul().len(),
-        savef,
-    );
+    fwrite(VERSION.as_ptr(), 1, VERSION.len(), savef);
 
     buf[..header.len()].copy_from_slice(header.as_bytes());
     fwrite(buf.as_ptr(), 1, buf.len(), savef);
@@ -205,35 +171,50 @@ pub unsafe extern "C" fn save_file(savef: *mut CFile) {
 
 /// Restores a saved game from disk, rebuilds runtime state, and resumes the main game loop.
 #[no_mangle]
-pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c_uchar {
-    let mut buf = [0 as c_char; MAXSTR];
+pub unsafe extern "C" fn restore(file: *mut std::os::raw::c_char) -> c_uchar {
+    let mut in_buf = [0u8; 1024];
     let mut lines: c_int = 0;
     let mut cols: c_int = 0;
-    let file_name_ptr = &raw mut file_name as *mut c_char;
-    let version_ptr = &raw const version;
 
-    let mut file_ptr = file;
-    if strcmp(file_ptr, c"-r".as_ptr()) == 0 {
-        file_ptr = file_name_ptr;
+    // The caller passes a file argument (typically "-r"); interpret it as Rust text.
+    let mut file_name = if file.is_null() {
+        String::new()
+    } else {
+        let mut len = 0usize;
+        let p = file as *const u8;
+        while *p.add(len) != 0 {
+            len += 1;
+        }
+        String::from_utf8_lossy(std::slice::from_raw_parts(p, len)).into_owned()
+    };
+
+    if file_name == "-r" {
+        file_name = crate::globals::file_name();
     }
 
     md_tstphold();
 
-    let inf = fopen(file_ptr, c"r".as_ptr());
+    let file_bytes = crate::ffi::to_c_bytes(&file_name);
+    let inf = fopen(file_bytes.as_ptr(), b"r\0".as_ptr());
     if inf.is_null() {
-        perror(file_ptr);
+        msg_str(&format!("{}: cannot open", file_name));
         return 0;
     }
 
-    let _ = fflush(ptr::null_mut());
-    let _ = fread(buf.as_mut_ptr() as *mut u8, 1, strlen(version_ptr) + 1, inf);
-    if strcmp(buf.as_ptr(), version_ptr) != 0 {
+    let _ = fflush(std::ptr::null_mut());
+    let _ = fread(in_buf.as_mut_ptr(), 1, VERSION.len(), inf);
+    if in_buf[..VERSION.len()] != *VERSION {
         msg_str("Sorry, saved game is out of date.\n");
         return 0;
     }
 
-    let _ = fread(buf.as_mut_ptr() as *mut u8, 1, 80, inf);
-    let _ = sscanf(buf.as_ptr(), c"%d x %d\n".as_ptr(), &mut lines, &mut cols);
+    let _ = fread(in_buf.as_mut_ptr(), 1, 80, inf);
+    let header = String::from_utf8_lossy(&in_buf[..80]);
+    let mut parts = header.split('x');
+    if let (Some(a), Some(b)) = (parts.next(), parts.next()) {
+        lines = a.trim().parse().unwrap_or(0);
+        cols = b.trim().parse().unwrap_or(0);
+    }
 
     if runtime::is_shutdown() {
         runtime::initialize();
@@ -269,7 +250,9 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     setup();
     let _ = rs_restore_file(inf.cast());
 
-    if (master_mode_enabled == 0 || wizard == 0) && md_unlink_open_file(file_ptr, inf.cast()) < 0 {
+    if (master_mode_enabled == 0 || wizard == 0)
+        && md_unlink_open_file(&file_name, inf.cast()) < 0
+    {
         msg_str("Cannot unlink file\n");
         return 0;
     }
@@ -284,14 +267,10 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
     }
 
     md_tstpresume();
-    environ = envp;
-    copy_cstr(file_name_ptr, file_ptr, MAXSTR);
+    crate::globals::set_file_name(file_name.clone());
     output::set_clear_on_refresh(Window::Curscr, true);
     set_seed(md_getpid());
-    msg_str(&format!(
-        "file name: {}",
-        CStr::from_ptr(file_ptr).to_string_lossy()
-    ));
+    msg_str(&format!("file name: {}", file_name));
     playit();
     0
 }
@@ -300,22 +279,21 @@ pub unsafe extern "C" fn restore(file: *mut c_char, envp: *mut *mut c_char) -> c
 #[no_mangle]
 pub unsafe extern "C" fn auto_save(sig: c_int) {
     let _ = sig;
-    let file_name_ptr = &raw mut file_name as *mut c_char;
-    let mode = c"w";
     let mut savef: *mut CFile;
 
     md_ignoreallsignals();
-    if ptr::read(file_name_ptr) != 0
-        && ((!{
-            savef = fopen(file_name_ptr, mode.as_ptr());
-            savef.is_null()
-        }) || (md_unlink_open_file(file_name_ptr, savef.cast()) >= 0
-            && !{
-                savef = fopen(file_name_ptr, mode.as_ptr());
-                savef.is_null()
-            }))
-    {
-        save_file(savef);
+    let file_name = crate::globals::file_name();
+    if !file_name.is_empty() {
+        let name_bytes = crate::ffi::to_c_bytes(&file_name);
+        savef = fopen(name_bytes.as_ptr(), b"w\0".as_ptr());
+        if !savef.is_null() {
+            save_file(savef);
+        } else if md_unlink_open_file(&file_name, savef.cast()) >= 0 {
+            savef = fopen(name_bytes.as_ptr(), b"w\0".as_ptr());
+            if !savef.is_null() {
+                save_file(savef);
+            }
+        }
     }
     exit(0)
 }
