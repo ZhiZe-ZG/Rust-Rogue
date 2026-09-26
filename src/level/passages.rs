@@ -19,7 +19,7 @@ use crate::tile::Tile;
 /// Mirrors the [`Room`](crate::structure::Room) abstraction: a bounding box
 /// (`position`/`size`) plus the relative coordinates of every passage tile
 /// and entry point.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Passage {
     pub position: IVec2,
     pub size: IVec2,
@@ -32,7 +32,7 @@ pub struct Passage {
 /// Door exits of one numbered passage component.
 ///
 /// Produced by [`number_passages`] and stored in the owning [`Level`](super::level::Level).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PassageLinks {
     /// Absolute map coordinates of the component's doorways.
     pub exits: Vec<IVec2>,

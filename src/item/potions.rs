@@ -46,7 +46,7 @@ const TRAP: i32 = '^' as i32;
 const MAXPOTIONS: usize = 14;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PotionType {
     Confuse = 0,
     Lsd = 1,

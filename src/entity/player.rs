@@ -29,6 +29,7 @@ use crate::ui::output;
 use crate::ui::output::msg_str;
 use crate::wizard::teleport;
 use glam::IVec2;
+use serde::{Deserialize, Serialize};
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 use std::ptr::NonNull;
 
@@ -40,7 +41,8 @@ pub use crate::entity::stats::Stats;
 /// The original 16-bit pattern is preserved exactly so save files stay
 /// byte-compatible; callers use the named constants and bit operations below
 /// instead of raw octal literals.
-#[derive(Copy, Clone, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct MonsterFlags(i16);
 
 impl MonsterFlags {
@@ -164,7 +166,8 @@ impl From<MonsterFlags> for i16 {
 /// Object (item) flags — the typed replacement for the legacy `o_flags` bit
 /// field of [`CThingObject`]. The 32-bit pattern is preserved exactly so save
 /// files stay byte-compatible.
-#[derive(Copy, Clone, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct ObjectFlags(i32);
 
 impl ObjectFlags {
@@ -314,7 +317,10 @@ pub struct ThingMonster {
 
 /// Object (item) data for a [`CThing`], using native Rust types. The `o_text`
 /// and `o_label` string fields are owned Rust `String`s rather than C pointers.
-#[derive(Clone)]
+///
+/// This is a pure value type (no pointers), so it derives `Serialize` /
+/// `Deserialize` for the RON save format directly.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ThingObject {
     /// The item's kind (typed replacement for the legacy ASCII `o_type`).
     pub o_type: crate::item::item_type::ItemType,

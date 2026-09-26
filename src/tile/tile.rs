@@ -10,7 +10,7 @@ use super::trap::TrapType;
 ///
 /// Orientation-sensitive tiles such as [`Tile::Wall`] have their on-screen
 /// character (`-` vs `|`) decided at draw time from the neighbouring cells.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Tile {
     /// Outside playable geometry / uninitialized map cell.
     Empty,

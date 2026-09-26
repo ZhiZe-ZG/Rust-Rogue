@@ -19,7 +19,7 @@ const RIGHT: usize = 1;
 const ESCAPE: u8 = 27;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum RingType {
     Protection = 0,
     AddStrength = 1,

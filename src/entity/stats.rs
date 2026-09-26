@@ -5,8 +5,10 @@
 //! gone now that the port no longer links C code. Save/restore maps each field
 //! explicitly, so the on-disk format is unchanged.
 
+use serde::{Deserialize, Serialize};
+
 /// Combat and progression statistics shared by the hero and monsters.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stats {
     /// Strength; unsigned because it is clamped to a minimum of 3.
     pub strength: u32,

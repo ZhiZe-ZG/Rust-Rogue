@@ -11,7 +11,7 @@ use crate::config::GameConfig;
 use crate::rnd::rnd;
 
 /// Planned room-to-room passage connections for one generation pass.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RoomGraph {
     connections: Vec<(usize, usize)>,
 }

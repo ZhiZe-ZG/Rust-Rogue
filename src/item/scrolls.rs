@@ -40,7 +40,7 @@ const F_REAL: u8 = 0x10;
 const MAXSCROLLS: usize = 18;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ScrollType {
     Confuse = 0,
     Map = 1,

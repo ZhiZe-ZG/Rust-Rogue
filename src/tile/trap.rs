@@ -8,7 +8,7 @@
 use crate::rnd::rnd;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TrapType {
     Door = 0,
     Arrow = 1,

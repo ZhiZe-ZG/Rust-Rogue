@@ -7,7 +7,7 @@ use super::super::tile::Tile;
 ///
 /// `Structure` owns a rectangular grid of logical [`Tile`] values and offers
 /// bounds-checked read/write helpers.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Structure {
     height: usize,
     width: usize,

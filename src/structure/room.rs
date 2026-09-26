@@ -12,7 +12,7 @@ use super::structure::Structure;
 ///
 /// Coordinates are absolute map positions; `structure` stores room-local
 /// tiles and `entry_points` stores room-local doorway coordinates.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Room {
     /// Absolute map position of the room's top-left corner.
     pub position: IVec2,

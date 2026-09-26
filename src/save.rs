@@ -24,8 +24,8 @@ use std::path::Path;
 
 const ESCAPE: i32 = 27;
 
-// The version banner written as the header of saved games (was `char version[]`).
-const VERSION: &[u8] = b"rogue (rogueforge) 09/05/07\0";
+/// Magic header that identifies a RON save file written by this version.
+pub const RON_MAGIC: &[u8] = b"ROGUE-RON 1\n";
 
 use crate::globals::{master_mode_enabled, mpos, wizard};
 
@@ -117,13 +117,12 @@ pub unsafe fn save_game() {
     }
 }
 
-/// Writes the save-file header and hands off the actual save payload to the state serializers.
+/// Writes the RON save-file header and hands off the actual save payload to the
+/// state serializer.
 pub unsafe fn save_file(savef: &mut File) {
-    let mut buf = [0u8; 80];
     let size = crate::ui::screen_size();
     let lines = size.y;
     let cols = size.x;
-    let header = format!("{} x {}\n", lines, cols);
 
     runtime::move_physical_cursor(IVec2::new(cols - 1, 0), IVec2::new(0, lines - 1));
     let _ = std::io::stdout().write_all(b"\n");
@@ -131,21 +130,18 @@ pub unsafe fn save_file(savef: &mut File) {
     resetltchars();
     md_chmod(&crate::globals::file_name(), 0o400);
 
-    let _ = savef.write_all(VERSION);
+    let _ = savef.write_all(RON_MAGIC);
 
-    buf[..header.len()].copy_from_slice(header.as_bytes());
-    let _ = savef.write_all(&buf);
-
-    rs_save_file(savef);
+    let _ = rs_save_file(savef);
     let _ = savef.flush();
     std::process::exit(0);
 }
 
 /// Restores a saved game from disk, rebuilds runtime state, and resumes the main game loop.
+///
+/// Save files are RON documents preceded by a short [`RON_MAGIC`] header line.
 pub unsafe fn restore(file: &str) -> u8 {
-    let mut in_buf = [0u8; 1024];
-    let mut lines: i32 = 0;
-    let mut cols: i32 = 0;
+    let mut magic = [0u8; 12];
 
     // The caller passes a file argument (typically "-r").
     let mut file_name = file.to_string();
@@ -164,18 +160,10 @@ pub unsafe fn restore(file: &str) -> u8 {
         }
     };
 
-    let _ = inf.read_exact(&mut in_buf[..VERSION.len()]);
-    if in_buf[..VERSION.len()] != *VERSION {
+    if inf.read_exact(&mut magic[..RON_MAGIC.len()]).is_err() || magic[..RON_MAGIC.len()] != *RON_MAGIC
+    {
         msg_str("Sorry, saved game is out of date.\n");
         return 0;
-    }
-
-    let _ = inf.read_exact(&mut in_buf[..80]);
-    let header = String::from_utf8_lossy(&in_buf[..80]);
-    let mut parts = header.split('x');
-    if let (Some(a), Some(b)) = (parts.next(), parts.next()) {
-        lines = a.trim().parse().unwrap_or(0);
-        cols = b.trim().parse().unwrap_or(0);
     }
 
     if runtime::is_shutdown() {
@@ -183,34 +171,12 @@ pub unsafe fn restore(file: &str) -> u8 {
     }
     input::set_keypad(Window::Stdscr, true);
 
-    let screen = crate::ui::screen_size();
-    if lines > screen.y {
-        runtime::shutdown();
-        msg_str(&format!(
-            "Sorry, original game was played on a screen with {} lines.\n",
-            lines
-        ));
-        msg_str(&format!(
-            "Current screen only has {} lines. Unable to restore game\n",
-            screen.y
-        ));
-        return 0;
-    }
-    if cols > screen.x {
-        runtime::shutdown();
-        msg_str(&format!(
-            "Sorry, original game was played on a screen with {} columns.\n",
-            cols
-        ));
-        msg_str(&format!(
-            "Current screen only has {} columns. Unable to restore game\n",
-            screen.x
-        ));
-        return 0;
-    }
-
     setup();
-    let _ = rs_restore_file(&mut inf);
+    if let Err(err) = rs_restore_file(&mut inf) {
+        runtime::shutdown();
+        msg_str(&format!("Sorry, saved game could not be read: {}", err));
+        return 0;
+    }
 
     if (master_mode_enabled == 0 || wizard == 0)
         && md_unlink_open_file(&file_name, std::ptr::null_mut()) < 0

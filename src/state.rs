@@ -1,2433 +1,1004 @@
-//! Portable Rogue save-state code.
+//! Portable Rogue save-state code, now serialized as RON.
 //!
-//! Ported from `src/c/state.c` to Rust.
+//! This module used to be a byte-for-byte port of the legacy C `state.c`
+//! binary serializer, complete with raw pointers, endian-swapping primitives
+//! and `RSID_*` markers. It has been rewritten to store the whole game state
+//! as [RON] (Rust Object Notation), a human-readable self-describing format.
 //!
-//! Copyright (C) 1999, 2000, 2005 Nicholas J. Kisseberth
-//! All rights reserved.
+//! The engine's live state is still held in process-wide safe owners
+//! ([`crate::game::PLAYER`], [`crate::game::MONSTER_LIST`],
+//! [`crate::game::MONSTER_MAP`], [`crate::game::CURRENT_LEVEL`], the item
+//! arena and the many `static mut` globals). This module only *snapshots* that
+//! state into plain value types, and rebuilds it on restore. Pointers between
+//! things (intrusive list links, chase targets, equipment slots) are encoded as
+//! indices/ids so the on-disk form contains no addresses.
 //!
-//! Redistribution and use in source and binary forms, with or without
-//! modification, are permitted provided that the following conditions
-//! are met:
-//! 1. Redistributions of source code must retain the above copyright
-//!    notice, this list of conditions and the following disclaimer.
-//! 2. Redistributions in binary form must reproduce the above copyright
-//!    notice, this list of conditions and the following disclaimer in the
-//!    documentation and/or other materials provided with the distribution.
-//! 3. Neither the name(s) of the author(s) nor the names of other contributors
-//!    may be used to endorse or promote products derived from this software
-//!    without specific prior written permission.
-//!
-//! THIS SOFTWARE IS PROVIDED BY THE AUTHOR(S) AND CONTRIBUTORS ``AS IS'' AND
-//! ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-//! IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-//! ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR(S) OR CONTRIBUTORS BE LIABLE
-//! FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-//! DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
-//! OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-//! HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-//! LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
-//! OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-//! SUCH DAMAGE.
+//! [RON]: https://github.com/ron-rs/ron
 
 use glam::IVec2;
+use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
-use crate::daemon::{CDelayedAction, Daemon, D_LIST};
-use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject};
-use crate::game::PLAYER;
-use crate::game::{MONSTER_LIST, MONSTER_MAP};
-use crate::globals::{
-    arm_info, monsters, pot_info, ring_info, scr_info, things, weap_info, ws_info, CMonster,
-    CObjInfo,
+use crate::daemon::{CDelayedAction, D_LIST};
+use crate::entity::monsters::MonsterType;
+use crate::entity::player::{
+    set_thing_dest, set_thing_dest_hero, set_thing_next, set_thing_pack, set_thing_prev, thing_o,
+    thing_t, thing_next, MonsterFlags, Stats, Thing, ThingObject,
 };
-use crate::game::new_actor;
-use crate::item::arena::{allocated_count, new_item};
-use crate::level::PassageLinks;
-use crate::structure::Room;
+use crate::game::{MONSTER_LIST, MONSTER_MAP, PLAYER};
+use crate::item::arena::new_item;
+use crate::level::{LevelFlags, Passage, PassageLinks, RoomGraph};
+use crate::structure::{Room, Structure};
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-const RSID_STATS: i32 = 0xABCD0001u32 as i32;
-const RSID_THING: i32 = 0xABCD0002u32 as i32;
-const RSID_THING_NULL: i32 = 0xDEAD0002u32 as i32;
-const RSID_OBJECT: i32 = 0xABCD0003u32 as i32;
-const RSID_MAGICITEMS: i32 = 0xABCD0004u32 as i32;
-const RSID_KNOWS: i32 = 0xABCD0005u32 as i32;
-const RSID_GUESSES: i32 = 0xABCD0006u32 as i32;
-const RSID_OBJECTLIST: i32 = 0xABCD0007u32 as i32;
-const RSID_BAGOBJECT: i32 = 0xABCD0008u32 as i32;
-const RSID_MONSTERLIST: i32 = 0xABCD0009u32 as i32;
-const RSID_MONSTERSTATS: i32 = 0xABCD000Au32 as i32;
-const RSID_MONSTERS: i32 = 0xABCD000Bu32 as i32;
-const RSID_TRAP: i32 = 0xABCD000Cu32 as i32;
-const RSID_WINDOW: i32 = 0xABCD000Du32 as i32;
-const RSID_DAEMONS: i32 = 0xABCD000Eu32 as i32;
-const RSID_IWEAPS: i32 = 0xABCD000Fu32 as i32;
-const RSID_IARMOR: i32 = 0xABCD0010u32 as i32;
-const RSID_SPELLS: i32 = 0xABCD0011u32 as i32;
-const RSID_ILIST: i32 = 0xABCD0012u32 as i32;
-const RSID_HLIST: i32 = 0xABCD0013u32 as i32;
-const RSID_DEATHTYPE: i32 = 0xABCD0014u32 as i32;
-const RSID_CTYPES: i32 = 0xABCD0015u32 as i32;
-const RSID_COORDLIST: i32 = 0xABCD0016u32 as i32;
-const RSID_ROOMS: i32 = 0xABCD0017u32 as i32;
-
-const MAXSTR: usize = 1024;
-
-const MAXARMORS: usize = 8;
-const MAXPOTIONS: usize = 14;
-const MAXRINGS: usize = 14;
+/// Number of generated scroll names persisted (legacy `MAXSCROLLS`).
 const MAXSCROLLS: usize = 18;
-const MAXSTICKS: usize = 14;
-const NUMTHINGS: usize = 7;
-const MAXWEAPONS: usize = 9;
-const MAXDAEMONS: usize = 20;
-const MAXMONSTERS: usize = 26;
 
-/// `#ifdef MASTER` helper: replaced by a plain `const` so the preprocessor
-/// conditional disappears.  The autoconf build (`configure.ac`) defines MASTER,
-/// so wizard-mode and the `total` counter are saved/restored here too.
-const MASTER: bool = true;
+// ─── Snapshot value types ────────────────────────────────────────────────────
 
-// ─── Module state (mirrors C statics) ────────────────────────────────────────
-
-static mut READ_ERROR: i32 = 0;
-static mut WRITE_ERROR: i32 = 0;
-static mut FORMAT_ERROR: i32 = 0;
-static ENDIAN: i32 = 0x01020304;
-
-#[inline]
-unsafe fn big_endian() -> bool {
-    *((&raw const ENDIAN) as *const u8) == 0x01
+/// A chase destination, encoded as an index instead of a raw pointer.
+///
+/// Mirrors the legacy `(listid, index)` scheme used by `state.c`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DestRef {
+    /// No chase target.
+    None,
+    /// Chasing the hero (position read live from [`crate::game::PLAYER`]).
+    Hero,
+    /// Chasing the monster at this index in the monster list.
+    Monster(usize),
+    /// Chasing the floor item at this index in the level's item list.
+    Object(usize),
+    /// Heading for the gold stash of this room index.
+    RoomGold(usize),
 }
 
-#[inline]
-unsafe fn read_stat() -> i32 {
-    if FORMAT_ERROR != 0 || READ_ERROR != 0 {
-        1
-    } else {
-        0
-    }
+/// A monster/actor [`Thing`] without any pointers.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MonsterSnapshot {
+    pub t_pos: IVec2,
+    pub t_turn: bool,
+    pub t_type: Option<MonsterType>,
+    pub t_disguise: u8,
+    pub t_oldch: u8,
+    pub t_dest: DestRef,
+    pub t_flags: MonsterFlags,
+    pub t_stats: Stats,
+    pub t_room: Option<usize>,
+    /// Items carried in the monster's pack, head first.
+    pub t_pack: Vec<ThingObject>,
+    /// Deferred chase-target index (resolved after every monster exists).
+    #[serde(default)]
+    pub t_reserved: i32,
 }
 
-// ─── C ABI mirror types ──────────────────────────────────────────────────────
-
-/// A ring-stone table entry (`struct stone { char *st_name; int st_value; }`
-/// in C), now carrying an owned Rust string slice.
-#[repr(C)]
-pub struct CStone {
-    pub st_name: &'static str,
-    pub st_value: i32,
+/// The player's equipped items, encoded as indices into the player's pack.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct EquipmentSnapshot {
+    pub armor: Option<usize>,
+    pub left_ring: Option<usize>,
+    pub right_ring: Option<usize>,
+    pub weapon: Option<usize>,
+    pub last_pick: Option<usize>,
+    pub l_last_pick: Option<usize>,
 }
 
-// ─── Extern C globals (defined in vers.c) ────────────────────────────────────
-
-use crate::daemons::{between};
-use crate::entity::player::{nh};
-use crate::globals::{a_class, after, again, amulet, delta, dir_ch, dnum, door_stop, e_levels, fight_flush, firstmove, food_left, got_ltc, has_hit, hungry_state, in_shell, inpack, inv_describe, inv_type, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, lastscore, lower_msg, max_level, max_stats, move_on, mpos, msg_esc, n_objs, no_command, no_food, no_move, noscore, ntraps, oldpos, oldrp, orig_dsusp, p_colors, pack_used, passgo, playing, purse, q_comm, quiet, r_stones, runch, running, save_msg, see_floor, seed, seenstairs, stat_msg, take, terse, to_death, tombstone, vf_hit, wizard};
-use crate::init::{cNMETAL, cNSTONES, cNWOOD, metal, stones, wood};
-use crate::item::weapons::{group};
-
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
+/// The mutable parts of the current dungeon level.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LevelSnapshot {
+    pub depth: i32,
+    pub stairs: IVec2,
+    pub rooms: Vec<Room>,
+    pub room_graph: RoomGraph,
+    pub passages: Vec<Passage>,
+    pub map: Structure,
+    pub flags: LevelFlags,
+    pub passage_links: Vec<PassageLinks>,
+    /// Floor items, head first.
+    pub items: Vec<ThingObject>,
+    /// Per-cell monster occupancy as `(y, x, monster_index)`.
+    pub monster_cells: Vec<(usize, usize, usize)>,
+    /// The stable per-room gold positions ([`crate::game::ROOM_GOLD`]).
+    pub room_gold: Vec<IVec2>,
 }
 
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
+/// The mutable `oi_guess`/`oi_know` state of one object-info table entry.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ObjInfoState {
+    pub guess: Option<String>,
+    pub know: bool,
 }
 
-// ─── Low-level primitives ────────────────────────────────────────────────────
+/// The full serialized game state.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GameSnapshot {
+    // ── boolean/char flags ──────────────────────────────────────────────
+    pub after: bool,
+    pub again: bool,
+    pub noscore: i32,
+    pub seenstairs: bool,
+    pub amulet: bool,
+    pub door_stop: bool,
+    pub fight_flush: bool,
+    pub firstmove: bool,
+    pub got_ltc: bool,
+    pub has_hit: bool,
+    pub in_shell: bool,
+    pub inv_describe: bool,
+    pub jump: bool,
+    pub kamikaze: bool,
+    pub lower_msg: bool,
+    pub move_on: bool,
+    pub msg_esc: bool,
+    pub passgo: bool,
+    pub playing: bool,
+    pub q_comm: bool,
+    pub running: bool,
+    pub save_msg: bool,
+    pub see_floor: bool,
+    pub stat_msg: bool,
+    pub terse: bool,
+    pub to_death: bool,
+    pub tombstone: bool,
+    pub wizard: i32,
+    pub pack_used: [u8; 26],
+    pub dir_ch: u8,
+    pub runch: u8,
+    pub take: u8,
 
-#[inline]
-unsafe fn rs_write(savef: &mut dyn Write, ptr: *const u8, size: usize) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
+    // ── strings / string tables ─────────────────────────────────────────
+    pub file_name: String,
+    pub huh: String,
+    pub prbuf: String,
+    pub release: String,
+    pub whoami: String,
+    pub fruit: String,
+    pub home: String,
+    pub scroll_names: Vec<String>,
+    pub inv_t_names: Vec<String>,
+    pub trap_names: Vec<String>,
+    pub p_colors: Vec<String>,
+    pub r_stones: Vec<String>,
+    pub ws_type: Vec<String>,
+    pub ws_made: Vec<String>,
 
-    let bytes = std::slice::from_raw_parts(ptr as *const u8, size);
-    if savef.write_all(bytes).is_err() {
-        WRITE_ERROR = 1;
-    }
+    // ── numeric globals ─────────────────────────────────────────────────
+    pub orig_dsusp: i32,
+    pub l_last_comm: u8,
+    pub l_last_dir: u8,
+    pub last_comm: u8,
+    pub last_dir: u8,
+    pub n_objs: i32,
+    pub ntraps: i32,
+    pub hungry_state: i32,
+    pub inpack: i32,
+    pub inv_type: i32,
+    pub max_level: i32,
+    pub mpos: i32,
+    pub no_food: i32,
+    pub a_class: Vec<i32>,
+    pub count: i32,
+    pub food_left: i32,
+    pub lastscore: i32,
+    pub no_command: i32,
+    pub no_move: i32,
+    pub purse: i32,
+    pub quiet: i32,
+    pub vf_hit: i32,
+    pub dnum: i32,
+    pub seed: i32,
+    pub e_levels: Vec<i32>,
+    pub delta: IVec2,
+    pub oldpos: IVec2,
 
-    WRITE_ERROR
+    // ── tables that gameplay mutates in place ───────────────────────────
+    pub monster_stats: Vec<Stats>,
+    pub arm_info: Vec<ObjInfoState>,
+    pub pot_info: Vec<ObjInfoState>,
+    pub ring_info: Vec<ObjInfoState>,
+    pub scr_info: Vec<ObjInfoState>,
+    pub weap_info: Vec<ObjInfoState>,
+    pub ws_info: Vec<ObjInfoState>,
+    pub things: Vec<ObjInfoState>,
+
+    // ── delayed actions ─────────────────────────────────────────────────
+    pub daemons: Vec<CDelayedAction>,
+
+    // ── player, level and misc game state ───────────────────────────────
+    pub player: MonsterSnapshot,
+    /// The live monster list, in traversal order.
+    pub monsters: Vec<MonsterSnapshot>,
+    pub player_pack: Vec<ThingObject>,
+    pub equipment: EquipmentSnapshot,
+    pub level: LevelSnapshot,
+    pub max_stats: Stats,
+    pub oldrp: Option<usize>,
+    pub between: i32,
+    pub group: i32,
+    pub nh: IVec2,
 }
 
-#[inline]
-unsafe fn rs_read(inf: &mut dyn Read, ptr: *mut u8, size: usize) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
+// ─── Pointer-free helpers ────────────────────────────────────────────────────
 
-    let buf = std::slice::from_raw_parts_mut(ptr, size);
-    if inf.read_exact(buf).is_err() {
-        READ_ERROR = 1;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_int(savef: &mut dyn Write, c: i32) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    if big_endian() {
-        let src = (&raw const c) as *const u8;
-        let bytes = [*src.add(3), *src.add(2), *src.add(1), *src.add(0)];
-        rs_write(savef, bytes.as_ptr() as *const u8, 4);
-    } else {
-        rs_write(savef, (&raw const c) as *const u8, 4);
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_int(inf: &mut dyn Read, i: *mut i32) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let mut input: i32 = 0;
-    let _ = rs_read(inf, (&mut input as *mut i32) as *mut u8, 4);
-
-    if big_endian() {
-        let src = (&raw const input) as *const u8;
-        let bytes = [*src.add(3), *src.add(2), *src.add(1), *src.add(0)];
-        *i = i32::from_ne_bytes(bytes);
-    } else {
-        *i = input;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_char(savef: &mut dyn Write, c: u8) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    rs_write(savef, (&raw const c) as *const u8, 1);
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_char(inf: &mut dyn Read, c: *mut u8) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read(inf, c as *mut u8, 1);
-
-    read_stat()
-}
-
-unsafe fn rs_write_chars(savef: &mut dyn Write, c: *mut u8, count: i32) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_int(savef, count);
-    if count > 0 {
-        let _ = rs_write(savef, c as *const u8, count as usize);
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_chars(inf: &mut dyn Read, i: *mut u8, count: i32) -> i32 {
-    let mut value: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut value);
-
-    if value != count {
-        FORMAT_ERROR = 1;
-    }
-
-    if count > 0 {
-        let _ = rs_read(inf, i as *mut u8, count as usize);
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_ints(savef: &mut dyn Write, c: *mut i32, count: i32) -> i32 {
-    let mut n: i32 = 0;
-
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_int(savef, count);
-
-    while n < count {
-        if rs_write_int(savef, *c.add(n as usize)) != 0 {
-            break;
+/// Collect a linked list of object things into a `Vec<ThingObject>`, head first.
+unsafe fn collect_objects(mut head: *mut Thing) -> Vec<ThingObject> {
+    let mut out = Vec::new();
+    while !head.is_null() {
+        let op = thing_o(head);
+        if !op.is_null() {
+            out.push((*op).clone());
         }
-        n += 1;
+        head = thing_next(head);
     }
-
-    WRITE_ERROR
+    out
 }
 
-unsafe fn rs_read_ints(inf: &mut dyn Read, i: *mut i32, count: i32) -> i32 {
-    let mut value: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut value);
-
-    if value != count {
-        FORMAT_ERROR = 1;
-    }
-
-    let mut n: i32 = 0;
-    while n < count {
-        if rs_read_int(inf, &mut *i.add(n as usize)) != 0 {
-            break;
+/// Build a doubly-linked list of objects from `items` (head = index 0) and
+/// return its head pointer.
+unsafe fn build_object_list(items: &[ThingObject]) -> *mut Thing {
+    let mut head: *mut Thing = std::ptr::null_mut();
+    let mut prev: *mut Thing = std::ptr::null_mut();
+    for data in items {
+        let item = new_item();
+        let op = thing_o(item);
+        *op = data.clone();
+        set_thing_prev(item, prev);
+        set_thing_next(item, std::ptr::null_mut());
+        if prev.is_null() {
+            head = item;
+        } else {
+            set_thing_next(prev, item);
         }
-        n += 1;
+        prev = item;
     }
-
-    read_stat()
+    head
 }
 
-unsafe fn rs_write_boolean(savef: &mut dyn Write, c: i32) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let buf: u8 = if c == 0 { 0 } else { 1 };
-    rs_write(savef, (&raw const buf) as *const u8, 1);
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_boolean(inf: &mut dyn Read, i: *mut u8) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let mut buf: u8 = 0;
-    let _ = rs_read(inf, (&mut buf) as *mut u8, 1);
-
-    *i = if buf != 0 { 1 } else { 0 };
-
-    read_stat()
-}
-
-unsafe fn rs_write_booleans(savef: &mut dyn Write, c: *mut u8, count: i32) -> i32 {
-    let mut n: i32 = 0;
-
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_int(savef, count);
-
-    while n < count {
-        if rs_write_boolean(savef, *c.add(n as usize) as i32) != 0 {
-            break;
-        }
-        n += 1;
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_booleans(inf: &mut dyn Read, i: *mut u8, count: i32) -> i32 {
-    let mut value: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut value);
-
-    if value != count {
-        FORMAT_ERROR = 1;
-    }
-
-    let mut n: i32 = 0;
-    while n < count {
-        if rs_read_boolean(inf, &mut *i.add(n as usize)) != 0 {
-            break;
-        }
-        n += 1;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_short(savef: &mut dyn Write, c: i16) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    if big_endian() {
-        let src = (&raw const c) as *const u8;
-        let bytes = [*src.add(1), *src.add(0)];
-        rs_write(savef, bytes.as_ptr() as *const u8, 2);
-    } else {
-        rs_write(savef, (&raw const c) as *const u8, 2);
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_short(inf: &mut dyn Read, i: *mut i16) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let mut input: i16 = 0;
-    let _ = rs_read(inf, (&mut input as *mut i16) as *mut u8, 2);
-
-    if big_endian() {
-        let src = (&raw const input) as *const u8;
-        let bytes = [*src.add(1), *src.add(0)];
-        *i = i16::from_ne_bytes(bytes);
-    } else {
-        *i = input;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_shorts(savef: &mut dyn Write, c: *mut i16, count: i32) -> i32 {
-    let mut n: i32 = 0;
-
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_int(savef, count);
-
-    while n < count {
-        if rs_write_short(savef, *c.add(n as usize)) != 0 {
-            break;
-        }
-        n += 1;
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_shorts(inf: &mut dyn Read, i: *mut i16, count: i32) -> i32 {
-    let mut value: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut value);
-
-    if value != count {
-        FORMAT_ERROR = 1;
-    }
-
-    // NOTE: mirrors the C loop bound (uses the read `value`, not `count`).
-    let mut n: i32 = 0;
-    while n < value {
-        if rs_read_short(inf, &mut *i.add(n as usize)) != 0 {
-            break;
-        }
-        n += 1;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_ushort(savef: &mut dyn Write, c: u16) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    if big_endian() {
-        let src = (&raw const c) as *const u8;
-        let bytes = [*src.add(1), *src.add(0)];
-        rs_write(savef, bytes.as_ptr() as *const u8, 2);
-    } else {
-        rs_write(savef, (&raw const c) as *const u8, 2);
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_ushort(inf: &mut dyn Read, i: *mut u16) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let mut input: u16 = 0;
-    let _ = rs_read(inf, (&mut input as *mut u16) as *mut u8, 2);
-
-    if big_endian() {
-        let src = (&raw const input) as *const u8;
-        let bytes = [*src.add(1), *src.add(0)];
-        *i = u16::from_ne_bytes(bytes);
-    } else {
-        *i = input;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_uint(savef: &mut dyn Write, c: u32) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    if big_endian() {
-        let src = (&raw const c) as *const u8;
-        let bytes = [*src.add(3), *src.add(2), *src.add(1), *src.add(0)];
-        rs_write(savef, bytes.as_ptr() as *const u8, 4);
-    } else {
-        rs_write(savef, (&raw const c) as *const u8, 4);
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_uint(inf: &mut dyn Read, i: *mut u32) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let mut input: u32 = 0;
-    let _ = rs_read(inf, (&mut input as *mut u32) as *mut u8, 4);
-
-    if big_endian() {
-        let src = (&raw const input) as *const u8;
-        let bytes = [*src.add(3), *src.add(2), *src.add(1), *src.add(0)];
-        *i = u32::from_ne_bytes(bytes);
-    } else {
-        *i = input;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_marker(savef: &mut dyn Write, id: i32) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    rs_write_int(savef, id);
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_marker(inf: &mut dyn Read, id: i32) -> i32 {
-    let mut nid: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    if rs_read_int(inf, &mut nid) == 0 {
-        if id != nid {
-            FORMAT_ERROR = 1;
-        }
-    }
-
-    read_stat()
-}
-
-// ─── Strings ─────────────────────────────────────────────────────────────────
-
-/// Writes a fixed-width, NUL-padded string record (`count` bytes) using the
-/// legacy `rs_write_chars` framing (an int length followed by the bytes).
-unsafe fn rs_write_fixed_string(savef: &mut dyn Write, text: &str, count: usize) -> i32 {
-    let mut buf = vec![0u8; count];
-    let bytes = text.as_bytes();
-    let copy_len = bytes.len().min(count.saturating_sub(1));
-    buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
-    let _ = rs_write_chars(savef, buf.as_mut_ptr() as *mut u8, count as i32);
-    WRITE_ERROR
-}
-
-/// Reads a fixed-width (`count`-byte) NUL-terminated string record back into
-/// an owned [`String`].
-unsafe fn rs_read_fixed_string(inf: &mut dyn Read, count: usize) -> String {
-    let mut buf = vec![0u8; count];
-    let _ = rs_read_chars(inf, buf.as_mut_ptr() as *mut u8, count as i32);
-    let end = buf.iter().position(|b| *b == 0).unwrap_or(count);
-    String::from_utf8_lossy(&buf[..end]).into_owned()
-}
-
-/// Write an owned string using the legacy double-length record, or a zero
-/// record for `None`.
-unsafe fn rs_write_string_opt(savef: &mut dyn Write, text: Option<&str>) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    match text {
-        None => {
-            let _ = rs_write_int(savef, 0);
-            let _ = rs_write_chars(savef, std::ptr::null_mut(), 0);
-            WRITE_ERROR
-        }
-        Some(value) => {
-            let mut bytes = value.as_bytes().to_vec();
-            bytes.push(0);
-            let len = bytes.len() as i32;
-            let _ = rs_write_int(savef, len);
-            let _ = rs_write_chars(savef, bytes.as_mut_ptr() as *mut u8, len);
-            WRITE_ERROR
-        }
-    }
-}
-
-/// Read a length-prefixed string into an owned Rust [`String`] (`None` when the
-/// stored length was zero). Uses Rust `Vec`/`String` storage instead of the
-/// legacy `malloc`/`free` buffer.
-unsafe fn rs_read_string_owned(inf: &mut dyn Read) -> Option<String> {
-    let mut len: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
+/// Index of `target` within the linked list `head`, or `None`.
+unsafe fn list_index_of(head: *mut Thing, target: *mut Thing) -> Option<usize> {
+    if target.is_null() {
         return None;
     }
-
-    let _ = rs_read_int(inf, &mut len);
-
-    if len <= 0 {
-        // Still consume the inner length field for format symmetry.
-        let _ = rs_read_chars(inf, std::ptr::null_mut(), 0);
-        return None;
-    }
-
-    let mut buf = vec![0u8; len as usize];
-    let _ = rs_read_chars(inf, buf.as_mut_ptr() as *mut u8, len);
-
-    if buf.last() == Some(&0) {
-        buf.pop();
-    }
-
-    Some(String::from_utf8_lossy(&buf).into_owned())
-}
-
-unsafe fn rs_write_str_t(savef: &mut dyn Write, st: u32) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    rs_write_uint(savef, st);
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_str_t(inf: &mut dyn Read, st: *mut u32) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    rs_read_uint(inf, st);
-
-    read_stat()
-}
-
-// ─── Coords / windows ────────────────────────────────────────────────────────
-
-unsafe fn rs_write_coord(savef: &mut dyn Write, c: IVec2) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_int(savef, c.x);
-    let _ = rs_write_int(savef, c.y);
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_coord(inf: &mut dyn Read, c: *mut IVec2) -> i32 {
-    let mut in_coord: IVec2 = IVec2 { x: 0, y: 0 };
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut in_coord.x);
-    let _ = rs_read_int(inf, &mut in_coord.y);
-
-    if read_stat() == 0 {
-        (*c).x = in_coord.x;
-        (*c).y = in_coord.y;
-    }
-
-    read_stat()
-}
-
-/// Dump the visible screen grid to the save file using the legacy window
-/// header (height, width, then one cell per position).
-unsafe fn rs_write_window(savef: &mut dyn Write) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let size = crate::ui::screen_size();
-    let height = size.y;
-    let width = size.x;
-
-    let _ = rs_write_marker(savef, RSID_WINDOW);
-    let _ = rs_write_int(savef, height);
-    let _ = rs_write_int(savef, width);
-
-    let mut row: i32 = 0;
-    while row < height {
-        let mut col: i32 = 0;
-        while col < width {
-            let cell = crate::ui::screen_cell(row, col) as i32;
-            if rs_write_int(savef, cell) != 0 {
-                return WRITE_ERROR;
-            }
-            col += 1;
+    let mut cur = head;
+    let mut i = 0usize;
+    while !cur.is_null() {
+        if cur == target {
+            return Some(i);
         }
-        row += 1;
+        i += 1;
+        cur = thing_next(cur);
     }
-
-    WRITE_ERROR
+    None
 }
 
-/// Reload the visible screen grid from the save file, clipping the stored
-/// dimensions to the fixed terminal size.
-unsafe fn rs_read_window(inf: &mut dyn Read) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let size = crate::ui::screen_size();
-    let height = size.y;
-    let width = size.x;
-
-    let _ = rs_read_marker(inf, RSID_WINDOW);
-
-    let mut maxlines: i32 = 0;
-    let mut maxcols: i32 = 0;
-    let _ = rs_read_int(inf, &mut maxlines);
-    let _ = rs_read_int(inf, &mut maxcols);
-
-    let mut row: i32 = 0;
-    while row < maxlines {
-        let mut col: i32 = 0;
-        while col < maxcols {
-            let mut value: i32 = 0;
-            if rs_read_int(inf, &mut value) != 0 {
-                return read_stat();
-            }
-
-            if row < height && col < width {
-                crate::ui::set_screen_cell(row, col, value as u8);
-            }
-            col += 1;
+/// The `i`-th element of the linked list `head`, or null.
+unsafe fn list_nth(mut head: *mut Thing, i: usize) -> *mut Thing {
+    let mut n = 0usize;
+    while !head.is_null() {
+        if n == i {
+            return head;
         }
-        row += 1;
+        n += 1;
+        head = thing_next(head);
     }
-
-    read_stat()
-}
-
-// ─── List helpers ────────────────────────────────────────────────────────────
-
-unsafe fn get_list_item(mut l: *mut Thing, i: i32) -> *mut Thing {
-    let mut count: i32 = 0;
-
-    while !l.is_null() {
-        if count == i {
-            return l;
-        }
-        count += 1;
-        l = crate::entity::player::thing_next(l);
-    }
-
     std::ptr::null_mut()
 }
 
-unsafe fn find_list_ptr(mut l: *mut Thing, ptr: *const u8) -> i32 {
-    let mut count: i32 = 0;
+/// Snapshot a monster `Thing` into a pointer-free [`MonsterSnapshot`].
+///
+/// `monster_index` is the position of this monster among the live monster
+/// list, and `level_items` is the live floor-item list head (used to resolve
+/// object chase targets).
+unsafe fn snapshot_monster(
+    tp: *mut Thing,
+    level_items: *mut Thing,
+    room_gold: &[IVec2],
+) -> MonsterSnapshot {
+    let t = thing_t(tp);
 
-    while !l.is_null() {
-        if l as *const u8 == ptr {
-            return count;
-        }
-        count += 1;
-        l = crate::entity::player::thing_next(l);
-    }
-
-    -1
-}
-
-unsafe fn list_size(mut l: *mut Thing) -> i32 {
-    let mut count: i32 = 0;
-
-    while !l.is_null() {
-        count += 1;
-        l = crate::entity::player::thing_next(l);
-    }
-
-    count
-}
-
-// ─── Stats / stone / item tables ─────────────────────────────────────────────
-
-unsafe fn rs_write_stats(savef: &mut dyn Write, s: *mut Stats) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_marker(savef, RSID_STATS);
-    let _ = rs_write_str_t(savef, (*s).strength);
-    let _ = rs_write_int(savef, (*s).experience);
-    let _ = rs_write_int(savef, (*s).level);
-    let _ = rs_write_int(savef, (*s).armor);
-    let _ = rs_write_int(savef, (*s).hit_points);
-    let _ = rs_write_chars(savef, (&raw mut (*s).damage) as *mut u8, 13);
-    let _ = rs_write_int(savef, (*s).max_hit_points);
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_stats(inf: &mut dyn Read, s: *mut Stats) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_marker(inf, RSID_STATS);
-    let _ = rs_read_str_t(inf, &raw mut (*s).strength);
-    let _ = rs_read_int(inf, &mut (*s).experience);
-    let _ = rs_read_int(inf, &mut (*s).level);
-    let _ = rs_read_int(inf, &mut (*s).armor);
-    let _ = rs_read_int(inf, &mut (*s).hit_points);
-    let _ = rs_read_chars(inf, (&raw mut (*s).damage) as *mut u8, 13);
-    let _ = rs_read_int(inf, &mut (*s).max_hit_points);
-
-    read_stat()
-}
-
-unsafe fn rs_write_stone_index(
-    savef: &mut dyn Write,
-    master: &[crate::init::CStone],
-    max: i32,
-    s: &str,
-) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let mut i: i32 = 0;
-    while i < max {
-        if s == master[i as usize].st_name {
-            let _ = rs_write_int(savef, i);
-            return WRITE_ERROR;
-        }
-        i += 1;
-    }
-
-    let _ = rs_write_int(savef, -1);
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_stone_index(
-    inf: &mut dyn Read,
-    master: &[crate::init::CStone],
-    maxindex: i32,
-    s: &mut &'static str,
-) -> i32 {
-    let mut i: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut i);
-
-    if i > maxindex {
-        FORMAT_ERROR = 1;
-    } else if i >= 0 {
-        *s = master[i as usize].st_name;
+    let dest = if (*t).t_dest_hero {
+        DestRef::Hero
     } else {
-        *s = "";
-    }
-
-    read_stat()
-}
-
-/// Serializes the global scroll names to the save file.
-///
-/// Uses [`crate::globals::SCROLL_NAMES`].
-unsafe fn rs_write_scrolls(savef: &mut dyn Write) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    for i in 0..MAXSCROLLS {
-        let name = crate::globals::scroll_name(i);
-        let _ = rs_write_string_opt(savef, Some(&name));
-    }
-
-    read_stat()
-}
-
-/// Restores the global scroll names from the save file.
-///
-/// Uses [`crate::globals::SCROLL_NAMES`].
-unsafe fn rs_read_scrolls(inf: &mut dyn Read) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    for i in 0..MAXSCROLLS {
-        match rs_read_string_owned(inf) {
-            Some(name) => crate::globals::set_scroll_name(i, name),
-            None => crate::globals::set_scroll_name(i, String::new()),
-        }
-    }
-
-    read_stat()
-}
-
-/// Index of `ptr` within [`crate::colors::POTION_COLORS`], or `-1` if it is not
-/// a potion colour. Bridges the legacy `p_colors` pointer array to the Rust
-/// colour table.
-fn potion_color_index(name: &str) -> i32 {
-    crate::colors::POTION_COLORS
-        .iter()
-        .position(|color| *color == name)
-        .map_or(-1, |i| i as i32)
-}
-
-/// Serializes the global potion colors to the save file.
-///
-/// Uses globals: p_colors.
-unsafe fn rs_write_potions(savef: &mut dyn Write) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let mut i = 0;
-    while i < MAXPOTIONS {
-        let _ = rs_write_int(savef, potion_color_index(p_colors[i]));
-        i += 1;
-    }
-
-    WRITE_ERROR
-}
-
-/// Restores the global potion colors from the save file.
-///
-/// Uses globals: p_colors.
-unsafe fn rs_read_potions(inf: &mut dyn Read) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let mut i = 0;
-    while i < MAXPOTIONS {
-        let mut idx: i32 = 0;
-        let _ = rs_read_int(inf, &mut idx);
-        p_colors[i] = if idx >= 0 && (idx as usize) < crate::colors::POTION_COLOR_COUNT {
-            crate::colors::POTION_COLORS[idx as usize]
+        let raw = crate::entity::player::thing_dest(tp);
+        if raw.is_null() {
+            DestRef::None
+        } else if let Some(i) = monster_index_for_dest(raw) {
+            DestRef::Monster(i)
+        } else if let Some(i) = list_index_of(level_items, monster_dest_owner_thing(tp)) {
+            DestRef::Object(i)
+        } else if let Some(i) = room_gold
+            .iter()
+            .position(|g| g.x == (*raw).x && g.y == (*raw).y)
+        {
+            DestRef::RoomGold(i)
         } else {
-            ""
-        };
-        i += 1;
-    }
-
-    read_stat()
-}
-
-/// Serializes the global ring stone settings to the save file.
-///
-/// Uses globals: stones, r_stones.
-unsafe fn rs_write_rings(savef: &mut dyn Write) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let mut i = 0;
-    while i < MAXRINGS {
-        let _ = rs_write_stone_index(savef, &crate::init::stones, cNSTONES, r_stones[i]);
-        i += 1;
-    }
-
-    WRITE_ERROR
-}
-
-/// Restores the global ring stone settings from the save file.
-///
-/// Uses globals: stones, r_stones.
-unsafe fn rs_read_rings(inf: &mut dyn Read) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let mut i = 0;
-    while i < MAXRINGS {
-        let _ = rs_read_stone_index(inf, &crate::init::stones, cNSTONES, &mut r_stones[i]);
-        i += 1;
-    }
-
-    read_stat()
-}
-
-/// Serializes the global wand/staff descriptions to the save file.
-///
-/// Uses globals: ws_type, ws_made, wood, metal.
-unsafe fn rs_write_sticks(savef: &mut dyn Write) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    for i in 0..MAXSTICKS {
-        if crate::globals::ws_type[i] == "staff" {
-            let _ = rs_write_int(savef, 0);
-            let idx = crate::init::wood
-                .iter()
-                .position(|w| *w == crate::globals::ws_made[i])
-                .map_or(-1, |p| p as i32);
-            let _ = rs_write_int(savef, idx);
-        } else {
-            let _ = rs_write_int(savef, 1);
-            let idx = crate::init::metal
-                .iter()
-                .position(|m| *m == crate::globals::ws_made[i])
-                .map_or(-1, |p| p as i32);
-            let _ = rs_write_int(savef, idx);
+            DestRef::None
         }
-    }
+    };
 
-    WRITE_ERROR
+    MonsterSnapshot {
+        t_pos: (*t).t_pos,
+        t_turn: (*t).t_turn,
+        t_type: (*t).t_type,
+        t_disguise: (*t).t_disguise,
+        t_oldch: (*t).t_oldch,
+        t_dest: dest,
+        t_flags: (*t).t_flags,
+        t_stats: (*t).t_stats,
+        t_room: (*t).t_room,
+        t_pack: collect_objects(crate::entity::player::thing_pack(tp)),
+        t_reserved: (*t).t_reserved,
+    }
 }
 
-/// Restores the global wand/staff descriptions from the save file.
-///
-/// Uses globals: ws_type, ws_made, wood, metal.
-unsafe fn rs_read_sticks(inf: &mut dyn Read) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    for i in 0..MAXSTICKS {
-        let mut list: i32 = 0;
-        let mut idx: i32 = 0;
-        let _ = rs_read_int(inf, &mut list);
-        let _ = rs_read_int(inf, &mut idx);
-
-        if list == 0 {
-            crate::globals::ws_type[i] = "staff";
-            if idx >= 0 && (idx as usize) < crate::init::wood.len() {
-                crate::globals::ws_made[i] = crate::init::wood[idx as usize];
-            }
-        } else {
-            crate::globals::ws_type[i] = "wand";
-            if idx >= 0 && (idx as usize) < crate::init::metal.len() {
-                crate::globals::ws_made[i] = crate::init::metal[idx as usize];
-            }
-        }
-    }
-
-    read_stat()
-}
-
-// ─── Daemons ─────────────────────────────────────────────────────────────────
-
-unsafe fn rs_write_daemons(savef: &mut dyn Write, dl: *mut CDelayedAction, cnt: i32) -> i32 {
-    let mut i: i32 = 0;
-
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_marker(savef, RSID_DAEMONS);
-    let _ = rs_write_int(savef, cnt);
-
-    while i < cnt {
-        // Map the typed callback back to the legacy integer identity. Callbacks
-        // the original `state.c` did not know (and empty slots) serialise as 0
-        // or -1, exactly as before, so the bytes are unchanged.
-        let func: i32 = match (*dl.add(i as usize)).d_func {
-            None => 0,
-            Some(d) => d.save_id().unwrap_or(-1),
-        };
-
-        let _ = rs_write_int(savef, (*dl.add(i as usize)).d_type);
-        let _ = rs_write_int(savef, func);
-        let _ = rs_write_int(savef, (*dl.add(i as usize)).d_arg);
-        let _ = rs_write_int(savef, (*dl.add(i as usize)).d_time);
-
-        i += 1;
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_daemons(inf: &mut dyn Read, dl: *mut CDelayedAction, cnt: i32) -> i32 {
-    let mut i: i32 = 0;
-    let mut func: i32 = 0;
-    let mut value: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_marker(inf, RSID_DAEMONS);
-    let _ = rs_read_int(inf, &mut value);
-
-    if value > cnt {
-        FORMAT_ERROR = 1;
-    }
-
-    while i < cnt {
-        func = 0;
-        let _ = rs_read_int(inf, &mut (*dl.add(i as usize)).d_type);
-        let _ = rs_read_int(inf, &mut func);
-        let _ = rs_read_int(inf, &mut (*dl.add(i as usize)).d_arg);
-        let _ = rs_read_int(inf, &mut (*dl.add(i as usize)).d_time);
-
-        (*dl.add(i as usize)).d_func = Daemon::from_save_id(func);
-
-        i += 1;
-    }
-
-    // Mirror the C sentinel cleanup; guarded so we never touch a slot past
-    // the end of the (20-entry) daemon table.
-    if (cnt as usize) < MAXDAEMONS {
-        let d = &mut *dl.add(cnt as usize);
-        if d.d_func.is_none() {
-            d.d_type = 0;
-            d.d_arg = 0;
-            d.d_time = 0;
-        }
-    }
-
-    read_stat()
-}
-
-// ─── Object info tables ──────────────────────────────────────────────────────
-
-unsafe fn rs_write_obj_info(savef: &mut dyn Write, info: *mut CObjInfo, count: i32) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_marker(savef, RSID_MAGICITEMS);
-    let _ = rs_write_int(savef, count);
-
-    let mut n: i32 = 0;
-    while n < count {
-        // oi_name is constant, defined at compile time in all cases
-        let _ = rs_write_int(savef, (*info.add(n as usize)).oi_prob);
-        let _ = rs_write_int(savef, (*info.add(n as usize)).oi_worth);
-        let guess = (*info.add(n as usize)).oi_guess.as_deref();
-        let _ = rs_write_string_opt(savef, guess);
-        let _ = rs_write_boolean(savef, (*info.add(n as usize)).oi_know as i32);
-        n += 1;
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_obj_info(inf: &mut dyn Read, mi: *mut CObjInfo, count: i32) -> i32 {
-    let mut value: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_marker(inf, RSID_MAGICITEMS);
-    let _ = rs_read_int(inf, &mut value);
-
-    if value > count {
-        FORMAT_ERROR = 1;
-    }
-
-    let mut n: i32 = 0;
-    while n < value {
-        // oi_name is constant, defined at compile time in all cases
-        let _ = rs_read_int(inf, &mut (*mi.add(n as usize)).oi_prob);
-        let _ = rs_read_int(inf, &mut (*mi.add(n as usize)).oi_worth);
-        (*mi.add(n as usize)).oi_guess = rs_read_string_owned(inf);
-        let mut know: u8 = 0;
-        let _ = rs_read_boolean(inf, &mut know);
-        (*mi.add(n as usize)).oi_know = know != 0;
-        n += 1;
-    }
-
-    read_stat()
-}
-
-// ─── Rooms ───────────────────────────────────────────────────────────────────
-
-unsafe fn rs_write_room(savef: &mut dyn Write, r: &Room) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_coord(savef, r.position);
-    let _ = rs_write_coord(savef, r.size);
-    let _ = rs_write_coord(savef, r.gold);
-    let _ = rs_write_int(savef, r.goldval);
-    let _ = rs_write_boolean(savef, r.gone as i32);
-    let _ = rs_write_boolean(savef, r.dark as i32);
-    let _ = rs_write_boolean(savef, r.maze as i32);
-    let _ = rs_write_int(savef, r.entry_point_count);
-    let mut i = 0;
-    while i < 12 {
-        let exit = r.entry_points.get(i).copied().unwrap_or(IVec2::ZERO);
-        let _ = rs_write_coord(savef, exit);
-        i += 1;
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_room(inf: &mut dyn Read, r: &mut Room) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let mut position = IVec2::ZERO;
-    let mut size = IVec2::ZERO;
-    let mut gold = IVec2::ZERO;
-    let mut gone = 0;
-    let mut dark = 0;
-    let mut maze = 0;
-    let _ = rs_read_coord(inf, &mut position);
-    let _ = rs_read_coord(inf, &mut size);
-    let _ = rs_read_coord(inf, &mut gold);
-    let _ = rs_read_int(inf, &mut r.goldval);
-    let _ = rs_read_boolean(inf, &mut gone);
-    let _ = rs_read_boolean(inf, &mut dark);
-    let _ = rs_read_boolean(inf, &mut maze);
-    let _ = rs_read_int(inf, &mut r.entry_point_count);
-    r.position = position;
-    r.size = size;
-    r.gold = gold;
-    r.gone = gone != 0;
-    r.dark = dark != 0;
-    r.maze = maze != 0;
-    r.entry_points.clear();
-    let mut i = 0;
-    while i < 12 {
-        let mut exit = IVec2::ZERO;
-        let _ = rs_read_coord(inf, &mut exit);
-        if i < r.entry_point_count.max(0) as usize {
-            r.entry_points.push(exit);
-        }
-        i += 1;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_rooms(savef: &mut dyn Write, rooms: &[Room]) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_int(savef, rooms.len() as i32);
-
-    for room in rooms {
-        let _ = rs_write_room(savef, room);
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_rooms(inf: &mut dyn Read, rooms: &mut [Room]) -> i32 {
-    let mut value: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut value);
-
-    if value < 0 || value as usize > rooms.len() {
-        FORMAT_ERROR = 1;
-    }
-
-    let mut n: i32 = 0;
-    while n < value && (n as usize) < rooms.len() {
-        let _ = rs_read_room(inf, &mut rooms[n as usize]);
-        n += 1;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_passage_links(savef: &mut dyn Write, links: &[PassageLinks]) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_int(savef, links.len() as i32);
-    for link in links {
-        let _ = rs_write_int(savef, link.exits.len() as i32);
-        for exit in &link.exits {
-            let _ = rs_write_coord(savef, *exit);
-        }
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_passage_links(inf: &mut dyn Read, links: &mut Vec<PassageLinks>) -> i32 {
-    let mut count = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut count);
-    if count < 0 {
-        FORMAT_ERROR = 1;
-        return read_stat();
-    }
-
-    links.clear();
-    for _ in 0..count {
-        let mut exit_count = 0;
-        let _ = rs_read_int(inf, &mut exit_count);
-        if exit_count < 0 {
-            FORMAT_ERROR = 1;
-            break;
-        }
-        let mut exits = Vec::with_capacity(exit_count as usize);
-        for _ in 0..exit_count {
-            let mut exit = IVec2::ZERO;
-            let _ = rs_read_coord(inf, &mut exit);
-            exits.push(exit);
-        }
-        links.push(PassageLinks { exits });
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_room_reference(savef: &mut dyn Write, room: Option<usize>) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_int(savef, room.map_or(-1, |i| i as i32));
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_room_reference(inf: &mut dyn Read, room: &mut Option<usize>) -> i32 {
-    let mut i: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut i);
-
-    if i >= 0 && (i as usize) < crate::config::GameConfig::MAX_ROOMS {
-        *room = Some(i as usize);
-    } else {
-        *room = None;
-    }
-
-    read_stat()
-}
-
-// ─── Monsters ────────────────────────────────────────────────────────────────
-
-unsafe fn rs_write_monsters(savef: &mut dyn Write, m: *mut CMonster, count: i32) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_marker(savef, RSID_MONSTERS);
-    let _ = rs_write_int(savef, count);
-
-    let mut n: i32 = 0;
-    while n < count {
-        let _ = rs_write_stats(savef, &mut (*m.add(n as usize)).m_stats);
-        n += 1;
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_monsters(inf: &mut dyn Read, m: *mut CMonster, count: i32) -> i32 {
-    let mut value: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_marker(inf, RSID_MONSTERS);
-    let _ = rs_read_int(inf, &mut value);
-
-    if value != count {
-        FORMAT_ERROR = 1;
-    }
-
-    let mut n: i32 = 0;
-    while n < count {
-        let _ = rs_read_stats(inf, &mut (*m.add(n as usize)).m_stats);
-        n += 1;
-    }
-
-    read_stat()
-}
-
-// ─── Objects ─────────────────────────────────────────────────────────────────
-
-unsafe fn rs_write_object(savef: &mut dyn Write, o: *mut Thing) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let op = thing_o(o);
-
-    let _ = rs_write_marker(savef, RSID_OBJECT);
-    let _ = rs_write_int(savef, (*op).o_type.code());
-    let _ = rs_write_coord(savef, (*op).o_pos);
-    let _ = rs_write_int(savef, (*op).o_launch);
-    let _ = rs_write_char(savef, (*op).o_packch as u8);
-    let _ = rs_write_chars(savef, (&raw mut (*op).o_damage) as *mut u8, 8);
-    let _ = rs_write_chars(savef, (&raw mut (*op).o_hurldmg) as *mut u8, 8);
-    let _ = rs_write_int(savef, (*op).o_count);
-    let _ = rs_write_int(savef, (*op).o_which);
-    let _ = rs_write_int(savef, (*op).o_hplus);
-    let _ = rs_write_int(savef, (*op).o_dplus);
-    let _ = rs_write_int(savef, (*op).o_arm);
-    let _ = rs_write_int(savef, (*op).o_flags.bits());
-    let _ = rs_write_int(savef, (*op).o_group);
-    let _ = rs_write_string_opt(savef, (*op).o_label.as_deref());
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_object(inf: &mut dyn Read, o: *mut Thing) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let op = thing_o(o);
-
-    let _ = rs_read_marker(inf, RSID_OBJECT);
-    let mut o_type_code: i32 = 0;
-    let _ = rs_read_int(inf, &mut o_type_code);
-    let _ = rs_read_coord(inf, &mut (*op).o_pos);
-    let _ = rs_read_int(inf, &mut (*op).o_launch);
-    let mut packch_ch: u8 = 0;
-    let _ = rs_read_char(inf, &mut packch_ch);
-    (*op).o_packch = packch_ch as u8;
-    let _ = rs_read_chars(inf, (&raw mut (*op).o_damage) as *mut u8, 8);
-    let _ = rs_read_chars(inf, (&raw mut (*op).o_hurldmg) as *mut u8, 8);
-    let _ = rs_read_int(inf, &mut (*op).o_count);
-    let _ = rs_read_int(inf, &mut (*op).o_which);
-    (*op).o_type = crate::item::item_type::ItemType::from_raw(o_type_code, (*op).o_which);
-    let _ = rs_read_int(inf, &mut (*op).o_hplus);
-    let _ = rs_read_int(inf, &mut (*op).o_dplus);
-    let _ = rs_read_int(inf, &mut (*op).o_arm);
-    let mut o_flags_bits: i32 = 0;
-    let _ = rs_read_int(inf, &mut o_flags_bits);
-    (*op).o_flags = crate::entity::player::ObjectFlags::from_bits(o_flags_bits);
-    let _ = rs_read_int(inf, &mut (*op).o_group);
-    (*op).o_label = rs_read_string_owned(inf);
-
-    read_stat()
-}
-
-unsafe fn rs_write_object_list(savef: &mut dyn Write, mut l: *mut Thing) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_marker(savef, RSID_OBJECTLIST);
-    let _ = rs_write_int(savef, list_size(l));
-
-    while !l.is_null() {
-        let _ = rs_write_object(savef, l);
-        l = crate::entity::player::thing_next(l);
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_object_list(inf: &mut dyn Read, list: *mut *mut Thing) -> i32 {
-    let mut cnt: i32 = 0;
-    let mut l: *mut Thing = std::ptr::null_mut();
-    let mut previous: *mut Thing = std::ptr::null_mut();
-    let mut head: *mut Thing = std::ptr::null_mut();
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_marker(inf, RSID_OBJECTLIST);
-    let _ = rs_read_int(inf, &mut cnt);
-
-    let mut i: i32 = 0;
-    while i < cnt {
-        // new_item() zero-allocates, matching the C memset(l, 0, sizeof(THING)).
-        l = new_item();
-
-        crate::entity::player::set_thing_prev(l, previous);
-
-        if !previous.is_null() {
-            crate::entity::player::set_thing_next(previous, l);
-        }
-
-        let _ = rs_read_object(inf, l);
-
-        if previous.is_null() {
-            head = l;
-        }
-
-        previous = l;
-        i += 1;
-    }
-
-    if !l.is_null() {
-        crate::entity::player::set_thing_next(l, std::ptr::null_mut());
-    }
-
-    *list = head;
-
-    read_stat()
-}
-
-unsafe fn rs_write_object_reference(
-    savef: &mut dyn Write,
-    list: *mut Thing,
-    item: *mut Thing,
-) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let i = find_list_ptr(list, item as *const u8);
-
-    rs_write_int(savef, i)
-}
-
-unsafe fn rs_read_object_reference(
-    inf: &mut dyn Read,
-    list: *mut Thing,
-    item: *mut *mut Thing,
-) -> i32 {
-    let mut i: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut i);
-
-    *item = get_list_item(list, i);
-
-    read_stat()
-}
-
-// ─── Thing serialization ─────────────────────────────────────────────────────
-
-unsafe fn find_room_coord(c: *mut IVec2) -> i32 {
-    let mut i: i32 = 0;
-
-    while (i as usize) < crate::config::GameConfig::MAX_ROOMS {
-        if crate::game::room_gold_ptr(Some(i as usize)) == c {
-            return i;
-        }
-        i += 1;
-    }
-
-    -1
-}
-
-unsafe fn find_thing_coord(_monlist: *mut Thing, c: *mut IVec2) -> i32 {
-    // Monsters live in `MLIST`; resolve the chase target by traversal position.
+/// The monster-list position whose `t_pos` equals `raw`, if any.
+unsafe fn monster_index_for_dest(raw: *mut IVec2) -> Option<usize> {
     for (i, id) in MONSTER_LIST.ids().iter().enumerate() {
-        if let Some(mitem) = MONSTER_LIST.handle(*id) {
-            if c == (&raw mut (*thing_t(mitem)).t_pos) as *mut IVec2 {
-                return i as i32;
+        if let Some(m) = MONSTER_LIST.handle(*id) {
+            if raw == (&raw mut (*thing_t(m)).t_pos) as *mut IVec2 {
+                return Some(i);
             }
         }
     }
-
-    -1
+    None
 }
 
-unsafe fn find_object_coord(objlist: *mut Thing, c: *mut IVec2) -> i32 {
-    let mut oitem: *mut Thing = objlist;
-    let mut i: i32 = 0;
-
-    while !oitem.is_null() {
-        if c == (&raw mut (*thing_o(oitem)).o_pos) as *mut IVec2 {
-            return i;
-        }
-        i += 1;
-        oitem = crate::entity::player::thing_next(oitem);
-    }
-
-    -1
-}
-
-/// Serializes a monster/player THING, encoding chase targets as references
-/// into the global mlist, lvl_obj, rooms or hero.
+/// Resolve a raw chase pointer to the monster/thing that owns that coordinate,
+/// for mapping object targets in [`snapshot_monster`].
 ///
-/// Uses globals: hero, mlist, lvl_obj, rooms.
-unsafe fn rs_write_thing(savef: &mut dyn Write, t: *mut Thing) -> i32 {
-    let mut i: i32 = -1;
-
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
+/// The legacy engine stored a pointer to `t_pos` (a monster) or `o_pos` (an
+/// object). This walks the monster list and level items to find the owner.
+unsafe fn monster_dest_owner_thing(tp: *mut Thing) -> *mut Thing {
+    let raw = crate::entity::player::thing_dest(tp);
+    if raw.is_null() {
+        return std::ptr::null_mut();
     }
-
-    let _ = rs_write_marker(savef, RSID_THING);
-
-    if t.is_null() {
-        let _ = rs_write_int(savef, 0);
-        return WRITE_ERROR;
+    for id in MONSTER_LIST.ids() {
+        if let Some(m) = MONSTER_LIST.handle(id) {
+            if raw == (&raw mut (*thing_t(m)).t_pos) as *mut IVec2 {
+                return m;
+            }
+        }
     }
+    std::ptr::null_mut()
+}
 
-    let _ = rs_write_int(savef, 1);
-    let _ = rs_write_coord(savef, (*thing_t(t)).t_pos);
-    let _ = rs_write_boolean(savef, (*thing_t(t)).t_turn as i32);
-    let _ = rs_write_char(savef, (*thing_t(t)).t_type.map_or(0, |m| m.glyph()));
-    let _ = rs_write_char(savef, (*thing_t(t)).t_disguise as u8);
-    let _ = rs_write_char(savef, (*thing_t(t)).t_oldch as u8);
+// ─── Save ────────────────────────────────────────────────────────────────────
 
-    /*
-        t_dest can be:
-        0,0: NULL
-        0,1: location of hero
-        1,i: location of a thing (monster)
-        2,i: location of an object
-        3,i: location of gold in a room
+/// Builds the full [`GameSnapshot`] from the live process-wide state.
+unsafe fn build_snapshot() -> GameSnapshot {
+    use crate::globals::*;
 
-        We need to remember what we are chasing rather than
-        the current location of what we are chasing.
-    */
+    // Player actor snapshot (without its pack, which is captured separately).
+    let hero_ptr = PLAYER.with_mut(|thing| thing as *mut Thing);
+    let hero_pack = PLAYER.pack();
+    let level_items = crate::game::with_current_level(|level| level.items.head());
 
-    let t_dest = crate::entity::player::thing_dest(t);
+    let mut player = snapshot_monster(hero_ptr, level_items, &crate::game::ROOM_GOLD);
+    player.t_pack = Vec::new();
 
-    if crate::entity::player::is_thing_dest_hero(t) {
-        let _ = rs_write_int(savef, 0);
-        let _ = rs_write_int(savef, 1);
-    } else if !t_dest.is_null() {
-        i = find_thing_coord(MONSTER_LIST.head(), t_dest);
+    let monster_snaps: Vec<MonsterSnapshot> = MONSTER_LIST
+        .ids()
+        .into_iter()
+        .filter_map(|id| MONSTER_LIST.handle(id))
+        .map(|tp| snapshot_monster(tp, level_items, &crate::game::ROOM_GOLD))
+        .collect();
 
-        if i >= 0 {
-            let _ = rs_write_int(savef, 1);
-            let _ = rs_write_int(savef, i);
-        } else {
-            i = find_object_coord(
-                crate::game::with_current_level(|level| level.items.head()),
-                t_dest,
-            );
+    let player_pack = collect_objects(hero_pack);
+    let equipment = EquipmentSnapshot {
+        armor: list_index_of(hero_pack, PLAYER.armor()),
+        left_ring: list_index_of(hero_pack, PLAYER.left_ring()),
+        right_ring: list_index_of(hero_pack, PLAYER.right_ring()),
+        weapon: list_index_of(hero_pack, PLAYER.weapon()),
+        last_pick: list_index_of(hero_pack, crate::globals::last_pick),
+        l_last_pick: list_index_of(hero_pack, crate::globals::l_last_pick),
+    };
 
-            if i >= 0 {
-                let _ = rs_write_int(savef, 2);
-                let _ = rs_write_int(savef, i);
-            } else {
-                i = find_room_coord(t_dest);
-
-                if i >= 0 {
-                    let _ = rs_write_int(savef, 3);
-                    let _ = rs_write_int(savef, i);
-                } else {
-                    let _ = rs_write_int(savef, 0);
-                    let _ = rs_write_int(savef, 1); /* chase the hero anyway */
+    // Level snapshot.
+    let level = crate::game::with_current_level(|lvl| {
+        let mut monster_cells = Vec::new();
+        for y in 0..crate::config::GameConfig::LEVEL_HEIGHT {
+            for x in 0..crate::config::GameConfig::LEVEL_WIDTH {
+                if let Some(id) = MONSTER_MAP.at(y, x) {
+                    if let Some(pos) = MONSTER_LIST.position(id) {
+                        monster_cells.push((y, x, pos));
+                    }
                 }
             }
         }
-    } else {
-        let _ = rs_write_int(savef, 0);
-        let _ = rs_write_int(savef, 0);
-    }
 
-    let _ = rs_write_short(savef, (*thing_t(t)).t_flags.bits());
-    let _ = rs_write_stats(savef, &raw mut (*thing_t(t)).t_stats);
-    let _ = rs_write_room_reference(savef, (*thing_t(t)).t_room);
-    let _ = rs_write_object_list(savef, crate::entity::player::thing_pack(t));
-
-    WRITE_ERROR
-}
-
-/// Restores a monster/player THING, resolving chase-target references against
-/// the global hero, mlist, lvl_obj and rooms tables.
-///
-/// Uses globals: hero, mlist, lvl_obj, rooms.
-unsafe fn rs_read_thing(inf: &mut dyn Read, t: *mut Thing) -> i32 {
-    let mut listid: i32 = 0;
-    let mut index: i32 = -1;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_marker(inf, RSID_THING);
-    let _ = rs_read_int(inf, &mut index);
-
-    if index == 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_coord(inf, &mut (*thing_t(t)).t_pos);
-    let mut turn_byte: u8 = 0;
-    let _ = rs_read_boolean(inf, &mut turn_byte);
-    (*thing_t(t)).t_turn = turn_byte != 0;
-    let mut type_ch: u8 = 0;
-    let _ = rs_read_char(inf, &mut type_ch);
-    (*thing_t(t)).t_type = crate::entity::monsters::MonsterType::from_glyph(type_ch);
-    let mut disguise_ch: u8 = 0;
-    let _ = rs_read_char(inf, &mut disguise_ch);
-    (*thing_t(t)).t_disguise = disguise_ch as u8;
-    let mut oldch_ch: u8 = 0;
-    let _ = rs_read_char(inf, &mut oldch_ch);
-    (*thing_t(t)).t_oldch = oldch_ch as u8;
-
-    /*
-        t_dest can be (listid,index):
-        0,0: NULL
-        0,1: location of hero
-        1,i: location of a thing (monster)
-        2,i: location of an object
-        3,i: location of gold in a room
-
-        We need to remember what we are chasing rather than
-        the current location of what we are chasing.
-    */
-
-    let _ = rs_read_int(inf, &mut listid);
-    let _ = rs_read_int(inf, &mut index);
-    (*thing_t(t)).t_reserved = -1;
-
-    if listid == 0 {
-        /* hero or NULL */
-        if index == 1 {
-            crate::entity::player::set_thing_dest_hero(t);
-        } else {
-            crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
+        LevelSnapshot {
+            depth: lvl.depth,
+            stairs: lvl.stairs,
+            rooms: lvl.rooms.clone(),
+            room_graph: lvl.room_graph.clone(),
+            passages: lvl.passages.clone(),
+            map: lvl.map.clone(),
+            flags: lvl.flags.clone(),
+            passage_links: lvl.passage_links.clone(),
+            items: collect_objects(lvl.items.head()),
+            monster_cells,
+            room_gold: crate::game::ROOM_GOLD.to_vec(),
         }
-    } else if listid == 1 {
-        /* monster/thing */
-        crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
-        (*thing_t(t)).t_reserved = index;
-    } else if listid == 2 {
-        /* object */
-        let item = get_list_item(
-            crate::game::with_current_level(|level| level.items.head()),
-            index,
-        );
+    });
 
-        if !item.is_null() {
-            crate::entity::player::set_thing_dest(
-                t,
-                (&raw mut (*thing_o(item)).o_pos) as *mut IVec2,
-            );
-        }
-    } else if listid == 3 {
-        /* gold */
-        if (index as usize) < crate::config::GameConfig::MAX_ROOMS {
-            crate::entity::player::set_thing_dest(
-                t,
-                crate::game::room_gold_ptr(Some(index as usize)),
-            );
-        } else {
-            crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
-        }
-    } else {
-        crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
+    // Monster table stats (mutated in place by combat/wizard code).
+    let mut monster_stats = Vec::new();
+    for m in crate::globals::monsters.iter() {
+        monster_stats.push(m.m_stats);
     }
 
-    let mut t_flags_bits: i16 = 0;
-    let _ = rs_read_short(inf, &mut t_flags_bits);
-    (*thing_t(t)).t_flags = crate::entity::player::MonsterFlags::from_bits(t_flags_bits);
-    let _ = rs_read_stats(inf, &raw mut (*thing_t(t)).t_stats);
-    let _ = rs_read_room_reference(inf, &mut (*thing_t(t)).t_room);
-    let mut pack_head: *mut Thing = std::ptr::null_mut();
-    let _ = rs_read_object_list(inf, &mut pack_head);
-    crate::entity::player::set_thing_pack(t, pack_head);
-
-    read_stat()
-}
-
-/// Resolves a deferred monster chase target stored in t_reserved.
-///
-/// Uses globals: mlist.
-unsafe fn rs_fix_thing(t: *mut Thing) {
-    if (*thing_t(t)).t_reserved < 0 {
-        return;
-    }
-
-    let id = MONSTER_LIST.nth((*thing_t(t)).t_reserved as usize);
-
-    if let Some(item) = id.and_then(|id| MONSTER_LIST.handle(id)) {
-        crate::entity::player::set_thing_dest(t, (&raw mut (*thing_t(item)).t_pos) as *mut IVec2);
-    }
-}
-
-unsafe fn rs_write_thing_list(savef: &mut dyn Write, _l: *mut Thing) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_marker(savef, RSID_MONSTERLIST);
-
-    let ids = MONSTER_LIST.ids();
-    let cnt = ids.len() as i32;
-
-    let _ = rs_write_int(savef, cnt);
-
-    if cnt < 1 {
-        return WRITE_ERROR;
-    }
-
-    for id in ids {
-        if let Some(tp) = MONSTER_LIST.handle(id) {
-            let _ = rs_write_thing(savef, tp);
-        }
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_thing_list(inf: &mut dyn Read, _list: *mut *mut Thing) -> i32 {
-    let mut cnt: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_marker(inf, RSID_MONSTERLIST);
-    let _ = rs_read_int(inf, &mut cnt);
-
-    let mut i: i32 = 0;
-    while i < cnt {
-        let l = new_actor();
-        let _ = rs_read_thing(inf, l);
-        i += 1;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_fix_thing_list(_list: *mut Thing) {
-    for id in MONSTER_LIST.ids() {
-        if let Some(item) = MONSTER_LIST.handle(id) {
-            rs_fix_thing(item);
-        }
-    }
-}
-
-unsafe fn rs_write_thing_reference(
-    savef: &mut dyn Write,
-    _list: *mut Thing,
-    item: *mut Thing,
-) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    // Monsters are indexed by position in the safe `MLIST`, so resolve the
-    // position from the handle rather than walking intrusive links.
-    let index = if item.is_null() {
-        -1
-    } else {
-        let mut found = -1;
-        for (pos, id) in MONSTER_LIST.ids().iter().enumerate() {
-            if MONSTER_LIST.handle(*id).map_or(false, |h| h == item) {
-                found = pos as i32;
-                break;
-            }
-        }
-        found
+    let obj_states = |table: &[CObjInfo]| -> Vec<ObjInfoState> {
+        table
+            .iter()
+            .map(|info| ObjInfoState {
+                guess: info.oi_guess.clone(),
+                know: info.oi_know,
+            })
+            .collect()
     };
 
-    rs_write_int(savef, index)
+    let daemons: Vec<CDelayedAction> = (*std::ptr::addr_of!(D_LIST)).to_vec();
+
+    GameSnapshot {
+        after: after != 0,
+        again: again != 0,
+        noscore,
+        seenstairs: seenstairs != 0,
+        amulet: amulet != 0,
+        door_stop: door_stop != 0,
+        fight_flush: fight_flush != 0,
+        firstmove: firstmove != 0,
+        got_ltc: got_ltc != 0,
+        has_hit: has_hit != 0,
+        in_shell: in_shell != 0,
+        inv_describe: inv_describe != 0,
+        jump: jump != 0,
+        kamikaze: kamikaze != 0,
+        lower_msg: lower_msg != 0,
+        move_on: move_on != 0,
+        msg_esc: msg_esc != 0,
+        passgo: passgo != 0,
+        playing: playing != 0,
+        q_comm: q_comm != 0,
+        running: running != 0,
+        save_msg: save_msg != 0,
+        see_floor: see_floor != 0,
+        stat_msg: stat_msg != 0,
+        terse: terse != 0,
+        to_death: to_death != 0,
+        tombstone: tombstone != 0,
+        wizard,
+        pack_used,
+        dir_ch,
+        runch,
+        take,
+
+        file_name: crate::globals::file_name(),
+        huh: crate::globals::huh_string(),
+        prbuf: crate::globals::prbuf(),
+        release: crate::vers::release(),
+        whoami: crate::globals::whoami(),
+        fruit: crate::globals::fruit(),
+        home: crate::globals::get_home(),
+        scroll_names: (0..MAXSCROLLS)
+            .map(crate::globals::scroll_name)
+            .collect(),
+        inv_t_names: crate::globals::inv_t_names(),
+        trap_names: crate::globals::trap_names(),
+        p_colors: p_colors.iter().map(|c| (*c).to_string()).collect(),
+        r_stones: r_stones.iter().map(|c| (*c).to_string()).collect(),
+        ws_type: ws_type.iter().map(|c| (*c).to_string()).collect(),
+        ws_made: ws_made.iter().map(|c| (*c).to_string()).collect(),
+
+        orig_dsusp,
+        l_last_comm,
+        l_last_dir,
+        last_comm,
+        last_dir,
+        n_objs,
+        ntraps,
+        hungry_state,
+        inpack,
+        inv_type,
+        max_level,
+        mpos,
+        no_food,
+        a_class: a_class.to_vec(),
+        count,
+        food_left,
+        lastscore,
+        no_command,
+        no_move,
+        purse,
+        quiet,
+        vf_hit,
+        dnum,
+        seed,
+        e_levels: e_levels.to_vec(),
+        delta,
+        oldpos,
+
+        monster_stats,
+        arm_info: obj_states(&arm_info),
+        pot_info: obj_states(&pot_info),
+        ring_info: obj_states(&ring_info),
+        scr_info: obj_states(&scr_info),
+        weap_info: obj_states(&weap_info),
+        ws_info: obj_states(&ws_info),
+        things: obj_states(&things),
+
+        daemons,
+
+        player,
+        monsters: monster_snaps,
+        player_pack,
+        equipment,
+        level,
+        max_stats,
+        oldrp,
+        between: crate::daemons::between,
+        group: crate::item::weapons::group,
+        nh: crate::entity::player::nh,
+    }
 }
 
-unsafe fn rs_read_thing_reference(
-    inf: &mut dyn Read,
-    _list: *mut Thing,
-    item: *mut *mut Thing,
-) -> i32 {
-    let mut i: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut i);
-
-    if i < 0 {
-        *item = std::ptr::null_mut();
-    } else {
-        *item = MONSTER_LIST
-            .nth(i as usize)
-            .and_then(|id| MONSTER_LIST.handle(id))
-            .unwrap_or(std::ptr::null_mut());
-    }
-
-    read_stat()
+/// Serializes the whole game state into `out` as RON.
+pub fn rs_save_file(out: &mut dyn Write) -> std::io::Result<()> {
+    let snapshot = unsafe { build_snapshot() };
+    let pretty = ron::ser::PrettyConfig::default();
+    let text = ron::ser::to_string_pretty(&snapshot, pretty)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    out.write_all(text.as_bytes())?;
+    Ok(())
 }
 
-unsafe fn rs_write_thing_references(
-    savef: &mut dyn Write,
-    list: *mut Thing,
-    items: *mut *mut Thing,
-    count: i32,
-) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
+// ─── Restore ─────────────────────────────────────────────────────────────────
 
-    let mut i: i32 = 0;
-    while i < count {
-        let _ = rs_write_thing_reference(savef, list, *items.add(i as usize));
-        i += 1;
-    }
-
-    WRITE_ERROR
+/// Restores the whole game state from the RON document in `input`.
+pub fn rs_restore_file(input: &mut dyn Read) -> std::io::Result<()> {
+    let mut text = String::new();
+    input.read_to_string(&mut text)?;
+    let snapshot: GameSnapshot = ron::de::from_str(&text)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    unsafe { apply_snapshot(snapshot) };
+    Ok(())
 }
 
-unsafe fn rs_read_thing_references(
-    inf: &mut dyn Read,
-    list: *mut Thing,
-    items: *mut *mut Thing,
-    count: i32,
-) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
+/// Resolve an `Option<usize>` pack index against a rebuilt list head.
+unsafe fn resolve_index(head: *mut Thing, index: Option<usize>) -> *mut Thing {
+    match index {
+        Some(i) => list_nth(head, i),
+        None => std::ptr::null_mut(),
     }
-
-    let mut i: i32 = 0;
-    while i < count {
-        let _ = rs_read_thing_reference(inf, list, &mut *items.add(i as usize));
-        i += 1;
-    }
-
-    read_stat()
 }
 
-// ─── Places (level map) ──────────────────────────────────────────────────────
+/// Writes a `&'static str` table entry from a saved string, using `lookup` to
+/// map back to a canonical `'static` literal (`""` when unknown).
+fn resolve_static_str<'a>(value: &str, table: &'a [&'a str]) -> &'a str {
+    table.iter().find(|&&c| c == value).copied().unwrap_or("")
+}
 
-/// Serialize the playable cell grid (the top `24x80` screen rows of the
-/// level): for each cell the tile discriminant, the four flag grids, the trap
-/// kind, and the per-cell monster reference (indexed into the global `mlist`).
-///
-/// Uses globals: mlist, places (via crate::game), CURRENT_LEVEL.
-unsafe fn rs_write_places(savef: &mut dyn Write, count: i32) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
+/// Applies a restored [`GameSnapshot`] back into the live process-wide state.
+unsafe fn apply_snapshot(s: GameSnapshot) {
+    use crate::globals::*;
+
+    // ── boolean/char flags ──────────────────────────────────────────────
+    macro_rules! set_flag {
+        ($name:ident) => {
+            $name = s.$name as u8;
+        };
     }
+    set_flag!(after);
+    set_flag!(again);
+    noscore = s.noscore;
+    set_flag!(seenstairs);
+    set_flag!(amulet);
+    set_flag!(door_stop);
+    set_flag!(fight_flush);
+    set_flag!(firstmove);
+    set_flag!(got_ltc);
+    set_flag!(has_hit);
+    set_flag!(in_shell);
+    set_flag!(inv_describe);
+    set_flag!(jump);
+    set_flag!(kamikaze);
+    set_flag!(lower_msg);
+    set_flag!(move_on);
+    set_flag!(msg_esc);
+    set_flag!(passgo);
+    set_flag!(playing);
+    set_flag!(q_comm);
+    set_flag!(running);
+    set_flag!(save_msg);
+    set_flag!(see_floor);
+    set_flag!(stat_msg);
+    set_flag!(terse);
+    set_flag!(to_death);
+    set_flag!(tombstone);
+    wizard = s.wizard;
+    pack_used = s.pack_used;
+    dir_ch = s.dir_ch;
+    runch = s.runch;
+    take = s.take;
 
-    crate::game::with_current_level(|lvl| {
-        let mut i: i32 = 0;
-        while i < count {
-            let y = i / crate::config::GameConfig::SCREEN_COLS;
-            let x = i % crate::config::GameConfig::SCREEN_COLS;
-            let idx = (y as usize) * crate::config::GameConfig::LEVEL_WIDTH + (x as usize);
-            let tile = lvl
-                .map
-                .get(y as usize, x as usize)
-                .unwrap_or(crate::tile::Tile::Empty);
-            let _ = rs_write_char(savef, tile.to_u8() as u8);
-            let _ = rs_write_boolean(savef, lvl.flags.real[idx] as i32);
-            let _ = rs_write_boolean(savef, lvl.flags.passage[idx] as i32);
-            let _ = rs_write_boolean(savef, lvl.flags.seen[idx] as i32);
-            let _ = rs_write_char(savef, lvl.flags.passnum[idx] as u8);
-            let _ = rs_write_char(savef, tile.trap() as u8);
-            // Per-cell monster occupancy.
-            let monst = MONSTER_MAP
-                .at(y as usize, x as usize)
-                .and_then(|id| MONSTER_LIST.handle(id))
-                .unwrap_or(std::ptr::null_mut());
-            let _ = rs_write_thing_reference(savef, MONSTER_LIST.head(), monst);
-            i += 1;
+    // ── strings / string tables ─────────────────────────────────────────
+    crate::globals::set_file_name(s.file_name);
+    crate::globals::set_huh_string(&s.huh);
+    crate::globals::set_prbuf(s.prbuf);
+    crate::vers::set_release(s.release);
+    crate::globals::set_whoami(s.whoami);
+    crate::globals::set_fruit(s.fruit);
+    crate::globals::set_home(s.home);
+    for (i, name) in s.scroll_names.iter().enumerate() {
+        crate::globals::set_scroll_name(i, name.clone());
+    }
+    for (i, name) in s.inv_t_names.iter().enumerate() {
+        crate::globals::set_inv_t_name(i, name.clone());
+    }
+    for (i, name) in s.trap_names.iter().enumerate() {
+        crate::globals::set_trap_name(i, name.clone());
+    }
+    for (i, name) in s.p_colors.iter().enumerate() {
+        if i < p_colors.len() {
+            p_colors[i] = resolve_static_str(name, &crate::colors::POTION_COLORS);
         }
-
-        WRITE_ERROR
-    })
-}
-
-/// Restore the playable cell grid, resolving monster references against the
-/// global mlist and writing everything back into `CURRENT_LEVEL` plus the
-/// monster map.
-///
-/// Uses globals: mlist, places (via crate::game), CURRENT_LEVEL.
-unsafe fn rs_read_places(inf: &mut dyn Read, count: i32) -> i32 {
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
     }
-
-    crate::game::with_current_level_mut(|lvl| {
-        let mut i: i32 = 0;
-        while i < count {
-            let y = i / crate::config::GameConfig::SCREEN_COLS;
-            let x = i % crate::config::GameConfig::SCREEN_COLS;
-            let idx = (y as usize) * crate::config::GameConfig::LEVEL_WIDTH + (x as usize);
-
-            let mut tile_disc: u8 = 0;
-            let mut real: u8 = 0;
-            let mut passage: u8 = 0;
-            let mut seen: u8 = 0;
-            let mut passnum: u8 = 0;
-            let mut trap_kind: u8 = 0;
-            let mut monst: *mut Thing = std::ptr::null_mut();
-
-            let _ = rs_read_char(inf, &mut tile_disc);
-            let _ = rs_read_boolean(inf, &mut real);
-            let _ = rs_read_boolean(inf, &mut passage);
-            let _ = rs_read_boolean(inf, &mut seen);
-            let _ = rs_read_char(inf, &mut passnum);
-            let _ = rs_read_char(inf, &mut trap_kind);
-            let _ = rs_read_thing_reference(inf, MONSTER_LIST.head(), &mut monst);
-
-            let trap = crate::tile::TrapType::from_raw(trap_kind as u8);
-            let tile =
-                crate::tile::Tile::from_u8(tile_disc as u8).unwrap_or(crate::tile::Tile::Empty);
-            let tile = match tile {
-                crate::tile::Tile::Trap(_) => crate::tile::Tile::Trap(trap),
-                other => other,
+    for (i, name) in s.r_stones.iter().enumerate() {
+        if i < r_stones.len() {
+            r_stones[i] = crate::init::stones
+                .iter()
+                .find(|st| st.st_name == name)
+                .map(|st| st.st_name)
+                .unwrap_or("");
+        }
+    }
+    for (i, name) in s.ws_type.iter().enumerate() {
+        if i < ws_type.len() {
+            ws_type[i] = if name == "staff" { "staff" } else { "wand" };
+        }
+    }
+    for (i, name) in s.ws_made.iter().enumerate() {
+        if i < ws_made.len() {
+            ws_made[i] = if ws_type[i] == "staff" {
+                crate::init::wood
+                    .iter()
+                    .find(|w| **w == *name)
+                    .copied()
+                    .unwrap_or("")
+            } else {
+                crate::init::metal
+                    .iter()
+                    .find(|m| **m == *name)
+                    .copied()
+                    .unwrap_or("")
             };
-            let _ = lvl.map.set(y as usize, x as usize, tile);
-            lvl.flags.real[idx] = real != 0;
-            lvl.flags.passage[idx] = passage != 0;
-            lvl.flags.seen[idx] = seen != 0;
-            lvl.flags.passnum[idx] = passnum as u8;
-
-            // Per-cell monster occupancy.
-            MONSTER_MAP.set(y as usize, x as usize, MONSTER_LIST.find(monst));
-            i += 1;
         }
-
-        read_stat()
-    })
-}
-
-// ─── Whole-game save / restore ───────────────────────────────────────────────
-
-/// Writes the entire game state to the save file.
-///
-/// Uses globals: after, again, noscore, seenstairs, amulet, door_stop,
-/// fight_flush, firstmove, got_ltc, has_hit, in_shell, inv_describe,
-/// jump, kamikaze, lower_msg, move_on, msg_esc, passgo, playing,
-/// q_comm, running, save_msg, see_floor, stat_msg, terse, to_death,
-/// tombstone, wizard, pack_used, dir_ch, file_name, huh, p_colors,
-/// prbuf, r_stones, stones, release, runch, s_names, take,
-/// whoami, ws_made, ws_type, wood, metal, orig_dsusp, fruit, home,
-/// inv_t_name, l_last_comm, l_last_dir, last_comm, last_dir, tr_name,
-/// n_objs, ntraps, hungry_state, inpack, inv_type, level, max_level,
-/// mpos, no_food, a_class, count, food_left, lastscore, no_command,
-/// no_move, purse, quiet, vf_hit, dnum, seed, e_levels, delta, oldpos,
-/// stairs, player, equipment slots, l_last_pick,
-/// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
-/// passages, monsters, things, arm_info, pot_info, ring_info,
-/// scr_info, weap_info, ws_info, D_LIST, total, between, nh, group.
-pub unsafe fn rs_save_file(savef: &mut dyn Write) -> i32 {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
     }
 
-    let _ = rs_write_boolean(savef, after as i32); /* 1  */
-    /* extern.c */
-    let _ = rs_write_boolean(savef, again as i32); /* 2  */
-    let _ = rs_write_int(savef, noscore); /* 3  */
-    let _ = rs_write_boolean(savef, seenstairs as i32); /* 4  */
-    let _ = rs_write_boolean(savef, amulet as i32); /* 5  */
-    let _ = rs_write_boolean(savef, door_stop as i32); /* 6  */
-    let _ = rs_write_boolean(savef, fight_flush as i32); /* 7  */
-    let _ = rs_write_boolean(savef, firstmove as i32); /* 8  */
-    let _ = rs_write_boolean(savef, got_ltc as i32); /* 9  */
-    let _ = rs_write_boolean(savef, has_hit as i32); /* 10 */
-    let _ = rs_write_boolean(savef, in_shell as i32); /* 11 */
-    let _ = rs_write_boolean(savef, inv_describe as i32); /* 12 */
-    let _ = rs_write_boolean(savef, jump as i32); /* 13 */
-    let _ = rs_write_boolean(savef, kamikaze as i32); /* 14 */
-    let _ = rs_write_boolean(savef, lower_msg as i32); /* 15 */
-    let _ = rs_write_boolean(savef, move_on as i32); /* 16 */
-    let _ = rs_write_boolean(savef, msg_esc as i32); /* 17 */
-    let _ = rs_write_boolean(savef, passgo as i32); /* 18 */
-    let _ = rs_write_boolean(savef, playing as i32); /* 19 */
-    let _ = rs_write_boolean(savef, q_comm as i32); /* 20 */
-    let _ = rs_write_boolean(savef, running as i32); /* 21 */
-    let _ = rs_write_boolean(savef, save_msg as i32); /* 22 */
-    let _ = rs_write_boolean(savef, see_floor as i32); /* 23 */
-    let _ = rs_write_boolean(savef, stat_msg as i32); /* 24 */
-    let _ = rs_write_boolean(savef, terse as i32); /* 25 */
-    let _ = rs_write_boolean(savef, to_death as i32); /* 26 */
-    let _ = rs_write_boolean(savef, tombstone as i32); /* 27 */
-    if MASTER {
-        let _ = rs_write_int(savef, wizard); /* 28 */
-    } else {
-        let _ = rs_write_int(savef, 0); /* 28 */
+    // ── numeric globals ─────────────────────────────────────────────────
+    orig_dsusp = s.orig_dsusp;
+    l_last_comm = s.l_last_comm;
+    l_last_dir = s.l_last_dir;
+    last_comm = s.last_comm;
+    last_dir = s.last_dir;
+    n_objs = s.n_objs;
+    ntraps = s.ntraps;
+    hungry_state = s.hungry_state;
+    inpack = s.inpack;
+    inv_type = s.inv_type;
+    max_level = s.max_level;
+    mpos = s.mpos;
+    no_food = s.no_food;
+    for (i, v) in s.a_class.iter().enumerate() {
+        if i < a_class.len() {
+            a_class[i] = *v;
+        }
     }
-    let _ = rs_write_booleans(savef, (&raw mut pack_used) as *mut u8, 26); /* 29 */
-    let _ = rs_write_char(savef, dir_ch);
-    let _ = rs_write_fixed_string(savef, &crate::globals::file_name(), MAXSTR);
-    let _ = rs_write_fixed_string(savef, &crate::globals::huh_string(), MAXSTR);
-    let _ = rs_write_potions(savef);
-    let _ = rs_write_fixed_string(savef, &crate::globals::prbuf(), 2 * MAXSTR);
-    let _ = rs_write_rings(savef);
-    let release = crate::vers::release();
-    let _ = rs_write_string_opt(savef, Some(&release));
-    let _ = rs_write_char(savef, runch);
-    let _ = rs_write_scrolls(savef);
-    let _ = rs_write_char(savef, take);
-    let _ = rs_write_fixed_string(savef, &crate::globals::whoami(), MAXSTR);
-    let _ = rs_write_sticks(savef);
-    let _ = rs_write_int(savef, orig_dsusp);
-    let _ = rs_write_fixed_string(savef, &crate::globals::fruit(), MAXSTR);
-    let _ = rs_write_fixed_string(savef, &crate::globals::get_home(), MAXSTR);
-    let inv_names = crate::globals::inv_t_names();
-    let _ = rs_write_int(savef, inv_names.len() as i32);
-    for name in &inv_names {
-        let _ = rs_write_string_opt(savef, Some(name));
+    count = s.count;
+    food_left = s.food_left;
+    lastscore = s.lastscore;
+    no_command = s.no_command;
+    no_move = s.no_move;
+    purse = s.purse;
+    quiet = s.quiet;
+    vf_hit = s.vf_hit;
+    dnum = s.dnum;
+    seed = s.seed;
+    for (i, v) in s.e_levels.iter().enumerate() {
+        if i < e_levels.len() {
+            e_levels[i] = *v;
+        }
     }
-    let _ = rs_write_char(savef, l_last_comm);
-    let _ = rs_write_char(savef, l_last_dir);
-    let _ = rs_write_char(savef, last_comm);
-    let _ = rs_write_char(savef, last_dir);
-    let trap_names = crate::globals::trap_names();
-    let _ = rs_write_int(savef, trap_names.len() as i32);
-    for name in &trap_names {
-        let _ = rs_write_string_opt(savef, Some(name));
-    }
-    let _ = rs_write_int(savef, n_objs);
-    let _ = rs_write_int(savef, ntraps);
-    let _ = rs_write_int(savef, hungry_state);
-    let _ = rs_write_int(savef, inpack);
-    let _ = rs_write_int(savef, inv_type);
-    let _ = rs_write_int(savef, crate::game::current_depth());
-    let _ = rs_write_int(savef, max_level);
-    let _ = rs_write_int(savef, mpos);
-    let _ = rs_write_int(savef, no_food);
-    let _ = rs_write_ints(savef, (&raw mut a_class) as *mut i32, MAXARMORS as i32);
-    let _ = rs_write_int(savef, crate::globals::count);
-    let _ = rs_write_int(savef, food_left);
-    let _ = rs_write_int(savef, lastscore);
-    let _ = rs_write_int(savef, no_command);
-    let _ = rs_write_int(savef, no_move);
-    let _ = rs_write_int(savef, purse);
-    let _ = rs_write_int(savef, quiet);
-    let _ = rs_write_int(savef, vf_hit);
-    let _ = rs_write_int(savef, dnum);
-    let _ = rs_write_int(savef, seed);
-    let _ = rs_write_ints(savef, (&raw mut e_levels) as *mut i32, 21);
-    let _ = rs_write_coord(savef, delta);
-    let _ = rs_write_coord(savef, oldpos);
-    let _ = rs_write_coord(savef, crate::game::stairs());
+    delta = s.delta;
+    oldpos = s.oldpos;
 
-    crate::game::PLAYER.with_mut(|hero| {
-        let _ = rs_write_thing(savef, hero as *mut Thing);
+    // ── in-place tables ─────────────────────────────────────────────────
+    for (i, stats) in s.monster_stats.iter().enumerate() {
+        if i < monsters.len() {
+            monsters[i].m_stats = *stats;
+        }
+    }
+    let apply_obj = |table: &mut [CObjInfo], states: &[ObjInfoState]| {
+        for (i, st) in states.iter().enumerate() {
+            if i < table.len() {
+                table[i].oi_guess = st.guess.clone();
+                table[i].oi_know = st.know;
+            }
+        }
+    };
+    apply_obj(&mut arm_info, &s.arm_info);
+    apply_obj(&mut pot_info, &s.pot_info);
+    apply_obj(&mut ring_info, &s.ring_info);
+    apply_obj(&mut scr_info, &s.scr_info);
+    apply_obj(&mut weap_info, &s.weap_info);
+    apply_obj(&mut ws_info, &s.ws_info);
+    apply_obj(&mut things, &s.things);
+
+    // ── daemons ─────────────────────────────────────────────────────────
+    for (i, slot) in s.daemons.iter().enumerate() {
+        if i < D_LIST.len() {
+            D_LIST[i] = *slot;
+        }
+    }
+
+    // ── level ───────────────────────────────────────────────────────────
+    MONSTER_LIST.clear();
+    MONSTER_MAP.clear();
+
+    let room_gold = s.level.room_gold.clone();
+    let mut level_items_head: *mut Thing = std::ptr::null_mut();
+    crate::game::with_current_level_mut(|lvl| {
+        lvl.depth = s.level.depth;
+        lvl.stairs = s.level.stairs;
+        lvl.rooms = s.level.rooms.clone();
+        lvl.room_graph = s.level.room_graph.clone();
+        lvl.passages = s.level.passages.clone();
+        lvl.map = s.level.map.clone();
+        lvl.flags = s.level.flags.clone();
+        lvl.passage_links = s.level.passage_links.clone();
+        level_items_head = build_object_list(&s.level.items);
+        lvl.items.set_head(level_items_head);
     });
-    let player_pack = crate::game::PLAYER.pack();
-    let _ = rs_write_object_reference(savef, player_pack, PLAYER.armor());
-    let _ = rs_write_object_reference(savef, player_pack, PLAYER.left_ring());
-    let _ = rs_write_object_reference(savef, player_pack, PLAYER.right_ring());
-    let _ = rs_write_object_reference(savef, player_pack, PLAYER.weapon());
-    let _ = rs_write_object_reference(savef, player_pack, l_last_pick);
-    let _ = rs_write_object_reference(savef, player_pack, last_pick);
+    crate::game::set_current_depth(s.level.depth);
 
-    let _ = rs_write_object_list(
-        savef,
-        crate::game::with_current_level(|level| level.items.head()),
-    );
-    let _ = rs_write_thing_list(savef, MONSTER_LIST.head());
-
-    let _ = rs_write_places(
-        savef,
-        crate::config::GameConfig::SCREEN_LINES * crate::config::GameConfig::SCREEN_COLS,
-    );
-
-    let _ = rs_write_stats(savef, &raw mut max_stats);
-    let _ = crate::game::with_current_level(|level| rs_write_rooms(savef, &level.rooms));
-    let _ = rs_write_room_reference(savef, oldrp);
-    let _ = crate::game::with_current_level(|level| {
-        rs_write_passage_links(savef, &level.passage_links)
-    });
-
-    let _ = rs_write_monsters(
-        savef,
-        (&raw mut monsters) as *mut CMonster,
-        MAXMONSTERS as i32,
-    );
-    let _ = rs_write_obj_info(
-        savef,
-        (&raw mut things) as *mut CObjInfo,
-        NUMTHINGS as i32,
-    );
-    let _ = rs_write_obj_info(
-        savef,
-        (&raw mut arm_info) as *mut CObjInfo,
-        MAXARMORS as i32,
-    );
-    let _ = rs_write_obj_info(
-        savef,
-        (&raw mut pot_info) as *mut CObjInfo,
-        MAXPOTIONS as i32,
-    );
-    let _ = rs_write_obj_info(
-        savef,
-        (&raw mut ring_info) as *mut CObjInfo,
-        MAXRINGS as i32,
-    );
-    let _ = rs_write_obj_info(
-        savef,
-        (&raw mut scr_info) as *mut CObjInfo,
-        MAXSCROLLS as i32,
-    );
-    let _ = rs_write_obj_info(
-        savef,
-        (&raw mut weap_info) as *mut CObjInfo,
-        (MAXWEAPONS + 1) as i32,
-    );
-    let _ = rs_write_obj_info(
-        savef,
-        (&raw mut ws_info) as *mut CObjInfo,
-        MAXSTICKS as i32,
-    );
-
-    let _ = rs_write_daemons(
-        savef,
-        (&raw mut D_LIST) as *mut CDelayedAction,
-        MAXDAEMONS as i32,
-    );
-    if MASTER {
-        let _ = rs_write_int(savef, allocated_count()); /* 5.4-list.c */
-    } else {
-        let _ = rs_write_int(savef, 0);
-    }
-    let _ = rs_write_int(savef, between); /* 5.4-daemons.c */
-    let _ = rs_write_coord(savef, nh); /* 5.4-move.c */
-    let _ = rs_write_int(savef, group); /* 5.4-weapons.rs */
-
-    let _ = rs_write_window(savef);
-
-    WRITE_ERROR
-}
-
-/// Reads the entire game state back from the save file, restoring all of the
-/// global variables written by rs_save_file().
-///
-/// Uses globals: after, again, noscore, seenstairs, amulet, door_stop,
-/// fight_flush, firstmove, got_ltc, has_hit, in_shell, inv_describe,
-/// jump, kamikaze, lower_msg, move_on, msg_esc, passgo, playing,
-/// q_comm, running, save_msg, see_floor, stat_msg, terse, to_death,
-/// tombstone, wizard, pack_used, dir_ch, file_name, huh, p_colors,
-/// prbuf, r_stones, stones, release, runch, s_names, take,
-/// whoami, ws_made, ws_type, wood, metal, orig_dsusp, fruit, home,
-/// inv_t_name, l_last_comm, l_last_dir, last_comm, last_dir, tr_name,
-/// n_objs, ntraps, hungry_state, inpack, inv_type, level, max_level,
-/// mpos, no_food, a_class, count, food_left, lastscore, no_command,
-/// no_move, purse, quiet, vf_hit, dnum, seed, e_levels, delta, oldpos,
-/// stairs, player, equipment slots, l_last_pick,
-/// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
-/// passages, monsters, things, arm_info, pot_info, ring_info,
-/// scr_info, weap_info, ws_info, D_LIST, total, between, nh, group.
-pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> i32 {
-    let mut dummyint: i32 = 0;
-    let mut depth: i32 = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
+    // Restore the stable per-room gold coordinate array (chase-target backing).
+    for (i, g) in room_gold.iter().enumerate() {
+        if i < crate::game::ROOM_GOLD.len() {
+            crate::game::ROOM_GOLD[i] = *g;
+        }
     }
 
-    let _ = rs_read_boolean(inf, &mut after); /* 1  */
-    /* extern.c */
-    let _ = rs_read_boolean(inf, &mut again); /* 2  */
-    let _ = rs_read_int(inf, &mut noscore); /* 3  */
-    let _ = rs_read_boolean(inf, &mut seenstairs); /* 4  */
-    let _ = rs_read_boolean(inf, &mut amulet); /* 5  */
-    let _ = rs_read_boolean(inf, &mut door_stop); /* 6  */
-    let _ = rs_read_boolean(inf, &mut fight_flush); /* 7  */
-    let _ = rs_read_boolean(inf, &mut firstmove); /* 8  */
-    let _ = rs_read_boolean(inf, &mut got_ltc); /* 9  */
-    let _ = rs_read_boolean(inf, &mut has_hit); /* 10 */
-    let _ = rs_read_boolean(inf, &mut in_shell); /* 11 */
-    let _ = rs_read_boolean(inf, &mut inv_describe); /* 12 */
-    let _ = rs_read_boolean(inf, &mut jump); /* 13 */
-    let _ = rs_read_boolean(inf, &mut kamikaze); /* 14 */
-    let _ = rs_read_boolean(inf, &mut lower_msg); /* 15 */
-    let _ = rs_read_boolean(inf, &mut move_on); /* 16 */
-    let mut msg_esc_byte = msg_esc as u8;
-    let _ = rs_read_boolean(inf, &mut msg_esc_byte); /* 17 */
-    msg_esc = msg_esc_byte;
-    let _ = rs_read_boolean(inf, &mut passgo); /* 18 */
-    let _ = rs_read_boolean(inf, &mut playing); /* 19 */
-    let _ = rs_read_boolean(inf, &mut q_comm); /* 20 */
-    let _ = rs_read_boolean(inf, &mut running); /* 21 */
-    let _ = rs_read_boolean(inf, &mut save_msg); /* 22 */
-    let _ = rs_read_boolean(inf, &mut see_floor); /* 23 */
-    let _ = rs_read_boolean(inf, &mut stat_msg); /* 24 */
-    let _ = rs_read_boolean(inf, &mut terse); /* 25 */
-    let _ = rs_read_boolean(inf, &mut to_death); /* 26 */
-    let _ = rs_read_boolean(inf, &mut tombstone); /* 27 */
-    if MASTER {
-        let _ = rs_read_int(inf, &mut wizard); /* 28 */
-    } else {
-        let _ = rs_read_int(inf, &mut dummyint); /* 28 */
+    // ── monsters ────────────────────────────────────────────────────────
+    let mut monster_ptrs: Vec<*mut Thing> = Vec::new();
+    for snap in &s.monsters {
+        let tp = crate::game::new_actor();
+        let t = thing_t(tp);
+        (*t).t_pos = snap.t_pos;
+        (*t).t_turn = snap.t_turn;
+        (*t).t_type = snap.t_type;
+        (*t).t_disguise = snap.t_disguise;
+        (*t).t_oldch = snap.t_oldch;
+        (*t).t_flags = snap.t_flags;
+        (*t).t_stats = snap.t_stats;
+        (*t).t_room = snap.t_room;
+        (*t).t_dest_hero = matches!(snap.t_dest, DestRef::Hero);
+        (*t).t_reserved = if let DestRef::Monster(i) = snap.t_dest {
+            i as i32
+        } else {
+            -1
+        };
+        let pack = build_object_list(&snap.t_pack);
+        set_thing_pack(tp, pack);
+        monster_ptrs.push(tp);
     }
-    let _ = rs_read_booleans(inf, (&raw mut pack_used) as *mut u8, 26); /* 29 */
-    let _ = rs_read_char(inf, &mut dir_ch);
-    crate::globals::set_file_name(rs_read_fixed_string(inf, MAXSTR));
-    crate::globals::set_huh_string(&rs_read_fixed_string(inf, MAXSTR));
-    let _ = rs_read_potions(inf);
-    crate::globals::set_prbuf(rs_read_fixed_string(inf, 2 * MAXSTR));
-    let _ = rs_read_rings(inf);
-    if let Some(value) = rs_read_string_owned(inf) {
-        crate::vers::set_release(value);
+
+    // Monster occupancy.
+    for &(y, x, idx) in &s.level.monster_cells {
+        if let Some(&tp) = monster_ptrs.get(idx) {
+            crate::game::set_monster(y as i32, x as i32, tp);
+        }
     }
-    let _ = rs_read_char(inf, &mut runch);
-    let _ = rs_read_scrolls(inf);
-    let _ = rs_read_char(inf, &mut take);
-    crate::globals::set_whoami(rs_read_fixed_string(inf, MAXSTR));
-    let _ = rs_read_sticks(inf);
-    let _ = rs_read_int(inf, &mut orig_dsusp);
-    crate::globals::set_fruit(rs_read_fixed_string(inf, MAXSTR));
-    crate::globals::set_home(rs_read_fixed_string(inf, MAXSTR));
-    {
-        let mut count: i32 = 0;
-        let _ = rs_read_int(inf, &mut count);
-        for i in 0..count.max(0) as usize {
-            if let Some(name) = rs_read_string_owned(inf) {
-                crate::globals::set_inv_t_name(i, name);
+
+    // Resolve object and room-gold chase targets now that everything exists.
+    for (i, snap) in s.monsters.iter().enumerate() {
+        let tp = monster_ptrs[i];
+        match snap.t_dest {
+            DestRef::None => set_thing_dest(tp, std::ptr::null_mut()),
+            DestRef::Hero => set_thing_dest_hero(tp),
+            DestRef::Object(j) => {
+                let item = list_nth(level_items_head, j);
+                if !item.is_null() {
+                    set_thing_dest(tp, (&raw mut (*thing_o(item)).o_pos) as *mut IVec2);
+                }
+            }
+            DestRef::RoomGold(j) => {
+                set_thing_dest(tp, crate::game::room_gold_ptr(Some(j)));
+            }
+            DestRef::Monster(j) => {
+                if let Some(&target) = monster_ptrs.get(j) {
+                    set_thing_dest(tp, (&raw mut (*thing_t(target)).t_pos) as *mut IVec2);
+                }
             }
         }
     }
-    let _ = rs_read_char(inf, &mut l_last_comm);
-    let _ = rs_read_char(inf, &mut l_last_dir);
-    let _ = rs_read_char(inf, &mut last_comm);
-    let _ = rs_read_char(inf, &mut last_dir);
-    {
-        let mut count: i32 = 0;
-        let _ = rs_read_int(inf, &mut count);
-        for i in 0..count.max(0) as usize {
-            if let Some(name) = rs_read_string_owned(inf) {
-                crate::globals::set_trap_name(i, name);
-            }
-        }
+
+    // ── player ──────────────────────────────────────────────────────────
+    let hero_ptr = PLAYER.with_mut(|thing| thing as *mut Thing);
+    let t = thing_t(hero_ptr);
+    (*t).t_pos = s.player.t_pos;
+    (*t).t_turn = s.player.t_turn;
+    (*t).t_type = s.player.t_type;
+    (*t).t_disguise = s.player.t_disguise;
+    (*t).t_oldch = s.player.t_oldch;
+    (*t).t_flags = s.player.t_flags;
+    (*t).t_stats = s.player.t_stats;
+    (*t).t_room = s.player.t_room;
+    (*t).t_dest = None;
+    (*t).t_dest_hero = false;
+    let player_pack = build_object_list(&s.player_pack);
+    set_thing_pack(hero_ptr, player_pack);
+    set_thing_dest(hero_ptr, std::ptr::null_mut());
+
+    PLAYER.set_armor(resolve_index(player_pack, s.equipment.armor));
+    PLAYER.set_left_ring(resolve_index(player_pack, s.equipment.left_ring));
+    PLAYER.set_right_ring(resolve_index(player_pack, s.equipment.right_ring));
+    PLAYER.set_weapon(resolve_index(player_pack, s.equipment.weapon));
+    crate::globals::last_pick = resolve_index(player_pack, s.equipment.last_pick);
+    crate::globals::l_last_pick = resolve_index(player_pack, s.equipment.l_last_pick);
+
+    // ── misc ────────────────────────────────────────────────────────────
+    max_stats = s.max_stats;
+    oldrp = s.oldrp;
+    crate::daemons::between = s.between;
+    crate::item::weapons::group = s.group;
+    crate::entity::player::nh = s.nh;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A snapshot round-trips through RON without loss.
+    #[test]
+    fn game_snapshot_round_trips_through_ron() {
+        let snapshot = GameSnapshot {
+            after: true,
+            again: false,
+            noscore: 3,
+            seenstairs: true,
+            amulet: false,
+            door_stop: true,
+            fight_flush: false,
+            firstmove: true,
+            got_ltc: false,
+            has_hit: true,
+            in_shell: false,
+            inv_describe: true,
+            jump: false,
+            kamikaze: true,
+            lower_msg: false,
+            move_on: true,
+            msg_esc: false,
+            passgo: true,
+            playing: true,
+            q_comm: false,
+            running: false,
+            save_msg: true,
+            see_floor: true,
+            stat_msg: false,
+            terse: false,
+            to_death: false,
+            tombstone: true,
+            wizard: 0,
+            pack_used: [0; 26],
+            dir_ch: b'h',
+            runch: 0,
+            take: 0,
+            file_name: "save.ron".to_owned(),
+            huh: String::new(),
+            prbuf: String::new(),
+            release: "5.4.4".to_owned(),
+            whoami: "tester".to_owned(),
+            fruit: "slime-mold".to_owned(),
+            home: "/tmp".to_owned(),
+            scroll_names: vec!["zap".to_owned()],
+            inv_t_names: vec!["Overwrite".to_owned()],
+            trap_names: vec!["a trapdoor".to_owned()],
+            p_colors: vec!["red".to_owned()],
+            r_stones: vec!["agate".to_owned()],
+            ws_type: vec!["staff".to_owned()],
+            ws_made: vec!["oaken".to_owned()],
+            orig_dsusp: 0,
+            l_last_comm: 0,
+            l_last_dir: 0,
+            last_comm: 0,
+            last_dir: 0,
+            n_objs: 0,
+            ntraps: 0,
+            hungry_state: 0,
+            inpack: 0,
+            inv_type: 0,
+            max_level: 1,
+            mpos: 0,
+            no_food: 0,
+            a_class: vec![8, 7, 7, 6, 5, 4, 4, 3],
+            count: 0,
+            food_left: 1300,
+            lastscore: -1,
+            no_command: 0,
+            no_move: 0,
+            purse: 0,
+            quiet: 0,
+            vf_hit: 0,
+            dnum: 0,
+            seed: 42,
+            e_levels: vec![10, 20],
+            delta: IVec2::new(1, 0),
+            oldpos: IVec2::new(5, 6),
+            monster_stats: vec![Stats::default()],
+            arm_info: vec![ObjInfoState::default()],
+            pot_info: vec![ObjInfoState {
+                guess: Some("fizzy".to_owned()),
+                know: true,
+            }],
+            ring_info: vec![ObjInfoState::default()],
+            scr_info: vec![ObjInfoState::default()],
+            weap_info: vec![ObjInfoState::default()],
+            ws_info: vec![ObjInfoState::default()],
+            things: vec![ObjInfoState::default()],
+            daemons: vec![CDelayedAction {
+                d_type: -1,
+                d_func: None,
+                d_arg: 0,
+                d_time: 0,
+            }],
+            player: MonsterSnapshot {
+                t_pos: IVec2::new(3, 4),
+                t_turn: false,
+                t_type: None,
+                t_disguise: 0,
+                t_oldch: 0,
+                t_dest: DestRef::None,
+                t_flags: MonsterFlags::NONE,
+                t_stats: Stats::default(),
+                t_room: None,
+                t_pack: Vec::new(),
+                t_reserved: -1,
+            },
+            monsters: Vec::new(),
+            player_pack: Vec::new(),
+            equipment: EquipmentSnapshot::default(),
+            level: LevelSnapshot {
+                depth: 1,
+                stairs: IVec2::ZERO,
+                rooms: Vec::new(),
+                room_graph: RoomGraph::default(),
+                passages: Vec::new(),
+                map: Structure::new(1, 1, crate::tile::Tile::Empty),
+                flags: LevelFlags {
+                    real: vec![true],
+                    passage: vec![false],
+                    seen: vec![false],
+                    passnum: vec![0],
+                },
+                passage_links: Vec::new(),
+                items: Vec::new(),
+                monster_cells: Vec::new(),
+                room_gold: Vec::new(),
+            },
+            max_stats: Stats::default(),
+            oldrp: None,
+            between: 0,
+            group: 2,
+            nh: IVec2::ZERO,
+        };
+
+        let text = ron::ser::to_string_pretty(&snapshot, ron::ser::PrettyConfig::default())
+            .expect("serialize");
+        let back: GameSnapshot = ron::de::from_str(&text).expect("deserialize");
+        assert_eq!(back.seed, 42);
+        assert_eq!(back.player.t_pos, IVec2::new(3, 4));
+        assert_eq!(back.pot_info[0].guess.as_deref(), Some("fizzy"));
+        assert!(back.pot_info[0].know);
     }
-    let _ = rs_read_int(inf, &mut n_objs);
-    let _ = rs_read_int(inf, &mut ntraps);
-    let _ = rs_read_int(inf, &mut hungry_state);
-    let _ = rs_read_int(inf, &mut inpack);
-    let _ = rs_read_int(inf, &mut inv_type);
-    let _ = rs_read_int(inf, &mut depth);
-    crate::game::set_current_depth(depth);
-    let _ = rs_read_int(inf, &mut max_level);
-    let _ = rs_read_int(inf, &mut mpos);
-    let _ = rs_read_int(inf, &mut no_food);
-    let _ = rs_read_ints(inf, (&raw mut a_class) as *mut i32, MAXARMORS as i32);
-    let _ = rs_read_int(inf, &mut crate::globals::count);
-    let _ = rs_read_int(inf, &mut food_left);
-    let _ = rs_read_int(inf, &mut lastscore);
-    let _ = rs_read_int(inf, &mut no_command);
-    let _ = rs_read_int(inf, &mut no_move);
-    let _ = rs_read_int(inf, &mut purse);
-    let _ = rs_read_int(inf, &mut quiet);
-    let _ = rs_read_int(inf, &mut vf_hit);
-    let _ = rs_read_int(inf, &mut dnum);
-    let _ = rs_read_int(inf, &mut seed);
-    let _ = rs_read_ints(inf, (&raw mut e_levels) as *mut i32, 21);
-    let _ = rs_read_coord(inf, &mut delta);
-    let _ = rs_read_coord(inf, &mut oldpos);
-    let mut stairs = IVec2::ZERO;
-    let _ = rs_read_coord(inf, &mut stairs);
-    crate::game::set_stairs(stairs);
-
-    crate::game::PLAYER.with_mut(|hero| {
-        let _ = rs_read_thing(inf, hero as *mut Thing);
-    });
-    let player_pack = crate::game::PLAYER.pack();
-    let mut equipment_item = std::ptr::null_mut();
-    let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
-    PLAYER.set_armor(equipment_item);
-    let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
-    PLAYER.set_left_ring(equipment_item);
-    let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
-    PLAYER.set_right_ring(equipment_item);
-    let _ = rs_read_object_reference(inf, player_pack, &raw mut equipment_item);
-    PLAYER.set_weapon(equipment_item);
-    let _ = rs_read_object_reference(inf, player_pack, &raw mut l_last_pick);
-    let _ = rs_read_object_reference(inf, player_pack, &raw mut last_pick);
-
-    let mut items_head: *mut Thing = std::ptr::null_mut();
-    let _ = rs_read_object_list(inf, &raw mut items_head);
-    crate::game::with_current_level_mut(|level| level.items.set_head(items_head));
-    let mut mlist: *mut Thing = std::ptr::null_mut();
-    let _ = rs_read_thing_list(inf, &raw mut mlist);
-    crate::game::PLAYER.with_mut(|hero| rs_fix_thing(hero as *mut Thing));
-    rs_fix_thing_list(mlist);
-
-    let _ = rs_read_places(
-        inf,
-        crate::config::GameConfig::SCREEN_LINES * crate::config::GameConfig::SCREEN_COLS,
-    );
-
-    let _ = rs_read_stats(inf, &raw mut max_stats);
-    let _ = crate::game::with_current_level_mut(|level| rs_read_rooms(inf, &mut level.rooms));
-    let _ = rs_read_room_reference(inf, &mut oldrp);
-    let _ = crate::game::with_current_level_mut(|level| {
-        rs_read_passage_links(inf, &mut level.passage_links)
-    });
-
-    let _ = rs_read_monsters(
-        inf,
-        (&raw mut monsters) as *mut CMonster,
-        MAXMONSTERS as i32,
-    );
-    let _ = rs_read_obj_info(inf, (&raw mut things) as *mut CObjInfo, NUMTHINGS as i32);
-    let _ = rs_read_obj_info(
-        inf,
-        (&raw mut arm_info) as *mut CObjInfo,
-        MAXARMORS as i32,
-    );
-    let _ = rs_read_obj_info(
-        inf,
-        (&raw mut pot_info) as *mut CObjInfo,
-        MAXPOTIONS as i32,
-    );
-    let _ = rs_read_obj_info(
-        inf,
-        (&raw mut ring_info) as *mut CObjInfo,
-        MAXRINGS as i32,
-    );
-    let _ = rs_read_obj_info(
-        inf,
-        (&raw mut scr_info) as *mut CObjInfo,
-        MAXSCROLLS as i32,
-    );
-    let _ = rs_read_obj_info(
-        inf,
-        (&raw mut weap_info) as *mut CObjInfo,
-        (MAXWEAPONS + 1) as i32,
-    );
-    let _ = rs_read_obj_info(inf, (&raw mut ws_info) as *mut CObjInfo, MAXSTICKS as i32);
-
-    let _ = rs_read_daemons(
-        inf,
-        (&raw mut D_LIST) as *mut CDelayedAction,
-        MAXDAEMONS as i32,
-    );
-    let _ = rs_read_int(inf, &mut dummyint); /* total */
-    /* 5.4-list.c */
-    let _ = rs_read_int(inf, &mut between); /* 5.4-daemons.c */
-    let _ = rs_read_coord(inf, &mut nh); /* 5.4-move.c */
-    let _ = rs_read_int(inf, &mut group); /* 5.4-weapons.rs */
-
-    let _ = rs_read_window(inf);
-
-    read_stat()
 }

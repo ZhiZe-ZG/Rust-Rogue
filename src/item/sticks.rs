@@ -21,7 +21,7 @@ const FLAME: i32 = 9;
 const VS_MAGIC: i32 = 3;
 
 #[repr(i32)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum StickType {
     Light = 0,
     Invis = 1,

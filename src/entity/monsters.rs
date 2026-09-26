@@ -38,7 +38,7 @@ pub use crate::globals::CMonster;
 /// reproduces the original `'A'..='Z'` byte used by the save format and by
 /// [`crate::globals::monsters`].
 #[repr(u8)]
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum MonsterType {
     Aquator = b'A',
     Bat = b'B',

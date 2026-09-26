@@ -32,7 +32,7 @@ const AMULET_CODE: i32 = b',' as i32;
 /// and `Armor` carry the legacy `o_which` index (there is no weapon/armor
 /// sub-type enum yet). `None` is the transient "unset" state (a raw `0`), used
 /// by freshly allocated objects before their kind is chosen.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum ItemType {
     #[default]
     None,

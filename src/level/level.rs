@@ -30,7 +30,7 @@ const MAZE_ROOM_CHANCE: i32 = 15;
 /// `places` grid's `p_flags` field. `real`/`passage`/`seen`/`passnum` are
 /// maintained by level generation; trap kinds live in the [`Tile`] map itself
 /// (see [`Tile::Trap`]).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LevelFlags {
     /// Whether each cell is real and visible as solid terrain; `false` marks
     /// a secret wall or door that has not been revealed.

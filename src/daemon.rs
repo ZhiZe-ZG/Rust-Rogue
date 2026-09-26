@@ -26,7 +26,7 @@ const MAXDAEMONS: usize = 20;
 /// Replaces the legacy `void (*d_func)(int)` pointer. The tag doubles as the
 /// on-disk identity written by `state.rs` (`state::rs_write_daemons`); the
 /// mapping in [`Daemon::save_id`] preserves the exact legacy integers.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Daemon {
     Rollwand,
     Doctor,
@@ -114,7 +114,7 @@ impl Daemon {
 /// than a raw function pointer. The field order still mirrors the legacy C
 /// `struct delayed_action` (`d_type`, `d_func`, `d_arg`, `d_time`) so the save
 /// stream stays readable.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CDelayedAction {
     pub d_type: i32,
     pub d_func: Option<Daemon>,
