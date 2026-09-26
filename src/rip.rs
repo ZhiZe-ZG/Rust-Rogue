@@ -55,7 +55,6 @@ unsafe extern "C" {
     static mut purse: c_int;
     static mut tombstone: c_uchar;
     static mut wizard: c_int;
-    static mut scoreboard: *mut crate::ffi::CFile;
 }
 
 #[inline]

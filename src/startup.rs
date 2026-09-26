@@ -9,7 +9,7 @@ use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
 use crate::entity::chase::roomin;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster};
-use crate::ffi::{exit, fflush, putchar, setbuf, signal, time, CFile};
+use crate::ffi::{exit, signal, time};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
@@ -31,46 +31,12 @@ const MAXSTR: usize = 1024;
 const AFTER: c_int = 2;
 const WANDERTIME: c_int = 70;
 const INV_CLEAR: c_int = 2;
-const BUFSIZ: usize = 8192;
 const SIGINT: c_int = 2;
 
-/// Static buffer used by `leave()` to discard pending stdout output.
-static mut LEAVE_BUF: [c_char; BUFSIZ] = [0; BUFSIZ];
-
-#[cfg(target_os = "macos")]
-unsafe extern "C" {
-    static mut __stdoutp: *mut CFile;
-    static mut __stderrp: *mut CFile;
-}
-
-#[cfg(not(target_os = "macos"))]
-unsafe extern "C" {
-    static mut stdout: *mut CFile;
-    static mut stderr: *mut CFile;
-}
-
+/// Flushes the process stdout stream (replaces the C `fflush(stdout)` calls).
 #[inline]
-unsafe fn c_stdout() -> *mut CFile {
-    #[cfg(target_os = "macos")]
-    {
-        __stdoutp
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        stdout
-    }
-}
-
-#[inline]
-unsafe fn c_stderr() -> *mut CFile {
-    #[cfg(target_os = "macos")]
-    {
-        __stderrp
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        stderr
-    }
+fn flush_stdout() {
+    let _ = std::io::stdout().flush();
 }
 
 unsafe extern "C" {
@@ -166,7 +132,7 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
     );
     runtime::shutdown();
     resetltchars();
-    fflush(c_stdout());
+    flush_stdout();
     md_tstpsignal();
 
     /*
@@ -181,7 +147,7 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
     output::refresh_window(Window::Curscr);
     runtime::move_physical_cursor(output::window_cursor(Window::Curscr), old_cursor);
     output::move_cursor(old_cursor);
-    fflush(c_stdout());
+    flush_stdout();
 }
 
 /// playit:
@@ -268,11 +234,6 @@ pub unsafe extern "C" fn quit(sig: c_int) {
 pub unsafe extern "C" fn leave(sig: c_int) {
     let _ = sig;
 
-    setbuf(
-        c_stdout(),
-        std::ptr::addr_of_mut!(LEAVE_BUF).cast::<u8>(),
-    ); /* throw away pending output */
-
     if !runtime::is_shutdown() {
         runtime::move_physical_cursor(
             IVec2::new(GameConfig::SCREEN_COLS - 1, 0),
@@ -281,7 +242,7 @@ pub unsafe extern "C" fn leave(sig: c_int) {
         runtime::shutdown();
     }
 
-    putchar(b'\n' as c_int);
+    let _ = std::io::stdout().write_all(b"\n");
     my_exit(0);
 }
 
@@ -298,10 +259,10 @@ pub unsafe extern "C" fn shell() {
     output::refresh();
     runtime::shutdown();
     resetltchars();
-    putchar(b'\n' as c_int);
+    let _ = std::io::stdout().write_all(b"\n");
     in_shell = true as c_uchar;
     after = false as c_uchar;
-    fflush(c_stdout());
+    flush_stdout();
     /*
      * Fork and do a shell
      */
@@ -329,8 +290,8 @@ pub unsafe extern "C" fn my_exit(st: c_int) -> ! {
         input::set_echo(true);
         runtime::shutdown();
     }
-    fflush(c_stdout());
-    fflush(c_stderr());
+    flush_stdout();
+    let _ = std::io::stderr().flush();
     exit(st);
 }
 

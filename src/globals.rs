@@ -173,8 +173,9 @@ pub static mut no_food: c_int = 0;
 pub static mut a_class: [c_int; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
 #[no_mangle]
 pub static mut count: c_int = 0;
+/// The open score file, or `None` when it is not open.
 #[no_mangle]
-pub static mut scoreboard: *mut crate::ffi::CFile = std::ptr::null_mut();
+pub static mut scoreboard: Option<std::fs::File> = None;
 #[no_mangle]
 pub static mut food_left: c_int = 0;
 #[no_mangle]

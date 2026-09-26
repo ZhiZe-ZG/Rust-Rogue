@@ -30,11 +30,11 @@
 //! SUCH DAMAGE.
 
 use glam::IVec2;
+use std::io::{Read, Write};
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 
 use crate::daemon::{CDelayedAction, Daemon, D_LIST};
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject};
-use crate::ffi::{fread, fwrite, CFile};
 use crate::game::PLAYER;
 use crate::game::{MONSTER_LIST, MONSTER_MAP};
 use crate::globals::{
@@ -232,12 +232,13 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 // ─── Low-level primitives ────────────────────────────────────────────────────
 
 #[inline]
-unsafe fn rs_write(savef: *mut CFile, ptr: *const c_void, size: usize) -> c_int {
+unsafe fn rs_write(savef: &mut dyn Write, ptr: *const c_void, size: usize) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    if fwrite(ptr as *const u8, 1, size, savef) != size {
+    let bytes = std::slice::from_raw_parts(ptr as *const u8, size);
+    if savef.write_all(bytes).is_err() {
         WRITE_ERROR = 1;
     }
 
@@ -245,19 +246,20 @@ unsafe fn rs_write(savef: *mut CFile, ptr: *const c_void, size: usize) -> c_int 
 }
 
 #[inline]
-unsafe fn rs_read(inf: *mut CFile, ptr: *mut u8, size: usize) -> c_int {
+unsafe fn rs_read(inf: &mut dyn Read, ptr: *mut u8, size: usize) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
-    if fread(ptr, 1, size, inf) != size {
+    let buf = std::slice::from_raw_parts_mut(ptr, size);
+    if inf.read_exact(buf).is_err() {
         READ_ERROR = 1;
     }
 
     read_stat()
 }
 
-unsafe fn rs_write_int(savef: *mut CFile, c: c_int) -> c_int {
+unsafe fn rs_write_int(savef: &mut dyn Write, c: c_int) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -273,7 +275,7 @@ unsafe fn rs_write_int(savef: *mut CFile, c: c_int) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_int(inf: *mut CFile, i: *mut c_int) -> c_int {
+unsafe fn rs_read_int(inf: &mut dyn Read, i: *mut c_int) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -292,7 +294,7 @@ unsafe fn rs_read_int(inf: *mut CFile, i: *mut c_int) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_char(savef: *mut CFile, c: c_char) -> c_int {
+unsafe fn rs_write_char(savef: &mut dyn Write, c: c_char) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -302,7 +304,7 @@ unsafe fn rs_write_char(savef: *mut CFile, c: c_char) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_char(inf: *mut CFile, c: *mut c_char) -> c_int {
+unsafe fn rs_read_char(inf: &mut dyn Read, c: *mut c_char) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -312,7 +314,7 @@ unsafe fn rs_read_char(inf: *mut CFile, c: *mut c_char) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_chars(savef: *mut CFile, c: *mut c_char, count: c_int) -> c_int {
+unsafe fn rs_write_chars(savef: &mut dyn Write, c: *mut c_char, count: c_int) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -325,7 +327,7 @@ unsafe fn rs_write_chars(savef: *mut CFile, c: *mut c_char, count: c_int) -> c_i
     WRITE_ERROR
 }
 
-unsafe fn rs_read_chars(inf: *mut CFile, i: *mut c_char, count: c_int) -> c_int {
+unsafe fn rs_read_chars(inf: &mut dyn Read, i: *mut c_char, count: c_int) -> c_int {
     let mut value: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -345,7 +347,7 @@ unsafe fn rs_read_chars(inf: *mut CFile, i: *mut c_char, count: c_int) -> c_int 
     read_stat()
 }
 
-unsafe fn rs_write_ints(savef: *mut CFile, c: *mut c_int, count: c_int) -> c_int {
+unsafe fn rs_write_ints(savef: &mut dyn Write, c: *mut c_int, count: c_int) -> c_int {
     let mut n: c_int = 0;
 
     if WRITE_ERROR != 0 {
@@ -364,7 +366,7 @@ unsafe fn rs_write_ints(savef: *mut CFile, c: *mut c_int, count: c_int) -> c_int
     WRITE_ERROR
 }
 
-unsafe fn rs_read_ints(inf: *mut CFile, i: *mut c_int, count: c_int) -> c_int {
+unsafe fn rs_read_ints(inf: &mut dyn Read, i: *mut c_int, count: c_int) -> c_int {
     let mut value: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -388,7 +390,7 @@ unsafe fn rs_read_ints(inf: *mut CFile, i: *mut c_int, count: c_int) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_boolean(savef: *mut CFile, c: c_int) -> c_int {
+unsafe fn rs_write_boolean(savef: &mut dyn Write, c: c_int) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -399,7 +401,7 @@ unsafe fn rs_write_boolean(savef: *mut CFile, c: c_int) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_boolean(inf: *mut CFile, i: *mut c_uchar) -> c_int {
+unsafe fn rs_read_boolean(inf: &mut dyn Read, i: *mut c_uchar) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -412,7 +414,7 @@ unsafe fn rs_read_boolean(inf: *mut CFile, i: *mut c_uchar) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_booleans(savef: *mut CFile, c: *mut c_uchar, count: c_int) -> c_int {
+unsafe fn rs_write_booleans(savef: &mut dyn Write, c: *mut c_uchar, count: c_int) -> c_int {
     let mut n: c_int = 0;
 
     if WRITE_ERROR != 0 {
@@ -431,7 +433,7 @@ unsafe fn rs_write_booleans(savef: *mut CFile, c: *mut c_uchar, count: c_int) ->
     WRITE_ERROR
 }
 
-unsafe fn rs_read_booleans(inf: *mut CFile, i: *mut c_uchar, count: c_int) -> c_int {
+unsafe fn rs_read_booleans(inf: &mut dyn Read, i: *mut c_uchar, count: c_int) -> c_int {
     let mut value: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -455,7 +457,7 @@ unsafe fn rs_read_booleans(inf: *mut CFile, i: *mut c_uchar, count: c_int) -> c_
     read_stat()
 }
 
-unsafe fn rs_write_short(savef: *mut CFile, c: c_short) -> c_int {
+unsafe fn rs_write_short(savef: &mut dyn Write, c: c_short) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -471,7 +473,7 @@ unsafe fn rs_write_short(savef: *mut CFile, c: c_short) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_short(inf: *mut CFile, i: *mut c_short) -> c_int {
+unsafe fn rs_read_short(inf: &mut dyn Read, i: *mut c_short) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -490,7 +492,7 @@ unsafe fn rs_read_short(inf: *mut CFile, i: *mut c_short) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_shorts(savef: *mut CFile, c: *mut c_short, count: c_int) -> c_int {
+unsafe fn rs_write_shorts(savef: &mut dyn Write, c: *mut c_short, count: c_int) -> c_int {
     let mut n: c_int = 0;
 
     if WRITE_ERROR != 0 {
@@ -509,7 +511,7 @@ unsafe fn rs_write_shorts(savef: *mut CFile, c: *mut c_short, count: c_int) -> c
     WRITE_ERROR
 }
 
-unsafe fn rs_read_shorts(inf: *mut CFile, i: *mut c_short, count: c_int) -> c_int {
+unsafe fn rs_read_shorts(inf: &mut dyn Read, i: *mut c_short, count: c_int) -> c_int {
     let mut value: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -534,7 +536,7 @@ unsafe fn rs_read_shorts(inf: *mut CFile, i: *mut c_short, count: c_int) -> c_in
     read_stat()
 }
 
-unsafe fn rs_write_ushort(savef: *mut CFile, c: c_ushort) -> c_int {
+unsafe fn rs_write_ushort(savef: &mut dyn Write, c: c_ushort) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -550,7 +552,7 @@ unsafe fn rs_write_ushort(savef: *mut CFile, c: c_ushort) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_ushort(inf: *mut CFile, i: *mut c_ushort) -> c_int {
+unsafe fn rs_read_ushort(inf: &mut dyn Read, i: *mut c_ushort) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -569,7 +571,7 @@ unsafe fn rs_read_ushort(inf: *mut CFile, i: *mut c_ushort) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_uint(savef: *mut CFile, c: c_uint) -> c_int {
+unsafe fn rs_write_uint(savef: &mut dyn Write, c: c_uint) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -585,7 +587,7 @@ unsafe fn rs_write_uint(savef: *mut CFile, c: c_uint) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_uint(inf: *mut CFile, i: *mut c_uint) -> c_int {
+unsafe fn rs_read_uint(inf: &mut dyn Read, i: *mut c_uint) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -604,7 +606,7 @@ unsafe fn rs_read_uint(inf: *mut CFile, i: *mut c_uint) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_marker(savef: *mut CFile, id: c_int) -> c_int {
+unsafe fn rs_write_marker(savef: &mut dyn Write, id: c_int) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -614,7 +616,7 @@ unsafe fn rs_write_marker(savef: *mut CFile, id: c_int) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_marker(inf: *mut CFile, id: c_int) -> c_int {
+unsafe fn rs_read_marker(inf: &mut dyn Read, id: c_int) -> c_int {
     let mut nid: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -634,7 +636,7 @@ unsafe fn rs_read_marker(inf: *mut CFile, id: c_int) -> c_int {
 
 /// Writes a fixed-width, NUL-padded string record (`count` bytes) using the
 /// legacy `rs_write_chars` framing (an int length followed by the bytes).
-unsafe fn rs_write_fixed_string(savef: *mut CFile, text: &str, count: usize) -> c_int {
+unsafe fn rs_write_fixed_string(savef: &mut dyn Write, text: &str, count: usize) -> c_int {
     let mut buf = vec![0u8; count];
     let bytes = text.as_bytes();
     let copy_len = bytes.len().min(count.saturating_sub(1));
@@ -645,14 +647,14 @@ unsafe fn rs_write_fixed_string(savef: *mut CFile, text: &str, count: usize) -> 
 
 /// Reads a fixed-width (`count`-byte) NUL-terminated string record back into
 /// an owned [`String`].
-unsafe fn rs_read_fixed_string(inf: *mut CFile, count: usize) -> String {
+unsafe fn rs_read_fixed_string(inf: &mut dyn Read, count: usize) -> String {
     let mut buf = vec![0u8; count];
     let _ = rs_read_chars(inf, buf.as_mut_ptr() as *mut c_char, count as c_int);
     let end = buf.iter().position(|b| *b == 0).unwrap_or(count);
     String::from_utf8_lossy(&buf[..end]).into_owned()
 }
 
-unsafe fn rs_write_string(savef: *mut CFile, s: *const c_char) -> c_int {
+unsafe fn rs_write_string(savef: &mut dyn Write, s: *const c_char) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -673,7 +675,7 @@ unsafe fn rs_write_string(savef: *mut CFile, s: *const c_char) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_string(inf: *mut CFile, s: *mut c_char, max: c_int) -> c_int {
+unsafe fn rs_read_string(inf: &mut dyn Read, s: *mut c_char, max: c_int) -> c_int {
     let mut len: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -693,7 +695,7 @@ unsafe fn rs_read_string(inf: *mut CFile, s: *mut c_char, max: c_int) -> c_int {
 
 /// Write an owned string using the legacy double-length record, or a zero
 /// record for `None`. Mirrors [`rs_write_string`] without needing a C string.
-unsafe fn rs_write_string_opt(savef: *mut CFile, text: Option<&str>) -> c_int {
+unsafe fn rs_write_string_opt(savef: &mut dyn Write, text: Option<&str>) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -718,7 +720,7 @@ unsafe fn rs_write_string_opt(savef: *mut CFile, text: Option<&str>) -> c_int {
 /// Read a length-prefixed string into an owned Rust [`String`] (`None` when the
 /// stored length was zero). Uses Rust `Vec`/`String` storage instead of the
 /// legacy `malloc`/`free` buffer.
-unsafe fn rs_read_string_owned(inf: *mut CFile) -> Option<String> {
+unsafe fn rs_read_string_owned(inf: &mut dyn Read) -> Option<String> {
     let mut len: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -743,7 +745,7 @@ unsafe fn rs_read_string_owned(inf: *mut CFile) -> Option<String> {
     Some(String::from_utf8_lossy(&buf).into_owned())
 }
 
-unsafe fn rs_write_strings(savef: *mut CFile, s: *mut *mut c_char, count: c_int) -> c_int {
+unsafe fn rs_write_strings(savef: &mut dyn Write, s: *mut *mut c_char, count: c_int) -> c_int {
     let mut n: c_int = 0;
 
     if WRITE_ERROR != 0 {
@@ -762,7 +764,7 @@ unsafe fn rs_write_strings(savef: *mut CFile, s: *mut *mut c_char, count: c_int)
     WRITE_ERROR
 }
 
-unsafe fn rs_read_strings(inf: *mut CFile, s: *mut *mut c_char, count: c_int, max: c_int) -> c_int {
+unsafe fn rs_read_strings(inf: &mut dyn Read, s: *mut *mut c_char, count: c_int, max: c_int) -> c_int {
     let mut value: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -787,7 +789,7 @@ unsafe fn rs_read_strings(inf: *mut CFile, s: *mut *mut c_char, count: c_int, ma
 }
 
 unsafe fn rs_write_string_index(
-    savef: *mut CFile,
+    savef: &mut dyn Write,
     master: *mut *mut c_char,
     max: c_int,
     s: *const c_char,
@@ -808,7 +810,7 @@ unsafe fn rs_write_string_index(
 }
 
 unsafe fn rs_read_string_index(
-    inf: *mut CFile,
+    inf: &mut dyn Read,
     master: *mut *mut c_char,
     maxindex: c_int,
     s: *mut *mut c_char,
@@ -832,7 +834,7 @@ unsafe fn rs_read_string_index(
     read_stat()
 }
 
-unsafe fn rs_write_str_t(savef: *mut CFile, st: c_uint) -> c_int {
+unsafe fn rs_write_str_t(savef: &mut dyn Write, st: c_uint) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -842,7 +844,7 @@ unsafe fn rs_write_str_t(savef: *mut CFile, st: c_uint) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_str_t(inf: *mut CFile, st: *mut c_uint) -> c_int {
+unsafe fn rs_read_str_t(inf: &mut dyn Read, st: *mut c_uint) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -854,7 +856,7 @@ unsafe fn rs_read_str_t(inf: *mut CFile, st: *mut c_uint) -> c_int {
 
 // ─── Coords / windows ────────────────────────────────────────────────────────
 
-unsafe fn rs_write_coord(savef: *mut CFile, c: IVec2) -> c_int {
+unsafe fn rs_write_coord(savef: &mut dyn Write, c: IVec2) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -865,7 +867,7 @@ unsafe fn rs_write_coord(savef: *mut CFile, c: IVec2) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_coord(inf: *mut CFile, c: *mut IVec2) -> c_int {
+unsafe fn rs_read_coord(inf: &mut dyn Read, c: *mut IVec2) -> c_int {
     let mut in_coord: IVec2 = IVec2 { x: 0, y: 0 };
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -885,7 +887,7 @@ unsafe fn rs_read_coord(inf: *mut CFile, c: *mut IVec2) -> c_int {
 
 /// Dump the visible screen grid to the save file using the legacy window
 /// header (height, width, then one cell per position).
-unsafe fn rs_write_window(savef: *mut CFile) -> c_int {
+unsafe fn rs_write_window(savef: &mut dyn Write) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -916,7 +918,7 @@ unsafe fn rs_write_window(savef: *mut CFile) -> c_int {
 
 /// Reload the visible screen grid from the save file, clipping the stored
 /// dimensions to the fixed terminal size.
-unsafe fn rs_read_window(inf: *mut CFile) -> c_int {
+unsafe fn rs_read_window(inf: &mut dyn Read) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -995,7 +997,7 @@ unsafe fn list_size(mut l: *mut Thing) -> c_int {
 
 // ─── Stats / stone / item tables ─────────────────────────────────────────────
 
-unsafe fn rs_write_stats(savef: *mut CFile, s: *mut Stats) -> c_int {
+unsafe fn rs_write_stats(savef: &mut dyn Write, s: *mut Stats) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1012,7 +1014,7 @@ unsafe fn rs_write_stats(savef: *mut CFile, s: *mut Stats) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_stats(inf: *mut CFile, s: *mut Stats) -> c_int {
+unsafe fn rs_read_stats(inf: &mut dyn Read, s: *mut Stats) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1030,7 +1032,7 @@ unsafe fn rs_read_stats(inf: *mut CFile, s: *mut Stats) -> c_int {
 }
 
 unsafe fn rs_write_stone_index(
-    savef: *mut CFile,
+    savef: &mut dyn Write,
     master: *const CStone,
     max: c_int,
     s: *const c_char,
@@ -1054,7 +1056,7 @@ unsafe fn rs_write_stone_index(
 }
 
 unsafe fn rs_read_stone_index(
-    inf: *mut CFile,
+    inf: &mut dyn Read,
     master: *const CStone,
     maxindex: c_int,
     s: *mut *mut c_char,
@@ -1081,7 +1083,7 @@ unsafe fn rs_read_stone_index(
 /// Serializes the global scroll names to the save file.
 ///
 /// Uses [`crate::globals::SCROLL_NAMES`].
-unsafe fn rs_write_scrolls(savef: *mut CFile) -> c_int {
+unsafe fn rs_write_scrolls(savef: &mut dyn Write) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1097,7 +1099,7 @@ unsafe fn rs_write_scrolls(savef: *mut CFile) -> c_int {
 /// Restores the global scroll names from the save file.
 ///
 /// Uses [`crate::globals::SCROLL_NAMES`].
-unsafe fn rs_read_scrolls(inf: *mut CFile) -> c_int {
+unsafe fn rs_read_scrolls(inf: &mut dyn Read) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1127,7 +1129,7 @@ fn potion_color_index(ptr: *const c_char) -> c_int {
 /// Serializes the global potion colors to the save file.
 ///
 /// Uses globals: p_colors.
-unsafe fn rs_write_potions(savef: *mut CFile) -> c_int {
+unsafe fn rs_write_potions(savef: &mut dyn Write) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1144,7 +1146,7 @@ unsafe fn rs_write_potions(savef: *mut CFile) -> c_int {
 /// Restores the global potion colors from the save file.
 ///
 /// Uses globals: p_colors.
-unsafe fn rs_read_potions(inf: *mut CFile) -> c_int {
+unsafe fn rs_read_potions(inf: &mut dyn Read) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1167,7 +1169,7 @@ unsafe fn rs_read_potions(inf: *mut CFile) -> c_int {
 /// Serializes the global ring stone settings to the save file.
 ///
 /// Uses globals: stones, r_stones.
-unsafe fn rs_write_rings(savef: *mut CFile) -> c_int {
+unsafe fn rs_write_rings(savef: &mut dyn Write) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1189,7 +1191,7 @@ unsafe fn rs_write_rings(savef: *mut CFile) -> c_int {
 /// Restores the global ring stone settings from the save file.
 ///
 /// Uses globals: stones, r_stones.
-unsafe fn rs_read_rings(inf: *mut CFile) -> c_int {
+unsafe fn rs_read_rings(inf: &mut dyn Read) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1211,7 +1213,7 @@ unsafe fn rs_read_rings(inf: *mut CFile) -> c_int {
 /// Serializes the global wand/staff descriptions to the save file.
 ///
 /// Uses globals: ws_type, ws_made, wood, metal.
-unsafe fn rs_write_sticks(savef: *mut CFile) -> c_int {
+unsafe fn rs_write_sticks(savef: &mut dyn Write) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1240,7 +1242,7 @@ unsafe fn rs_write_sticks(savef: *mut CFile) -> c_int {
 /// Restores the global wand/staff descriptions from the save file.
 ///
 /// Uses globals: ws_type, ws_made, wood, metal.
-unsafe fn rs_read_sticks(inf: *mut CFile) -> c_int {
+unsafe fn rs_read_sticks(inf: &mut dyn Read) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1269,7 +1271,7 @@ unsafe fn rs_read_sticks(inf: *mut CFile) -> c_int {
 
 // ─── Daemons ─────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_daemons(savef: *mut CFile, dl: *mut CDelayedAction, cnt: c_int) -> c_int {
+unsafe fn rs_write_daemons(savef: &mut dyn Write, dl: *mut CDelayedAction, cnt: c_int) -> c_int {
     let mut i: c_int = 0;
 
     if WRITE_ERROR != 0 {
@@ -1299,7 +1301,7 @@ unsafe fn rs_write_daemons(savef: *mut CFile, dl: *mut CDelayedAction, cnt: c_in
     WRITE_ERROR
 }
 
-unsafe fn rs_read_daemons(inf: *mut CFile, dl: *mut CDelayedAction, cnt: c_int) -> c_int {
+unsafe fn rs_read_daemons(inf: &mut dyn Read, dl: *mut CDelayedAction, cnt: c_int) -> c_int {
     let mut i: c_int = 0;
     let mut func: c_int = 0;
     let mut value: c_int = 0;
@@ -1343,7 +1345,7 @@ unsafe fn rs_read_daemons(inf: *mut CFile, dl: *mut CDelayedAction, cnt: c_int) 
 
 // ─── Object info tables ──────────────────────────────────────────────────────
 
-unsafe fn rs_write_obj_info(savef: *mut CFile, info: *mut CObjInfo, count: c_int) -> c_int {
+unsafe fn rs_write_obj_info(savef: &mut dyn Write, info: *mut CObjInfo, count: c_int) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1366,7 +1368,7 @@ unsafe fn rs_write_obj_info(savef: *mut CFile, info: *mut CObjInfo, count: c_int
     WRITE_ERROR
 }
 
-unsafe fn rs_read_obj_info(inf: *mut CFile, mi: *mut CObjInfo, count: c_int) -> c_int {
+unsafe fn rs_read_obj_info(inf: &mut dyn Read, mi: *mut CObjInfo, count: c_int) -> c_int {
     let mut value: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -1397,7 +1399,7 @@ unsafe fn rs_read_obj_info(inf: *mut CFile, mi: *mut CObjInfo, count: c_int) -> 
 
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_room(savef: *mut CFile, r: &Room) -> c_int {
+unsafe fn rs_write_room(savef: &mut dyn Write, r: &Room) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1420,7 +1422,7 @@ unsafe fn rs_write_room(savef: *mut CFile, r: &Room) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_room(inf: *mut CFile, r: &mut Room) -> c_int {
+unsafe fn rs_read_room(inf: &mut dyn Read, r: &mut Room) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1459,7 +1461,7 @@ unsafe fn rs_read_room(inf: *mut CFile, r: &mut Room) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_rooms(savef: *mut CFile, rooms: &[Room]) -> c_int {
+unsafe fn rs_write_rooms(savef: &mut dyn Write, rooms: &[Room]) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1473,7 +1475,7 @@ unsafe fn rs_write_rooms(savef: *mut CFile, rooms: &[Room]) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_rooms(inf: *mut CFile, rooms: &mut [Room]) -> c_int {
+unsafe fn rs_read_rooms(inf: &mut dyn Read, rooms: &mut [Room]) -> c_int {
     let mut value: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -1495,7 +1497,7 @@ unsafe fn rs_read_rooms(inf: *mut CFile, rooms: &mut [Room]) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_passage_links(savef: *mut CFile, links: &[PassageLinks]) -> c_int {
+unsafe fn rs_write_passage_links(savef: &mut dyn Write, links: &[PassageLinks]) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1511,7 +1513,7 @@ unsafe fn rs_write_passage_links(savef: *mut CFile, links: &[PassageLinks]) -> c
     WRITE_ERROR
 }
 
-unsafe fn rs_read_passage_links(inf: *mut CFile, links: &mut Vec<PassageLinks>) -> c_int {
+unsafe fn rs_read_passage_links(inf: &mut dyn Read, links: &mut Vec<PassageLinks>) -> c_int {
     let mut count = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -1544,7 +1546,7 @@ unsafe fn rs_read_passage_links(inf: *mut CFile, links: &mut Vec<PassageLinks>) 
     read_stat()
 }
 
-unsafe fn rs_write_room_reference(savef: *mut CFile, room: Option<usize>) -> c_int {
+unsafe fn rs_write_room_reference(savef: &mut dyn Write, room: Option<usize>) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1554,7 +1556,7 @@ unsafe fn rs_write_room_reference(savef: *mut CFile, room: Option<usize>) -> c_i
     WRITE_ERROR
 }
 
-unsafe fn rs_read_room_reference(inf: *mut CFile, room: &mut Option<usize>) -> c_int {
+unsafe fn rs_read_room_reference(inf: &mut dyn Read, room: &mut Option<usize>) -> c_int {
     let mut i: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -1574,7 +1576,7 @@ unsafe fn rs_read_room_reference(inf: *mut CFile, room: &mut Option<usize>) -> c
 
 // ─── Monsters ────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_monsters(savef: *mut CFile, m: *mut CMonster, count: c_int) -> c_int {
+unsafe fn rs_write_monsters(savef: &mut dyn Write, m: *mut CMonster, count: c_int) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1591,7 +1593,7 @@ unsafe fn rs_write_monsters(savef: *mut CFile, m: *mut CMonster, count: c_int) -
     WRITE_ERROR
 }
 
-unsafe fn rs_read_monsters(inf: *mut CFile, m: *mut CMonster, count: c_int) -> c_int {
+unsafe fn rs_read_monsters(inf: &mut dyn Read, m: *mut CMonster, count: c_int) -> c_int {
     let mut value: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -1616,7 +1618,7 @@ unsafe fn rs_read_monsters(inf: *mut CFile, m: *mut CMonster, count: c_int) -> c
 
 // ─── Objects ─────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_object(savef: *mut CFile, o: *mut Thing) -> c_int {
+unsafe fn rs_write_object(savef: &mut dyn Write, o: *mut Thing) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1651,7 +1653,7 @@ unsafe fn rs_write_object(savef: *mut CFile, o: *mut Thing) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_object(inf: *mut CFile, o: *mut Thing) -> c_int {
+unsafe fn rs_read_object(inf: &mut dyn Read, o: *mut Thing) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1681,7 +1683,7 @@ unsafe fn rs_read_object(inf: *mut CFile, o: *mut Thing) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_object_list(savef: *mut CFile, mut l: *mut Thing) -> c_int {
+unsafe fn rs_write_object_list(savef: &mut dyn Write, mut l: *mut Thing) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1697,7 +1699,7 @@ unsafe fn rs_write_object_list(savef: *mut CFile, mut l: *mut Thing) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_object_list(inf: *mut CFile, list: *mut *mut Thing) -> c_int {
+unsafe fn rs_read_object_list(inf: &mut dyn Read, list: *mut *mut Thing) -> c_int {
     let mut cnt: c_int = 0;
     let mut l: *mut Thing = std::ptr::null_mut();
     let mut previous: *mut Thing = std::ptr::null_mut();
@@ -1741,7 +1743,7 @@ unsafe fn rs_read_object_list(inf: *mut CFile, list: *mut *mut Thing) -> c_int {
 }
 
 unsafe fn rs_write_object_reference(
-    savef: *mut CFile,
+    savef: &mut dyn Write,
     list: *mut Thing,
     item: *mut Thing,
 ) -> c_int {
@@ -1755,7 +1757,7 @@ unsafe fn rs_write_object_reference(
 }
 
 unsafe fn rs_read_object_reference(
-    inf: *mut CFile,
+    inf: &mut dyn Read,
     list: *mut Thing,
     item: *mut *mut Thing,
 ) -> c_int {
@@ -1819,7 +1821,7 @@ unsafe fn find_object_coord(objlist: *mut Thing, c: *mut IVec2) -> c_int {
 /// into the global mlist, lvl_obj, rooms or hero.
 ///
 /// Uses globals: hero, mlist, lvl_obj, rooms.
-unsafe fn rs_write_thing(savef: *mut CFile, t: *mut Thing) -> c_int {
+unsafe fn rs_write_thing(savef: &mut dyn Write, t: *mut Thing) -> c_int {
     let mut i: c_int = -1;
 
     if WRITE_ERROR != 0 {
@@ -1901,7 +1903,7 @@ unsafe fn rs_write_thing(savef: *mut CFile, t: *mut Thing) -> c_int {
 /// the global hero, mlist, lvl_obj and rooms tables.
 ///
 /// Uses globals: hero, mlist, lvl_obj, rooms.
-unsafe fn rs_read_thing(inf: *mut CFile, t: *mut Thing) -> c_int {
+unsafe fn rs_read_thing(inf: &mut dyn Read, t: *mut Thing) -> c_int {
     let mut listid: c_int = 0;
     let mut index: c_int = -1;
 
@@ -2011,7 +2013,7 @@ unsafe fn rs_fix_thing(t: *mut Thing) {
     }
 }
 
-unsafe fn rs_write_thing_list(savef: *mut CFile, _l: *mut Thing) -> c_int {
+unsafe fn rs_write_thing_list(savef: &mut dyn Write, _l: *mut Thing) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -2036,7 +2038,7 @@ unsafe fn rs_write_thing_list(savef: *mut CFile, _l: *mut Thing) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_thing_list(inf: *mut CFile, _list: *mut *mut Thing) -> c_int {
+unsafe fn rs_read_thing_list(inf: &mut dyn Read, _list: *mut *mut Thing) -> c_int {
     let mut cnt: c_int = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -2065,7 +2067,7 @@ unsafe fn rs_fix_thing_list(_list: *mut Thing) {
 }
 
 unsafe fn rs_write_thing_reference(
-    savef: *mut CFile,
+    savef: &mut dyn Write,
     _list: *mut Thing,
     item: *mut Thing,
 ) -> c_int {
@@ -2092,7 +2094,7 @@ unsafe fn rs_write_thing_reference(
 }
 
 unsafe fn rs_read_thing_reference(
-    inf: *mut CFile,
+    inf: &mut dyn Read,
     _list: *mut Thing,
     item: *mut *mut Thing,
 ) -> c_int {
@@ -2117,7 +2119,7 @@ unsafe fn rs_read_thing_reference(
 }
 
 unsafe fn rs_write_thing_references(
-    savef: *mut CFile,
+    savef: &mut dyn Write,
     list: *mut Thing,
     items: *mut *mut Thing,
     count: c_int,
@@ -2136,7 +2138,7 @@ unsafe fn rs_write_thing_references(
 }
 
 unsafe fn rs_read_thing_references(
-    inf: *mut CFile,
+    inf: &mut dyn Read,
     list: *mut Thing,
     items: *mut *mut Thing,
     count: c_int,
@@ -2161,7 +2163,7 @@ unsafe fn rs_read_thing_references(
 /// kind, and the per-cell monster reference (indexed into the global `mlist`).
 ///
 /// Uses globals: mlist, places (via crate::game), CURRENT_LEVEL.
-unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
+unsafe fn rs_write_places(savef: &mut dyn Write, count: c_int) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -2200,7 +2202,7 @@ unsafe fn rs_write_places(savef: *mut CFile, count: c_int) -> c_int {
 /// monster map.
 ///
 /// Uses globals: mlist, places (via crate::game), CURRENT_LEVEL.
-unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
+unsafe fn rs_read_places(inf: &mut dyn Read, count: c_int) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -2269,8 +2271,7 @@ unsafe fn rs_read_places(inf: *mut CFile, count: c_int) -> c_int {
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
 /// scr_info, weap_info, ws_info, D_LIST, total, between, nh, group.
-#[no_mangle]
-pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
+pub unsafe fn rs_save_file(savef: &mut dyn Write) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -2471,8 +2472,7 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
 /// scr_info, weap_info, ws_info, D_LIST, total, between, nh, group.
-#[no_mangle]
-pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
+pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
     let mut dummyint: c_int = 0;
     let mut depth: c_int = 0;
 

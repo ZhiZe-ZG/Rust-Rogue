@@ -8,11 +8,10 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
+use std::fs::{File, OpenOptions};
 use std::os::raw::{c_int, c_uchar};
-use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::ffi::{fclose, fopen, rewind, CFile};
 use crate::globals::{got_ltc, orig_dsusp, scoreboard};
 use crate::mdport::{
     md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
@@ -28,32 +27,9 @@ const DUMP: bool = false; // not set in the standard build
 
 const SCOREFILE: &str = "rogue.scr";
 const LOCKFILE: &str = "rogue.lck";
-const ENOENT: c_int = 2;
 
 /// `FILE *lfd` from mach_dep.c -- handle of the scoreboard lock file.
-static mut LFD: *mut CFile = ptr::null_mut();
-
-#[cfg(target_os = "macos")]
-unsafe extern "C" {
-    fn __error() -> *mut c_int;
-}
-
-#[cfg(not(target_os = "macos"))]
-unsafe extern "C" {
-    fn __errno_location() -> *mut c_int;
-}
-
-#[inline]
-unsafe fn errno_location() -> *mut c_int {
-    #[cfg(target_os = "macos")]
-    {
-        __error()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        __errno_location()
-    }
-}
+static mut LFD: Option<File> = None;
 
 /// Current time in seconds since the Unix epoch.
 fn now_secs() -> i64 {
@@ -93,31 +69,43 @@ pub unsafe extern "C" fn init_check() {
 #[no_mangle]
 pub unsafe extern "C" fn open_score() {
     if !SCOREFILE_ENABLED {
-        scoreboard = ptr::null_mut();
+        scoreboard = None;
         return;
     }
 
-    if !scoreboard.is_null() {
-        rewind(scoreboard);
+    if let Some(file) = scoreboard.as_mut() {
+        use std::io::Seek;
+        let _ = file.seek(std::io::SeekFrom::Start(0));
         return;
     }
 
-    let scorefile_bytes = crate::ffi::to_c_bytes(SCOREFILE);
-
-    scoreboard = fopen(scorefile_bytes.as_ptr(), b"r+\0".as_ptr());
-
-    if scoreboard.is_null() && *errno_location() == ENOENT {
-        scoreboard = fopen(scorefile_bytes.as_ptr(), b"w+\0".as_ptr());
-        md_chmod(SCOREFILE, 0o664);
-    }
-
-    if scoreboard.is_null() {
-        eprintln!(
-            "Could not open {} for writing: error {}",
-            SCOREFILE,
-            *errno_location()
-        );
-    }
+    // "r+" then fall back to "w+" when the file does not exist.
+    scoreboard = match OpenOptions::new().read(true).write(true).open(SCOREFILE) {
+        Ok(file) => Some(file),
+        Err(err) => {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                let created = OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .open(SCOREFILE);
+                match created {
+                    Ok(file) => {
+                        md_chmod(SCOREFILE, 0o664);
+                        Some(file)
+                    }
+                    Err(err) => {
+                        eprintln!("Could not open {} for writing: error {}", SCOREFILE, err);
+                        None
+                    }
+                }
+            } else {
+                eprintln!("Could not open {} for writing: error {}", SCOREFILE, err);
+                None
+            }
+        }
+    };
 }
 
 /// setup:
@@ -212,18 +200,18 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
         return true as c_uchar as c_int;
     }
 
-    let lockfile_bytes = crate::ffi::to_c_bytes(LOCKFILE);
+    let try_open = || File::create(LOCKFILE).ok();
 
     'over: loop {
-        LFD = fopen(lockfile_bytes.as_ptr(), b"w+\0".as_ptr());
-        if !LFD.is_null() {
+        LFD = try_open();
+        if LFD.is_some() {
             return true as c_uchar as c_int;
         }
 
         for _ in 0..5 {
             md_sleep(1);
-            LFD = fopen(lockfile_bytes.as_ptr(), b"w+\0".as_ptr());
-            if !LFD.is_null() {
+            LFD = try_open();
+            if LFD.is_some() {
                 return true as c_uchar as c_int;
             }
         }
@@ -231,7 +219,7 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
         match lockfile_mtime(LOCKFILE) {
             None => {
                 // stat() failed -- the lock file is gone; try again.
-                LFD = fopen(lockfile_bytes.as_ptr(), b"w+\0".as_ptr());
+                LFD = try_open();
                 return true as c_uchar as c_int;
             }
             Some(mtime) => {
@@ -249,8 +237,8 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
                 let _ = std::io::stdin().read_line(&mut answer);
                 if answer.trim_start().starts_with('y') {
                     loop {
-                        LFD = fopen(lockfile_bytes.as_ptr(), b"w+\0".as_ptr());
-                        if !LFD.is_null() {
+                        LFD = try_open();
+                        if LFD.is_some() {
                             return true as c_uchar as c_int;
                         }
                         if let Some(mtime2) = lockfile_mtime(LOCKFILE) {
@@ -260,7 +248,7 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
                                 }
                             }
                         } else {
-                            LFD = fopen(lockfile_bytes.as_ptr(), b"w+\0".as_ptr());
+                            LFD = try_open();
                             return true as c_uchar as c_int;
                         }
                         md_sleep(1);
@@ -281,10 +269,7 @@ pub unsafe extern "C" fn unlock_sc() {
     if !SCOREFILE_ENABLED || !LOCKFILE_ENABLED {
         return;
     }
-    if !LFD.is_null() {
-        fclose(LFD);
-    }
-    LFD = ptr::null_mut();
+    LFD = None;
     md_unlink(LOCKFILE);
 }
 
