@@ -153,10 +153,25 @@ pub(crate) unsafe fn terrain_chat_at(y: i32, x: i32) -> u8 {
 /// Rendering glyph at `(y, x)`: a level object's type char if one lies here,
 /// otherwise the terrain glyph. Excludes the monster overlay (that's
 /// [`winat`]).
+/// The glyph a floor object's kind renders as.
+///
+/// This is the single place an item kind becomes a screen character; every
+/// other module matches on [`crate::item::item_type::ItemType`] instead.
+#[inline]
+pub(crate) fn item_glyph(ty: crate::item::item_type::ItemType) -> char {
+    (ty.code() as u8) as char
+}
+
+/// The rendering glyph for a floor object handle (its kind's character).
+#[inline]
+pub(crate) unsafe fn obj_glyph(obj: *mut Thing) -> char {
+    item_glyph((*thing_o(obj)).o_type)
+}
+
 pub(crate) unsafe fn cell_glyph(y: i32, x: i32) -> u8 {
     let obj = find_obj(y, x);
     if !obj.is_null() {
-        (*thing_o(obj)).o_type as u8
+        item_glyph((*thing_o(obj)).o_type) as u8
     } else {
         terrain_chat_at(y, x)
     }

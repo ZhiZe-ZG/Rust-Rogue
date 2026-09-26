@@ -1397,7 +1397,7 @@ unsafe fn rs_write_object(savef: &mut dyn Write, o: *mut Thing) -> i32 {
     let op = thing_o(o);
 
     let _ = rs_write_marker(savef, RSID_OBJECT);
-    let _ = rs_write_int(savef, (*op).o_type);
+    let _ = rs_write_int(savef, (*op).o_type.code());
     let _ = rs_write_coord(savef, (*op).o_pos);
     let _ = rs_write_int(savef, (*op).o_launch);
     let _ = rs_write_char(savef, (*op).o_packch as u8);
@@ -1423,7 +1423,8 @@ unsafe fn rs_read_object(inf: &mut dyn Read, o: *mut Thing) -> i32 {
     let op = thing_o(o);
 
     let _ = rs_read_marker(inf, RSID_OBJECT);
-    let _ = rs_read_int(inf, &mut (*op).o_type);
+    let mut o_type_code: i32 = 0;
+    let _ = rs_read_int(inf, &mut o_type_code);
     let _ = rs_read_coord(inf, &mut (*op).o_pos);
     let _ = rs_read_int(inf, &mut (*op).o_launch);
     let mut packch_ch: u8 = 0;
@@ -1433,6 +1434,7 @@ unsafe fn rs_read_object(inf: &mut dyn Read, o: *mut Thing) -> i32 {
     let _ = rs_read_chars(inf, (&raw mut (*op).o_hurldmg) as *mut u8, 8);
     let _ = rs_read_int(inf, &mut (*op).o_count);
     let _ = rs_read_int(inf, &mut (*op).o_which);
+    (*op).o_type = crate::item::item_type::ItemType::from_raw(o_type_code, (*op).o_which);
     let _ = rs_read_int(inf, &mut (*op).o_hplus);
     let _ = rs_read_int(inf, &mut (*op).o_dplus);
     let _ = rs_read_int(inf, &mut (*op).o_arm);

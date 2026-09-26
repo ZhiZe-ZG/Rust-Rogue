@@ -15,6 +15,7 @@ use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::entity::rndmove::rndmove;
 use crate::game::MONSTER_LIST;
 use crate::globals::monsters;
+use crate::item::item_type::ItemType;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
 use crate::entity::player::attach_pack;
@@ -32,7 +33,6 @@ const F_PNUM: u8 = 0x0fu8 as u8;
 const DOOR: u8 = b'+' as u8;
 const FLOOR: u8 = b'.' as u8;
 const PASSAGE: u8 = b'#' as u8;
-const SCROLL: u8 = b'?' as u8;
 const BOLT_LENGTH: i32 = 6;
 const LAMPDIST: i32 = 3;
 
@@ -482,7 +482,12 @@ pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> u8 {
                             }
                             obj = crate::entity::player::thing_next(obj);
                         }
-                        if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as i32 {
+                        if !obj.is_null()
+                            && matches!(
+                                (*thing_o(obj)).o_type,
+                                ItemType::Scroll(ScrollType::Scare)
+                            )
+                        {
                             y += 1;
                             continue;
                         }
@@ -615,9 +620,7 @@ pub unsafe fn update_dest(tp: *mut Thing) {
     }
     let mut obj = crate::game::with_current_level(|level| level.items.head());
     while !obj.is_null() {
-        if (*thing_o(obj)).o_type == SCROLL as i32
-            && (*thing_o(obj)).o_which == ScrollType::Scare as i32
-        {
+        if matches!((*thing_o(obj)).o_type, ItemType::Scroll(ScrollType::Scare)) {
             obj = crate::entity::player::thing_next(obj);
             continue;
         }

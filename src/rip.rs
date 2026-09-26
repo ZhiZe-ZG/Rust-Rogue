@@ -4,6 +4,7 @@
 use std::io::Write;
 
 use crate::globals::{allscore, monsters, numscores, CMonster, NUMNAME};
+use crate::item::item_type::ItemType;
 use crate::item::things::inv_name;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
 use crate::mdport::md_getuid;
@@ -427,7 +428,7 @@ pub unsafe fn total_winner() {
         let mut worth = 0;
         let item_type = (*thing_o(obj)).o_type;
         match item_type {
-            58 => worth = 2 * (*thing_o(obj)).o_count,
+            ItemType::Food => worth = 2 * (*thing_o(obj)).o_count,
             _ => {}
         }
         if worth < 0 {

@@ -17,6 +17,7 @@ use crate::entity::player::{
 };
 use crate::game::PLAYER;
 use crate::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::help::{help, identify};
 use crate::item::armor::{take_off, wear};
 use crate::item::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
@@ -50,18 +51,6 @@ const DOOR: u8 = b'+' as u8;
 const FLOOR: u8 = b'.' as u8;
 const TRAP: u8 = b'^' as u8;
 const STAIRS: u8 = b'%' as u8;
-const GOLD: u8 = b'*' as u8;
-const POTION: u8 = b'!' as u8;
-const SCROLL: u8 = b'?' as u8;
-const FOOD: u8 = b':' as u8;
-const WEAPON: u8 = b')' as u8;
-const ARMOR: u8 = b']' as u8;
-const AMULET: u8 = b',' as u8;
-const RING: u8 = b'=' as u8;
-const STICK: u8 = b'/' as u8;
-
-// Object "types" used by get_item()
-const CALLABLE: i32 = -1;
 
 // Map flags
 const F_REAL: u8 = 0x10u8 as u8;
@@ -365,7 +354,7 @@ pub unsafe fn command() {
 
                         if found {
                             if levit_check() == 0 {
-                                pick_up((*thing_o(obj)).o_type as u8);
+                                pick_up((*thing_o(obj)).o_type.code() as u8);
                             }
                         } else {
                             if terse == 0 {
@@ -477,7 +466,7 @@ pub unsafe fn command() {
                     }
                     b'i' => {
                         after = false as u8;
-                        inventory(crate::game::PLAYER.pack(), 0);
+                        inventory(crate::game::PLAYER.pack(), ItemFilter::Any);
                     }
                     b'I' => {
                         after = false as u8;
@@ -663,10 +652,10 @@ pub unsafe fn command() {
                                 CTRL_G => {
                                     let _ = inventory(
                                         crate::game::with_current_level(|level| level.items.head()),
-                                        0,
+                                        ItemFilter::Any,
                                     );
                                 }
-                                CTRL_W => whatis(false as u8, 0),
+                                CTRL_W => whatis(false as u8, ItemFilter::Any),
                                 CTRL_D => {
                                     crate::game::set_current_depth(
                                         crate::game::current_depth() + 1,
@@ -696,7 +685,8 @@ pub unsafe fn command() {
                                     });
                                 }
                                 CTRL_TILDE => {
-                                    let item = get_item("charge", STICK as i32);
+                                    let item =
+                                        get_item("charge", ItemFilter::Category(ItemType::STICK));
                                     if !item.is_null() {
                                         (*thing_o(item)).o_arm = 10000;
                                     }
@@ -720,7 +710,7 @@ pub unsafe fn command() {
                                      * And his suit of armor
                                      */
                                     obj = new_item();
-                                    (*thing_o(obj)).o_type = ARMOR as i32;
+                                    (*thing_o(obj)).o_type = ItemType::Armor(PLATE_MAIL);
                                     (*thing_o(obj)).o_which = PLATE_MAIL;
                                     (*thing_o(obj)).o_arm = -5;
                                     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
@@ -937,23 +927,25 @@ pub unsafe fn levit_check() -> u8 {
 /// Uses globals: ring_info, r_stones, pot_info, p_colors, scr_info,
 /// s_names, ws_info, ws_made, terse, prbuf.
 pub unsafe fn call() {
-    let obj = get_item("call", CALLABLE);
+    let obj = get_item("call", ItemFilter::Callable);
 
     // Make certain that it's something that we want to wear
     if obj.is_null() {
         return;
     }
 
-    let otype = (*thing_o(obj)).o_type as u8;
+    let otype = (*thing_o(obj)).o_type;
 
-    if otype == FOOD as u8 {
+    if matches!(otype, ItemType::Food) {
         msg_str("you can't call that anything");
         return;
     }
 
     // Weapons and armor store their player-assigned name directly in `o_label`.
-    if otype != RING as u8 && otype != POTION as u8 && otype != SCROLL as u8 && otype != STICK as u8
-    {
+    if !matches!(
+        otype,
+        ItemType::Ring(_) | ItemType::Potion(_) | ItemType::Scroll(_) | ItemType::Stick(_)
+    ) {
         if let Some(elsewise) = (*thing_o(obj)).o_label.as_ref() {
             if terse == 0 {
                 addmsg_str("Was ");
@@ -976,13 +968,13 @@ pub unsafe fn call() {
 
     // Magic items keep their call-name in the obj-info table entry.
     let op = match otype {
-        x if x == RING as u8 => std::ptr::addr_of_mut!(ring_info)
+        ItemType::Ring(_) => std::ptr::addr_of_mut!(ring_info)
             .cast::<CObjInfo>()
             .add((*thing_o(obj)).o_which as usize),
-        x if x == POTION as u8 => std::ptr::addr_of_mut!(pot_info)
+        ItemType::Potion(_) => std::ptr::addr_of_mut!(pot_info)
             .cast::<CObjInfo>()
             .add((*thing_o(obj)).o_which as usize),
-        x if x == SCROLL as u8 => std::ptr::addr_of_mut!(scr_info)
+        ItemType::Scroll(_) => std::ptr::addr_of_mut!(scr_info)
             .cast::<CObjInfo>()
             .add((*thing_o(obj)).o_which as usize),
         _ => std::ptr::addr_of_mut!(ws_info)
@@ -992,9 +984,9 @@ pub unsafe fn call() {
 
     let which = (*thing_o(obj)).o_which as usize;
     let mut elsewise: String = match otype {
-        x if x == RING as u8 => cstr_at(r_stones[which]),
-        x if x == POTION as u8 => cstr_at(p_colors[which]),
-        x if x == SCROLL as u8 => crate::globals::scroll_name(which),
+        ItemType::Ring(_) => cstr_at(r_stones[which]),
+        ItemType::Potion(_) => cstr_at(p_colors[which]),
+        ItemType::Scroll(_) => crate::globals::scroll_name(which),
         _ => cstr_at(ws_made[which]),
     };
 
@@ -1077,7 +1069,7 @@ pub unsafe fn pr_list() {
     while !obj.is_null() {
         msg_str(&format!(
             "{}) {}",
-            (*thing_o(obj)).o_type as u8 as char,
+            crate::draw::item_glyph((*thing_o(obj)).o_type),
             inv_name(obj, false as u8)
         ));
         obj = crate::entity::player::thing_next(obj);

@@ -7,6 +7,7 @@ use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
 use crate::game::PLAYER;
 use crate::globals::CObjInfo;
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item, leave_pack, reset_last};
 use crate::rnd::rnd;
 use crate::ui::input::readchar;
@@ -103,11 +104,11 @@ pub unsafe fn find_obj(y: i32, x: i32) -> *mut Thing {
 }
 
 pub unsafe fn eat() {
-    let obj = get_item("eat", FOOD as i32);
+    let obj = get_item("eat", ItemFilter::Category(ItemType::Food));
     if obj.is_null() {
         return;
     }
-    if (*thing_o(obj)).o_type != FOOD as i32 {
+    if !matches!((*thing_o(obj)).o_type, ItemType::Food) {
         if terse == 0 {
             msg_str("ugh, you would get ill if you ate that");
         } else {

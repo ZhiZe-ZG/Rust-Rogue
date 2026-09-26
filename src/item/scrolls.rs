@@ -11,6 +11,7 @@ use crate::game;
 use crate::game::PLAYER;
 use crate::globals::{scr_info, weap_info};
 use crate::init::pick_color;
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item, leave_pack};
 use crate::entity::player::discard;
 use crate::game::new_actor;
@@ -31,11 +32,6 @@ const H_WALL: i32 = '-' as i32;
 const V_WALL: i32 = '|' as i32;
 const SPACE: i32 = ' ' as i32;
 const FOOD: i32 = ':' as i32;
-const POTION: i32 = '!' as i32;
-const SCROLL: i32 = '?' as i32;
-const WEAPON: i32 = ')' as i32;
-const ARMOR: i32 = ']' as i32;
-const R_OR_S: i32 = -2;
 
 const F_PASS: u8 = 0x80u8 as u8;
 const F_SEEN: u8 = 0x40u8 as u8;
@@ -44,7 +40,7 @@ const F_REAL: u8 = 0x10;
 const MAXSCROLLS: usize = 18;
 
 #[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScrollType {
     Confuse = 0,
     Map = 1,
@@ -67,9 +63,18 @@ pub enum ScrollType {
 }
 
 impl ScrollType {
+    /// Number of scroll kinds.
+    pub const COUNT: usize = 18;
+
     #[inline]
-    fn from_raw(value: i32) -> Self {
-        match value {
+    pub fn from_raw(value: i32) -> Self {
+        Self::try_from_raw(value).unwrap_or_else(|| panic!("invalid scroll type: {value}"))
+    }
+
+    /// Build a scroll kind from its legacy index (`None` when out of range).
+    #[inline]
+    pub fn try_from_raw(value: i32) -> Option<Self> {
+        Some(match value {
             0 => Self::Confuse,
             1 => Self::Map,
             2 => Self::Hold,
@@ -88,12 +93,12 @@ impl ScrollType {
             15 => Self::RemoveCurse,
             16 => Self::Aggravate,
             17 => Self::Protect,
-            _ => panic!("invalid scroll type: {value}"),
-        }
+            _ => return None,
+        })
     }
 
     #[inline]
-    const fn index(self) -> usize {
+    pub const fn index(self) -> usize {
         self as usize
     }
 }
@@ -142,12 +147,12 @@ fn player_has(flag: MonsterFlags) -> bool {
 /// read_scroll:
 /// Read a scroll from the pack and apply its effect.
 pub unsafe fn read_scroll() {
-    let mut obj = get_item("read", SCROLL);
+    let mut obj = get_item("read", ItemFilter::Category(ItemType::SCROLL));
     if obj.is_null() {
         return;
     }
 
-    if (*thing_o(obj)).o_type != SCROLL {
+    if !matches!((*thing_o(obj)).o_type, ItemType::Scroll(_)) {
         if terse == 0 {
             msg_str("there is nothing on it to read");
         } else {
@@ -237,8 +242,7 @@ pub unsafe fn read_scroll() {
                     }
                     let found = find_obj(y, x);
                     if !found.is_null()
-                        && (*thing_o(found)).o_type == SCROLL as i32
-                        && (*thing_o(found)).o_which == ScrollType::Scare as i32
+                        && matches!((*thing_o(found)).o_type, ItemType::Scroll(ScrollType::Scare))
                     {
                         continue;
                     }
@@ -262,14 +266,24 @@ pub unsafe fn read_scroll() {
         | ScrollType::IdentifyWeapon
         | ScrollType::IdentifyArmor
         | ScrollType::IdentifyRingOrStick => {
-            let id_type: [i32; ScrollType::IdentifyRingOrStick.index() + 1] =
-                [0, 0, 0, 0, 0, POTION, SCROLL, WEAPON, ARMOR, R_OR_S];
+            let id_filter: [ItemFilter; ScrollType::IdentifyRingOrStick.index() + 1] = [
+                ItemFilter::Any,
+                ItemFilter::Any,
+                ItemFilter::Any,
+                ItemFilter::Any,
+                ItemFilter::Any,
+                ItemFilter::Category(ItemType::POTION),
+                ItemFilter::Category(ItemType::SCROLL),
+                ItemFilter::Category(ItemType::WEAPON),
+                ItemFilter::Category(ItemType::ARMOR),
+                ItemFilter::RingOrStick,
+            ];
             scr_info[(*thing_o(obj)).o_which as usize].oi_know = true;
             msg_str(&format!(
                 "this scroll is an {} scroll",
                 scr_info[(*thing_o(obj)).o_which as usize].oi_name
             ));
-            whatis(true as u8, id_type[(*thing_o(obj)).o_which as usize]);
+            whatis(true as u8, id_filter[(*thing_o(obj)).o_which as usize]);
         }
         ScrollType::Map => {
             scr_info[ScrollType::Map.index()].oi_know = true;
@@ -296,7 +310,7 @@ pub unsafe fn read_scroll() {
             output::clear_window(window);
             let mut it = crate::game::with_current_level(|level| level.items.head());
             while !it.is_null() {
-                if (*thing_o(it)).o_type == FOOD {
+                if matches!((*thing_o(it)).o_type, ItemType::Food) {
                     found = true as u8;
                     output::move_window_cursor(
                         window,
@@ -321,7 +335,9 @@ pub unsafe fn read_scroll() {
             }
         }
         ScrollType::Enchant => {
-            if PLAYER.weapon().is_null() || (*thing_o(PLAYER.weapon())).o_type != WEAPON {
+            if PLAYER.weapon().is_null()
+                || !matches!((*thing_o(PLAYER.weapon())).o_type, ItemType::Weapon(_))
+            {
                 msg_str("you feel a strange sense of loss");
             } else {
                 (*thing_o(PLAYER.weapon()))

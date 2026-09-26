@@ -13,6 +13,7 @@ use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonste
 use crate::game::MONSTER_LIST;
 use crate::game::PLAYER;
 use crate::globals::{pot_info, CObjInfo};
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
 use crate::entity::player::discard;
@@ -45,8 +46,8 @@ const TRAP: i32 = '^' as i32;
 const MAXPOTIONS: usize = 14;
 
 #[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum PotionType {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PotionType {
     Confuse = 0,
     Lsd = 1,
     Poison = 2,
@@ -64,9 +65,18 @@ enum PotionType {
 }
 
 impl PotionType {
+    /// Number of potion kinds.
+    pub const COUNT: usize = 14;
+
     #[inline]
-    fn from_raw(value: i32) -> Self {
-        match value {
+    pub fn from_raw(value: i32) -> Self {
+        Self::try_from_raw(value).unwrap_or_else(|| panic!("invalid potion type: {value}"))
+    }
+
+    /// Build a potion kind from its legacy index (`None` when out of range).
+    #[inline]
+    pub fn try_from_raw(value: i32) -> Option<Self> {
+        Some(match value {
             0 => Self::Confuse,
             1 => Self::Lsd,
             2 => Self::Poison,
@@ -81,12 +91,12 @@ impl PotionType {
             11 => Self::Restore,
             12 => Self::Blind,
             13 => Self::Levitate,
-            _ => panic!("invalid potion type: {value}"),
-        }
+            _ => return None,
+        })
     }
 
     #[inline]
-    const fn index(self) -> usize {
+    pub const fn index(self) -> usize {
         self as usize
     }
 }
@@ -158,9 +168,15 @@ unsafe fn moat(y: i32, x: i32) -> *mut Thing {
 #[inline]
 unsafe fn is_magic_local(obj: *mut Thing) -> bool {
     match (*thing_o(obj)).o_type {
-        ARMOR => (*thing_o(obj)).o_flags.contains(ObjectFlags::PROT) || (*thing_o(obj)).o_arm != 0,
-        WEAPON => (*thing_o(obj)).o_hplus != 0 || (*thing_o(obj)).o_dplus != 0,
-        POTION | SCROLL | STICK | RING | AMULET => true,
+        ItemType::Armor(_) => {
+            (*thing_o(obj)).o_flags.contains(ObjectFlags::PROT) || (*thing_o(obj)).o_arm != 0
+        }
+        ItemType::Weapon(_) => (*thing_o(obj)).o_hplus != 0 || (*thing_o(obj)).o_dplus != 0,
+        ItemType::Potion(_)
+        | ItemType::Scroll(_)
+        | ItemType::Stick(_)
+        | ItemType::Ring(_)
+        | ItemType::Amulet => true,
         _ => false,
     }
 }
@@ -244,7 +260,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
 /// quaff:
 /// Quaff a potion from the pack.
 pub unsafe fn quaff() {
-    let obj = get_item("quaff", POTION);
+    let obj = get_item("quaff", ItemFilter::Category(ItemType::POTION));
     let mut tp: *mut Thing;
     let mut mp: *mut Thing;
     let discardit;
@@ -254,7 +270,7 @@ pub unsafe fn quaff() {
     if obj.is_null() {
         return;
     }
-    if (*thing_o(obj)).o_type != POTION {
+    if !matches!((*thing_o(obj)).o_type, ItemType::Potion(_)) {
         if terse == 0 {
             msg_str("yuk! Why would you want to drink that?");
         } else {

@@ -16,7 +16,8 @@ use crate::rnd::rnd;
 
 
 
-use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::item::item_type::ItemType;
 use crate::item::pack::add_pack;
 use crate::item::arena::new_item;
 use crate::item::weapons::init_weapon;
@@ -35,11 +36,6 @@ const MAXWEAPONS: usize = 9;
 const MAXARMORS: usize = 8;
 
 const HUNGERTIME: i32 = 1300;
-
-// Item types
-const FOOD: i32 = b':' as i32;
-const ARMOR: i32 = b']' as i32;
-const WEAPON: i32 = b')' as i32;
 
 // Armor / weapon indices
 const RING_MAIL: i32 = 1;
@@ -214,13 +210,13 @@ pub unsafe fn init_player() {
 
     // Give her some food
     let obj = new_item();
-    (*thing_o(obj)).o_type = FOOD;
+    (*thing_o(obj)).o_type = ItemType::Food;
     (*thing_o(obj)).o_count = 1;
     add_pack(obj, true as u8);
 
     // A suit of ring-mail armor
     let obj = new_item();
-    (*thing_o(obj)).o_type = ARMOR;
+    (*thing_o(obj)).o_type = ItemType::Armor(RING_MAIL);
     (*thing_o(obj)).o_which = RING_MAIL;
     (*thing_o(obj)).o_arm = a_class[RING_MAIL as usize] - 1;
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);

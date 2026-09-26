@@ -5,6 +5,7 @@ use crate::entity::monsters::{save, save_throw};
 use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
 use crate::globals::ws_info;
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
 use crate::rip::death;
@@ -21,7 +22,7 @@ const VS_MAGIC: i32 = 3;
 
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum StickType {
+pub enum StickType {
     Light = 0,
     Invis = 1,
     Elect = 2,
@@ -39,9 +40,10 @@ enum StickType {
 }
 
 impl StickType {
-    const COUNT: usize = 14;
+    /// Number of wand/staff kinds.
+    pub const COUNT: usize = 14;
 
-    fn from_raw(value: i32) -> Option<Self> {
+    pub fn from_raw(value: i32) -> Option<Self> {
         match value {
             0 => Some(Self::Light),
             1 => Some(Self::Invis),
@@ -61,7 +63,7 @@ impl StickType {
         }
     }
 
-    fn index(self) -> usize {
+    pub fn index(self) -> usize {
         self as usize
     }
 }
@@ -120,7 +122,7 @@ unsafe fn stick_type(obj: *mut Thing) -> Option<StickType> {
 /// fix_stick:
 /// Set up a new stick with the expected damage and charge values.
 pub unsafe fn fix_stick(cur: *mut Thing) {
-    if (*thing_o(cur)).o_type != STICK {
+    if !matches!((*thing_o(cur)).o_type, ItemType::Stick(_)) {
         return;
     }
 
@@ -141,11 +143,11 @@ pub unsafe fn fix_stick(cur: *mut Thing) {
 /// do_zap:
 /// Perform a zap with a wand or staff and apply a simplified effect.
 pub unsafe fn do_zap() {
-    let obj = get_item("zap with", STICK);
+    let obj = get_item("zap with", ItemFilter::Category(ItemType::STICK));
     if obj.is_null() {
         return;
     }
-    if (*thing_o(obj)).o_type != STICK {
+    if !matches!((*thing_o(obj)).o_type, ItemType::Stick(_)) {
         after = false as u8;
         msg_str("you can't zap with that!");
         return;
@@ -188,7 +190,7 @@ pub unsafe fn do_zap() {
         Some(StickType::Missile) => {
             ws_info[StickType::Missile.index()].oi_know = true;
             let mut bolt = Thing::object(ThingObject::default());
-            (*thing_o(&mut bolt)).o_type = WEAPON;
+            (*thing_o(&mut bolt)).o_type = ItemType::Weapon(FLAME);
             (*thing_o(&mut bolt)).o_which = FLAME;
             set_c_string(&mut (*thing_o(&mut bolt)).o_hurldmg, "1x4");
             (*thing_o(&mut bolt)).o_hplus = 100;
@@ -261,7 +263,7 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
     let hit_hero = start != hero;
     let mut bolt = Thing::object(ThingObject::default());
 
-    (*thing_o(&mut bolt)).o_type = WEAPON;
+    (*thing_o(&mut bolt)).o_type = ItemType::Weapon(FLAME);
     (*thing_o(&mut bolt)).o_which = FLAME;
     set_c_string(&mut (*thing_o(&mut bolt)).o_hurldmg, "6x6");
     (*thing_o(&mut bolt)).o_hplus = 100;

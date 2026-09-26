@@ -15,6 +15,7 @@ use crate::entity::monsters::save;
 use crate::game::PLAYER;
 use crate::init::pick_color;
 use crate::item::armor::rust_armor;
+use crate::item::item_type::ItemType;
 use crate::item::pack::leave_pack;
 use crate::item::potions::is_magic;
 use crate::misc::{check_level, chg_str, choose_str};
@@ -39,7 +40,6 @@ use glam::IVec2;
 const MAXSTR: usize = 1024;
 
 // Item types
-const WEAPON: i32 = b')' as i32;
 const GOLD: i32 = b'*' as i32;
 
 // Misc constants
@@ -661,7 +661,7 @@ pub unsafe fn thunk(weap: *mut Thing, mname: Option<&str>, noend: u8) {
     if to_death != 0 {
         return;
     }
-    if (*thing_o(weap)).o_type == WEAPON {
+    if matches!((*thing_o(weap)).o_type, ItemType::Weapon(_)) {
         addmsg_str(&format!(
             "the {} hits ",
             weap_info[(*thing_o(weap)).o_which as usize].oi_name
@@ -736,7 +736,7 @@ pub unsafe fn bounce(weap: *mut Thing, mname: Option<&str>, noend: u8) {
     if to_death != 0 {
         return;
     }
-    if (*thing_o(weap)).o_type == WEAPON {
+    if matches!((*thing_o(weap)).o_type, ItemType::Weapon(_)) {
         addmsg_str(&format!(
             "the {} misses ",
             weap_info[(*thing_o(weap)).o_which as usize].oi_name
@@ -805,7 +805,7 @@ pub unsafe fn killed(tp: *mut Thing, pr: u8) {
             && level >= max_level
         {
             let gold = new_item();
-            (*thing_o(gold)).o_type = GOLD;
+            (*thing_o(gold)).o_type = ItemType::Gold;
             // o_goldval is #define'd to o_arm
             (*thing_o(gold)).o_arm = rnd(50 + 10 * level) + 2; // GOLDCALC
             if save(VS_MAGIC) != 0 {

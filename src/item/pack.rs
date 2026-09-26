@@ -4,6 +4,7 @@
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game::MONSTER_LIST;
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::scrolls::ScrollType;
 use crate::entity::player::{detach, discard};
 use crate::item::arena::new_item;
@@ -106,9 +107,10 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
         from_floor = true as u8;
     }
 
-    if (*thing_o(item)).o_type == SCROLL as i32
-        && (*thing_o(item)).o_which == ScrollType::Scare as i32
-        && (*thing_o(item)).o_flags.contains(ObjectFlags::FOUND)
+    if matches!(
+        (*thing_o(item)).o_type,
+        ItemType::Scroll(ScrollType::Scare)
+    ) && (*thing_o(item)).o_flags.contains(ObjectFlags::FOUND)
     {
         crate::game::with_current_level_mut(|level| level.items.detach(item));
         // The object is removed from `lvl_obj`, so the terrain glyph shows
@@ -130,10 +132,10 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
         lp = std::ptr::null_mut();
         op = pack_head();
         while !op.is_null() {
-            if (*thing_o(op)).o_type != (*thing_o(item)).o_type {
+            if !(*thing_o(op)).o_type.same_category((*thing_o(item)).o_type) {
                 lp = op;
             } else {
-                while (*thing_o(op)).o_type == (*thing_o(item)).o_type
+                while (*thing_o(op)).o_type.same_category((*thing_o(item)).o_type)
                     && (*thing_o(op)).o_which != (*thing_o(item)).o_which
                 {
                     lp = op;
@@ -142,13 +144,13 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
                     }
                     op = next_item(op);
                 }
-                if (*thing_o(op)).o_type == (*thing_o(item)).o_type
+                if (*thing_o(op)).o_type.same_category((*thing_o(item)).o_type)
                     && (*thing_o(op)).o_which == (*thing_o(item)).o_which
                 {
-                    if ((*thing_o(op)).o_type == FOOD as i32
-                        || (*thing_o(op)).o_type == POTION as i32
-                        || (*thing_o(op)).o_type == SCROLL as i32)
-                    {
+                    if matches!(
+                        (*thing_o(op)).o_type,
+                        ItemType::Food | ItemType::Potion(_) | ItemType::Scroll(_)
+                    ) {
                         if pack_room(from_floor, item) == 0 {
                             return;
                         }
@@ -160,7 +162,7 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
                     }
                     if (*thing_o(item)).o_group != 0 {
                         lp = op;
-                        while (*thing_o(op)).o_type == (*thing_o(item)).o_type
+                        while (*thing_o(op)).o_type.same_category((*thing_o(item)).o_type)
                             && (*thing_o(op)).o_which == (*thing_o(item)).o_which
                             && (*thing_o(op)).o_group != (*thing_o(item)).o_group
                         {
@@ -170,7 +172,7 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
                             }
                             op = next_item(op);
                         }
-                        if (*thing_o(op)).o_type == (*thing_o(item)).o_type
+                        if (*thing_o(op)).o_type.same_category((*thing_o(item)).o_type)
                             && (*thing_o(op)).o_which == (*thing_o(item)).o_which
                             && (*thing_o(op)).o_group == (*thing_o(item)).o_group
                         {
@@ -219,7 +221,7 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
         }
     }
 
-    if (*thing_o(item)).o_type == AMULET as i32 {
+    if matches!((*thing_o(item)).o_type, ItemType::Amulet) {
         amulet = true as u8;
     }
 
@@ -303,19 +305,13 @@ pub unsafe fn pack_char() -> u8 {
     b'a' as u8
 }
 
-pub unsafe fn inventory(list: *mut Thing, type_: i32) -> u8 {
+pub unsafe fn inventory(list: *mut Thing, filter: ItemFilter) -> u8 {
     let mut cur = list;
     n_objs = 0;
+    let any = filter == ItemFilter::Any;
 
     while !cur.is_null() {
-        if type_ != 0
-            && type_ != (*thing_o(cur)).o_type
-            && !(type_ == CALLABLE
-                && (*thing_o(cur)).o_type != FOOD
-                && (*thing_o(cur)).o_type != AMULET)
-            && !(type_ == R_OR_S
-                && ((*thing_o(cur)).o_type == RING || (*thing_o(cur)).o_type == STICK))
-        {
+        if !filter.matches((*thing_o(cur)).o_type) {
             cur = next_item(cur);
             continue;
         }
@@ -334,13 +330,13 @@ pub unsafe fn inventory(list: *mut Thing, type_: i32) -> u8 {
 
     if n_objs == 0 {
         if terse != 0 {
-            msg_str(if type_ == 0 {
+            msg_str(if any {
                 "empty handed"
             } else {
                 "nothing appropriate"
             });
         } else {
-            msg_str(if type_ == 0 {
+            msg_str(if any {
                 "you are empty handed"
             } else {
                 "you don't have anything appropriate"
@@ -382,7 +378,7 @@ pub unsafe fn pick_up(ch: u8) {
     }
 }
 
-pub unsafe fn get_item(purpose: &str, type_: i32) -> *mut Thing {
+pub unsafe fn get_item(purpose: &str, filter: ItemFilter) -> *mut Thing {
     let mut ch: i32;
 
     if pack_head().is_null() {
@@ -418,7 +414,7 @@ pub unsafe fn get_item(purpose: &str, type_: i32) -> *mut Thing {
         n_objs = 1;
         if ch == '*' as i32 {
             mpos = 0;
-            if inventory(pack_head(), type_) == 0 {
+            if inventory(pack_head(), filter) == 0 {
                 after = false as u8;
                 return std::ptr::null_mut();
             }

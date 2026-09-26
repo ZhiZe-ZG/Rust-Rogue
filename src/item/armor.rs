@@ -4,6 +4,7 @@
 use crate::daemon::{do_daemons, do_fuses};
 use crate::entity::player::{ObjectFlags, Thing, ThingObject};
 use crate::game::PLAYER;
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item;
 use crate::item::rings::RingType;
 use crate::item::things::{dropcheck, inv_name};
@@ -27,7 +28,7 @@ unsafe fn ring_is(ring: *mut Thing, ring_type: RingType) -> bool {
 
 /// Equips selected armor if valid and no armor is already worn.
 pub unsafe fn wear() {
-    let obj = get_item("wear", ARMOR);
+    let obj = get_item("wear", ItemFilter::Category(ItemType::ARMOR));
     if obj.is_null() {
         return;
     }
@@ -42,7 +43,7 @@ pub unsafe fn wear() {
         return;
     }
 
-    if (*thing_o(obj)).o_type != ARMOR {
+    if !matches!((*thing_o(obj)).o_type, ItemType::Armor(_)) {
         msg_str("you can't wear that");
         return;
     }
@@ -99,7 +100,7 @@ pub unsafe fn waste_time() {
 /// Rust the given armor if it is a legal kind to rust.
 pub unsafe fn rust_armor(arm: *mut Thing) {
     if arm.is_null()
-        || (*thing_o(arm)).o_type != ARMOR
+        || !matches!((*thing_o(arm)).o_type, ItemType::Armor(_))
         || (*thing_o(arm)).o_which == 0
         || (*thing_o(arm)).o_arm >= 9
     {

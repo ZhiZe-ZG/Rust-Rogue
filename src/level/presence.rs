@@ -20,6 +20,7 @@ use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, Thin
 use crate::game::MONSTER_LIST;
 use crate::game::{self, with_current_level, with_current_level_mut};
 use crate::globals::{amulet, max_level, ntraps, seenstairs};
+use crate::item::item_type::ItemType;
 use crate::item::potions::turn_see;
 use crate::game::new_actor;
 use crate::item::arena::new_item;
@@ -31,8 +32,6 @@ use super::level::LevelFlags;
 use crate::tile::{Tile, TrapType};
 
 // -- Glyphs --
-const AMULET: u8 = b',';
-const GOLD: u8 = b'*';
 const PLAYER: u8 = b'@';
 
 const GOLDGRP: i32 = 1;
@@ -188,7 +187,7 @@ unsafe fn place_room_contents() {
                 (*og).o_pos = gold_pos;
                 (*og).o_flags = ObjectFlags::MANY;
                 (*og).o_group = GOLDGRP;
-                (*og).o_type = GOLD as i32;
+                (*og).o_type = ItemType::Gold;
                 with_current_level_mut(|current| current.items.attach(gold));
             }
         }
@@ -242,7 +241,7 @@ unsafe fn put_things() {
             (*og).o_damage = [b'0', b'x', b'0', 0, 0, 0, 0, 0];
             (*og).o_hurldmg = [b'0', b'x', b'0', 0, 0, 0, 0, 0];
             (*og).o_arm = 11;
-            (*og).o_type = AMULET as i32;
+            (*og).o_type = ItemType::Amulet;
             (*og).o_pos = pos;
             with_current_level_mut(|current| current.items.attach(obj));
         }

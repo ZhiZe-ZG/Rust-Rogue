@@ -6,6 +6,7 @@
 pub mod arena;
 pub mod armor;
 pub mod item_list;
+pub mod item_type;
 pub mod pack;
 pub mod potions;
 pub mod rings;

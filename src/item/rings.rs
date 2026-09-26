@@ -6,6 +6,7 @@ use crate::item::potions::invis_on;
 use crate::rnd::rnd;
 
 use crate::game::PLAYER;
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item;
 use crate::item::things::{dropcheck, inv_name};
 use crate::item::weapons::num;
@@ -15,7 +16,6 @@ use crate::ui::output::{addmsg_str, msg_str};
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
-const RING_TYPE: i32 = '=' as i32;
 const ESCAPE: u8 = 27;
 
 #[repr(u8)]
@@ -94,11 +94,11 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 
 /// Prompts for a ring and equips it on an available hand, applying immediate ring effects.
 pub unsafe fn ring_on() {
-    let obj = get_item("put on", RING_TYPE);
+    let obj = get_item("put on", ItemFilter::Category(ItemType::RING));
     if obj.is_null() {
         return;
     }
-    if (*thing_o(obj)).o_type != RING_TYPE {
+    if !matches!((*thing_o(obj)).o_type, ItemType::Ring(_)) {
         if terse == 0 {
             msg_str("it would be difficult to wrap that around a finger");
         } else {
@@ -269,7 +269,8 @@ unsafe fn ring_num(obj: *mut Thing) -> String {
         Some(
             RingType::Protection | RingType::AddStrength | RingType::AddDamage | RingType::AddHit,
         ) => {
-            let inner = num((*thing_o(obj)).o_arm, 0, RING_TYPE as u8);
+            // Not a weapon, so `num` formats a single signed value.
+            let inner = num((*thing_o(obj)).o_arm, 0, 0);
             format!(" [{}]", inner)
         }
         _ => String::new(),

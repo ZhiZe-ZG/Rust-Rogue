@@ -4,6 +4,7 @@
 use crate::entity::chase::cansee;
 use crate::entity::fight::fight;
 use crate::game::PLAYER;
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item, leave_pack};
 use crate::misc::{is_current, show_floor};
 use crate::rnd::rnd;
@@ -22,7 +23,6 @@ const FLOOR: i32 = '.' as i32;
 const PASSAGE: i32 = '#' as i32;
 const DOOR: i32 = '+' as i32;
 const WEAPON: u8 = ')' as u8;
-const ARMOR: u8 = ']' as u8;
 
 const BOW: i32 = 2;
 const DAGGER: i32 = 4;
@@ -143,7 +143,7 @@ unsafe fn copy_c_bytes(dst: &mut [u8], src: &[u8]) {
 
 /// Throws a selected weapon in the provided direction and resolves impact/fall behavior.
 pub unsafe fn missile(ydelta: i32, xdelta: i32) {
-    let mut obj = get_item("throw", WEAPON as i32);
+    let mut obj = get_item("throw", ItemFilter::Category(ItemType::WEAPON));
     if obj.is_null() {
         return;
     }
@@ -189,7 +189,7 @@ pub unsafe fn do_motion(obj: *mut Thing, ydelta: i32, xdelta: i32) {
             if cansee((*o).o_pos.y, (*o).o_pos.x) != 0 && terse == 0 {
                 output::write_glyph_at(
                     IVec2::new((*o).o_pos.x, (*o).o_pos.y),
-                    ((*o).o_type as u8) as char,
+                    crate::draw::item_glyph((*o).o_type),
                 );
                 output::refresh();
             }
@@ -208,11 +208,11 @@ pub unsafe fn fall(obj: *mut Thing, pr: u8) {
         if cansee(FALL_POS.y, FALL_POS.x) != 0 {
             let m = moat(FALL_POS.y, FALL_POS.x);
             if !m.is_null() {
-                (*thing_t(m)).t_oldch = (*thing_o(obj)).o_type as u8;
+                (*thing_t(m)).t_oldch = crate::draw::item_glyph((*thing_o(obj)).o_type) as u8;
             } else {
                 output::write_glyph_at(
                     IVec2::new(FALL_POS.x, FALL_POS.y),
-                    ((*thing_o(obj)).o_type as u8) as char,
+                    crate::draw::item_glyph((*thing_o(obj)).o_type),
                 );
             }
         }
@@ -238,7 +238,7 @@ pub unsafe fn fall(obj: *mut Thing, pr: u8) {
 /// Initializes a weapon object with baseline damage, flags, and stack counts.
 pub unsafe fn init_weapon(weap: *mut Thing, which: i32) {
     let o = thing_o(weap);
-    (*o).o_type = WEAPON as i32;
+    (*o).o_type = ItemType::Weapon(which);
     (*o).o_which = which;
 
     let iwp = INIT_DAM[which as usize];
@@ -287,13 +287,13 @@ pub unsafe fn wield() {
     }
     PLAYER.set_weapon(oweapon);
 
-    let obj = get_item("wield", WEAPON as i32);
+    let obj = get_item("wield", ItemFilter::Category(ItemType::WEAPON));
     if obj.is_null() {
         after = 0;
         return;
     }
 
-    if (*thing_o(obj)).o_type == ARMOR as i32 {
+    if matches!((*thing_o(obj)).o_type, ItemType::Armor(_)) {
         msg_str("you can't wield armor");
         after = 0;
         return;

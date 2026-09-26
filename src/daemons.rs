@@ -246,7 +246,7 @@ pub unsafe fn come_down() {
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
             output::write_glyph_at(
                 IVec2::new((*op).o_pos.x, (*op).o_pos.y),
-                ((*op).o_type as u8) as char,
+                crate::draw::item_glyph((*op).o_type),
             );
         }
         tp = crate::entity::player::thing_next(tp);

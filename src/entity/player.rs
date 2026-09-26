@@ -316,7 +316,8 @@ pub struct ThingMonster {
 /// and `o_label` string fields are owned Rust `String`s rather than C pointers.
 #[derive(Clone)]
 pub struct ThingObject {
-    pub o_type: i32,
+    /// The item's kind (typed replacement for the legacy ASCII `o_type`).
+    pub o_type: crate::item::item_type::ItemType,
     pub o_pos: IVec2,
     pub o_text: Option<String>,
     pub o_launch: i32,
@@ -409,7 +410,7 @@ impl Default for ThingMonster {
 impl Default for ThingObject {
     fn default() -> Self {
         ThingObject {
-            o_type: 0,
+            o_type: crate::item::item_type::ItemType::None,
             o_pos: IVec2 { x: 0, y: 0 },
             o_text: None,
             o_launch: 0,

@@ -9,6 +9,7 @@ use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{add_pack, floor_at, get_item};
 use crate::item::sticks::fix_stick;
 use crate::item::arena::new_item;
@@ -21,14 +22,7 @@ use crate::ui::output::{msg_str, show_win};
 use crate::ui::{output, Window};
 use glam::IVec2;
 
-const POTION: i32 = b'!' as i32;
-const SCROLL: i32 = b'?' as i32;
 const FOOD: i32 = b':' as i32;
-const R_OR_S: i32 = -2;
-const RING: i32 = b'=' as i32;
-const STICK: i32 = b'/' as i32;
-const WEAPON: i32 = b')' as i32;
-const ARMOR: i32 = b']' as i32;
 const GOLD: i32 = b'*' as i32;
 
 const F_REAL: u8 = 0x10u8 as u8;
@@ -88,7 +82,7 @@ unsafe fn master_enabled() -> bool {
 use crate::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hit};
 
 
-pub unsafe fn whatis(insist: u8, item_type: i32) {
+pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
     let pack = crate::game::PLAYER.pack();
     if pack.is_null() {
         msg_str("you don't have anything in your pack to identify");
@@ -97,21 +91,14 @@ pub unsafe fn whatis(insist: u8, item_type: i32) {
 
     let mut obj: *mut Thing = ptr::null_mut();
     loop {
-        obj = get_item("identify", item_type);
+        obj = get_item("identify", filter);
         if insist != 0 {
             if n_objs == 0 {
                 return;
             } else if obj.is_null() {
                 msg_str("you must identify something");
-            } else if item_type != 0
-                && (*thing_o(obj)).o_type != item_type
-                && !(item_type == R_OR_S
-                    && ((*thing_o(obj)).o_type == RING || (*thing_o(obj)).o_type == STICK))
-            {
-                msg_str(&format!(
-                    "you must identify a {}",
-                    type_name(item_type)
-                ));
+            } else if !filter.matches((*thing_o(obj)).o_type) {
+                msg_str(&format!("you must identify a {}", type_name(filter)));
             } else {
                 break;
             }
@@ -125,11 +112,13 @@ pub unsafe fn whatis(insist: u8, item_type: i32) {
     }
 
     match (*thing_o(obj)).o_type {
-        SCROLL => set_know(obj, std::ptr::addr_of_mut!(scr_info).cast()),
-        POTION => set_know(obj, std::ptr::addr_of_mut!(pot_info).cast()),
-        STICK => set_know(obj, std::ptr::addr_of_mut!(ws_info).cast()),
-        WEAPON | ARMOR => (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW),
-        RING => set_know(obj, std::ptr::addr_of_mut!(ring_info).cast()),
+        ItemType::Scroll(_) => set_know(obj, std::ptr::addr_of_mut!(scr_info).cast()),
+        ItemType::Potion(_) => set_know(obj, std::ptr::addr_of_mut!(pot_info).cast()),
+        ItemType::Stick(_) => set_know(obj, std::ptr::addr_of_mut!(ws_info).cast()),
+        ItemType::Weapon(_) | ItemType::Armor(_) => {
+            (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW)
+        }
+        ItemType::Ring(_) => set_know(obj, std::ptr::addr_of_mut!(ring_info).cast()),
         _ => {}
     }
 
@@ -148,16 +137,16 @@ pub unsafe fn set_know(obj: *mut Thing, info: *mut CObjInfo) {
     item.oi_guess = None;
 }
 
-pub fn type_name(item_type: i32) -> &'static str {
-    match item_type {
-        x if x == POTION => "potion",
-        x if x == SCROLL => "scroll",
-        x if x == FOOD => "food",
-        x if x == R_OR_S => "ring, wand or staff",
-        x if x == RING => "ring",
-        x if x == STICK => "wand or staff",
-        x if x == WEAPON => "weapon",
-        x if x == ARMOR => "suit of armor",
+pub fn type_name(filter: ItemFilter) -> &'static str {
+    match filter {
+        ItemFilter::Category(ItemType::Potion(_)) => "potion",
+        ItemFilter::Category(ItemType::Scroll(_)) => "scroll",
+        ItemFilter::Category(ItemType::Food) => "food",
+        ItemFilter::RingOrStick => "ring, wand or staff",
+        ItemFilter::Category(ItemType::Ring(_)) => "ring",
+        ItemFilter::Category(ItemType::Stick(_)) => "wand or staff",
+        ItemFilter::Category(ItemType::Weapon(_)) => "weapon",
+        ItemFilter::Category(ItemType::Armor(_)) => "suit of armor",
         _ => "",
     }
 }
@@ -171,49 +160,52 @@ pub unsafe fn create_obj() {
     let mut ch: i32;
 
     msg_str("type of item: ");
-    (*thing_o(obj)).o_type = readchar();
+    let type_ch = readchar();
     mpos = 0;
     msg_str(&format!(
         "which {} do you want? (0-f)",
-        (*thing_o(obj)).o_type as u8 as char
+        (type_ch as u8) as char
     ));
     ch = readchar();
-    (*thing_o(obj)).o_which = if (ch as u8).is_ascii_digit() {
+    let which = if (ch as u8).is_ascii_digit() {
         ch - b'0' as i32
     } else {
         ch - b'a' as i32 + 10
     };
+    (*thing_o(obj)).o_which = which;
+    (*thing_o(obj)).o_type = ItemType::from_raw(type_ch, which);
 
     (*thing_o(obj)).o_group = 0;
     (*thing_o(obj)).o_count = 1;
     mpos = 0;
 
-    if (*thing_o(obj)).o_type == WEAPON || (*thing_o(obj)).o_type == ARMOR {
-        msg_str("blessing? (+,-,n)");
-        let bless = readchar() as u8;
-        mpos = 0;
-        if bless == ('-' as u8) {
-            (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
-        }
-        if (*thing_o(obj)).o_type == WEAPON {
-            init_weapon(obj, (*thing_o(obj)).o_which);
+    match (*thing_o(obj)).o_type {
+        ItemType::Weapon(_) | ItemType::Armor(_) => {
+            msg_str("blessing? (+,-,n)");
+            let bless = readchar() as u8;
+            mpos = 0;
             if bless == ('-' as u8) {
-                (*thing_o(obj)).o_hplus -= rnd(3) + 1;
+                (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
             }
-            if bless == ('+' as u8) {
-                (*thing_o(obj)).o_hplus += rnd(3) + 1;
-            }
-        } else {
-            (*thing_o(obj)).o_arm = a_class[(*thing_o(obj)).o_which as usize];
-            if bless == ('-' as u8) {
-                (*thing_o(obj)).o_arm += rnd(3) + 1;
-            }
-            if bless == ('+' as u8) {
-                (*thing_o(obj)).o_arm -= rnd(3) + 1;
+            if matches!((*thing_o(obj)).o_type, ItemType::Weapon(_)) {
+                init_weapon(obj, (*thing_o(obj)).o_which);
+                if bless == ('-' as u8) {
+                    (*thing_o(obj)).o_hplus -= rnd(3) + 1;
+                }
+                if bless == ('+' as u8) {
+                    (*thing_o(obj)).o_hplus += rnd(3) + 1;
+                }
+            } else {
+                (*thing_o(obj)).o_arm = a_class[(*thing_o(obj)).o_which as usize];
+                if bless == ('-' as u8) {
+                    (*thing_o(obj)).o_arm += rnd(3) + 1;
+                }
+                if bless == ('+' as u8) {
+                    (*thing_o(obj)).o_arm -= rnd(3) + 1;
+                }
             }
         }
-    } else if (*thing_o(obj)).o_type == RING {
-        match (*thing_o(obj)).o_which {
+        ItemType::Ring(_) => match (*thing_o(obj)).o_which {
             0 | 1 | 2 | 3 | 6 | 7 => {
                 msg_str("blessing? (+,-,n)");
                 let bless = readchar() as u8;
@@ -230,13 +222,16 @@ pub unsafe fn create_obj() {
             _ => {
                 (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
             }
+        },
+        ItemType::Stick(_) => {
+            fix_stick(obj);
         }
-    } else if (*thing_o(obj)).o_type == STICK {
-        fix_stick(obj);
-    } else if (*thing_o(obj)).o_type == GOLD {
-        msg_str("how much?");
-        let mut amount = 0;
-        get_num(&mut amount);
+        ItemType::Gold => {
+            msg_str("how much?");
+            let mut amount = 0;
+            get_num(&mut amount);
+        }
+        _ => {}
     }
 
     add_pack(obj, false as u8);
@@ -300,9 +295,12 @@ mod tests {
 
     #[test]
     fn type_name_matches_expected_strings() {
-        assert_eq!(type_name(POTION), "potion");
-        assert_eq!(type_name(SCROLL), "scroll");
-        assert_eq!(type_name(ARMOR), "suit of armor");
+        assert_eq!(type_name(ItemFilter::Category(ItemType::POTION)), "potion");
+        assert_eq!(type_name(ItemFilter::Category(ItemType::SCROLL)), "scroll");
+        assert_eq!(
+            type_name(ItemFilter::Category(ItemType::ARMOR)),
+            "suit of armor"
+        );
     }
 
     #[test]
@@ -311,7 +309,7 @@ mod tests {
             let mut obj = Thing::Object {
                 link: crate::entity::player::ThingLink::empty(),
                 data: ThingObject {
-                    o_type: SCROLL,
+                    o_type: ItemType::SCROLL,
                     o_pos: IVec2 { x: 0, y: 0 },
                     o_text: None,
                     o_launch: 0,

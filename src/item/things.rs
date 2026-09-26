@@ -12,6 +12,7 @@ use crate::entity::player::{ObjectFlags, Thing, ThingObject};
 use crate::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
 };
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::rings::RingType;
 use crate::item::sticks::fix_stick;
 use crate::item::arena::new_item;
@@ -25,16 +26,6 @@ const MAXRINGS: usize = RingType::COUNT;
 const MAXSCROLLS: usize = 18;
 const MAXWEAPONS: usize = 9;
 const MAXSTICKS: usize = 14;
-
-const POTION: i32 = b'!' as i32;
-const SCROLL: i32 = b'?' as i32;
-const FOOD: i32 = b':' as i32;
-const WEAPON: i32 = b')' as i32;
-const ARMOR: i32 = b']' as i32;
-const RING: i32 = b'=' as i32;
-const STICK: i32 = b'/' as i32;
-const GOLD: i32 = b'*' as i32;
-const AMULET: i32 = b',' as i32;
 
 use crate::globals::{a_class, inv_describe, no_food};
 
@@ -59,17 +50,17 @@ fn starts_with_article(name: &str) -> &'static str {
 }
 
 #[inline]
-unsafe fn item_name(typ: i32, which: i32) -> &'static str {
+unsafe fn item_name(typ: ItemType, which: i32) -> &'static str {
     match typ {
-        POTION => pot_info[which as usize].oi_name,
-        SCROLL => scr_info[which as usize].oi_name,
-        RING => ring_info[which as usize].oi_name,
-        STICK => ws_info[which as usize].oi_name,
-        WEAPON => weap_info[which as usize].oi_name,
-        ARMOR => arm_info[which as usize].oi_name,
-        FOOD => "food",
-        GOLD => "gold",
-        AMULET => "the Amulet of Yendor",
+        ItemType::Potion(_) => pot_info[which as usize].oi_name,
+        ItemType::Scroll(_) => scr_info[which as usize].oi_name,
+        ItemType::Ring(_) => ring_info[which as usize].oi_name,
+        ItemType::Stick(_) => ws_info[which as usize].oi_name,
+        ItemType::Weapon(_) => weap_info[which as usize].oi_name,
+        ItemType::Armor(_) => arm_info[which as usize].oi_name,
+        ItemType::Food => "food",
+        ItemType::Gold => "gold",
+        ItemType::Amulet => "the Amulet of Yendor",
         _ => "item",
     }
 }
@@ -116,7 +107,7 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
     let typ = (*thing_o(obj)).o_type;
     let count = (*thing_o(obj)).o_count;
     let mut name = match typ {
-        POTION => {
+        ItemType::Potion(_) => {
             let item = item_name(typ, which);
             if count == 1 {
                 format!("A {item}")
@@ -124,7 +115,7 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
                 format!("{count} {item}s")
             }
         }
-        RING => {
+        ItemType::Ring(_) => {
             let item = item_name(typ, which);
             if count == 1 {
                 format!("A {item} ring")
@@ -132,7 +123,7 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
                 format!("{count} {item} rings")
             }
         }
-        STICK => {
+        ItemType::Stick(_) => {
             let item = item_name(typ, which);
             if count == 1 {
                 format!("A {item}")
@@ -140,7 +131,7 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
                 format!("{count} {item}s")
             }
         }
-        SCROLL => {
+        ItemType::Scroll(_) => {
             let item = item_name(typ, which);
             if count == 1 {
                 format!("A scroll of {item}")
@@ -148,14 +139,14 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
                 format!("{count} scrolls of {item}")
             }
         }
-        FOOD => {
+        ItemType::Food => {
             if count == 1 {
                 "Some food".to_owned()
             } else {
                 format!("{count} rations of food")
             }
         }
-        WEAPON => {
+        ItemType::Weapon(_) => {
             let item = item_name(typ, which);
             let mut text = if count > 1 {
                 format!("{count} {item}s")
@@ -168,7 +159,7 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
             }
             text
         }
-        ARMOR => {
+        ItemType::Armor(_) => {
             let mut text = item_name(typ, which).to_owned();
             if let Some(label) = (*thing_o(obj)).o_label.as_ref() {
                 text.push_str(" called ");
@@ -176,8 +167,8 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
             }
             text
         }
-        AMULET => "The Amulet of Yendor".to_owned(),
-        GOLD => format!("{} Gold pieces", (*thing_o(obj)).o_group),
+        ItemType::Amulet => "The Amulet of Yendor".to_owned(),
+        ItemType::Gold => format!("{} Gold pieces", (*thing_o(obj)).o_group),
         _ => "something".to_owned(),
     };
 
@@ -262,21 +253,23 @@ pub unsafe fn new_thing() -> *mut Thing {
     };
     match choice {
         0 => {
-            (*thing_o(cur)).o_type = POTION;
-            (*thing_o(cur)).o_which = pick_one(
+            let which = pick_one(
                 std::ptr::addr_of!(pot_info).cast::<CObjInfo>().cast_mut(),
                 MAXPOTIONS as i32,
             );
+            (*thing_o(cur)).o_which = which;
+            (*thing_o(cur)).o_type = ItemType::potion(which);
         }
         1 => {
-            (*thing_o(cur)).o_type = SCROLL;
-            (*thing_o(cur)).o_which = pick_one(
+            let which = pick_one(
                 std::ptr::addr_of!(scr_info).cast::<CObjInfo>().cast_mut(),
                 MAXSCROLLS as i32,
             );
+            (*thing_o(cur)).o_which = which;
+            (*thing_o(cur)).o_type = ItemType::scroll(which);
         }
         2 => {
-            (*thing_o(cur)).o_type = FOOD;
+            (*thing_o(cur)).o_type = ItemType::Food;
             no_food = 0;
             if rnd(10) != 0 {
                 (*thing_o(cur)).o_which = 0;
@@ -285,7 +278,6 @@ pub unsafe fn new_thing() -> *mut Thing {
             }
         }
         3 => {
-            (*thing_o(cur)).o_type = WEAPON;
             init_weapon(
                 cur,
                 pick_one(
@@ -302,11 +294,12 @@ pub unsafe fn new_thing() -> *mut Thing {
             }
         }
         4 => {
-            (*thing_o(cur)).o_type = ARMOR;
-            (*thing_o(cur)).o_which = pick_one(
+            let which = pick_one(
                 std::ptr::addr_of!(arm_info).cast::<CObjInfo>().cast_mut(),
                 MAXARMORS as i32,
             );
+            (*thing_o(cur)).o_which = which;
+            (*thing_o(cur)).o_type = ItemType::Armor(which);
             (*thing_o(cur)).o_arm = a_class[(*thing_o(cur)).o_which as usize];
             let r = rnd(100);
             if r < 20 {
@@ -317,13 +310,13 @@ pub unsafe fn new_thing() -> *mut Thing {
             }
         }
         5 => {
-            (*thing_o(cur)).o_type = RING;
             let ring_type = RingType::from_raw(pick_one(
                 std::ptr::addr_of!(ring_info).cast::<CObjInfo>().cast_mut(),
                 MAXRINGS as i32,
             ))
             .expect("ring metadata produced an invalid ring type");
             (*thing_o(cur)).o_which = ring_type as i32;
+            (*thing_o(cur)).o_type = ItemType::Ring(ring_type);
             match ring_type {
                 RingType::Protection
                 | RingType::SustainStrength
@@ -343,11 +336,12 @@ pub unsafe fn new_thing() -> *mut Thing {
             }
         }
         6 => {
-            (*thing_o(cur)).o_type = STICK;
-            (*thing_o(cur)).o_which = pick_one(
+            let which = pick_one(
                 std::ptr::addr_of!(ws_info).cast::<CObjInfo>().cast_mut(),
                 MAXSTICKS as i32,
             );
+            (*thing_o(cur)).o_which = which;
+            (*thing_o(cur)).o_type = ItemType::stick(which);
             fix_stick(cur);
         }
         _ => {}
@@ -357,14 +351,14 @@ pub unsafe fn new_thing() -> *mut Thing {
 }
 
 pub unsafe fn drop() {
-    let obj = get_item("drop", 0);
+    let obj = get_item("drop", ItemFilter::Any);
     if obj.is_null() {
         return;
     }
     if dropcheck(obj) == 0 {
         return;
     }
-    let all = if ((*thing_o(obj)).o_type & 0x1) == 0 {
+    let all = if (*thing_o(obj)).o_type.drop_whole_stack_by_default() {
         true as u8
     } else {
         false as u8
