@@ -123,7 +123,10 @@ unsafe fn lockfile_mtime(path: *const c_char) -> Option<i64> {
 /// build (config.h leaves both undefined), so this is a no-op.
 #[no_mangle]
 pub unsafe extern "C" fn init_check() {
-    let _ = (whoami.as_ptr(), fruit.as_ptr());
+    let _ = (
+        std::ptr::addr_of!(whoami).cast::<c_char>(),
+        std::ptr::addr_of!(fruit).cast::<c_char>(),
+    );
 }
 
 /// open_score:
@@ -292,7 +295,11 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
                 printf(c"The score file is very busy.  Do you want to wait longer\n".as_ptr());
                 printf(c"for it to become free so your score can get posted?\n".as_ptr());
                 printf(c"If so, type \"y\"\n".as_ptr());
-                let _ = fgets(prbuf.as_mut_ptr(), MAXSTR as c_int, c_stdin());
+                let _ = fgets(
+                    std::ptr::addr_of_mut!(prbuf).cast::<c_char>(),
+                    MAXSTR as c_int,
+                    c_stdin(),
+                );
                 if prbuf[0] == 'y' as c_char {
                     loop {
                         LFD = fopen(lockfile_ptr, c"w+".as_ptr());

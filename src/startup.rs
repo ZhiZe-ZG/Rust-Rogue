@@ -245,7 +245,10 @@ pub unsafe extern "C" fn quit(sig: c_int) {
     if readchar() == b'y' as c_int {
         signal(SIGINT, leave as usize);
         output::clear_screen();
-        let line = format!("You quit with {} gold pieces", purse);
+        let line = format!(
+            "You quit with {} gold pieces",
+            std::ptr::addr_of!(purse).read()
+        );
         output::write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), &line);
         output::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
         output::refresh();
@@ -437,7 +440,7 @@ pub unsafe extern "C" fn rogue_main(
         print!(
             "Hello {}, welcome to dungeon #{}",
             CStr::from_ptr(std::ptr::addr_of!(whoami).cast::<c_char>()).to_string_lossy(),
-            dnum
+            std::ptr::addr_of!(dnum).read()
         );
     } else {
         print!(

@@ -320,7 +320,7 @@ pub unsafe extern "C" fn md_getusername() -> *mut c_char {
         LOGIN[i] = *b as c_char;
     }
     LOGIN[n] = 0;
-    LOGIN.as_mut_ptr()
+    std::ptr::addr_of_mut!(LOGIN).cast::<c_char>()
 }
 
 /// md_gethomedir:
@@ -361,7 +361,7 @@ pub unsafe extern "C" fn md_gethomedir() -> *mut c_char {
         }
     }
 
-    HOMEDIR.as_mut_ptr()
+    std::ptr::addr_of_mut!(HOMEDIR).cast::<c_char>()
 }
 
 /// md_sleep:
@@ -409,7 +409,7 @@ pub unsafe extern "C" fn md_getshell() -> *mut c_char {
         SHELL[i] = *b as c_char;
     }
     SHELL[n] = 0;
-    SHELL.as_mut_ptr()
+    std::ptr::addr_of_mut!(SHELL).cast::<c_char>()
 }
 
 /// md_shellescape:
@@ -499,7 +499,7 @@ unsafe fn md_getrealname(uid: c_int) -> *mut c_char {
         UIDSTR[i] = *b as c_char;
     }
     UIDSTR[n] = 0;
-    UIDSTR.as_mut_ptr()
+    std::ptr::addr_of_mut!(UIDSTR).cast::<c_char>()
 }
 
 // -------------------------------------------------------------------------
