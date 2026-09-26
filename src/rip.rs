@@ -2,9 +2,9 @@
 //!
 //! Ported from `src/c/rip.c` to Rust.
 use std::ffi::{CStr, CString};
+use std::io::Write;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_ushort};
 
-use crate::ffi::printf;
 use crate::globals::{allscore, monsters, numscores, CMonster, Numname};
 use crate::item::things::inv_name;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
@@ -292,36 +292,34 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
         }
     }
 
-    let mode = if allscore != 0 {
-        c"Scores".as_ptr()
-    } else {
-        c"Rogueists".as_ptr()
-    };
-    printf(c"Top %s %s:\n".as_ptr(), Numname, mode);
-    printf(c"   Score Name\n".as_ptr());
+    let mode = if allscore != 0 { "Scores" } else { "Rogueists" };
+    let numname = CStr::from_ptr(Numname).to_string_lossy();
+    println!("Top {} {}:", numname, mode);
+    println!("   Score Name");
 
     for (idx, entry) in top_ten.iter().enumerate() {
         if entry.sc_score != 0 {
             let reason = match entry.sc_flags {
-                0 => c"killed".as_ptr(),
-                1 => c"quit".as_ptr(),
-                2 => c"A total winner".as_ptr(),
-                3 => c"killed with Amulet".as_ptr(),
-                _ => c"killed".as_ptr(),
+                0 => "killed",
+                1 => "quit",
+                2 => "A total winner",
+                3 => "killed with Amulet",
+                _ => "killed",
             };
-            printf(
-                c"%2d %5d %s: %s on level %d".as_ptr(),
+            let name = CStr::from_ptr(entry.sc_name.as_ptr()).to_string_lossy();
+            print!(
+                "{:2} {:5} {}: {} on level {}",
                 idx as c_int + 1,
                 entry.sc_score,
-                entry.sc_name.as_ptr(),
+                name,
                 reason,
                 entry.sc_level,
             );
             if entry.sc_flags == 0 || entry.sc_flags == 3 {
                 let killer = killname(entry.sc_monster as c_char, true);
-                printf(c" by %s".as_ptr(), killer);
+                print!(" by {}", CStr::from_ptr(killer).to_string_lossy());
             }
-            printf(c".\n".as_ptr());
+            println!(".");
         } else {
             break;
         }
@@ -427,8 +425,8 @@ pub unsafe extern "C" fn death(monst: c_char) {
 
     output::refresh();
     score(purse, if amulet != 0 { 3 } else { 0 }, monst);
-    let msg = CString::new("[Press return to continue]").unwrap();
-    printf(c"%s".as_ptr(), msg.as_ptr());
+    print!("[Press return to continue]");
+    let _ = std::io::stdout().flush();
     wait_for('\n');
     my_exit(0);
 }

@@ -13,15 +13,13 @@ use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::ffi::{fclose, fflush, fgets, fopen, fprintf, printf, rewind, strerror, CFile};
-use crate::globals::{fruit, got_ltc, orig_dsusp, prbuf, scoreboard, whoami};
+use crate::ffi::{fclose, fopen, rewind, strerror, CFile};
+use crate::globals::{fruit, got_ltc, orig_dsusp, scoreboard, whoami};
 use crate::mdport::{
     md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
 };
 use crate::ui::input;
 use crate::ui::Window;
-
-const MAXSTR: usize = 1024;
 
 // Build-time feature flags mirroring config.h for the standard build.
 const SCOREFILE_ENABLED: bool = true; // config.h: #define SCOREFILE "rogue.scr"
@@ -35,42 +33,6 @@ const ENOENT: c_int = 2;
 
 /// `FILE *lfd` from mach_dep.c -- handle of the scoreboard lock file.
 static mut LFD: *mut CFile = ptr::null_mut();
-
-#[cfg(target_os = "macos")]
-unsafe extern "C" {
-    static mut __stdinp: *mut CFile;
-    static mut __stderrp: *mut CFile;
-}
-
-#[cfg(not(target_os = "macos"))]
-unsafe extern "C" {
-    static mut stdin: *mut CFile;
-    static mut stderr: *mut CFile;
-}
-
-#[inline]
-unsafe fn c_stdin() -> *mut CFile {
-    #[cfg(target_os = "macos")]
-    {
-        __stdinp
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        stdin
-    }
-}
-
-#[inline]
-unsafe fn c_stderr() -> *mut CFile {
-    #[cfg(target_os = "macos")]
-    {
-        __stderrp
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        stderr
-    }
-}
 
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
@@ -156,13 +118,9 @@ pub unsafe extern "C" fn open_score() {
     }
 
     if scoreboard.is_null() {
-        fprintf(
-            c_stderr(),
-            c"Could not open %s for writing: %s\n".as_ptr(),
-            scorefile_ptr,
-            strerror(*errno_location()),
-        );
-        fflush(c_stderr());
+        let path = CStr::from_ptr(scorefile_ptr).to_string_lossy();
+        let err = CStr::from_ptr(strerror(*errno_location())).to_string_lossy();
+        eprintln!("Could not open {} for writing: {}", path, err);
     }
 }
 
@@ -292,15 +250,12 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
                     continue 'over;
                 }
 
-                printf(c"The score file is very busy.  Do you want to wait longer\n".as_ptr());
-                printf(c"for it to become free so your score can get posted?\n".as_ptr());
-                printf(c"If so, type \"y\"\n".as_ptr());
-                let _ = fgets(
-                    std::ptr::addr_of_mut!(prbuf).cast::<c_char>(),
-                    MAXSTR as c_int,
-                    c_stdin(),
-                );
-                if prbuf[0] == 'y' as c_char {
+                println!("The score file is very busy.  Do you want to wait longer");
+                println!("for it to become free so your score can get posted?");
+                println!("If so, type \"y\"");
+                let mut answer = String::new();
+                let _ = std::io::stdin().read_line(&mut answer);
+                if answer.trim_start().starts_with('y') {
                     loop {
                         LFD = fopen(lockfile_ptr, c"w+".as_ptr());
                         if !LFD.is_null() {

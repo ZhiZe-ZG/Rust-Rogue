@@ -60,9 +60,4 @@ extern "C" {
     pub fn fread(ptr: *mut u8, size: usize, n: usize, stream: *mut CFile) -> usize;
     pub fn fwrite(ptr: *const u8, size: usize, nmemb: usize, stream: *mut CFile) -> usize;
     pub fn access(path: *const c_char, mode: c_int) -> c_int;
-
-    // ── Process stdout formatting (startup banner) ───────────────────────
-    pub fn printf(fmt: *const c_char, ...) -> c_int;
-    pub fn fprintf(stream: *mut CFile, fmt: *const c_char, ...) -> c_int;
-    pub fn fgets(buf: *mut c_char, n: c_int, stream: *mut CFile) -> *mut c_char;
 }

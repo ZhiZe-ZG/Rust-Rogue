@@ -9,7 +9,7 @@ use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
 use crate::entity::chase::roomin;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster};
-use crate::ffi::{exit, fflush, printf, putchar, setbuf, signal, time, CFile};
+use crate::ffi::{exit, fflush, putchar, setbuf, signal, time, CFile};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
@@ -311,8 +311,8 @@ pub unsafe extern "C" fn shell() {
      */
     md_shellescape();
 
-    printf(c"\n[Press return to continue]".as_ptr());
-    fflush(c_stdout());
+    print!("\n[Press return to continue]");
+    let _ = std::io::stdout().flush();
     input::set_echo(false);
     input::set_raw_mode(true);
     input::set_keypad(Window::Stdscr, true);
