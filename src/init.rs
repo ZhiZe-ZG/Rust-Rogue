@@ -100,7 +100,6 @@ pub static stones: [CStone; NSTONES] = [
 pub static mut cNSTONES: c_int = NSTONES as c_int;
 
 /// Wand / staff wood materials.  Exported as `char *wood[]` for C.
-#[no_mangle]
 pub static wood: [&'static str; NWOOD] = [
     "avocado wood",
     "balsa",
@@ -138,11 +137,9 @@ pub static wood: [&'static str; NWOOD] = [
 ];
 
 /// Count of entries in `wood`.  Exported as `int cNWOOD` for C.
-#[no_mangle]
 pub static mut cNWOOD: c_int = NWOOD as c_int;
 
 /// Wand metal materials.  Exported as `char *metal[]` for C.
-#[no_mangle]
 pub static metal: [&'static str; NMETAL] = [
     "aluminum",
     "beryllium",
@@ -169,7 +166,6 @@ pub static metal: [&'static str; NMETAL] = [
 ];
 
 /// Count of entries in `metal`.  Exported as `int cNMETAL` for C.
-#[no_mangle]
 pub static mut cNMETAL: c_int = NMETAL as c_int;
 
 // ─── Private static data ─────────────────────────────────────────────────────
@@ -196,11 +192,8 @@ static mut USED: [c_uchar; 33] = [0; 33];
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
-unsafe extern "C" {
-    static mut max_stats: Stats;
-    static mut food_left: c_int;
-    static mut a_class: [c_int; 26];
-}
+use crate::globals::{a_class, food_left, max_stats};
+
 
 // ─── Private helpers ─────────────────────────────────────────────────────────
 
@@ -217,8 +210,7 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 // ─── Exported functions ───────────────────────────────────────────────────────
 
 /// Roll up the starting player: give food, armor, weapons, and arrows.
-#[no_mangle]
-pub unsafe extern "C" fn init_player() {
+pub unsafe fn init_player() {
     crate::game::PLAYER.set_stats(max_stats);
     food_left = HUNGERTIME;
 
@@ -263,8 +255,7 @@ pub unsafe extern "C" fn init_player() {
 }
 
 /// Assign a random colour from [`crate::colors::POTION_COLORS`] to each potion.
-#[no_mangle]
-pub unsafe extern "C" fn init_colors() {
+pub unsafe fn init_colors() {
     for i in 0..crate::colors::POTION_COLOR_COUNT {
         USED[i] = 0;
     }
@@ -285,8 +276,7 @@ pub unsafe extern "C" fn init_colors() {
 /// Builds each name as an owned Rust [`String`] and stores it in
 /// [`crate::globals::SCROLL_NAMES`], preserving the syllable, word-count, and
 /// `MAXNAME` length limits of the original C routine.
-#[no_mangle]
-pub unsafe extern "C" fn init_names() {
+pub unsafe fn init_names() {
     crate::globals::set_scroll_names(MAXSCROLLS, |_| {
         let mut name = String::new();
         let mut nwords = rnd(3) + 2;
@@ -310,8 +300,7 @@ pub unsafe extern "C" fn init_names() {
 }
 
 /// Assign a random stone setting to each ring type.
-#[no_mangle]
-pub unsafe extern "C" fn init_stones() {
+pub unsafe fn init_stones() {
     for i in 0..NSTONES {
         USED[i] = 0;
     }
@@ -329,8 +318,7 @@ pub unsafe extern "C" fn init_stones() {
 }
 
 /// Assign random wood / metal materials to wands and staves.
-#[no_mangle]
-pub unsafe extern "C" fn init_materials() {
+pub unsafe fn init_materials() {
     for i in 0..NWOOD {
         USED[i] = 0;
     }
@@ -361,8 +349,7 @@ pub unsafe extern "C" fn init_materials() {
 /// Accumulate cumulative probabilities for one item-info table.
 ///
 /// Mirrors the C `sumprobs(struct obj_info *info, int bound)`.
-#[no_mangle]
-pub unsafe extern "C" fn sumprobs(info: *mut CObjInfo, bound: c_int) {
+pub unsafe fn sumprobs(info: *mut CObjInfo, bound: c_int) {
     let endp = info.add(bound as usize);
     let mut p = info.add(1);
     while p < endp {
@@ -372,8 +359,7 @@ pub unsafe extern "C" fn sumprobs(info: *mut CObjInfo, bound: c_int) {
 }
 
 /// Initialize cumulative probabilities for all item types.
-#[no_mangle]
-pub unsafe extern "C" fn init_probs() {
+pub unsafe fn init_probs() {
     sumprobs(std::ptr::addr_of_mut!(things).cast(), NUMTHINGS as c_int);
     sumprobs(std::ptr::addr_of_mut!(pot_info).cast(), MAXPOTIONS as c_int);
     sumprobs(std::ptr::addr_of_mut!(scr_info).cast(), MAXSCROLLS as c_int);

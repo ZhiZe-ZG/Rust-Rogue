@@ -86,10 +86,8 @@ const USES: [c_int; RingType::COUNT] = [
     1,  // SustainArmor
 ];
 
-unsafe extern "C" {
-    static mut terse: c_uchar;
-    static mut mpos: c_int;
-}
+use crate::globals::{mpos, terse};
+
 
 #[inline]
 unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
@@ -97,9 +95,8 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 }
 
 /// Prompts for a ring and equips it on an available hand, applying immediate ring effects.
-#[no_mangle]
-pub unsafe extern "C" fn ring_on() {
-    let obj = get_item(c"put on".as_ptr(), RING_TYPE);
+pub unsafe fn ring_on() {
+    let obj = get_item("put on", RING_TYPE);
     if obj.is_null() {
         return;
     }
@@ -159,8 +156,7 @@ pub unsafe extern "C" fn ring_on() {
 }
 
 /// Removes a worn ring from the chosen hand after passing drop constraints.
-#[no_mangle]
-pub unsafe extern "C" fn ring_off() {
+pub unsafe fn ring_off() {
     let left_hand = if PLAYER.left_ring().is_null() && PLAYER.right_ring().is_null() {
         if terse != 0 {
             msg_str("no rings");
@@ -201,8 +197,7 @@ pub unsafe extern "C" fn ring_off() {
 }
 
 /// Asks which hand the player means and returns LEFT, RIGHT, or -1 on escape.
-#[no_mangle]
-pub unsafe extern "C" fn gethand() -> c_int {
+pub unsafe fn gethand() -> c_int {
     loop {
         if terse != 0 {
             msg_str("left or right ring? ");
@@ -232,8 +227,7 @@ pub unsafe extern "C" fn gethand() -> c_int {
 }
 
 /// Computes per-turn food impact for the ring on the given hand.
-#[no_mangle]
-pub unsafe extern "C" fn ring_eat(hand: c_int) -> c_int {
+pub unsafe fn ring_eat(hand: c_int) -> c_int {
     let hand_idx = hand as usize;
     if hand_idx > RIGHT {
         return 0;

@@ -57,8 +57,7 @@ unsafe fn lockfile_mtime(path: &str) -> Option<i64> {
 ///
 /// The MAXLOAD / MAXUSERS features are not enabled in the standard
 /// build (config.h leaves both undefined), so this is a no-op.
-#[no_mangle]
-pub unsafe extern "C" fn init_check() {
+pub unsafe fn init_check() {
     let _ = (crate::globals::whoami(), crate::globals::fruit());
 }
 
@@ -66,8 +65,7 @@ pub unsafe extern "C" fn init_check() {
 /// Open up the score file for future use.
 ///
 /// Uses globals: scoreboard.
-#[no_mangle]
-pub unsafe extern "C" fn open_score() {
+pub unsafe fn open_score() {
     if !SCOREFILE_ENABLED {
         scoreboard = None;
         return;
@@ -110,8 +108,7 @@ pub unsafe extern "C" fn open_score() {
 
 /// setup:
 /// Get starting setup for all games.
-#[no_mangle]
-pub unsafe extern "C" fn setup() {
+pub unsafe fn setup() {
     if DUMP {
         // md_onsignal_autosave();
     } else {
@@ -132,9 +129,8 @@ pub unsafe extern "C" fn setup() {
 /// Get the local tty chars for later use.
 ///
 /// Uses globals: got_ltc, orig_dsusp.
-#[no_mangle]
-pub unsafe extern "C" fn getltchars() {
-    got_ltc = true;
+pub unsafe fn getltchars() {
+    got_ltc = 1;
     orig_dsusp = md_dsuspchar();
     md_setdsuspchar(md_suspchar());
 }
@@ -143,9 +139,8 @@ pub unsafe extern "C" fn getltchars() {
 /// Reset the local tty chars to original values.
 ///
 /// Uses globals: got_ltc, orig_dsusp.
-#[no_mangle]
-pub unsafe extern "C" fn resetltchars() {
-    if got_ltc {
+pub unsafe fn resetltchars() {
+    if got_ltc != 0 {
         md_setdsuspchar(orig_dsusp);
     }
 }
@@ -154,9 +149,8 @@ pub unsafe extern "C" fn resetltchars() {
 /// Set local tty chars to the values we use when playing.
 ///
 /// Uses globals: got_ltc.
-#[no_mangle]
-pub unsafe extern "C" fn playltchars() {
-    if got_ltc {
+pub unsafe fn playltchars() {
+    if got_ltc != 0 {
         md_setdsuspchar(md_suspchar());
     }
 }
@@ -166,8 +160,7 @@ pub unsafe extern "C" fn playltchars() {
 ///
 /// The CHECKTIME feature is not enabled in the standard build, so
 /// md_stop_checkout_timer() is never needed.
-#[no_mangle]
-pub unsafe extern "C" fn start_score() {
+pub unsafe fn start_score() {
     // CHECKTIME is not defined in the standard build.
 }
 
@@ -194,8 +187,7 @@ unsafe fn is_symlink(path: &str) -> c_uchar {
 /// care to wait.  Return true as c_uchar if the lock is successful.
 ///
 /// Uses globals: lfd (static), prbuf.
-#[no_mangle]
-pub unsafe extern "C" fn lock_sc() -> c_int {
+pub unsafe fn lock_sc() -> c_int {
     if !SCOREFILE_ENABLED || !LOCKFILE_ENABLED {
         return true as c_uchar as c_int;
     }
@@ -264,8 +256,7 @@ pub unsafe extern "C" fn lock_sc() -> c_int {
 /// Unlock the score file.
 ///
 /// Uses globals: lfd (static).
-#[no_mangle]
-pub unsafe extern "C" fn unlock_sc() {
+pub unsafe fn unlock_sc() {
     if !SCOREFILE_ENABLED || !LOCKFILE_ENABLED {
         return;
     }
@@ -275,7 +266,6 @@ pub unsafe extern "C" fn unlock_sc() {
 
 /// flush_type:
 /// Flush typeahead for traps, etc.
-#[no_mangle]
-pub unsafe extern "C" fn flush_type() {
+pub unsafe fn flush_type() {
     input::flush_pending();
 }

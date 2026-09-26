@@ -33,26 +33,8 @@ const CALLABLE: c_int = -1;
 const R_OR_S: c_int = -2;
 const ESCAPE: c_int = 27;
 
-unsafe extern "C" {
-    static mut after: c_uchar;
-    static mut again: c_uchar;
-    static mut amulet: c_uchar;
-    static mut inpack: c_int;
-    static mut last_comm: c_char;
-    static mut l_last_comm: c_char;
-    static mut last_dir: c_char;
-    static mut l_last_dir: c_char;
-    static mut last_pick: *mut Thing;
-    static mut l_last_pick: *mut Thing;
-    static mut move_on: c_uchar;
-    static mut msg_esc: bool;
-    static mut mpos: c_int;
-    static mut n_objs: c_int;
-    static mut pack_used: [c_uchar; 26];
-    static mut purse: c_int;
-    static mut terse: c_uchar;
+use crate::globals::{after, again, amulet, inpack, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, move_on, mpos, msg_esc, n_objs, pack_used, purse, terse};
 
-}
 
 unsafe fn thing_t(tp: *mut Thing) -> *mut crate::entity::player::ThingMonster {
     crate::entity::player::thing_t(tp)
@@ -112,8 +94,7 @@ unsafe fn floor_char_for_room() -> c_char {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn add_pack(obj: *mut Thing, silent: c_uchar) {
+pub unsafe fn add_pack(obj: *mut Thing, silent: c_uchar) {
     let mut item = obj;
     let mut from_floor = false as c_uchar;
     let mut op: *mut Thing;
@@ -256,8 +237,7 @@ pub unsafe extern "C" fn add_pack(obj: *mut Thing, silent: c_uchar) {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut Thing) -> c_uchar {
+pub unsafe fn pack_room(from_floor: c_uchar, obj: *mut Thing) -> c_uchar {
     if inpack + 1 > MAXPACK {
         if terse == 0 {
             addmsg_str("there's ");
@@ -288,8 +268,7 @@ pub unsafe extern "C" fn pack_room(from_floor: c_uchar, obj: *mut Thing) -> c_uc
     true as c_uchar
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn leave_pack(obj: *mut Thing, newobj: c_uchar, all: c_uchar) -> *mut Thing {
+pub unsafe fn leave_pack(obj: *mut Thing, newobj: c_uchar, all: c_uchar) -> *mut Thing {
     let mut nobj = obj;
 
     inpack -= 1;
@@ -314,8 +293,7 @@ pub unsafe extern "C" fn leave_pack(obj: *mut Thing, newobj: c_uchar, all: c_uch
     nobj
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn pack_char() -> c_char {
+pub unsafe fn pack_char() -> c_char {
     // `pack_used` is a 26-entry array (one slot per letter); index it directly so
     // no shared reference to the mutable static is created.
     for i in 0..26 {
@@ -327,8 +305,7 @@ pub unsafe extern "C" fn pack_char() -> c_char {
     b'a' as c_char
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn inventory(list: *mut Thing, type_: c_int) -> c_uchar {
+pub unsafe fn inventory(list: *mut Thing, type_: c_int) -> c_uchar {
     let mut cur = list;
     n_objs = 0;
 
@@ -346,14 +323,14 @@ pub unsafe extern "C" fn inventory(list: *mut Thing, type_: c_int) -> c_uchar {
         }
 
         n_objs += 1;
-        msg_esc = true;
+        msg_esc = 1;
         let format = if (*thing_o(cur)).o_packch == 0 {
             "%s".to_string()
         } else {
             format!("{}) %s", (*thing_o(cur)).o_packch as char)
         };
         let _ = add_line(&format, &inv_name(cur, false as c_uchar));
-        msg_esc = false;
+        msg_esc = 0;
         cur = next_item(cur);
     }
 
@@ -377,8 +354,7 @@ pub unsafe extern "C" fn inventory(list: *mut Thing, type_: c_int) -> c_uchar {
     true as c_uchar
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn pick_up(ch: c_char) {
+pub unsafe fn pick_up(ch: c_char) {
     let obj = find_obj(hero_coord().y, hero_coord().x);
     if player_has(MonsterFlags::LEVIT) {
         return;
@@ -408,8 +384,7 @@ pub unsafe extern "C" fn pick_up(ch: c_char) {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut Thing {
+pub unsafe fn get_item(purpose: &str, type_: c_int) -> *mut Thing {
     let mut ch: c_int;
 
     if pack_head().is_null() {
@@ -429,7 +404,7 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
         if terse == 0 {
             addmsg_str("which object do you want to ");
         }
-        addmsg_str(&CStr::from_ptr(purpose).to_string_lossy());
+        addmsg_str(purpose);
         if terse != 0 {
             addmsg_str(" what");
         }
@@ -465,8 +440,7 @@ pub unsafe extern "C" fn get_item(purpose: *const c_char, type_: c_int) -> *mut 
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn money(value: c_int) {
+pub unsafe fn money(value: c_int) {
     purse += value;
     // The gold object was discarded, so the terrain glyph shows via draw.
     output::write_glyph_at(
@@ -481,13 +455,11 @@ pub unsafe extern "C" fn money(value: c_int) {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn floor_ch() -> c_char {
+pub unsafe fn floor_ch() -> c_char {
     floor_char_for_room()
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn floor_at() -> c_char {
+pub unsafe fn floor_at() -> c_char {
     let ch = crate::draw::cell_glyph(hero_coord().y, hero_coord().x);
     if ch == FLOOR {
         floor_char_for_room()
@@ -496,23 +468,20 @@ pub unsafe extern "C" fn floor_at() -> c_char {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn reset_last() {
+pub unsafe fn reset_last() {
     last_comm = l_last_comm;
     last_dir = l_last_dir;
     last_pick = l_last_pick;
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn move_msg(obj: *mut Thing) {
+pub unsafe fn move_msg(obj: *mut Thing) {
     if terse == 0 {
         addmsg_str("you ");
     }
     msg_str(&format!("moved onto {}", inv_name(obj, true as c_uchar)));
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn picky_inven() {
+pub unsafe fn picky_inven() {
     if pack_head().is_null() {
         msg_str("you aren't carrying anything");
     } else if next_item(pack_head()).is_null() {

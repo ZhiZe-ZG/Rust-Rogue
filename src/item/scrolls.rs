@@ -100,11 +100,8 @@ impl ScrollType {
     }
 }
 
-unsafe extern "C" {
-    static mut terse: c_uchar;
-    static mut no_command: c_int;
+use crate::globals::{no_command, terse};
 
-}
 
 #[inline]
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
@@ -146,9 +143,8 @@ fn player_has(flag: MonsterFlags) -> bool {
 
 /// read_scroll:
 /// Read a scroll from the pack and apply its effect.
-#[no_mangle]
-pub unsafe extern "C" fn read_scroll() {
-    let mut obj = get_item(c"read".as_ptr(), SCROLL);
+pub unsafe fn read_scroll() {
+    let mut obj = get_item("read", SCROLL);
     if obj.is_null() {
         return;
     }
@@ -388,8 +384,7 @@ pub unsafe extern "C" fn read_scroll() {
 
 /// uncurse:
 /// Uncurse an item.
-#[no_mangle]
-pub unsafe extern "C" fn uncurse(obj: *mut Thing) {
+pub unsafe fn uncurse(obj: *mut Thing) {
     if !obj.is_null() {
         (*thing_o(obj)).o_flags.remove(ObjectFlags::CURSED);
     }

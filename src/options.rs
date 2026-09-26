@@ -41,17 +41,8 @@ pub struct OPTION {
     o_getfunc: unsafe fn(&OPTION, Window) -> c_int,
 }
 
-unsafe extern "C" {
-    static mut after: c_uchar;
-    static mut fight_flush: c_uchar;
-    static mut inv_type: c_int;
-    static mut jump: c_uchar;
-    static mut mpos: c_int;
-    static mut passgo: c_uchar;
-    static mut see_floor: c_uchar;
-    static mut terse: c_uchar;
-    static mut tombstone: c_uchar;
-}
+use crate::globals::{after, fight_flush, inv_type, jump, mpos, passgo, see_floor, terse, tombstone};
+
 
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
@@ -177,8 +168,7 @@ unsafe fn pr_optname_slot(op: &OPTION) {
     paint(Window::Stdscr, &out);
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn option() {
+pub unsafe fn option() {
     let mut optlist = option_list();
     let mut retval: c_int;
 
@@ -405,7 +395,6 @@ unsafe fn get_inv_t(op: &OPTION, win: Window) -> c_int {
 
 /// Parse a `ROGUEOPTS`-style string, applying each recognised option. The
 /// string is processed as Rust `&str`; no C string calls are used.
-#[no_mangle]
 pub unsafe fn parse_opts(s: &str) {
     let bytes = s.as_bytes();
     let mut i = 0usize;

@@ -38,11 +38,8 @@ const STICK: c_int = b'/' as c_int;
 const GOLD: c_int = b'*' as c_int;
 const AMULET: c_int = b',' as c_int;
 
-unsafe extern "C" {
-    static mut a_class: [c_int; 26];
-    static mut inv_describe: c_uchar;
-    static mut no_food: c_int;
-}
+use crate::globals::{a_class, inv_describe, no_food};
+
 
 #[inline]
 unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
@@ -112,7 +109,6 @@ unsafe fn pick_one(info: *mut CObjInfo, nitems: c_int) -> c_int {
     0
 }
 
-#[no_mangle]
 pub unsafe fn inv_name(obj: *mut Thing, drop: c_uchar) -> String {
     if obj.is_null() {
         return String::new();
@@ -205,8 +201,7 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: c_uchar) -> String {
     copy_to_prbuf(&name)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn dropcheck(obj: *mut Thing) -> c_uchar {
+pub unsafe fn dropcheck(obj: *mut Thing) -> c_uchar {
     if obj.is_null() {
         return true as c_uchar;
     }
@@ -240,18 +235,17 @@ pub unsafe extern "C" fn dropcheck(obj: *mut Thing) -> c_uchar {
     true as c_uchar
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn new_thing() -> *mut Thing {
+pub unsafe fn new_thing() -> *mut Thing {
     let cur = new_item();
     (*thing_o(cur)).o_hplus = 0;
     (*thing_o(cur)).o_dplus = 0;
     std::ptr::copy_nonoverlapping(
-        c"0x0".as_ptr().cast::<u8>(),
+        b"0x0\0".as_ptr(),
         (*thing_o(cur)).o_damage.as_mut_ptr(),
         4,
     );
     std::ptr::copy_nonoverlapping(
-        c"0x0".as_ptr().cast::<u8>(),
+        b"0x0\0".as_ptr(),
         (*thing_o(cur)).o_hurldmg.as_mut_ptr(),
         4,
     );
@@ -364,9 +358,8 @@ pub unsafe extern "C" fn new_thing() -> *mut Thing {
     cur
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn drop() {
-    let obj = get_item(c"drop".as_ptr(), 0);
+pub unsafe fn drop() {
+    let obj = get_item("drop", 0);
     if obj.is_null() {
         return;
     }
@@ -381,8 +374,7 @@ pub unsafe extern "C" fn drop() {
     let _ = leave_pack(obj, true as c_uchar, all);
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn discovered() {}
+pub unsafe fn discovered() {}
 
 unsafe fn print_disc(_type: c_char) {}
 
@@ -403,19 +395,18 @@ unsafe fn nothing(_type: c_char) -> String {
     copy_to_prbuf("Nothing found")
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn nameit(
+pub unsafe fn nameit(
     obj: *mut Thing,
-    typ: *mut c_char,
-    which: *mut c_char,
+    typ: &str,
+    which: &str,
     op: *mut CObjInfo,
-    prfunc: unsafe extern "C" fn(*mut Thing) -> *mut c_char,
+    prfunc: unsafe fn(*mut Thing) -> *mut c_char,
 ) {
     if op.is_null() || obj.is_null() {
         return;
     }
-    let typ = CStr::from_ptr(typ).to_string_lossy();
-    let which = CStr::from_ptr(which).to_string_lossy();
+    let typ = typ;
+    let which = which;
     let pr_text = CStr::from_ptr(prfunc(obj)).to_string_lossy();
     let count = (*thing_o(obj)).o_count;
 
@@ -442,7 +433,7 @@ pub unsafe extern "C" fn nameit(
 }
 
 unsafe fn nullstr(_: *mut Thing) -> *mut c_char {
-    c"".as_ptr() as *mut c_char
+    b"\0".as_ptr() as *mut c_char
 }
 
 unsafe fn pick_one_ex(info: *mut CObjInfo, nitems: c_int) -> c_int {

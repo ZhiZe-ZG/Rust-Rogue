@@ -620,25 +620,8 @@ pub fn discard(item: *mut Thing) {
     let _ = crate::item::arena::OBJECTS.discard(item);
 }
 
-unsafe extern "C" {
-    static mut after: c_uchar;
-    static mut count: c_int;
-    static mut door_stop: c_uchar;
-    static mut firstmove: c_uchar;
-    static mut jump: c_uchar;
-    static mut move_on: c_uchar;
-    static mut no_command: c_int;
-    static mut no_move: c_int;
-    static mut passgo: c_uchar;
-    static mut running: c_uchar;
-    static mut seenstairs: c_uchar;
-    static mut take: c_char;
-    static mut to_death: c_uchar;
-    static mut oldpos: IVec2;
-    static mut delta: IVec2;
-    static mut runch: c_char;
+use crate::globals::{after, count, delta, door_stop, firstmove, jump, move_on, no_command, no_move, oldpos, passgo, runch, running, seenstairs, take, to_death};
 
-}
 
 /// Borrow the actor payload of `tp` (null when `tp` is an object).
 #[inline]
@@ -689,8 +672,7 @@ unsafe fn is_upper(ch: c_char) -> bool {
 
 /// turn_ok:
 /// Decide whether it is legal to turn onto the given space.
-#[no_mangle]
-pub unsafe extern "C" fn turn_ok(y: c_int, x: c_int) -> c_uchar {
+pub unsafe fn turn_ok(y: c_int, x: c_int) -> c_uchar {
     let flags = flat_at(y, x) as u8;
     if crate::game::is_door_at(y, x)
         || (flags & (F_REAL as u8 | F_PASS as u8)) == (F_REAL as u8 | F_PASS as u8)
@@ -870,8 +852,7 @@ pub static mut nh: IVec2 = IVec2 { x: 0, y: 0 };
 
 /// do_run:
 /// Start the hero running in the chosen direction.
-#[no_mangle]
-pub unsafe extern "C" fn do_run(ch: c_char) {
+pub unsafe fn do_run(ch: c_char) {
     running = true as c_uchar;
     after = false as c_uchar;
     runch = ch;
@@ -879,8 +860,7 @@ pub unsafe extern "C" fn do_run(ch: c_char) {
 
 /// do_move:
 /// Check to see that a move is legal. If it is, handle the consequences.
-#[no_mangle]
-pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
+pub unsafe fn do_move(dy: c_int, dx: c_int) {
     let mut next_pos = IVec2 { x: 0, y: 0 };
     let mut current_dy = dy;
     let mut current_dx = dx;

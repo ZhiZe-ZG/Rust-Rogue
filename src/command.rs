@@ -129,54 +129,12 @@ static mut NEWCOUNT: c_uchar = false as c_uchar;
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
-unsafe extern "C" {
-    static mut after: c_uchar;
-    static mut again: c_uchar;
-    static mut amulet: c_uchar;
-    static mut count: c_int;
-    static mut delta: IVec2;
-    static mut dir_ch: c_char;
-    static mut dnum: c_int;
-    static mut door_stop: c_uchar;
-    static mut firstmove: c_uchar;
-    static mut food_left: c_int;
-    static mut has_hit: c_uchar;
-    static mut inpack: c_int;
-    static mut inv_describe: c_uchar;
-    static mut jump: c_uchar;
-    static mut kamikaze: c_uchar;
-    static mut l_last_comm: c_char;
-    static mut l_last_dir: c_char;
-    static mut l_last_pick: *mut Thing;
-    static mut last_comm: c_char;
-    static mut last_dir: c_char;
-    static mut last_pick: *mut Thing;
-    static mut lastscore: c_int;
-    static mut max_hit: c_int;
-    static mut move_on: c_uchar;
-    static mut mpos: c_int;
-    static mut no_command: c_int;
-    static mut noscore: c_int;
-    static mut prbuf: [c_char; 2 * MAXSTR];
-    static mut purse: c_int;
-    static mut q_comm: c_uchar;
-    static mut runch: c_char;
-    static mut running: c_uchar;
-    static mut save_msg: c_uchar;
-    static mut seenstairs: c_uchar;
-    static mut stat_msg: c_uchar;
-    static mut take: c_char;
-    static mut terse: c_uchar;
-    static mut to_death: c_uchar;
-    static mut r_stones: [*mut c_char; 14];
-    static mut p_colors: [*mut c_char; 14];
-    static mut ws_made: [*mut c_char; 14];
-    static mut wizard: c_int;
-}
+use crate::globals::{after, again, amulet, count, delta, dir_ch, dnum, door_stop, firstmove, food_left, has_hit, inpack, inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm, r_stones, runch, running, save_msg, seenstairs, stat_msg, take, terse, to_death, wizard, ws_made};
+
 
 // ─── Extern C functions called from this module ───────────────────────────────
 
-unsafe extern "C" {}
+
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
 
@@ -210,14 +168,10 @@ unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
-/// Copy a (possibly null) C string into an owned [`String`].
+/// Copy a string slice into an owned [`String`].
 #[inline]
-unsafe fn cstr_at(ptr: *mut c_char) -> String {
-    if ptr.is_null() {
-        String::new()
-    } else {
-        CStr::from_ptr(ptr).to_string_lossy().into_owned()
-    }
+fn cstr_at(s: &str) -> String {
+    s.to_owned()
 }
 
 // ─── command() ────────────────────────────────────────────────────────────────
@@ -232,8 +186,7 @@ unsafe fn cstr_at(ptr: *mut c_char) -> String {
 /// terse, mlist (via moat), max_hit, mp/t_flags (via to_death),
 /// dir_ch, delta, q_comm, huh, release, amulet, level, seenstairs,
 /// tr_name, stat_msg, inpack, food_left, equipment, inv_describe.
-#[no_mangle]
-pub unsafe extern "C" fn command() {
+pub unsafe fn command() {
     let mut ch: u8;
     let mut ntimes: c_int = 1; // Number of player moves
     let mut mp: *mut Thing;
@@ -663,28 +616,28 @@ pub unsafe extern "C" fn command() {
                         }
                     }
                     b')' => {
-                        current(PLAYER.weapon(), c"wielding".as_ptr(), std::ptr::null_mut());
+                        current(PLAYER.weapon(), "wielding", "");
                     }
                     b']' => {
-                        current(PLAYER.armor(), c"wearing".as_ptr(), std::ptr::null_mut());
+                        current(PLAYER.armor(), "wearing", "");
                     }
                     b'=' => {
                         current(
                             PLAYER.left_ring(),
-                            c"wearing".as_ptr(),
+                            "wearing",
                             if terse != 0 {
-                                c"(L)".as_ptr()
+                                "(L)"
                             } else {
-                                c"on left hand".as_ptr()
+                                "on left hand"
                             },
                         );
                         current(
                             PLAYER.right_ring(),
-                            c"wearing".as_ptr(),
+                            "wearing",
                             if terse != 0 {
-                                c"(R)".as_ptr()
+                                "(R)"
                             } else {
-                                c"on right hand".as_ptr()
+                                "on right hand"
                             },
                         );
                     }
@@ -745,7 +698,7 @@ pub unsafe extern "C" fn command() {
                                     });
                                 }
                                 CTRL_TILDE => {
-                                    let item = get_item(c"charge".as_ptr(), STICK as c_int);
+                                    let item = get_item("charge", STICK as c_int);
                                     if !item.is_null() {
                                         (*thing_o(item)).o_arm = 10000;
                                     }
@@ -824,8 +777,7 @@ pub unsafe extern "C" fn command() {
 /// What to do with an illegal command.
 ///
 /// Uses globals: save_msg, count.
-#[no_mangle]
-pub unsafe extern "C" fn illcom(ch: c_int) {
+pub unsafe fn illcom(ch: c_int) {
     save_msg = false as c_uchar;
     count = 0;
     msg_str(&format!(
@@ -842,8 +794,7 @@ pub unsafe extern "C" fn illcom(ch: c_int) {
 ///
 /// Uses globals: hero, player, places (via chat/flat), count, running,
 /// terse, tr_name.
-#[no_mangle]
-pub unsafe extern "C" fn search() {
+pub unsafe fn search() {
     let hero = hero_pos();
     let ey = hero.y + 1;
     let ex = hero.x + 1;
@@ -928,8 +879,7 @@ pub unsafe extern "C" fn search() {
 /// He wants to go down a level.
 ///
 /// Uses globals: hero, places (via chat), level, seenstairs.
-#[no_mangle]
-pub unsafe extern "C" fn d_level() {
+pub unsafe fn d_level() {
     if levit_check() != 0 {
         return;
     }
@@ -947,8 +897,7 @@ pub unsafe extern "C" fn d_level() {
 /// He wants to go up a level.
 ///
 /// Uses globals: hero, places (via chat), amulet, level.
-#[no_mangle]
-pub unsafe extern "C" fn u_level() {
+pub unsafe fn u_level() {
     if levit_check() != 0 {
         return;
     }
@@ -974,8 +923,7 @@ pub unsafe extern "C" fn u_level() {
 /// appropriate message.
 ///
 /// Uses globals: player.
-#[no_mangle]
-pub unsafe extern "C" fn levit_check() -> c_uchar {
+pub unsafe fn levit_check() -> c_uchar {
     if !player_has(MonsterFlags::LEVIT) {
         return false as c_uchar;
     }
@@ -990,9 +938,8 @@ pub unsafe extern "C" fn levit_check() -> c_uchar {
 ///
 /// Uses globals: ring_info, r_stones, pot_info, p_colors, scr_info,
 /// s_names, ws_info, ws_made, terse, prbuf.
-#[no_mangle]
-pub unsafe extern "C" fn call() {
-    let obj = get_item(c"call".as_ptr(), CALLABLE);
+pub unsafe fn call() {
+    let obj = get_item("call", CALLABLE);
 
     // Make certain that it's something that we want to wear
     if obj.is_null() {
@@ -1086,14 +1033,13 @@ pub unsafe extern "C" fn call() {
 /// Print the current weapon/armor.
 ///
 /// Uses globals: after, terse, inv_describe.
-#[no_mangle]
-pub unsafe extern "C" fn current(cur: *mut Thing, how: *const c_char, where_: *const c_char) {
+pub unsafe fn current(cur: *mut Thing, how: &str, where_: &str) {
     after = false as c_uchar;
     if !cur.is_null() {
         if terse == 0 {
             addmsg_str(&format!(
                 "you are {} (",
-                CStr::from_ptr(how).to_string_lossy()
+                how
             ));
         }
         inv_describe = false as c_uchar;
@@ -1103,8 +1049,8 @@ pub unsafe extern "C" fn current(cur: *mut Thing, how: *const c_char, where_: *c
             inv_name(cur, true as c_uchar)
         ));
         inv_describe = true as c_uchar;
-        if !where_.is_null() {
-            addmsg_str(&format!(" {}", CStr::from_ptr(where_).to_string_lossy()));
+        if !where_.is_empty() {
+            addmsg_str(&format!(" {}", where_));
         }
         endmsg();
     } else {
@@ -1113,10 +1059,10 @@ pub unsafe extern "C" fn current(cur: *mut Thing, how: *const c_char, where_: *c
         }
         addmsg_str(&format!(
             "{} nothing",
-            CStr::from_ptr(how).to_string_lossy()
+            how
         ));
-        if !where_.is_null() {
-            addmsg_str(&format!(" {}", CStr::from_ptr(where_).to_string_lossy()));
+        if !where_.is_empty() {
+            addmsg_str(&format!(" {}", where_));
         }
         endmsg();
     }
@@ -1128,8 +1074,7 @@ pub unsafe extern "C" fn current(cur: *mut Thing, how: *const c_char, where_: *c
 /// Wizard command to list the objects on the current level.
 ///
 /// Uses globals: lvl_obj, mlist.
-#[no_mangle]
-pub unsafe extern "C" fn pr_list() {
+pub unsafe fn pr_list() {
     let mut obj = crate::game::with_current_level(|level| level.items.head());
     while !obj.is_null() {
         msg_str(&format!(

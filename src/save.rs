@@ -21,18 +21,14 @@ use std::io::{Read, Write};
 use std::os::raw::{c_int, c_uchar};
 use std::path::Path;
 
-use crate::ffi::exit;
 
 const ESCAPE: c_int = 27;
 
 // The version banner written as the header of saved games (was `char version[]`).
 const VERSION: &[u8] = b"rogue (rogueforge) 09/05/07\0";
 
-unsafe extern "C" {
-    static mut mpos: c_int;
-    static mut wizard: c_int;
-    static mut master_mode_enabled: c_uchar;
-}
+use crate::globals::{master_mode_enabled, mpos, wizard};
+
 
 /// Checks the restored player state and reports whether the saved game is already dead.
 unsafe fn restore_player_dead() -> bool {
@@ -142,7 +138,7 @@ pub unsafe fn save_file(savef: &mut File) {
 
     rs_save_file(savef);
     let _ = savef.flush();
-    exit(0)
+    std::process::exit(0);
 }
 
 /// Restores a saved game from disk, rebuilds runtime state, and resumes the main game loop.
@@ -251,7 +247,6 @@ pub unsafe fn restore(file: *mut std::os::raw::c_char) -> c_uchar {
 }
 
 /// Handles signal-triggered autosave by reopening the current save file and delegating to save_file.
-#[no_mangle]
 pub unsafe extern "C" fn auto_save(sig: c_int) {
     let _ = sig;
 
@@ -269,5 +264,5 @@ pub unsafe extern "C" fn auto_save(sig: c_int) {
             }
         }
     }
-    exit(0)
+    std::process::exit(0);
 }

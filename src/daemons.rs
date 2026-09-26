@@ -43,20 +43,8 @@ const STARVETIME: c_int = 850;
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
-unsafe extern "C" {
-    static mut quiet: c_int;
-    static mut hungry_state: c_int;
-    static mut food_left: c_int;
-    static mut no_command: c_int;
-    static mut terse: c_uchar;
-    static mut amulet: c_uchar;
-    static mut running: c_uchar;
-    static mut to_death: c_uchar;
-    static mut count: c_int;
-    static mut after: c_uchar;
-    static mut jump: c_uchar;
-    static mut seenstairs: c_uchar;
-}
+use crate::globals::{after, amulet, count, food_left, hungry_state, jump, no_command, quiet, running, seenstairs, terse, to_death};
+
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
 
@@ -87,8 +75,7 @@ pub static mut between: c_int = 0;
 
 /// doctor:
 /// A healing daemon that restores hit points after rest.
-#[no_mangle]
-pub unsafe extern "C" fn doctor() {
+pub unsafe fn doctor() {
     let lv = PLAYER.level();
     let ohp = PLAYER.stats().hit_points;
     quiet += 1;
@@ -116,15 +103,13 @@ pub unsafe extern "C" fn doctor() {
 
 /// swander:
 /// Called when it is time to start rolling for wandering monsters.
-#[no_mangle]
-pub unsafe extern "C" fn swander() {
+pub unsafe fn swander() {
     start_daemon(Daemon::Rollwand, 0, BEFORE);
 }
 
 /// rollwand:
 /// Called to roll to see if a wandering monster starts up.
-#[no_mangle]
-pub unsafe extern "C" fn rollwand() {
+pub unsafe fn rollwand() {
     between += 1;
     if between >= 4 {
         if roll(1, 6) == 4 {
@@ -138,8 +123,7 @@ pub unsafe extern "C" fn rollwand() {
 
 /// unconfuse:
 /// Release the poor player from his confusion.
-#[no_mangle]
-pub unsafe extern "C" fn unconfuse() {
+pub unsafe fn unconfuse() {
     PLAYER.remove_flag(MonsterFlags::HUH);
     msg_str(&format!(
         "you feel less {} now",
@@ -149,8 +133,7 @@ pub unsafe extern "C" fn unconfuse() {
 
 /// unsee:
 /// Turn off the ability to see invisible.
-#[no_mangle]
-pub unsafe extern "C" fn unsee() {
+pub unsafe fn unsee() {
     for id in MONSTER_LIST.ids() {
         if let Some(th) = MONSTER_LIST.handle(id) {
             if (*thing_t(th)).t_flags.contains(MonsterFlags::INVIS) && see_monst(th) != 0 {
@@ -166,8 +149,7 @@ pub unsafe extern "C" fn unsee() {
 
 /// sight:
 /// He gets his sight back.
-#[no_mangle]
-pub unsafe extern "C" fn sight() {
+pub unsafe fn sight() {
     if PLAYER.has_flag(MonsterFlags::BLIND) {
         extinguish(Daemon::Sight);
         PLAYER.remove_flag(MonsterFlags::BLIND);
@@ -185,16 +167,14 @@ pub unsafe extern "C" fn sight() {
 
 /// nohaste:
 /// End the hasting.
-#[no_mangle]
-pub unsafe extern "C" fn nohaste() {
+pub unsafe fn nohaste() {
     PLAYER.remove_flag(MonsterFlags::HASTE);
     msg_str("you feel yourself slowing down");
 }
 
 /// stomach:
 /// Digest the hero's food.
-#[no_mangle]
-pub unsafe extern "C" fn stomach() {
+pub unsafe fn stomach() {
     let orig_hungry = hungry_state;
 
     if food_left <= 0 {
@@ -250,8 +230,7 @@ pub unsafe extern "C" fn stomach() {
 
 /// come_down:
 /// Take the hero down off her acid trip.
-#[no_mangle]
-pub unsafe extern "C" fn come_down() {
+pub unsafe fn come_down() {
     if !PLAYER.has_flag(MonsterFlags::HALU) {
         return;
     }
@@ -301,8 +280,7 @@ pub unsafe extern "C" fn come_down() {
 
 /// visuals:
 /// Change the displayed characters for the hallucinating player.
-#[no_mangle]
-pub unsafe extern "C" fn visuals() {
+pub unsafe fn visuals() {
     if after == 0 || (running != 0 && jump != 0) {
         return;
     }
@@ -348,8 +326,7 @@ pub unsafe extern "C" fn visuals() {
 
 /// land:
 /// Land from a levitation potion.
-#[no_mangle]
-pub unsafe extern "C" fn land() {
+pub unsafe fn land() {
     PLAYER.remove_flag(MonsterFlags::LEVIT);
     msg_str(choose_str(
         "bummer!  You've hit the ground",

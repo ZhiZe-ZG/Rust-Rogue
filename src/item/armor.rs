@@ -12,14 +12,9 @@ use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use std::ffi::CStr;
 use std::os::raw::{c_int, c_uchar};
 
+use crate::globals::{after, terse, to_death};
+
 const ARMOR: c_int = ']' as c_int;
-
-unsafe extern "C" {
-    static mut terse: c_uchar;
-    static mut after: c_uchar;
-    static mut to_death: c_uchar;
-
-}
 
 #[inline]
 unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
@@ -32,9 +27,8 @@ unsafe fn ring_is(ring: *mut Thing, ring_type: RingType) -> bool {
 }
 
 /// Equips selected armor if valid and no armor is already worn.
-#[no_mangle]
-pub unsafe extern "C" fn wear() {
-    let obj = get_item(c"wear".as_ptr(), ARMOR);
+pub unsafe fn wear() {
+    let obj = get_item("wear", ARMOR);
     if obj.is_null() {
         return;
     }
@@ -65,8 +59,7 @@ pub unsafe extern "C" fn wear() {
 }
 
 /// Removes currently worn armor after curse/drop checks.
-#[no_mangle]
-pub unsafe extern "C" fn take_off() {
+pub unsafe fn take_off() {
     let obj = PLAYER.armor();
     if obj.is_null() {
         after = false as c_uchar;
@@ -96,8 +89,7 @@ pub unsafe extern "C" fn take_off() {
 }
 
 /// Advances daemon and fuse queues as a deliberate no-op turn.
-#[no_mangle]
-pub unsafe extern "C" fn waste_time() {
+pub unsafe fn waste_time() {
     do_daemons(spread(1));
     do_fuses(spread(1));
     do_daemons(spread(2));
@@ -106,8 +98,7 @@ pub unsafe extern "C" fn waste_time() {
 
 /// rust_armor:
 /// Rust the given armor if it is a legal kind to rust.
-#[no_mangle]
-pub unsafe extern "C" fn rust_armor(arm: *mut Thing) {
+pub unsafe fn rust_armor(arm: *mut Thing) {
     if arm.is_null()
         || (*thing_o(arm)).o_type != ARMOR
         || (*thing_o(arm)).o_which == 0

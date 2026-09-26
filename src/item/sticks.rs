@@ -69,12 +69,8 @@ impl StickType {
 
 const MAXSTICKS: usize = StickType::COUNT;
 
-unsafe extern "C" {
-    static mut terse: c_uchar;
-    static mut after: c_uchar;
-    static mut delta: IVec2;
+use crate::globals::{after, delta, terse};
 
-}
 
 #[inline]
 unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
@@ -124,8 +120,7 @@ unsafe fn stick_type(obj: *mut Thing) -> Option<StickType> {
 
 /// fix_stick:
 /// Set up a new stick with the expected damage and charge values.
-#[no_mangle]
-pub unsafe extern "C" fn fix_stick(cur: *mut Thing) {
+pub unsafe fn fix_stick(cur: *mut Thing) {
     if (*thing_o(cur)).o_type != STICK {
         return;
     }
@@ -146,9 +141,8 @@ pub unsafe extern "C" fn fix_stick(cur: *mut Thing) {
 
 /// do_zap:
 /// Perform a zap with a wand or staff and apply a simplified effect.
-#[no_mangle]
-pub unsafe extern "C" fn do_zap() {
-    let obj = get_item(c"zap with".as_ptr(), STICK);
+pub unsafe fn do_zap() {
+    let obj = get_item("zap with", STICK);
     if obj.is_null() {
         return;
     }
@@ -230,12 +224,12 @@ pub unsafe extern "C" fn do_zap() {
         }
         Some(StickType::Elect) | Some(StickType::Fire) | Some(StickType::Cold) => {
             let name = match kind {
-                Some(StickType::Elect) => c"bolt",
-                Some(StickType::Fire) => c"flame",
-                _ => c"ice",
+                Some(StickType::Elect) => "bolt",
+                Some(StickType::Fire) => "flame",
+                _ => "ice",
             };
             let mut hero = hero_pos();
-            fire_bolt(&mut hero, &raw mut delta, name.as_ptr() as *mut c_char);
+            fire_bolt(&mut hero, &raw mut delta, name);
             if let Some(kind) = kind {
                 ws_info[kind.index()].oi_know = true;
             }
@@ -251,8 +245,7 @@ pub unsafe extern "C" fn do_zap() {
 
 /// drain:
 /// Reduce the hero's hit points and apply a simple draining effect.
-#[no_mangle]
-pub unsafe extern "C" fn drain() {
+pub unsafe fn drain() {
     crate::game::PLAYER.with_stats_mut(|stats| {
         if stats.hit_points >= 2 {
             stats.hit_points /= 2;
@@ -263,8 +256,7 @@ pub unsafe extern "C" fn drain() {
 
 /// fire_bolt:
 /// Fire a bolt in a given direction from a specific starting place.
-#[no_mangle]
-pub unsafe extern "C" fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, name: *mut c_char) {
+pub unsafe fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, _name: &str) {
     let mut pos = *start;
     let mut hero = hero_pos();
     let hit_hero = start != &mut hero;

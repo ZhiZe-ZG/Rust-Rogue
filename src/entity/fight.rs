@@ -64,28 +64,26 @@ static ADD_DAM: [c_int; 32] = [
 
 // ─── Hit/miss message tables ──────────────────────────────────────────────────
 
-#[no_mangle]
-pub static mut h_names: [*const c_char; 8] = [
-    c" scored an excellent hit on ".as_ptr(),
-    c" hit ".as_ptr(),
-    c" have injured ".as_ptr(),
-    c" swing and hit ".as_ptr(),
-    c" scored an excellent hit on ".as_ptr(),
-    c" hit ".as_ptr(),
-    c" has injured ".as_ptr(),
-    c" swings and hits ".as_ptr(),
+pub static H_NAMES: [&str; 8] = [
+    " scored an excellent hit on ",
+    " hit ",
+    " have injured ",
+    " swing and hit ",
+    " scored an excellent hit on ",
+    " hit ",
+    " has injured ",
+    " swings and hits ",
 ];
 
-#[no_mangle]
-pub static mut m_names: [*const c_char; 8] = [
-    c" miss".as_ptr(),
-    c" swing and miss".as_ptr(),
-    c" barely miss".as_ptr(),
-    c" don't hit".as_ptr(),
-    c" misses".as_ptr(),
-    c" swings and misses".as_ptr(),
-    c" barely misses".as_ptr(),
-    c" doesn't hit".as_ptr(),
+pub static M_NAMES: [&str; 8] = [
+    " miss",
+    " swing and miss",
+    " barely miss",
+    " don't hit",
+    " misses",
+    " swings and misses",
+    " barely misses",
+    " doesn't hit",
 ];
 
 // ─── Static name buffer for set_mname ────────────────────────────────────────
@@ -109,23 +107,8 @@ unsafe fn copy_str_to_c_buffer(dst: *mut c_char, capacity: usize, text: &str) {
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
-unsafe extern "C" {
-    static mut e_levels: [c_int; 21];
+use crate::globals::{count, e_levels, fight_flush, has_hit, kamikaze, max_hit, max_level, no_command, purse, quiet, running, terse, to_death, vf_hit};
 
-    static mut count: c_int;
-    static mut quiet: c_int;
-    static mut running: c_uchar;
-    static mut to_death: c_uchar;
-    static mut kamikaze: c_uchar;
-    static mut has_hit: c_uchar;
-    static mut terse: c_uchar;
-    static mut fight_flush: c_uchar;
-    static mut no_command: c_int;
-    static mut vf_hit: c_int;
-    static mut max_hit: c_int;
-    static mut purse: c_int;
-    static mut max_level: c_int;
-}
 
 // ─── Inline helpers ───────────────────────────────────────────────────────────
 
@@ -173,8 +156,7 @@ unsafe fn set_moat(y: c_int, x: c_int, val: *mut Thing) {
 
 /// fight:
 /// The player attacks the monster.
-#[no_mangle]
-pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: c_uchar) -> c_int {
+pub unsafe fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: c_uchar) -> c_int {
     let tp = moat((*mp).y, (*mp).x);
 
     // Since we are fighting, things are not quiet — no healing.
@@ -216,9 +198,9 @@ pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: c_uchar
     if roll_em_hero_to(tp, weap, thrown) != 0 {
         did_hit = false as c_uchar;
         if thrown != 0 {
-            thunk(weap, mname, terse);
+            thunk(weap, Some(&mname), terse);
         } else {
-            hit(std::ptr::null_mut(), mname, terse);
+            hit(None, Some(&mname), terse);
         }
         if player_has(MonsterFlags::CANHUH) {
             did_hit = true as c_uchar;
@@ -231,24 +213,20 @@ pub unsafe extern "C" fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: c_uchar
         if (*thing_t(tp)).t_stats.hit_points <= 0 {
             killed(tp, true as c_uchar);
         } else if did_hit != 0 && !player_has(MonsterFlags::BLIND) {
-            msg_str(&format!(
-                "{} appears confused",
-                CStr::from_ptr(mname).to_string_lossy()
-            ));
+            msg_str(&format!("{mname} appears confused"));
         }
         did_hit = true as c_uchar;
     } else if thrown != 0 {
-        bounce(weap, mname, terse);
+        bounce(weap, Some(&mname), terse);
     } else {
-        miss(std::ptr::null_mut(), mname, terse);
+        miss(None, Some(&mname), terse);
     }
     did_hit as c_int
 }
 
 /// attack:
 /// The monster attacks the player.
-#[no_mangle]
-pub unsafe extern "C" fn attack(mp: *mut Thing) -> c_int {
+pub unsafe fn attack(mp: *mut Thing) -> c_int {
     // Stop running / healing.
     running = false as c_uchar;
     count = 0;
@@ -280,7 +258,7 @@ pub unsafe extern "C" fn attack(mp: *mut Thing) -> c_int {
             if has_hit != 0 {
                 addmsg_str(".  ");
             }
-            hit(mname, std::ptr::null_mut(), false as c_uchar);
+            hit(Some(&mname), None, false as c_uchar);
         } else if has_hit != 0 {
             endmsg();
         }
@@ -309,10 +287,7 @@ pub unsafe extern "C" fn attack(mp: *mut Thing) -> c_int {
                 if no_command == 0 {
                     addmsg_str("you are frozen");
                     if terse == 0 {
-                        addmsg_str(&format!(
-                            " by the {}",
-                            CStr::from_ptr(mname).to_string_lossy()
-                        ));
+                        addmsg_str(&format!(" by the {mname}"));
                     }
                     endmsg();
                 }
@@ -464,7 +439,7 @@ pub unsafe extern "C" fn attack(mp: *mut Thing) -> c_int {
                 death((*thing_t(mp)).t_type as c_char);
             }
         }
-        miss(mname, std::ptr::null_mut(), false as c_uchar);
+        miss(Some(&mname), None, false as c_uchar);
     }
 
     if fight_flush != 0 && to_death == 0 {
@@ -482,23 +457,13 @@ unsafe fn is_magic_item(obj: *mut Thing) -> c_uchar {
 
 /// set_mname:
 /// Return the monster name for the given monster.
-#[no_mangle]
-pub unsafe extern "C" fn set_mname(tp: *mut Thing) -> *mut c_char {
+pub unsafe fn set_mname(tp: *mut Thing) -> String {
     if see_monst(tp) == 0 && !player_has(MonsterFlags::SEEMONST) {
         return if terse != 0 {
-            c"it".as_ptr() as *mut c_char
+            "it".to_string()
         } else {
-            c"something".as_ptr() as *mut c_char
+            "something".to_string()
         };
-    }
-
-    // Ensure "the " prefix is initialised.
-    if !MNAME_INIT {
-        MNAME_BUF[0] = b't' as c_char;
-        MNAME_BUF[1] = b'h' as c_char;
-        MNAME_BUF[2] = b'e' as c_char;
-        MNAME_BUF[3] = b' ' as c_char;
-        MNAME_INIT = true;
     }
 
     let mname: &'static str;
@@ -516,15 +481,12 @@ pub unsafe extern "C" fn set_mname(tp: *mut Thing) -> *mut c_char {
         mname = monsters[idx].m_name;
     }
 
-    let buffer = std::ptr::addr_of_mut!(MNAME_BUF).cast::<c_char>();
-    copy_str_to_c_buffer(buffer.add(4), MAXSTR - 4, mname);
-    buffer
+    format!("the {mname}")
 }
 
 /// swing:
 /// Returns true (1) if the swing hits.
-#[no_mangle]
-pub unsafe extern "C" fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_int {
+pub unsafe fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_int {
     let res = rnd(20);
     let need = (20 - at_lvl) - op_arm;
     (res + wplus >= need) as c_int
@@ -532,8 +494,7 @@ pub unsafe extern "C" fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_
 
 /// roll_em:
 /// Roll several attacks and apply damage.
-#[no_mangle]
-pub unsafe extern "C" fn roll_em(
+pub unsafe fn roll_em(
     thatt: *mut Thing,
     thdef: *mut Thing,
     weap: *mut Thing,
@@ -697,34 +658,18 @@ unsafe fn roll_em_inner(
 
 /// prname:
 /// The print name of a combatant.
-#[no_mangle]
-pub unsafe extern "C" fn prname(mname: *const c_char, upper: c_uchar) -> *mut c_char {
-    let text: &str = if mname.is_null() {
-        "you"
-    } else {
-        // Borrow the incoming C string without allocating.
-        let mut len = 0usize;
-        while *mname.add(len) != 0 {
-            len += 1;
-        }
-        std::str::from_utf8_unchecked(std::slice::from_raw_parts(
-            mname as *const u8,
-            len,
-        ))
-    };
-    let buffer = std::ptr::addr_of_mut!(PRNAME_BUF).cast::<c_char>();
-    copy_str_to_c_buffer(buffer, MAXSTR, text);
-    if upper != 0 && PRNAME_BUF[0] != 0 {
-        let first = (PRNAME_BUF[0] as u8).to_ascii_uppercase();
-        PRNAME_BUF[0] = first as c_char;
+pub unsafe fn prname(mname: Option<&str>, upper: c_uchar) -> String {
+    let mut text = mname.unwrap_or("you").to_string();
+    if upper != 0 && !text.is_empty() {
+        let first = text.as_bytes()[0].to_ascii_uppercase();
+        text.replace_range(0..1, &(first as char).to_string());
     }
-    std::ptr::addr_of_mut!(PRNAME_BUF).cast()
+    text
 }
 
 /// thunk:
 /// A missile hits a monster.
-#[no_mangle]
-pub unsafe extern "C" fn thunk(weap: *mut Thing, mname: *const c_char, noend: c_uchar) {
+pub unsafe fn thunk(weap: *mut Thing, mname: Option<&str>, noend: c_uchar) {
     if to_death != 0 {
         return;
     }
@@ -736,7 +681,7 @@ pub unsafe extern "C" fn thunk(weap: *mut Thing, mname: *const c_char, noend: c_
     } else {
         addmsg_str("you hit ");
     }
-    addmsg_str(&CStr::from_ptr(mname).to_string_lossy());
+    addmsg_str(mname.unwrap_or(""));
     if noend == 0 {
         endmsg();
     }
@@ -744,24 +689,23 @@ pub unsafe extern "C" fn thunk(weap: *mut Thing, mname: *const c_char, noend: c_
 
 /// hit:
 /// Print a message to indicate a successful hit.
-#[no_mangle]
-pub unsafe extern "C" fn hit(er: *const c_char, ee: *const c_char, noend: c_uchar) {
+pub unsafe fn hit(er: Option<&str>, ee: Option<&str>, noend: c_uchar) {
     if to_death != 0 {
         return;
     }
-    addmsg_str(&CStr::from_ptr(prname(er, true as c_uchar)).to_string_lossy());
-    let s: *const c_char = if terse != 0 {
-        c" hit".as_ptr()
+    addmsg_str(&prname(er, true as c_uchar));
+    let s: &str = if terse != 0 {
+        " hit"
     } else {
         let mut i = rnd(4) as usize;
-        if !er.is_null() {
+        if er.is_some() {
             i += 4;
         }
-        h_names[i]
+        H_NAMES[i]
     };
-    addmsg_str(&CStr::from_ptr(s).to_string_lossy());
+    addmsg_str(s);
     if terse == 0 {
-        addmsg_str(&CStr::from_ptr(prname(ee, false as c_uchar)).to_string_lossy());
+        addmsg_str(&prname(ee, false as c_uchar));
     }
     if noend == 0 {
         endmsg();
@@ -770,32 +714,28 @@ pub unsafe extern "C" fn hit(er: *const c_char, ee: *const c_char, noend: c_ucha
 
 /// miss:
 /// Print a message to indicate a poor swing.
-#[no_mangle]
-pub unsafe extern "C" fn miss(er: *const c_char, ee: *const c_char, noend: c_uchar) {
+pub unsafe fn miss(er: Option<&str>, ee: Option<&str>, noend: c_uchar) {
     if to_death != 0 {
         return;
     }
-    addmsg_str(&CStr::from_ptr(prname(er, true as c_uchar)).to_string_lossy());
+    addmsg_str(&prname(er, true as c_uchar));
     let i: usize = if terse != 0 {
-        if !er.is_null() {
+        if er.is_some() {
             4
         } else {
             0
         }
     } else {
         let base = rnd(4) as usize;
-        if !er.is_null() {
+        if er.is_some() {
             base + 4
         } else {
             base
         }
     };
-    addmsg_str(&CStr::from_ptr(m_names[i]).to_string_lossy());
+    addmsg_str(M_NAMES[i]);
     if terse == 0 {
-        addmsg_str(&format!(
-            " {}",
-            CStr::from_ptr(prname(ee, false as c_uchar)).to_string_lossy()
-        ));
+        addmsg_str(&format!(" {}", prname(ee, false as c_uchar)));
     }
     if noend == 0 {
         endmsg();
@@ -804,8 +744,7 @@ pub unsafe extern "C" fn miss(er: *const c_char, ee: *const c_char, noend: c_uch
 
 /// bounce:
 /// A missile misses a monster.
-#[no_mangle]
-pub unsafe extern "C" fn bounce(weap: *mut Thing, mname: *const c_char, noend: c_uchar) {
+pub unsafe fn bounce(weap: *mut Thing, mname: Option<&str>, noend: c_uchar) {
     if to_death != 0 {
         return;
     }
@@ -817,7 +756,7 @@ pub unsafe extern "C" fn bounce(weap: *mut Thing, mname: *const c_char, noend: c
     } else {
         addmsg_str("you missed ");
     }
-    addmsg_str(&CStr::from_ptr(mname).to_string_lossy());
+    addmsg_str(mname.unwrap_or(""));
     if noend == 0 {
         endmsg();
     }
@@ -825,8 +764,7 @@ pub unsafe extern "C" fn bounce(weap: *mut Thing, mname: *const c_char, noend: c
 
 /// remove_mon:
 /// Remove a monster from the screen.
-#[no_mangle]
-pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: c_uchar) {
+pub unsafe fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: c_uchar) {
     let mut obj = crate::entity::player::thing_pack(tp);
     while !obj.is_null() {
         let nexti = crate::entity::player::thing_next(obj);
@@ -856,8 +794,7 @@ pub unsafe extern "C" fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: c_u
 
 /// killed:
 /// Called to put a monster to death.
-#[no_mangle]
-pub unsafe extern "C" fn killed(tp: *mut Thing, pr: c_uchar) {
+pub unsafe fn killed(tp: *mut Thing, pr: c_uchar) {
     let gained = (*thing_t(tp)).t_stats.experience;
     PLAYER.with_stats_mut(|stats| stats.experience += gained);
 
@@ -904,7 +841,7 @@ pub unsafe extern "C" fn killed(tp: *mut Thing, pr: c_uchar) {
             }
             addmsg_str("defeated ");
         }
-        msg_str(&CStr::from_ptr(mname).to_string_lossy());
+        msg_str(&mname);
     }
 
     check_level();

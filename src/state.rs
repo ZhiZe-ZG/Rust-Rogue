@@ -113,109 +113,22 @@ unsafe fn read_stat() -> c_int {
 
 // ─── C ABI mirror types ──────────────────────────────────────────────────────
 
-/// C layout of a `struct stone { char *st_name; int st_value; }` entry, used
-/// only while reading/writing the ring-stone table in the save stream.
+/// A ring-stone table entry (`struct stone { char *st_name; int st_value; }`
+/// in C), now carrying an owned Rust string slice.
 #[repr(C)]
 pub struct CStone {
-    pub st_name: *const c_char,
+    pub st_name: &'static str,
     pub st_value: c_int,
 }
 
 // ─── Extern C globals (defined in vers.c) ────────────────────────────────────
 
-unsafe extern "C" {
-    // booleans (C bool -> c_uchar)
-    static mut after: c_uchar;
-    static mut again: c_uchar;
-    static mut noscore: c_int;
-    static mut seenstairs: c_uchar;
-    static mut amulet: c_uchar;
-    static mut door_stop: c_uchar;
-    static mut fight_flush: c_uchar;
-    static mut firstmove: c_uchar;
-    static mut got_ltc: c_uchar;
-    static mut has_hit: c_uchar;
-    static mut in_shell: c_uchar;
-    static mut inv_describe: c_uchar;
-    static mut jump: c_uchar;
-    static mut kamikaze: c_uchar;
-    static mut lower_msg: c_uchar;
-    static mut move_on: c_uchar;
-    static mut msg_esc: bool;
-    static mut passgo: c_uchar;
-    static mut playing: c_uchar;
-    static mut q_comm: c_uchar;
-    static mut running: c_uchar;
-    static mut save_msg: c_uchar;
-    static mut see_floor: c_uchar;
-    static mut stat_msg: c_uchar;
-    static mut terse: c_uchar;
-    static mut to_death: c_uchar;
-    static mut tombstone: c_uchar;
-    static mut wizard: c_int;
-    static mut pack_used: [c_uchar; 26];
+use crate::daemons::{between};
+use crate::entity::player::{nh};
+use crate::globals::{a_class, after, again, amulet, delta, dir_ch, dnum, door_stop, e_levels, fight_flush, firstmove, food_left, got_ltc, has_hit, hungry_state, in_shell, inpack, inv_describe, inv_type, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, lastscore, lower_msg, max_level, max_stats, move_on, mpos, msg_esc, n_objs, no_command, no_food, no_move, noscore, ntraps, oldpos, oldrp, orig_dsusp, p_colors, pack_used, passgo, playing, purse, q_comm, quiet, r_stones, runch, running, save_msg, see_floor, seed, seenstairs, stat_msg, take, terse, to_death, tombstone, vf_hit, wizard};
+use crate::init::{cNMETAL, cNSTONES, cNWOOD, metal, stones, wood};
+use crate::item::weapons::{group};
 
-    // chars
-    static mut dir_ch: c_char;
-    static mut p_colors: [*mut c_char; MAXPOTIONS];
-    static mut r_stones: [*mut c_char; MAXRINGS];
-    static mut runch: c_char;
-    static mut take: c_char;
-
-    static mut orig_dsusp: c_int;
-    static mut l_last_comm: c_char;
-    static mut l_last_dir: c_char;
-    static mut last_comm: c_char;
-    static mut last_dir: c_char;
-
-    // ints
-    static mut n_objs: c_int;
-    static mut ntraps: c_int;
-    static mut hungry_state: c_int;
-    static mut inpack: c_int;
-    static mut inv_type: c_int;
-    static mut max_level: c_int;
-    static mut mpos: c_int;
-    static mut no_food: c_int;
-    static mut a_class: [c_int; MAXARMORS];
-    #[link_name = "count"]
-    static mut COUNT: c_int;
-    static mut food_left: c_int;
-    static mut lastscore: c_int;
-    static mut no_command: c_int;
-    static mut no_move: c_int;
-    static mut purse: c_int;
-    static mut quiet: c_int;
-    static mut vf_hit: c_int;
-    static mut dnum: c_int;
-    static mut seed: c_int;
-    static mut e_levels: [c_int; 21];
-
-    // coords
-    static mut delta: IVec2;
-    static mut oldpos: IVec2;
-
-    // player / lists
-    static mut l_last_pick: *mut Thing;
-    static mut last_pick: *mut Thing;
-
-    // rooms / map
-    static mut max_stats: Stats;
-    static mut oldrp: Option<usize>;
-
-    // misc C-visible globals (daemons live in `crate::daemon::D_LIST`)
-    static mut between: c_int;
-    static mut nh: IVec2;
-    static mut group: c_int;
-
-    // material arrays (defined in init.rs as stones/wood/metal)
-    static stones: [CStone; 26];
-    static mut wood: [*mut c_char; 33];
-    static mut metal: [*mut c_char; 22];
-    static mut cNSTONES: c_int;
-    static mut cNWOOD: c_int;
-    static mut cNMETAL: c_int;
-}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -745,95 +658,6 @@ unsafe fn rs_read_string_owned(inf: &mut dyn Read) -> Option<String> {
     Some(String::from_utf8_lossy(&buf).into_owned())
 }
 
-unsafe fn rs_write_strings(savef: &mut dyn Write, s: *mut *mut c_char, count: c_int) -> c_int {
-    let mut n: c_int = 0;
-
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let _ = rs_write_int(savef, count);
-
-    while n < count {
-        if rs_write_string(savef, *s.add(n as usize)) != 0 {
-            break;
-        }
-        n += 1;
-    }
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_strings(inf: &mut dyn Read, s: *mut *mut c_char, count: c_int, max: c_int) -> c_int {
-    let mut value: c_int = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut value);
-
-    if value != count {
-        FORMAT_ERROR = 1;
-    }
-
-    let mut n: c_int = 0;
-    while n < count {
-        if rs_read_string(inf, *s.add(n as usize), max) != 0 {
-            break;
-        }
-        n += 1;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_write_string_index(
-    savef: &mut dyn Write,
-    master: *mut *mut c_char,
-    max: c_int,
-    s: *const c_char,
-) -> c_int {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let mut i: c_int = 0;
-    while i < max {
-        if s == *master.add(i as usize) {
-            return rs_write_int(savef, i);
-        }
-        i += 1;
-    }
-
-    rs_write_int(savef, -1)
-}
-
-unsafe fn rs_read_string_index(
-    inf: &mut dyn Read,
-    master: *mut *mut c_char,
-    maxindex: c_int,
-    s: *mut *mut c_char,
-) -> c_int {
-    let mut i: c_int = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut i);
-
-    if i > maxindex {
-        FORMAT_ERROR = 1;
-    } else if i >= 0 {
-        *s = *master.add(i as usize);
-    } else {
-        *s = std::ptr::null_mut();
-    }
-
-    read_stat()
-}
-
 unsafe fn rs_write_str_t(savef: &mut dyn Write, st: c_uint) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -1033,9 +857,9 @@ unsafe fn rs_read_stats(inf: &mut dyn Read, s: *mut Stats) -> c_int {
 
 unsafe fn rs_write_stone_index(
     savef: &mut dyn Write,
-    master: *const CStone,
+    master: &[crate::init::CStone],
     max: c_int,
-    s: *const c_char,
+    s: &str,
 ) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -1043,7 +867,7 @@ unsafe fn rs_write_stone_index(
 
     let mut i: c_int = 0;
     while i < max {
-        if s == (*master.add(i as usize)).st_name {
+        if s == master[i as usize].st_name {
             let _ = rs_write_int(savef, i);
             return WRITE_ERROR;
         }
@@ -1057,9 +881,9 @@ unsafe fn rs_write_stone_index(
 
 unsafe fn rs_read_stone_index(
     inf: &mut dyn Read,
-    master: *const CStone,
+    master: &[crate::init::CStone],
     maxindex: c_int,
-    s: *mut *mut c_char,
+    s: &mut &'static str,
 ) -> c_int {
     let mut i: c_int = 0;
 
@@ -1072,9 +896,9 @@ unsafe fn rs_read_stone_index(
     if i > maxindex {
         FORMAT_ERROR = 1;
     } else if i >= 0 {
-        *s = (*master.add(i as usize)).st_name as *mut c_char;
+        *s = master[i as usize].st_name;
     } else {
-        *s = std::ptr::null_mut();
+        *s = "";
     }
 
     read_stat()
@@ -1117,13 +941,11 @@ unsafe fn rs_read_scrolls(inf: &mut dyn Read) -> c_int {
 /// Index of `ptr` within [`crate::colors::POTION_COLORS`], or `-1` if it is not
 /// a potion colour. Bridges the legacy `p_colors` pointer array to the Rust
 /// colour table.
-fn potion_color_index(ptr: *const c_char) -> c_int {
-    for (i, color) in crate::colors::POTION_COLORS.iter().enumerate() {
-        if color.as_ptr() as *const c_char == ptr {
-            return i as c_int;
-        }
-    }
-    -1
+fn potion_color_index(name: &str) -> c_int {
+    crate::colors::POTION_COLORS
+        .iter()
+        .position(|color| *color == name)
+        .map_or(-1, |i| i as c_int)
 }
 
 /// Serializes the global potion colors to the save file.
@@ -1136,7 +958,7 @@ unsafe fn rs_write_potions(savef: &mut dyn Write) -> c_int {
 
     let mut i = 0;
     while i < MAXPOTIONS {
-        let _ = rs_write_int(savef, potion_color_index(p_colors[i] as *const c_char));
+        let _ = rs_write_int(savef, potion_color_index(p_colors[i]));
         i += 1;
     }
 
@@ -1156,9 +978,9 @@ unsafe fn rs_read_potions(inf: &mut dyn Read) -> c_int {
         let mut idx: c_int = 0;
         let _ = rs_read_int(inf, &mut idx);
         p_colors[i] = if idx >= 0 && (idx as usize) < crate::colors::POTION_COLOR_COUNT {
-            crate::colors::POTION_COLORS[idx as usize].as_ptr() as *mut c_char
+            crate::colors::POTION_COLORS[idx as usize]
         } else {
-            std::ptr::null_mut()
+            ""
         };
         i += 1;
     }
@@ -1176,12 +998,7 @@ unsafe fn rs_write_rings(savef: &mut dyn Write) -> c_int {
 
     let mut i = 0;
     while i < MAXRINGS {
-        let _ = rs_write_stone_index(
-            savef,
-            (&raw const stones) as *const CStone,
-            cNSTONES,
-            r_stones[i],
-        );
+        let _ = rs_write_stone_index(savef, &crate::init::stones, cNSTONES, r_stones[i]);
         i += 1;
     }
 
@@ -1198,12 +1015,7 @@ unsafe fn rs_read_rings(inf: &mut dyn Read) -> c_int {
 
     let mut i = 0;
     while i < MAXRINGS {
-        let _ = rs_read_stone_index(
-            inf,
-            (&raw const stones) as *const CStone,
-            cNSTONES,
-            &mut r_stones[i],
-        );
+        let _ = rs_read_stone_index(inf, &crate::init::stones, cNSTONES, &mut r_stones[i]);
         i += 1;
     }
 
@@ -2350,7 +2162,7 @@ pub unsafe fn rs_save_file(savef: &mut dyn Write) -> c_int {
     let _ = rs_write_int(savef, mpos);
     let _ = rs_write_int(savef, no_food);
     let _ = rs_write_ints(savef, (&raw mut a_class) as *mut c_int, MAXARMORS as c_int);
-    let _ = rs_write_int(savef, COUNT);
+    let _ = rs_write_int(savef, crate::globals::count);
     let _ = rs_write_int(savef, food_left);
     let _ = rs_write_int(savef, lastscore);
     let _ = rs_write_int(savef, no_command);
@@ -2499,7 +2311,7 @@ pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
     let _ = rs_read_boolean(inf, &mut move_on); /* 16 */
     let mut msg_esc_byte = msg_esc as c_uchar;
     let _ = rs_read_boolean(inf, &mut msg_esc_byte); /* 17 */
-    msg_esc = msg_esc_byte != 0;
+    msg_esc = msg_esc_byte;
     let _ = rs_read_boolean(inf, &mut passgo); /* 18 */
     let _ = rs_read_boolean(inf, &mut playing); /* 19 */
     let _ = rs_read_boolean(inf, &mut q_comm); /* 20 */
@@ -2566,7 +2378,7 @@ pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
     let _ = rs_read_int(inf, &mut mpos);
     let _ = rs_read_int(inf, &mut no_food);
     let _ = rs_read_ints(inf, (&raw mut a_class) as *mut c_int, MAXARMORS as c_int);
-    let _ = rs_read_int(inf, &mut COUNT);
+    let _ = rs_read_int(inf, &mut crate::globals::count);
     let _ = rs_read_int(inf, &mut food_left);
     let _ = rs_read_int(inf, &mut lastscore);
     let _ = rs_read_int(inf, &mut no_command);

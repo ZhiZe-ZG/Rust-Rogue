@@ -110,15 +110,8 @@ struct PACT {
 
 /// External C symbols that provide game state, UI helpers, and gameplay
 /// primitives used by the potion effects.
-unsafe extern "C" {
-    static mut terse: c_uchar;
-    static mut after: c_uchar;
-    static mut seenstairs: c_uchar;
-    static mut fruit: [c_char; 1024];
-    static mut prbuf: [c_char; 2048];
-    static mut max_stats: Stats;
-    static mut e_levels: [c_int; 21];
-}
+use crate::globals::{after, e_levels, max_stats, seenstairs, terse};
+
 
 /// A mutable reference to the static `pot_info` entry at `index`.
 ///
@@ -261,9 +254,8 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
 
 /// quaff:
 /// Quaff a potion from the pack.
-#[no_mangle]
-pub unsafe extern "C" fn quaff() {
-    let obj = get_item(c"quaff".as_ptr(), POTION);
+pub unsafe fn quaff() {
+    let obj = get_item("quaff", POTION);
     let mut tp: *mut Thing;
     let mut mp: *mut Thing;
     let discardit;
@@ -473,8 +465,7 @@ pub unsafe extern "C" fn quaff() {
 
 /// is_magic:
 /// Returns true if an object radiates magic.
-#[no_mangle]
-pub unsafe extern "C" fn is_magic(obj: *mut Thing) -> c_uchar {
+pub unsafe fn is_magic(obj: *mut Thing) -> c_uchar {
     if obj.is_null() {
         return 0;
     }
@@ -487,8 +478,7 @@ pub unsafe extern "C" fn is_magic(obj: *mut Thing) -> c_uchar {
 
 /// invis_on:
 /// Turn on the ability to see invisible.
-#[no_mangle]
-pub unsafe extern "C" fn invis_on() {
+pub unsafe fn invis_on() {
     crate::game::PLAYER.add_flag(MonsterFlags::CANSEE);
     for id in MONSTER_LIST.ids() {
         if let Some(mp) = MONSTER_LIST.handle(id) {
@@ -507,8 +497,7 @@ pub unsafe extern "C" fn invis_on() {
 
 /// turn_see:
 /// Put on or off seeing monsters on this level.
-#[no_mangle]
-pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
+pub unsafe fn turn_see(turn_off: c_uchar) -> c_uchar {
     let mut add_new = 0;
 
     for id in MONSTER_LIST.ids() {
@@ -551,8 +540,7 @@ pub unsafe extern "C" fn turn_see(turn_off: c_uchar) -> c_uchar {
 
 /// seen_stairs:
 /// Return true if the player has seen the stairs.
-#[no_mangle]
-pub unsafe extern "C" fn seen_stairs() -> c_uchar {
+pub unsafe fn seen_stairs() -> c_uchar {
     let tp: *mut Thing;
     let stairs = crate::game::stairs();
 
@@ -579,8 +567,7 @@ pub unsafe extern "C" fn seen_stairs() -> c_uchar {
 
 /// raise_level:
 /// The player just magically went up a level.
-#[no_mangle]
-pub unsafe extern "C" fn raise_level() {
+pub unsafe fn raise_level() {
     let level = crate::game::PLAYER.level();
     crate::game::PLAYER.with_stats_mut(|stats| stats.experience = e_levels[level as usize - 1] + 1);
     check_level();

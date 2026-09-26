@@ -44,32 +44,8 @@ const ESCAPE: c_int = 27;
 const NORM: c_int = 0;
 const F_SEEN: c_uchar = 0x40;
 
-unsafe extern "C" {
-    static mut after: c_uchar;
-    static mut again: c_uchar;
-    static mut amulet: c_uchar;
-    static mut delta: IVec2;
-    static mut dir_ch: c_char;
-    static mut door_stop: c_uchar;
-    static mut e_levels: [c_int; 21];
-    static mut firstmove: c_uchar;
-    static mut food_left: c_int;
-    static mut hungry_state: c_int;
-    static mut jump: c_uchar;
-    static mut last_dir: c_char;
-    static mut max_stats: crate::entity::player::Stats;
-    static mut mpos: c_int;
-    static mut no_command: c_int;
-    static mut no_move: c_int;
-    static mut oldpos: IVec2;
-    static mut passgo: c_uchar;
-    static mut runch: c_char;
-    static mut running: c_uchar;
-    static mut seenstairs: c_uchar;
-    static mut see_floor: bool;
-    static mut terse: c_uchar;
+use crate::globals::{after, again, amulet, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump, last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running, see_floor, seenstairs, terse};
 
-}
 
 #[inline]
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
@@ -105,20 +81,18 @@ unsafe fn first_is_vowel(s: *const c_char) -> bool {
 
 /// show_floor:
 /// Returns whether the floor of the player's room should be displayed.
-#[no_mangle]
 pub unsafe fn show_floor() -> bool {
     let player_room = PLAYER.room();
     if crate::game::room_dark(player_room)
         && !crate::game::room_gone(player_room)
         && !player_has(MonsterFlags::BLIND)
     {
-        return see_floor;
+        return see_floor != 0;
     }
     true
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn find_obj(y: c_int, x: c_int) -> *mut Thing {
+pub unsafe fn find_obj(y: c_int, x: c_int) -> *mut Thing {
     let mut obj = crate::game::with_current_level(|level| level.items.head());
     while !obj.is_null() {
         if (*thing_o(obj)).o_pos.y == y && (*thing_o(obj)).o_pos.x == x {
@@ -129,9 +103,8 @@ pub unsafe extern "C" fn find_obj(y: c_int, x: c_int) -> *mut Thing {
     std::ptr::null_mut()
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn eat() {
-    let obj = get_item(c"eat".as_ptr(), FOOD as c_int);
+pub unsafe fn eat() {
+    let obj = get_item("eat", FOOD as c_int);
     if obj.is_null() {
         return;
     }
@@ -166,8 +139,7 @@ pub unsafe extern "C" fn eat() {
     leave_pack(obj, false as c_uchar, false as c_uchar);
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn check_level() {
+pub unsafe fn check_level() {
     let experience = PLAYER.stats().experience;
     let mut i: c_int = 0;
     while e_levels[i as usize] != 0 {
@@ -189,8 +161,7 @@ pub unsafe extern "C" fn check_level() {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn chg_str(amt: c_int) {
+pub unsafe fn chg_str(amt: c_int) {
     if amt == 0 {
         return;
     }
@@ -220,8 +191,7 @@ pub unsafe extern "C" fn chg_str(amt: c_int) {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn add_str(sp: *mut c_uint, amt: c_int) {
+pub unsafe fn add_str(sp: *mut c_uint, amt: c_int) {
     let newv = (*sp).wrapping_add(amt as c_uint);
     if newv < 3 {
         *sp = 3;
@@ -232,7 +202,6 @@ pub unsafe extern "C" fn add_str(sp: *mut c_uint, amt: c_int) {
     }
 }
 
-#[no_mangle]
 pub unsafe fn add_haste(potion: bool) -> bool {
     if player_has(MonsterFlags::HASTE) {
         no_command += rnd(8);
@@ -249,8 +218,7 @@ pub unsafe fn add_haste(potion: bool) -> bool {
     true
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn aggravate() {
+pub unsafe fn aggravate() {
     for id in MONSTER_LIST.ids() {
         if let Some(mp) = MONSTER_LIST.handle(id) {
             runto(&mut (*thing_t(mp)).t_pos);
@@ -258,7 +226,6 @@ pub unsafe extern "C" fn aggravate() {
     }
 }
 
-#[no_mangle]
 pub unsafe fn is_current(obj: *mut Thing) -> bool {
     if obj.is_null() {
         return false;
@@ -277,8 +244,7 @@ pub unsafe fn is_current(obj: *mut Thing) -> bool {
     false
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn get_dir() -> c_uchar {
+pub unsafe fn get_dir() -> c_uchar {
     let mut gotit: bool;
     let mut last_delt: IVec2 = IVec2 { x: 0, y: 0 };
 
@@ -362,8 +328,7 @@ pub unsafe extern "C" fn get_dir() -> c_uchar {
     true as c_uchar
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn sign(nm: c_int) -> c_int {
+pub unsafe fn sign(nm: c_int) -> c_int {
     if nm < 0 {
         -1
     } else if nm > 0 {
@@ -373,13 +338,11 @@ pub unsafe extern "C" fn sign(nm: c_int) -> c_int {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn spread(nm: c_int) -> c_int {
+pub unsafe fn spread(nm: c_int) -> c_int {
     nm - nm / 20 + rnd(nm / 10)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn call_it(info: &mut CObjInfo) {
+pub unsafe fn call_it(info: &mut CObjInfo) {
     if info.oi_know {
         info.oi_guess = None;
     } else if info.oi_guess.is_none() {
@@ -394,8 +357,7 @@ pub unsafe extern "C" fn call_it(info: &mut CObjInfo) {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn rnd_thing() -> c_char {
+pub unsafe fn rnd_thing() -> c_char {
     let thing_list = [
         POTION, SCROLL, RING, STICK, FOOD, WEAPON, ARMOR, STAIRS, GOLD, AMULET,
     ];

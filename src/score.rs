@@ -36,7 +36,6 @@ fn parse_scoreline(line: &[u8]) -> Option<(u32, i32, u32, u16, i32, u32)> {
 }
 
 /// Reads the on-disk scoreboard into the caller-provided score array using the legacy file format.
-#[no_mangle]
 pub unsafe fn rd_score(top_ten: *mut Score) {
     let mut scoreline = [0u8; SCORELINE_LEN];
 
@@ -71,7 +70,6 @@ pub unsafe fn rd_score(top_ten: *mut Score) {
 }
 
 /// Serializes the caller-provided score array back into the legacy scoreboard file format.
-#[no_mangle]
 pub unsafe fn wr_score(top_ten: *mut Score) {
     let mut scoreline = [0u8; SCORELINE_LEN];
 

@@ -6,7 +6,6 @@ use crate::daemon::{fuse, lengthen, Daemon};
 use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
-use crate::ffi::abort;
 use crate::game::PLAYER;
 use crate::item::rings::RingType;
 use crate::entity::player::attach_pack;
@@ -90,10 +89,8 @@ static WAND_MONS: [c_char; 26] = [
     0,
 ];
 
-unsafe extern "C" {
-    static mut max_level: c_int;
-    static mut wizard: c_int;
-}
+use crate::globals::{max_level, wizard};
+
 
 #[inline]
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
@@ -124,7 +121,6 @@ unsafe fn iswearing(which: RingType) -> bool {
 }
 
 /// Picks an appropriate monster glyph for the current depth.
-#[no_mangle]
 pub unsafe fn randmonster(wander: bool) -> c_char {
     let mons = if wander { &WAND_MONS } else { &LVL_MONS };
     let level = crate::game::current_depth();
@@ -144,8 +140,7 @@ pub unsafe fn randmonster(wander: bool) -> c_char {
 }
 
 /// Initializes a freshly allocated monster thing and places it on the map.
-#[no_mangle]
-pub unsafe extern "C" fn new_monster(tp: *mut Thing, monster_type: c_char, cp: *mut IVec2) {
+pub unsafe fn new_monster(tp: *mut Thing, monster_type: c_char, cp: *mut IVec2) {
     let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
@@ -187,8 +182,7 @@ pub unsafe extern "C" fn new_monster(tp: *mut Thing, monster_type: c_char, cp: *
 }
 
 /// Computes bonus experience from a monster's level and max HP.
-#[no_mangle]
-pub unsafe extern "C" fn exp_add(tp: *mut Thing) -> c_int {
+pub unsafe fn exp_add(tp: *mut Thing) -> c_int {
     let mut modu = if (*thing_t(tp)).t_stats.level == 1 {
         (*thing_t(tp)).t_stats.max_hit_points / 8
     } else {
@@ -204,8 +198,7 @@ pub unsafe extern "C" fn exp_add(tp: *mut Thing) -> c_int {
 }
 
 /// Spawns a wandering monster in a different room and sets it running toward the hero.
-#[no_mangle]
-pub unsafe extern "C" fn wanderer() {
+pub unsafe fn wanderer() {
     let tp = new_actor();
     let mut cp;
 
@@ -239,12 +232,11 @@ pub unsafe extern "C" fn wanderer() {
 }
 
 /// Wakes and updates an adjacent monster's pursuit behavior and special gaze logic.
-#[no_mangle]
-pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
+pub unsafe fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
     let tp = crate::game::monster_at(y, x);
     if tp.is_null() {
         runtime::shutdown();
-        abort();
+        std::process::abort();
     }
 
     let ch = (*thing_t(tp)).t_type;
@@ -278,8 +270,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
                     fuse(Daemon::Unconfuse, 0, spread(HUHDURATION), AFTER);
                 }
                 crate::game::PLAYER.add_flag(MonsterFlags::HUH);
-                let mname = set_mname(tp);
-                let mname_str = CStr::from_ptr(mname).to_string_lossy().into_owned();
+                let mname_str = set_mname(tp);
                 addmsg_str(&mname_str);
                 if mname_str != "it" {
                     addmsg_str("'");
@@ -303,8 +294,7 @@ pub unsafe extern "C" fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
 }
 
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
-#[no_mangle]
-pub unsafe extern "C" fn give_pack(tp: *mut Thing) {
+pub unsafe fn give_pack(tp: *mut Thing) {
     if crate::game::current_depth() >= max_level
         && rnd(100) < monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry
     {
@@ -313,8 +303,7 @@ pub unsafe extern "C" fn give_pack(tp: *mut Thing) {
 }
 
 /// Rolls a saving throw for any creature against an effect category.
-#[no_mangle]
-pub unsafe extern "C" fn save_throw(which: c_int, tp: *mut Thing) -> c_int {
+pub unsafe fn save_throw(which: c_int, tp: *mut Thing) -> c_int {
     save_throw_for_level(which, (*thing_t(tp)).t_stats.level)
 }
 
@@ -331,8 +320,7 @@ fn save_throw_for_level(which: c_int, level: c_int) -> c_int {
 }
 
 /// Rolls the hero's saving throw, applying ring of protection magic adjustment.
-#[no_mangle]
-pub unsafe extern "C" fn save(which: c_int) -> c_int {
+pub unsafe fn save(which: c_int) -> c_int {
     let mut adj = which;
     if which == VS_MAGIC {
         if !PLAYER.left_ring().is_null()

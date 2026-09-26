@@ -1,6 +1,5 @@
 //! Command help and map-symbol identification.
 
-use std::ffi::CStr;
 use std::os::raw::{c_int, c_uchar};
 
 use crate::config::GameConfig;
@@ -14,80 +13,80 @@ const ESCAPE: c_int = 27;
 
 struct HelpEntry {
     ch: u8,
-    desc: &'static CStr,
+    desc: &'static str,
     print: bool,
 }
 
-const fn help_entry(ch: u8, desc: &'static CStr, print: bool) -> HelpEntry {
+const fn help_entry(ch: u8, desc: &'static str, print: bool) -> HelpEntry {
     HelpEntry { ch, desc, print }
 }
 
 static HELP_ENTRIES: &[HelpEntry] = &[
-    help_entry(b'?', c"\tprints help", true),
-    help_entry(b'/', c"\tidentify object", true),
-    help_entry(b'h', c"\tleft", true),
-    help_entry(b'j', c"\tdown", true),
-    help_entry(b'k', c"\tup", true),
-    help_entry(b'l', c"\tright", true),
-    help_entry(b'y', c"\tup & left", true),
-    help_entry(b'u', c"\tup & right", true),
-    help_entry(b'b', c"\tdown & left", true),
-    help_entry(b'n', c"\tdown & right", true),
-    help_entry(b'H', c"\trun left", false),
-    help_entry(b'J', c"\trun down", false),
-    help_entry(b'K', c"\trun up", false),
-    help_entry(b'L', c"\trun right", false),
-    help_entry(b'Y', c"\trun up & left", false),
-    help_entry(b'U', c"\trun up & right", false),
-    help_entry(b'B', c"\trun down & left", false),
-    help_entry(b'N', c"\trun down & right", false),
-    help_entry(0x08, c"\trun left until adjacent", false),
-    help_entry(0x0a, c"\trun down until adjacent", false),
-    help_entry(0x0b, c"\trun up until adjacent", false),
-    help_entry(0x0c, c"\trun right until adjacent", false),
-    help_entry(0x19, c"\trun up & left until adjacent", false),
-    help_entry(0x15, c"\trun up & right until adjacent", false),
-    help_entry(0x02, c"\trun down & left until adjacent", false),
-    help_entry(0x16, c"\trun down & right until adjacent", false),
-    help_entry(0, c"\t<SHIFT><dir>: run that way", true),
-    help_entry(0, c"\t<CTRL><dir>: run till adjacent", true),
-    help_entry(b'f', c"<dir>\tfight till death or near death", true),
-    help_entry(b't', c"<dir>\tthrow something", true),
-    help_entry(b'm', c"<dir>\tmove onto without picking up", true),
-    help_entry(b'z', c"<dir>\tzap a wand in a direction", true),
-    help_entry(b'^', c"<dir>\tidentify trap type", true),
-    help_entry(b's', c"\tsearch for trap/secret door", true),
-    help_entry(b'>', c"\tgo down a staircase", true),
-    help_entry(b'<', c"\tgo up a staircase", true),
-    help_entry(b'.', c"\trest for a turn", true),
-    help_entry(b',', c"\tpick something up", true),
-    help_entry(b'i', c"\tinventory", true),
-    help_entry(b'I', c"\tinventory single item", true),
-    help_entry(b'q', c"\tquaff potion", true),
-    help_entry(b'r', c"\tread scroll", true),
-    help_entry(b'e', c"\teat food", true),
-    help_entry(b'w', c"\twield a weapon", true),
-    help_entry(b'W', c"\twear armor", true),
-    help_entry(b'T', c"\ttake armor off", true),
-    help_entry(b'P', c"\tput on ring", true),
-    help_entry(b'R', c"\tremove ring", true),
-    help_entry(b'd', c"\tdrop object", true),
-    help_entry(b'c', c"\tcall object", true),
-    help_entry(b'a', c"\trepeat last command", true),
-    help_entry(b')', c"\tprint current weapon", true),
-    help_entry(b']', c"\tprint current armor", true),
-    help_entry(b'=', c"\tprint current rings", true),
-    help_entry(b'@', c"\tprint current stats", true),
-    help_entry(b'D', c"\trecall what's been discovered", true),
-    help_entry(b'o', c"\texamine/set options", true),
-    help_entry(0x12, c"\tredraw screen", true),
-    help_entry(0x10, c"\trepeat last message", true),
-    help_entry(0x1b, c"\tcancel command", true),
-    help_entry(b'S', c"\tsave game", true),
-    help_entry(b'Q', c"\tquit", true),
-    help_entry(b'!', c"\tshell escape", true),
-    help_entry(b'F', c"<dir>\tfight till either of you dies", true),
-    help_entry(b'v', c"\tprint version number", true),
+    help_entry(b'?', "\tprints help", true),
+    help_entry(b'/', "\tidentify object", true),
+    help_entry(b'h', "\tleft", true),
+    help_entry(b'j', "\tdown", true),
+    help_entry(b'k', "\tup", true),
+    help_entry(b'l', "\tright", true),
+    help_entry(b'y', "\tup & left", true),
+    help_entry(b'u', "\tup & right", true),
+    help_entry(b'b', "\tdown & left", true),
+    help_entry(b'n', "\tdown & right", true),
+    help_entry(b'H', "\trun left", false),
+    help_entry(b'J', "\trun down", false),
+    help_entry(b'K', "\trun up", false),
+    help_entry(b'L', "\trun right", false),
+    help_entry(b'Y', "\trun up & left", false),
+    help_entry(b'U', "\trun up & right", false),
+    help_entry(b'B', "\trun down & left", false),
+    help_entry(b'N', "\trun down & right", false),
+    help_entry(0x08, "\trun left until adjacent", false),
+    help_entry(0x0a, "\trun down until adjacent", false),
+    help_entry(0x0b, "\trun up until adjacent", false),
+    help_entry(0x0c, "\trun right until adjacent", false),
+    help_entry(0x19, "\trun up & left until adjacent", false),
+    help_entry(0x15, "\trun up & right until adjacent", false),
+    help_entry(0x02, "\trun down & left until adjacent", false),
+    help_entry(0x16, "\trun down & right until adjacent", false),
+    help_entry(0, "\t<SHIFT><dir>: run that way", true),
+    help_entry(0, "\t<CTRL><dir>: run till adjacent", true),
+    help_entry(b'f', "<dir>\tfight till death or near death", true),
+    help_entry(b't', "<dir>\tthrow something", true),
+    help_entry(b'm', "<dir>\tmove onto without picking up", true),
+    help_entry(b'z', "<dir>\tzap a wand in a direction", true),
+    help_entry(b'^', "<dir>\tidentify trap type", true),
+    help_entry(b's', "\tsearch for trap/secret door", true),
+    help_entry(b'>', "\tgo down a staircase", true),
+    help_entry(b'<', "\tgo up a staircase", true),
+    help_entry(b'.', "\trest for a turn", true),
+    help_entry(b',', "\tpick something up", true),
+    help_entry(b'i', "\tinventory", true),
+    help_entry(b'I', "\tinventory single item", true),
+    help_entry(b'q', "\tquaff potion", true),
+    help_entry(b'r', "\tread scroll", true),
+    help_entry(b'e', "\teat food", true),
+    help_entry(b'w', "\twield a weapon", true),
+    help_entry(b'W', "\twear armor", true),
+    help_entry(b'T', "\ttake armor off", true),
+    help_entry(b'P', "\tput on ring", true),
+    help_entry(b'R', "\tremove ring", true),
+    help_entry(b'd', "\tdrop object", true),
+    help_entry(b'c', "\tcall object", true),
+    help_entry(b'a', "\trepeat last command", true),
+    help_entry(b')', "\tprint current weapon", true),
+    help_entry(b']', "\tprint current armor", true),
+    help_entry(b'=', "\tprint current rings", true),
+    help_entry(b'@', "\tprint current stats", true),
+    help_entry(b'D', "\trecall what's been discovered", true),
+    help_entry(b'o', "\texamine/set options", true),
+    help_entry(0x12, "\tredraw screen", true),
+    help_entry(0x10, "\trepeat last message", true),
+    help_entry(0x1b, "\tcancel command", true),
+    help_entry(b'S', "\tsave game", true),
+    help_entry(b'Q', "\tquit", true),
+    help_entry(b'!', "\tshell escape", true),
+    help_entry(b'F', "<dir>\tfight till either of you dies", true),
+    help_entry(b'v', "\tprint version number", true),
 ];
 
 struct IdentItem {
@@ -183,7 +182,7 @@ pub(crate) unsafe fn help() {
             msg_str(&format!(
                 "{}{}",
                 output::format_key(entry.ch),
-                entry.desc.to_string_lossy()
+                entry.desc
             ));
             lower_msg = false as c_uchar;
         } else {
@@ -224,7 +223,7 @@ pub(crate) unsafe fn help() {
         if entry.ch != 0 {
             output::write_window_text(help_window, &output::format_key(entry.ch));
         }
-        output::write_window_text(help_window, &entry.desc.to_string_lossy());
+        output::write_window_text(help_window, &entry.desc);
     }
 
     output::move_window_cursor(help_window, IVec2::new(0, GameConfig::SCREEN_LINES - 1));

@@ -9,7 +9,7 @@ use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
 use crate::entity::chase::roomin;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster};
-use crate::ffi::{exit, signal, time};
+use std::time::{SystemTime, UNIX_EPOCH};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
@@ -39,30 +39,8 @@ fn flush_stdout() {
     let _ = std::io::stdout().flush();
 }
 
-unsafe extern "C" {
-    static mut dnum: c_int;
-    static master_mode_enabled: c_uchar;
-    static mut noscore: c_int;
-    static mut purse: c_int;
-    static mut seed: c_int;
-    static mut wizard: c_int;
+use crate::globals::{after, count, dnum, in_shell, inv_type, jump, master_mode_enabled, mpos, noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death, wizard};
 
-    // ── Game-control globals from extern.c ────────────────────────────────
-    static mut after: c_uchar;
-    static mut count: c_int;
-    static mut in_shell: c_uchar;
-    static mut inv_type: c_int;
-    static mut jump: c_uchar;
-    static mut mpos: c_int;
-    static mut oldpos: IVec2;
-    static mut oldrp: Option<usize>;
-    static mut playing: c_uchar;
-    static mut q_comm: c_uchar;
-    static mut running: c_uchar;
-    static mut see_floor: c_uchar;
-    static mut terse: c_uchar;
-    static mut to_death: c_uchar;
-}
 
 #[inline]
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
@@ -80,21 +58,19 @@ unsafe fn arg_at(argv: *mut *mut c_char, index: usize) -> *mut c_char {
 /// Exit the program abnormally.
 ///
 /// No globals used directly.
-#[no_mangle]
 pub unsafe extern "C" fn endit(sig: c_int) {
     let _ = sig;
-    fatal(c"Okay, bye bye!\n".as_ptr() as *mut c_char);
+    fatal("Okay, bye bye!\n");
 }
 
 /// fatal:
 /// Exit the program, printing a message.
 ///
 /// No globals used directly.
-#[no_mangle]
-pub unsafe extern "C" fn fatal(s: *mut c_char) {
+pub unsafe fn fatal(s: &str) {
     output::write_text_at(
         IVec2::new(0, GameConfig::SCREEN_LINES - 2),
-        &CStr::from_ptr(s).to_string_lossy(),
+        s,
     );
     output::refresh();
     runtime::shutdown();
@@ -105,8 +81,7 @@ pub unsafe extern "C" fn fatal(s: *mut c_char) {
 /// Roll a number of dice.
 ///
 /// No globals used directly (uses rnd()).
-#[no_mangle]
-pub unsafe extern "C" fn roll(mut number: c_int, sides: c_int) -> c_int {
+pub unsafe fn roll(mut number: c_int, sides: c_int) -> c_int {
     let mut dtotal = 0;
 
     while number > 0 {
@@ -118,7 +93,6 @@ pub unsafe extern "C" fn roll(mut number: c_int, sides: c_int) -> c_int {
 
 /// tstp:
 /// Handle stop and start signals.
-#[no_mangle]
 pub unsafe extern "C" fn tstp(ignored: c_int) {
     let _ = ignored;
 
@@ -156,8 +130,7 @@ pub unsafe extern "C" fn tstp(ignored: c_int) {
 ///
 /// Uses globals: terse, jump, see_floor, inv_type, oldpos, oldrp,
 /// hero, playing, running.
-#[no_mangle]
-pub unsafe extern "C" fn playit() {
+pub unsafe fn playit() {
     /*
      * set up defaults for slow terminals
      */
@@ -192,7 +165,6 @@ pub unsafe extern "C" fn playit() {
 /// Have player make certain, then exit.
 ///
 /// Uses globals: q_comm, mpos, purse, count, to_death.
-#[no_mangle]
 pub unsafe extern "C" fn quit(sig: c_int) {
     let _ = sig;
 
@@ -205,7 +177,7 @@ pub unsafe extern "C" fn quit(sig: c_int) {
     let old_cursor = output::window_cursor(Window::Curscr);
     msg_str("really quit?");
     if readchar() == b'y' as c_int {
-        signal(SIGINT, leave as usize);
+        libc::signal(libc::SIGINT, leave as libc::sighandler_t);
         output::clear_screen();
         let line = format!(
             "You quit with {} gold pieces",
@@ -230,7 +202,6 @@ pub unsafe extern "C" fn quit(sig: c_int) {
 
 /// leave:
 /// Leave quickly, but curteously.
-#[no_mangle]
 pub unsafe extern "C" fn leave(sig: c_int) {
     let _ = sig;
 
@@ -250,8 +221,7 @@ pub unsafe extern "C" fn leave(sig: c_int) {
 /// Let them escape for a while.
 ///
 /// Uses globals: in_shell, after.
-#[no_mangle]
-pub unsafe extern "C" fn shell() {
+pub unsafe fn shell() {
     /*
      * Set the terminal back to original mode
      */
@@ -283,8 +253,7 @@ pub unsafe extern "C" fn shell() {
 /// Leave the process properly.
 ///
 /// No globals used directly.
-#[no_mangle]
-pub unsafe extern "C" fn my_exit(st: c_int) -> ! {
+pub unsafe fn my_exit(st: c_int) -> ! {
     resetltchars();
     if !runtime::is_shutdown() {
         input::set_echo(true);
@@ -292,13 +261,12 @@ pub unsafe extern "C" fn my_exit(st: c_int) -> ! {
     }
     flush_stdout();
     let _ = std::io::stderr().flush();
-    exit(st);
+    std::process::exit(st);
 }
 
 /// The C-ABI entry point, kept for the (legacy) `make` link path.
 /// A native Rust `main` in `src/bin/rogue.rs` calls this with
 /// argv/envp built from `std::env::args_os`.
-#[no_mangle]
 pub unsafe extern "C" fn rogue_main(
     mut argc: c_int,
     mut argv: *mut *mut c_char,
@@ -328,7 +296,8 @@ pub unsafe extern "C" fn rogue_main(
         crate::globals::set_whoami(crate::options::filter_printable(&username));
     }
 
-    let clock_seed = time(std::ptr::null_mut()) as c_int + md_getpid();
+    let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as c_int).unwrap_or(0);
+    let clock_seed = now_secs + md_getpid();
     dnum = if master_mode_enabled != 0 && wizard != 0 {
         std::env::var("SEED")
             .ok()

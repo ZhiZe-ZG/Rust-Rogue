@@ -47,15 +47,8 @@ pub struct Score {
     pub sc_time: c_uint,
 }
 
-unsafe extern "C" {
-    static mut amulet: c_uchar;
-    static mut max_level: c_int;
-    static mut noscore: c_int;
-    static mut pack: *mut crate::entity::player::Thing;
-    static mut purse: c_int;
-    static mut tombstone: c_uchar;
-    static mut wizard: c_int;
-}
+use crate::globals::{amulet, max_level, noscore, purse, tombstone, wizard};
+
 
 #[inline]
 unsafe fn thing_t(
@@ -82,16 +75,15 @@ unsafe fn next_ptr(tp: *mut crate::entity::player::Thing) -> *mut crate::entity:
 }
 
 #[inline]
-unsafe fn vowelstr(s: *const c_char) -> *const c_char {
-    let s = CStr::from_ptr(s);
-    let first = s.to_bytes().first().copied().unwrap_or_default();
+fn vowelstr(s: &str) -> &'static str {
+    let first = s.as_bytes().first().copied().unwrap_or_default();
     if matches!(
         first,
         b'a' | b'A' | b'e' | b'E' | b'i' | b'I' | b'o' | b'O' | b'u' | b'U'
     ) {
-        c"n".as_ptr()
+        "n"
     } else {
-        c"".as_ptr()
+        ""
     }
 }
 
@@ -100,14 +92,11 @@ unsafe fn center_string(s: &str) -> c_int {
     28 - (((s.len() as c_int) + 1) / 2)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn center(s: *mut c_char) -> c_int {
-    let text = CStr::from_ptr(s).to_string_lossy();
-    center_string(&text)
+pub unsafe fn center(s: &str) -> c_int {
+    center_string(s)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn killname(monst: c_char, doart: bool) -> *mut c_char {
+pub unsafe fn killname(monst: c_char, doart: bool) -> String {
     let mut article = false;
     let mut name = String::from("Wally the Wonder Badger");
     if (monst as u8).is_ascii_uppercase() {
@@ -129,8 +118,7 @@ pub unsafe extern "C" fn killname(monst: c_char, doart: bool) -> *mut c_char {
     }
 
     if doart && article {
-        let prefix = CStr::from_ptr(vowelstr(CString::new(name.as_str()).unwrap().as_ptr()))
-            .to_string_lossy();
+        let prefix = vowelstr(name.as_str());
         let mut out = String::new();
         out.push_str("a");
         out.push_str(&prefix);
@@ -139,21 +127,10 @@ pub unsafe extern "C" fn killname(monst: c_char, doart: bool) -> *mut c_char {
         name = out;
     }
 
-    let bytes = name.as_bytes();
-    let buffer = std::slice::from_raw_parts_mut(
-        std::ptr::addr_of_mut!(KILLNAME_BUFFER).cast::<c_char>(),
-        MAXSTR,
-    );
-    buffer.fill(0);
-    for (idx, byte) in bytes.iter().enumerate() {
-        buffer[idx] = *byte as c_char;
-    }
-    buffer[bytes.len()] = 0;
-    std::ptr::addr_of_mut!(KILLNAME_BUFFER).cast::<c_char>()
+    name
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn death_monst() -> c_char {
+pub unsafe fn death_monst() -> c_char {
     static POSS: [c_char; 33] = [
         b'A' as c_char,
         b'B' as c_char,
@@ -194,8 +171,7 @@ pub unsafe extern "C" fn death_monst() -> c_char {
     POSS[idx]
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
+pub unsafe fn score(amount: c_int, flags: c_int, monst: c_char) {
     let mut top_ten = Vec::with_capacity(numscores as usize);
     for _ in 0..numscores as usize {
         top_ten.push(Score {
@@ -311,7 +287,7 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
             );
             if entry.sc_flags == 0 || entry.sc_flags == 3 {
                 let killer = killname(entry.sc_monster as c_char, true);
-                print!(" by {}", CStr::from_ptr(killer).to_string_lossy());
+                print!(" by {}", killer);
             }
             println!(".");
         } else {
@@ -325,11 +301,8 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn death(monst: c_char) {
-    let mut killer = CStr::from_ptr(killname(monst, false))
-        .to_string_lossy()
-        .to_string();
+pub unsafe fn death(monst: c_char) {
+    let mut killer = killname(monst, false);
     purse -= purse / 10;
     output::clear_screen();
 
@@ -424,8 +397,7 @@ pub unsafe extern "C" fn death(monst: c_char) {
     my_exit(0);
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn total_winner() {
+pub unsafe fn total_winner() {
     let lines = [
         "                                                               \n",
         "  @   @               @   @           @          @@@  @     @  \n",
@@ -483,14 +455,12 @@ pub fn rip_art() -> &'static [&'static str] {
 }
 
 /// Returns the number of lines in the Rust-backed RIP artwork.
-#[no_mangle]
-pub extern "C" fn rogue_rip_count() -> usize {
+pub fn rogue_rip_count() -> usize {
     RIP_ART.len()
 }
 
 /// Returns a pointer to a specific RIP artwork line for C FFI callers.
-#[no_mangle]
-pub extern "C" fn rogue_rip_line(index: usize) -> *const c_char {
+pub fn rogue_rip_line(index: usize) -> *const c_char {
     RIP_ART[index].as_ptr() as *const c_char
 }
 
@@ -500,17 +470,15 @@ mod tests {
 
     #[test]
     fn center_keeps_text_centered() {
-        let s = b"You\0";
         assert_eq!(
-            unsafe { center(s.as_ptr() as *mut c_char) },
+            unsafe { center("You") },
             28 - ((("You".len() as c_int) + 1) / 2)
         );
     }
 
     #[test]
     fn killname_uses_monster_names() {
-        let name = unsafe { CStr::from_ptr(killname(b'F' as c_char, false)) };
-        let s = name.to_string_lossy();
+        let s = unsafe { killname(b'F' as c_char, false) };
         assert!(!s.is_empty());
     }
 }

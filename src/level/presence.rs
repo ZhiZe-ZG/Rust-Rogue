@@ -173,7 +173,7 @@ unsafe fn place_room_contents() {
             continue;
         }
 
-        if rnd(2) == 0 && (!amulet || level >= max_level) {
+        if rnd(2) == 0 && (amulet == 0 || level >= max_level) {
             let gold = new_item();
 
             if !gold.is_null() {
@@ -212,7 +212,7 @@ unsafe fn put_things() {
 
     // Once you have found the amulet, the only way to get new stuff is
     // go down into the dungeon.
-    if amulet && level < max_level {
+    if amulet != 0 && level < max_level {
         return;
     }
 
@@ -233,7 +233,7 @@ unsafe fn put_things() {
 
     // If he is really deep in the dungeon and he hasn't found the amulet
     // yet, put it somewhere on the ground.
-    if level >= GameConfig::AMULET_LEVEL && !amulet {
+    if level >= GameConfig::AMULET_LEVEL && amulet == 0 {
         if let Some(pos) = find_floor(None, 0, false) {
             let obj = new_item();
             let og = thing_o(obj);

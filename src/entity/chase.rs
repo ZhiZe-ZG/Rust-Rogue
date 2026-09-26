@@ -13,7 +13,6 @@ use crate::entity::fight::attack;
 use crate::entity::player::{set_thing_dest, set_thing_dest_hero, thing_dest};
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::entity::rndmove::rndmove;
-use crate::ffi::abort;
 use crate::game::MONSTER_LIST;
 use crate::globals::monsters;
 use crate::item::scrolls::ScrollType;
@@ -52,17 +51,8 @@ static mut TRYP: IVec2 = IVec2 { x: 0, y: 0 };
 /// Temporary coord for cansee (mirrors C's `static coord tp`).
 static mut CANSEE_TP: IVec2 = IVec2 { x: 0, y: 0 };
 
-unsafe extern "C" {
+use crate::globals::{count, delta, has_hit, kamikaze, quiet, running, see_floor, to_death};
 
-    static mut has_hit: c_uchar;
-    static mut to_death: c_uchar;
-    static mut running: c_uchar;
-    static mut count: c_int;
-    static mut quiet: c_int;
-    static mut kamikaze: c_uchar;
-    static mut see_floor: c_uchar;
-    static mut delta: IVec2;
-}
 
 #[inline]
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
@@ -128,8 +118,7 @@ unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut Thing) {
 /// Make all the running monsters move.
 ///
 /// Uses globals: mlist, hero, to_death, has_hit.
-#[no_mangle]
-pub unsafe extern "C" fn runners() {
+pub unsafe fn runners() {
     for id in MONSTER_LIST.ids() {
         if let Some(tp) = MONSTER_LIST.handle(id) {
             if !monster_has(tp, MonsterFlags::HELD) && monster_has(tp, MonsterFlags::RUN) {
@@ -164,8 +153,7 @@ pub unsafe extern "C" fn runners() {
 
 /// move_monst:
 /// Execute a single turn of running for a monster
-#[no_mangle]
-pub unsafe extern "C" fn move_monst(tp: *mut Thing) -> c_int {
+pub unsafe fn move_monst(tp: *mut Thing) -> c_int {
     if !monster_has(tp, MonsterFlags::SLOW) || (*thing_t(tp)).t_turn {
         if do_chase(tp) == -1 {
             return -1;
@@ -185,8 +173,7 @@ pub unsafe extern "C" fn move_monst(tp: *mut Thing) -> c_int {
 /// all the relevant state.
 ///
 /// Uses globals: places (via moat), player, see_monst (function).
-#[no_mangle]
-pub unsafe extern "C" fn relocate(th: *mut Thing, new_loc: *mut IVec2) {
+pub unsafe fn relocate(th: *mut Thing, new_loc: *mut IVec2) {
     if new_loc.is_null() {
         return;
     }
@@ -225,8 +212,7 @@ pub unsafe extern "C" fn relocate(th: *mut Thing, new_loc: *mut IVec2) {
 ///
 /// Uses globals: hero, proom, passages, places (via flat/chat/moat),
 /// delta, running, count, quiet, to_death, kamikaze, lvl_obj.
-#[no_mangle]
-pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
+pub unsafe fn do_chase(th: *mut Thing) -> c_int {
     let mut mindist: c_int = 32767;
     let mut curdist: c_int;
     let mut stoprun = false; // true as c_uchar means we are there
@@ -307,7 +293,7 @@ pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
                 fire_bolt(
                     &raw mut (*thing_t(th)).t_pos,
                     &raw mut delta,
-                    c"flame".as_ptr() as *mut c_char,
+                    "flame",
                 );
                 running = false as c_uchar;
                 count = 0;
@@ -360,8 +346,7 @@ pub unsafe extern "C" fn do_chase(th: *mut Thing) -> c_int {
 /// Set the oldch character for the monster
 ///
 /// Uses globals: player, hero, see_floor, places (via chat).
-#[no_mangle]
-pub unsafe extern "C" fn set_oldch(tp: *mut Thing, cp: *mut IVec2) {
+pub unsafe fn set_oldch(tp: *mut Thing, cp: *mut IVec2) {
     if coord_eq((*thing_t(tp)).t_pos, *cp) {
         return;
     }
@@ -383,8 +368,7 @@ pub unsafe extern "C" fn set_oldch(tp: *mut Thing, cp: *mut IVec2) {
 /// Return true as c_uchar if the hero can see the monster
 ///
 /// Uses globals: player, hero, proom, places (via chat).
-#[no_mangle]
-pub unsafe extern "C" fn see_monst(mp: *mut Thing) -> c_uchar {
+pub unsafe fn see_monst(mp: *mut Thing) -> c_uchar {
     if player_has(MonsterFlags::BLIND) {
         return false as c_uchar;
     }
@@ -417,8 +401,7 @@ pub unsafe extern "C" fn see_monst(mp: *mut Thing) -> c_uchar {
 /// Set a monster running after the hero.
 ///
 /// Uses globals: places (via moat).
-#[no_mangle]
-pub unsafe extern "C" fn runto(runner: *mut IVec2) {
+pub unsafe fn runto(runner: *mut IVec2) {
     // If we couldn't find him, something is funny.
     // (C guarded this with `#ifdef MASTER`; always report in the Rust port.)
     let tp = moat_at((*runner).y, (*runner).x);
@@ -444,8 +427,7 @@ pub unsafe extern "C" fn runto(runner: *mut IVec2) {
 /// false as c_uchar if we reach the goal.
 ///
 /// Uses globals: hero, lvl_obj, places (via moat/chat/winat).
-#[no_mangle]
-pub unsafe extern "C" fn chase(tp: *mut Thing, ee: *mut IVec2) -> c_uchar {
+pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> c_uchar {
     let mut curdist: c_int;
     let mut thisdist: c_int;
     let er = &raw mut (*thing_t(tp)).t_pos;
@@ -546,7 +528,6 @@ pub unsafe extern "C" fn chase(tp: *mut Thing, ee: *mut IVec2) -> c_uchar {
 /// in any room.
 ///
 /// Uses globals: places (via flat), passages, rooms, msg.
-#[no_mangle]
 pub unsafe fn roomin(cp: *mut IVec2) -> Option<usize> {
     if cp.is_null() {
         return None;
@@ -558,7 +539,7 @@ pub unsafe fn roomin(cp: *mut IVec2) -> Option<usize> {
 
     msg_str(&format!("in some bizarre place ({}, {})", (*cp).y, (*cp).x));
     if MASTER {
-        abort();
+        std::process::abort();
     }
     None
 }
@@ -567,8 +548,7 @@ pub unsafe fn roomin(cp: *mut IVec2) -> Option<usize> {
 /// Check to see if the move is legal if it is diagonal
 ///
 /// Uses globals: places (via chat).
-#[no_mangle]
-pub unsafe extern "C" fn diag_ok(sp: *mut IVec2, ep: *mut IVec2) -> c_uchar {
+pub unsafe fn diag_ok(sp: *mut IVec2, ep: *mut IVec2) -> c_uchar {
     if (*ep).x < 0
         || (*ep).x >= GameConfig::SCREEN_COLS
         || (*ep).y <= 0
@@ -592,8 +572,7 @@ pub unsafe extern "C" fn diag_ok(sp: *mut IVec2, ep: *mut IVec2) -> c_uchar {
 /// Returns true if the hero can see a certain coordinate.
 ///
 /// Uses globals: player, hero, proom, places (via flat/chat).
-#[no_mangle]
-pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
+pub unsafe fn cansee(y: c_int, x: c_int) -> c_uchar {
     if player_has(MonsterFlags::BLIND) {
         return false as c_uchar;
     }
@@ -629,8 +608,7 @@ pub unsafe extern "C" fn cansee(y: c_int, x: c_int) -> c_uchar {
 /// otherwise it may target a nearby floor object it wants to pick up.
 ///
 /// Uses globals: monsters, hero, proom, lvl_obj, mlist.
-#[no_mangle]
-pub unsafe extern "C" fn update_dest(tp: *mut Thing) {
+pub unsafe fn update_dest(tp: *mut Thing) {
     let prob = monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry;
     if prob <= 0
         || (*thing_t(tp)).t_room == crate::game::PLAYER.room()
@@ -672,14 +650,12 @@ pub unsafe extern "C" fn update_dest(tp: *mut Thing) {
 /// Calculate the "distance" between to points.  Actually,
 /// this calculates d^2, not d, but that's good enough for
 /// our purposes, since it's only used comparitively.
-#[no_mangle]
-pub unsafe extern "C" fn dist(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int {
+pub unsafe fn dist(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int {
     (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)
 }
 
 /// dist_cp:
 /// Call dist() with appropriate arguments for coord pointers
-#[no_mangle]
-pub unsafe extern "C" fn dist_cp(c1: *mut IVec2, c2: *mut IVec2) -> c_int {
+pub unsafe fn dist_cp(c1: *mut IVec2, c2: *mut IVec2) -> c_int {
     dist((*c1).y, (*c1).x, (*c2).y, (*c2).x)
 }

@@ -61,19 +61,8 @@ const LAMPDIST: c_int = 3;
 
 // ─── Legacy C ABI surface ─────────────────────────────────────────────────────
 
-unsafe extern "C" {
-    static mut after: c_uchar;
-    static mut door_stop: c_uchar;
-    static mut firstmove: c_uchar;
-    static mut jump: c_uchar;
-    static mut oldpos: IVec2;
-    static mut oldrp: Option<usize>;
-    static mut runch: c_char;
-    static mut running: c_uchar;
-    static mut see_floor: c_uchar;
-    static mut seenstairs: c_uchar;
+use crate::globals::{after, door_stop, firstmove, jump, oldpos, oldrp, runch, running, see_floor, seenstairs};
 
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -321,8 +310,7 @@ fn is_door_or_hidden(ch: c_char, flags: c_char) -> bool {
 /// Iterates the screen and redraws every cell marked as a passage or a door,
 /// marking it seen. Every glyph comes from [`cell_glyph`]/[`flat_at`] which read
 /// `CURRENT_LEVEL` directly.
-#[no_mangle]
-pub unsafe extern "C" fn add_pass() {
+pub unsafe fn add_pass() {
     for y in 1..GameConfig::SCREEN_LINES - 1 {
         for x in 0..GameConfig::SCREEN_COLS {
             let flags = flat_at(y, x);
@@ -356,8 +344,7 @@ pub unsafe extern "C" fn add_pass() {
 /// look:
 /// This routine actually draws the screen. Called with `wakeup` true to
 /// wake monsters that the hero can now see.
-#[no_mangle]
-pub unsafe extern "C" fn look(wakeup: c_uchar) {
+pub unsafe fn look(wakeup: c_uchar) {
     let mut ch: c_int;
     let mut tp: *mut Thing;
     let mut ey: c_int;
@@ -525,8 +512,7 @@ pub unsafe extern "C" fn look(wakeup: c_uchar) {
 
 /// trip_ch:
 /// Maybe trip on a hallucination — randomize a visible glyph.
-#[no_mangle]
-pub unsafe extern "C" fn trip_ch(y: c_int, x: c_int, ch: c_int) -> c_int {
+pub unsafe fn trip_ch(y: c_int, x: c_int, ch: c_int) -> c_int {
     if player_has(MonsterFlags::HALU) && after != 0 {
         let tile = ch as c_char;
         if tile != FLOOR
@@ -546,8 +532,7 @@ pub unsafe extern "C" fn trip_ch(y: c_int, x: c_int, ch: c_int) -> c_int {
 
 /// erase_lamp:
 /// Clear the highlighted floor cells when a lamp fades in a dark room.
-#[no_mangle]
-pub unsafe extern "C" fn erase_lamp(pos: *mut IVec2, rp: Option<usize>) {
+pub unsafe fn erase_lamp(pos: *mut IVec2, rp: Option<usize>) {
     if !((see_floor != 0)
         && rp.is_some()
         && crate::game::room_dark(rp)
@@ -591,8 +576,7 @@ unsafe fn cchar_at_cursor() -> c_char {
 
 /// enter_room:
 /// Code that is executed whenever the hero appears in a room.
-#[no_mangle]
-pub unsafe extern "C" fn enter_room(cp: *mut IVec2) {
+pub unsafe fn enter_room(cp: *mut IVec2) {
     if cp.is_null() {
         return;
     }
@@ -653,8 +637,7 @@ pub unsafe extern "C" fn enter_room(cp: *mut IVec2) {
 
 /// leave_room:
 /// Code for when the hero exits a room.
-#[no_mangle]
-pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
+pub unsafe fn leave_room(cp: *mut IVec2) {
     if cp.is_null() {
         return;
     }
@@ -719,8 +702,7 @@ pub unsafe extern "C" fn leave_room(cp: *mut IVec2) {
 
 /// turnref:
 /// Decide whether to refresh at a passage turning or not.
-#[no_mangle]
-pub unsafe extern "C" fn turnref() {
+pub unsafe fn turnref() {
     let hero = hero_pos();
     if (flat_at(hero.y, hero.x) as u8 & F_SEEN as u8) == 0 {
         if jump != 0 {

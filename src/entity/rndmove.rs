@@ -61,8 +61,7 @@ pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
 
 /// rndmove:
 /// Move in a random direction if the monster/person is confused.
-#[no_mangle]
-pub unsafe extern "C" fn rndmove(who: *mut Thing) -> *mut IVec2 {
+pub unsafe fn rndmove(who: *mut Thing) -> *mut IVec2 {
     let pos = (*crate::entity::player::thing_t(who)).t_pos;
     RET = rndmove_from(pos);
     &raw mut RET

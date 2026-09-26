@@ -103,11 +103,8 @@ pub static mut group: c_int = 2;
 
 static mut FALL_POS: IVec2 = IVec2 { x: 0, y: 0 };
 
-unsafe extern "C" {
-    static mut terse: c_uchar;
-    static mut after: c_uchar;
-    static mut has_hit: c_uchar;
-}
+use crate::globals::{after, has_hit, terse};
+
 
 #[inline]
 unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
@@ -148,9 +145,8 @@ unsafe fn copy_c_bytes(dst: &mut [u8], src: &[u8]) {
 }
 
 /// Throws a selected weapon in the provided direction and resolves impact/fall behavior.
-#[no_mangle]
-pub unsafe extern "C" fn missile(ydelta: c_int, xdelta: c_int) {
-    let mut obj = get_item(c"throw".as_ptr(), WEAPON as c_int);
+pub unsafe fn missile(ydelta: c_int, xdelta: c_int) {
+    let mut obj = get_item("throw", WEAPON as c_int);
     if obj.is_null() {
         return;
     }
@@ -170,8 +166,7 @@ pub unsafe extern "C" fn missile(ydelta: c_int, xdelta: c_int) {
 }
 
 /// Animates projectile movement until it hits blocking terrain or a door.
-#[no_mangle]
-pub unsafe extern "C" fn do_motion(obj: *mut Thing, ydelta: c_int, xdelta: c_int) {
+pub unsafe fn do_motion(obj: *mut Thing, ydelta: c_int, xdelta: c_int) {
     let o = thing_o(obj);
     (*o).o_pos = hero();
 
@@ -208,8 +203,7 @@ pub unsafe extern "C" fn do_motion(obj: *mut Thing, ydelta: c_int, xdelta: c_int
 }
 
 /// Drops an item near its current position or discards it if no floor slot is available.
-#[no_mangle]
-pub unsafe extern "C" fn fall(obj: *mut Thing, pr: c_uchar) {
+pub unsafe fn fall(obj: *mut Thing, pr: c_uchar) {
     if fallpos(&mut (*thing_o(obj)).o_pos, &raw mut FALL_POS) != 0 {
         // Objects render from the `lvl_obj` list; no glyph write needed.
         (*thing_o(obj)).o_pos = FALL_POS;
@@ -245,8 +239,7 @@ pub unsafe extern "C" fn fall(obj: *mut Thing, pr: c_uchar) {
 }
 
 /// Initializes a weapon object with baseline damage, flags, and stack counts.
-#[no_mangle]
-pub unsafe extern "C" fn init_weapon(weap: *mut Thing, which: c_int) {
+pub unsafe fn init_weapon(weap: *mut Thing, which: c_int) {
     let o = thing_o(weap);
     (*o).o_type = WEAPON as c_int;
     (*o).o_which = which;
@@ -274,8 +267,7 @@ pub unsafe extern "C" fn init_weapon(weap: *mut Thing, which: c_int) {
 }
 
 /// Resolves thrown-weapon combat against the target tile.
-#[no_mangle]
-pub unsafe extern "C" fn hit_monster(y: c_int, x: c_int, obj: *mut Thing) -> c_int {
+pub unsafe fn hit_monster(y: c_int, x: c_int, obj: *mut Thing) -> c_int {
     let mut mp = IVec2 { x, y };
     fight(&mut mp, obj, true as c_uchar)
 }
@@ -290,8 +282,7 @@ pub fn num(n1: c_int, n2: c_int, obj_type: c_char) -> String {
 }
 
 /// Equips a selected weapon after validating curses and item type constraints.
-#[no_mangle]
-pub unsafe extern "C" fn wield() {
+pub unsafe fn wield() {
     let oweapon = PLAYER.weapon();
     if dropcheck(PLAYER.weapon()) == 0 {
         PLAYER.set_weapon(oweapon);
@@ -299,7 +290,7 @@ pub unsafe extern "C" fn wield() {
     }
     PLAYER.set_weapon(oweapon);
 
-    let obj = get_item(c"wield".as_ptr(), WEAPON as c_int);
+    let obj = get_item("wield", WEAPON as c_int);
     if obj.is_null() {
         after = 0;
         return;
@@ -328,8 +319,7 @@ pub unsafe extern "C" fn wield() {
 }
 
 /// Chooses a nearby floor/passage location to drop an item and returns whether one was found.
-#[no_mangle]
-pub unsafe extern "C" fn fallpos(pos: *mut IVec2, newpos: *mut IVec2) -> c_uchar {
+pub unsafe fn fallpos(pos: *mut IVec2, newpos: *mut IVec2) -> c_uchar {
     let mut cnt = 0;
     for y in ((*pos).y - 1)..=((*pos).y + 1) {
         for x in ((*pos).x - 1)..=((*pos).x + 1) {

@@ -87,19 +87,10 @@ unsafe fn master_enabled() -> bool {
     master_mode_enabled != 0
 }
 
-unsafe extern "C" {
-    static mut n_objs: c_int;
-    static mut mpos: c_int;
-    static mut a_class: [c_int; 26];
-    static mut no_move: c_int;
-    static mut count: c_int;
-    static mut running: c_uchar;
-    static mut vf_hit: c_int;
+use crate::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hit};
 
-}
 
-#[no_mangle]
-pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
+pub unsafe fn whatis(insist: c_uchar, item_type: c_int) {
     let pack = crate::game::PLAYER.pack();
     if pack.is_null() {
         msg_str("you don't have anything in your pack to identify");
@@ -108,7 +99,7 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
 
     let mut obj: *mut Thing = ptr::null_mut();
     loop {
-        obj = get_item(c"identify".as_ptr(), item_type);
+        obj = get_item("identify", item_type);
         if insist != 0 {
             if n_objs == 0 {
                 return;
@@ -147,8 +138,7 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
     msg_str(&inv_name(obj, false as c_uchar));
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn set_know(obj: *mut Thing, info: *mut CObjInfo) {
+pub unsafe fn set_know(obj: *mut Thing, info: *mut CObjInfo) {
     if obj.is_null() || info.is_null() {
         return;
     }
@@ -174,8 +164,7 @@ pub fn type_name(item_type: c_int) -> &'static str {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn create_obj() {
+pub unsafe fn create_obj() {
     if !master_enabled() {
         return;
     }
@@ -255,8 +244,7 @@ pub unsafe extern "C" fn create_obj() {
     add_pack(obj, false as c_uchar);
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn teleport() {
+pub unsafe fn teleport() {
     let mut c = find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
     let mut hero = hero();
 
@@ -285,8 +273,7 @@ pub unsafe extern "C" fn teleport() {
     flush_type();
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn show_map() {
+pub unsafe fn show_map() {
     if !master_enabled() {
         return;
     }

@@ -10,7 +10,7 @@ pub mod daemon;
 pub mod daemons;
 pub mod draw;
 pub mod entity;
-pub(crate) mod ffi;
+
 pub mod game;
 pub mod globals;
 pub mod help;

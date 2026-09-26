@@ -75,8 +75,7 @@ const ERR: c_int = -1;
 
 /// md_onsignal_default:
 /// Restore default signal disposition for common termination signals.
-#[no_mangle]
-pub unsafe extern "C" fn md_onsignal_default() {
+pub unsafe fn md_onsignal_default() {
     #[cfg(unix)]
     {
         libc::signal(libc::SIGHUP, libc::SIG_DFL);
@@ -94,8 +93,7 @@ pub unsafe extern "C" fn md_onsignal_default() {
 
 /// md_onsignal_exit:
 /// Arrange for signals to exit the program.
-#[no_mangle]
-pub unsafe extern "C" fn md_onsignal_exit() {
+pub unsafe fn md_onsignal_exit() {
     #[cfg(unix)]
     {
         let exit_h: libc::sighandler_t = libc::exit as libc::sighandler_t;
@@ -136,8 +134,7 @@ unsafe fn md_onsignal_autosave() {
 
 /// md_ignoreallsignals:
 /// Ignore all signals.
-#[no_mangle]
-pub unsafe extern "C" fn md_ignoreallsignals() {
+pub unsafe fn md_ignoreallsignals() {
     // libc::NSIG is not exposed by the Rust libc crate; 32 matches the
     // `#ifndef NSIG  #define NSIG 32` fallback in the original mdport.c.
     for sig in 0..32 {
@@ -147,8 +144,7 @@ pub unsafe extern "C" fn md_ignoreallsignals() {
 
 /// md_init:
 /// Perform machine-dependent startup initialization.
-#[no_mangle]
-pub unsafe extern "C" fn md_init() {
+pub unsafe fn md_init() {
     #[cfg(unix)]
     {
         // ESCDELAY is a curses global; the ncurses crate exposes set_escdelay().
@@ -159,8 +155,7 @@ pub unsafe extern "C" fn md_init() {
 
 /// md_hasclreol:
 /// Return true if the terminal supports clear-to-end-of-line.
-#[no_mangle]
-pub unsafe extern "C" fn md_hasclreol() -> c_int {
+pub unsafe fn md_hasclreol() -> c_int {
     // The ncurses crate doesn't expose clr_eol/CE directly.  Assume the
     // terminal supports it (all common terminals do).
     1
@@ -178,15 +173,13 @@ unsafe fn md_putchar(c: c_int) {
 
 /// md_raw_standout:
 /// Turn on standout (reverse-video) output.
-#[no_mangle]
-pub unsafe extern "C" fn md_raw_standout() {
+pub unsafe fn md_raw_standout() {
     output::set_standout(true);
 }
 
 /// md_raw_standend:
 /// Turn off standout (reverse-video) output.
-#[no_mangle]
-pub unsafe extern "C" fn md_raw_standend() {
+pub unsafe fn md_raw_standend() {
     output::set_standout(false);
 }
 
@@ -197,26 +190,30 @@ pub unsafe extern "C" fn md_raw_standend() {
 /// md_unlink_open_file:
 /// Unlink an open file.  On POSIX there is nothing special to do beyond
 /// unlinking the path.
-#[no_mangle]
 pub unsafe fn md_unlink_open_file(file: &str, _inf: *mut c_void) -> c_int {
-    let bytes = crate::ffi::to_c_bytes(file);
-    libc::unlink(bytes.as_ptr() as *const libc::c_char)
+    match std::fs::remove_file(file) {
+        Ok(()) => 0,
+        Err(_) => -1,
+    }
 }
 
 /// md_unlink:
 /// Remove a file.
-#[no_mangle]
 pub unsafe fn md_unlink(file: &str) -> c_int {
-    let bytes = crate::ffi::to_c_bytes(file);
-    libc::unlink(bytes.as_ptr() as *const libc::c_char)
+    match std::fs::remove_file(file) {
+        Ok(()) => 0,
+        Err(_) => -1,
+    }
 }
 
 /// md_chmod:
 /// Change file permissions.
-#[no_mangle]
 pub unsafe fn md_chmod(filename: &str, mode: c_int) -> c_int {
-    let bytes = crate::ffi::to_c_bytes(filename);
-    libc::chmod(bytes.as_ptr() as *const libc::c_char, mode as libc::mode_t)
+    use std::os::unix::fs::PermissionsExt;
+    match std::fs::set_permissions(filename, std::fs::Permissions::from_mode(mode as u32)) {
+        Ok(()) => 0,
+        Err(_) => -1,
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -229,8 +226,7 @@ pub unsafe fn md_chmod(filename: &str, mode: c_int) -> c_int {
 /// Mirrors the original mdport.c: each platform uses exactly one
 /// privilege-dropping call (the most capable one available) with -1
 /// (keep current) for the real uid/gid slot.
-#[no_mangle]
-pub unsafe extern "C" fn md_normaluser() {
+pub unsafe fn md_normaluser() {
     #[cfg(unix)]
     {
         let realgid = libc::getgid();
@@ -244,7 +240,7 @@ pub unsafe extern "C" fn md_normaluser() {
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         let gerr = libc::setregid(realgid, realgid) != 0;
         if gerr {
-            libc::perror(c"Could not drop setgid privileges.  Aborting.".as_ptr());
+            eprintln!("Could not drop setgid privileges.  Aborting.");
             libc::exit(1);
         }
 
@@ -254,7 +250,7 @@ pub unsafe extern "C" fn md_normaluser() {
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         let uerr = libc::setreuid(realuid, realuid) != 0;
         if uerr {
-            libc::perror(c"Could not drop setuid privileges.  Aborting.".as_ptr());
+            eprintln!("Could not drop setuid privileges.  Aborting.");
             libc::exit(1);
         }
     }
@@ -262,8 +258,7 @@ pub unsafe extern "C" fn md_normaluser() {
 
 /// md_getuid:
 /// Return the real user id.
-#[no_mangle]
-pub unsafe extern "C" fn md_getuid() -> c_uint {
+pub unsafe fn md_getuid() -> c_uint {
     #[cfg(unix)]
     {
         libc::getuid() as c_uint
@@ -276,8 +271,7 @@ pub unsafe extern "C" fn md_getuid() -> c_uint {
 
 /// md_getpid:
 /// Return the process id.
-#[no_mangle]
-pub unsafe extern "C" fn md_getpid() -> c_int {
+pub unsafe fn md_getpid() -> c_int {
     #[cfg(unix)]
     {
         libc::getpid() as c_int
@@ -294,7 +288,6 @@ pub unsafe extern "C" fn md_getpid() -> c_int {
 
 /// md_getusername:
 /// Return the login name of the current user.
-#[no_mangle]
 pub unsafe fn md_getusername() -> String {
     #[cfg(unix)]
     {
@@ -319,7 +312,6 @@ pub unsafe fn md_getusername() -> String {
 
 /// md_gethomedir:
 /// Return the home directory of the current user, with a trailing slash.
-#[no_mangle]
 pub unsafe fn md_gethomedir() -> String {
     let mut home: Option<String> = None;
 
@@ -346,8 +338,7 @@ pub unsafe fn md_gethomedir() -> String {
 
 /// md_sleep:
 /// Sleep for the given number of seconds.
-#[no_mangle]
-pub unsafe extern "C" fn md_sleep(s: c_int) {
+pub unsafe fn md_sleep(s: c_int) {
     #[cfg(unix)]
     {
         libc::sleep(s as c_uint);
@@ -356,7 +347,6 @@ pub unsafe extern "C" fn md_sleep(s: c_int) {
 
 /// md_getshell:
 /// Return the user's login shell.
-#[no_mangle]
 pub unsafe fn md_getshell() -> String {
     #[cfg(unix)]
     {
@@ -381,8 +371,7 @@ pub unsafe fn md_getshell() -> String {
 
 /// md_shellescape:
 /// Escape to a shell; return the exit status of the shell.
-#[no_mangle]
-pub unsafe extern "C" fn md_shellescape() -> c_int {
+pub unsafe fn md_shellescape() -> c_int {
     #[cfg(unix)]
     {
         let sh = md_getshell();
@@ -397,14 +386,15 @@ pub unsafe extern "C" fn md_shellescape() -> c_int {
         if pid == 0 {
             // Shell process: drop privileges then exec the shell.
             md_normaluser();
-            let shell_bytes = crate::ffi::to_c_bytes(&sh);
+            let shell_c = std::ffi::CString::new(sh.as_str())
+                .unwrap_or_else(|_| std::ffi::CString::new("/bin/sh").unwrap());
             libc::execl(
-                shell_bytes.as_ptr() as *const libc::c_char,
+                shell_c.as_ptr(),
                 c"shell".as_ptr(),
                 c"-i".as_ptr(),
                 std::ptr::null::<libc::c_char>(),
             );
-            libc::perror(c"No shelly".as_ptr());
+            eprintln!("No shelly");
             libc::_exit(-1);
         } else {
             // Application: ignore interrupt/quit while the shell runs.
@@ -475,23 +465,20 @@ unsafe fn md_killchar() -> c_int {
 
 /// md_dsuspchar:
 /// Return the terminal delete-suspend character.
-#[no_mangle]
-pub unsafe extern "C" fn md_dsuspchar() -> c_int {
+pub unsafe fn md_dsuspchar() -> c_int {
     // No portable POSIX VDSUSP; use 0 (which the caller treats as "disabled").
     0
 }
 
 /// md_setdsuspchar:
 /// Set the terminal delete-suspend character.
-#[no_mangle]
-pub unsafe extern "C" fn md_setdsuspchar(_c: c_int) -> c_int {
+pub unsafe fn md_setdsuspchar(_c: c_int) -> c_int {
     0
 }
 
 /// md_suspchar:
 /// Return the terminal suspend character.
-#[no_mangle]
-pub unsafe extern "C" fn md_suspchar() -> c_int {
+pub unsafe fn md_suspchar() -> c_int {
     #[cfg(unix)]
     {
         let mut attr = std::mem::zeroed::<libc::termios>();
@@ -526,8 +513,7 @@ const M_TRAIL: c_int = 3;
 /// md_readchar:
 /// Read a character, translating cursor/keypad escape sequences into the
 /// classic rogue movement commands (h j k l y u b n, plus Ctrl-modified runs).
-#[no_mangle]
-pub unsafe extern "C" fn md_readchar() -> c_int {
+pub unsafe fn md_readchar() -> c_int {
     let mut ch = 0;
     let mut lastch = 0;
     let mut mode = M_NORMAL;
@@ -723,6 +709,7 @@ unsafe extern "C" {
     fn getloadavg(loadavg: *mut f64, nelem: c_int) -> c_int;
 }
 
+
 /// md_loadav:
 /// Fill `avg` (3 doubles) with the 1/5/15 minute load averages.
 unsafe fn md_loadav(avg: *mut f64) {
@@ -770,8 +757,7 @@ unsafe fn md_stop_checkout_timer() {
 
 /// md_tstphold:
 /// Hold (ignore) SIGTSTP so the process can't be suspended.
-#[no_mangle]
-pub unsafe extern "C" fn md_tstphold() {
+pub unsafe fn md_tstphold() {
     #[cfg(unix)]
     {
         libc::signal(libc::SIGTSTP, libc::SIG_IGN);
@@ -780,8 +766,7 @@ pub unsafe extern "C" fn md_tstphold() {
 
 /// md_tstpresume:
 /// Restore the SIGTSTP handler to the game's tstp() function.
-#[no_mangle]
-pub unsafe extern "C" fn md_tstpresume() {
+pub unsafe fn md_tstpresume() {
     #[cfg(unix)]
     {
         libc::signal(libc::SIGTSTP, tstp as libc::sighandler_t);
@@ -790,8 +775,7 @@ pub unsafe extern "C" fn md_tstpresume() {
 
 /// md_tstpsignal:
 /// Send SIGTSTP to the process group to actually suspend.
-#[no_mangle]
-pub unsafe extern "C" fn md_tstpsignal() {
+pub unsafe fn md_tstpsignal() {
     #[cfg(unix)]
     {
         libc::kill(0, libc::SIGTSTP);

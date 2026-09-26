@@ -5,7 +5,7 @@
 use crate::entity::player::Thing as PlayerCThing;
 use crate::entity::stats::Stats;
 use glam::IVec2;
-use std::os::raw::{c_int, c_uchar, c_uint};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 use std::sync::{Mutex, MutexGuard};
 
 const MAXSTR: usize = 1024;
@@ -59,57 +59,57 @@ pub type CThingObject = crate::entity::player::ThingObject;
 #[no_mangle]
 pub static mut allscore: c_uchar = 1; // ALLSCORES is enabled in the standard build
 #[no_mangle]
-pub static mut after: bool = false;
+pub static mut after: c_uchar = 0;
 #[no_mangle]
-pub static mut again: bool = false;
+pub static mut again: c_uchar = 0;
 #[no_mangle]
 pub static mut noscore: c_int = 0;
 #[no_mangle]
 pub static mut seenstairs: c_uchar = 0;
 #[no_mangle]
-pub static mut amulet: bool = false;
+pub static mut amulet: c_uchar = 0;
 #[no_mangle]
-pub static mut door_stop: bool = false;
+pub static mut door_stop: c_uchar = 0;
 #[no_mangle]
 pub static mut fight_flush: c_uchar = 0;
 #[no_mangle]
-pub static mut firstmove: bool = false;
+pub static mut firstmove: c_uchar = 0;
 #[no_mangle]
-pub static mut got_ltc: bool = false;
+pub static mut got_ltc: c_uchar = 0;
 #[no_mangle]
-pub static mut has_hit: bool = false;
+pub static mut has_hit: c_uchar = 0;
 #[no_mangle]
 pub static mut in_shell: c_uchar = 0;
 #[no_mangle]
 pub static mut inv_describe: c_uchar = 1;
 #[no_mangle]
-pub static mut jump: bool = false;
+pub static mut jump: c_uchar = 0;
 #[no_mangle]
-pub static mut kamikaze: bool = false;
+pub static mut kamikaze: c_uchar = 0;
 #[no_mangle]
 pub static mut lower_msg: c_uchar = 0;
 #[no_mangle]
-pub static mut move_on: bool = false;
+pub static mut move_on: c_uchar = 0;
 #[no_mangle]
-pub static mut msg_esc: bool = false;
+pub static mut msg_esc: c_uchar = 0;
 #[no_mangle]
 pub static mut passgo: c_uchar = 0;
 #[no_mangle]
-pub static mut playing: bool = true;
+pub static mut playing: c_uchar = 1;
 #[no_mangle]
 pub static mut q_comm: c_uchar = 0;
 #[no_mangle]
-pub static mut running: bool = false;
+pub static mut running: c_uchar = 0;
 #[no_mangle]
 pub static mut save_msg: c_uchar = 1;
 #[no_mangle]
-pub static mut see_floor: bool = true;
+pub static mut see_floor: c_uchar = 1;
 #[no_mangle]
 pub static mut stat_msg: c_uchar = 0;
 #[no_mangle]
-pub static mut terse: bool = false;
+pub static mut terse: c_uchar = 0;
 #[no_mangle]
-pub static mut to_death: bool = false;
+pub static mut to_death: c_uchar = 0;
 #[no_mangle]
 pub static mut tombstone: c_uchar = 1;
 #[no_mangle]
@@ -120,7 +120,7 @@ pub static mut wizard: c_int = 0;
 pub static mut pack_used: [c_uchar; 26] = [0; 26];
 
 #[no_mangle]
-pub static mut dir_ch: u8 = 0;
+pub static mut dir_ch: c_char = 0;
 /// Per-item colour names (`char *p_colors[]`), now Rust string slices.
 #[no_mangle]
 pub static mut p_colors: [&'static str; MAXPOTIONS] = [""; MAXPOTIONS];
@@ -128,9 +128,9 @@ pub static mut p_colors: [&'static str; MAXPOTIONS] = [""; MAXPOTIONS];
 #[no_mangle]
 pub static mut r_stones: [&'static str; MAXRINGS] = [""; MAXRINGS];
 #[no_mangle]
-pub static mut runch: u8 = 0;
+pub static mut runch: c_char = 0;
 #[no_mangle]
-pub static mut take: u8 = 0;
+pub static mut take: c_char = 0;
 /// Wand/staff material names (`char *ws_made[]`), now Rust string slices.
 #[no_mangle]
 pub static mut ws_made: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
@@ -140,13 +140,13 @@ pub static mut ws_type: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
 #[no_mangle]
 pub static mut orig_dsusp: c_int = 0;
 #[no_mangle]
-pub static mut l_last_comm: u8 = 0;
+pub static mut l_last_comm: c_char = 0;
 #[no_mangle]
-pub static mut l_last_dir: u8 = 0;
+pub static mut l_last_dir: c_char = 0;
 #[no_mangle]
-pub static mut last_comm: u8 = 0;
+pub static mut last_comm: c_char = 0;
 #[no_mangle]
-pub static mut last_dir: u8 = 0;
+pub static mut last_dir: c_char = 0;
 #[no_mangle]
 pub static mut numscores: c_uint = 10; // NUMSCORES from config.h
 /// The number label for the scoreboard (`NUMNAME` from config.h).
@@ -1247,7 +1247,7 @@ pub fn set_mpos(value: i32) {
 /// message line is shown.
 #[inline]
 pub fn msg_esc_enabled() -> bool {
-    unsafe { msg_esc }
+    unsafe { msg_esc != 0 }
 }
 
 /// Whether messages should be saved into the `huh` history buffer.
