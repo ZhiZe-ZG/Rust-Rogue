@@ -54,10 +54,22 @@ split into reviewable slices:
   list/arena invariants the migration must preserve — attach/detach across
   head/middle/tail/only-element cases, neighbour-link patching, removal during
   traversal (capturing the successor before free), and balanced allocation
-  accounting via `allocated_count`. Test count is now 41.
-- **Still open**: the generational `ThingId` arena that replaces the `Box`
-  arena and intrusive `l_next`/`l_prev` ordering, and migrating callers off raw
-  `*mut Thing` handles.
+  accounting via `allocated_count`.
+- **Stage 2.6 (done)**: introduced the generational arena in `src/item/arena.rs`
+  (`ThingArena` + opaque `ThingId { index, generation }`). Freed slots advance
+  their generation on reuse, so a handle to a removed object is rejected
+  (`contains`/`with`/`with_mut`/`remove` all validate the generation); that is
+  the property the old slot-only index lacked. Access is closure-scoped like
+  `MonsterList`. Two explicitly documented bridge methods (`ptr`, `id_for_ptr`/
+  `remove_by_ptr`) map between `ThingId` and the legacy `*mut Thing` while the
+  remaining raw-pointer callers migrate; the object store in
+  `item/thing_list.rs` now delegates to this arena (`OBJECTS`), replacing the
+  ad-hoc `Box` vector + separate counter. Four new arena tests cover round-trip,
+  stale-handle rejection across reuse, the pointer bridge, and scoped mutation.
+- **Still open**: migrating callers off raw `*mut Thing` handles (pack, floor
+  items, equipment, monster inventories) to `ThingId`, and removing the
+  intrusive `l_next`/`l_prev` ordering in favour of id sequences. Test count is
+  now 45.
 
 ### Stage 5 progress (dead-code reduction)
 
@@ -207,7 +219,8 @@ stale).
 | Location | Form | Note |
 | --- | --- | --- |
 | `entity/player.rs` | `Thing`, `ThingMonster`/`ThingObject` with `NonNull` links, `thing_t/thing_o/thing_next/thing_prev`, 4 `static mut` externs | intrusive list + actor/object union |
-| `item/thing_list.rs` | `OwnedThing(Box<Thing>)` arena, `*mut Thing` returns | replace with generational `ThingId` |
+| `item/arena.rs` | `ThingArena` slots + `ThingId{index,generation}`; `ptr`/`id_for_ptr` bridge | new owner; callers to migrate off `*mut Thing` |
+| `item/thing_list.rs` | `*mut Thing` returns; adapter over `ThingArena` | thin legacy shim; migrating to `ThingId` |
 | `item/item_list.rs` | `head: *mut Thing` | floor list head |
 | `game/player.rs` | `Slot(RwLock<Option<NonNull<Thing>>>)` equipment | convert to IDs |
 | `game/monster_list.rs` | `handle()`/`find()` bridge to `*mut Thing` | temporary bridge |

@@ -5,23 +5,15 @@
 //! this vector, so list operations no longer depend on a C allocator or ABI.
 
 use crate::entity::player::{Thing, ThingObject};
-use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::{Mutex, OnceLock};
+use crate::item::arena::ThingArena;
 
-/// Arena slot: a boxed, stable-address thing.
+/// Generational owner of every live object (item) thing.
 ///
-/// `Thing` already opts into `Send` (see `entity::player`), so `Box<Thing>` is
-/// `Send` automatically and no explicit `unsafe impl` is needed here. The game
-/// accesses the pointers from its single gameplay thread; the mutex only
-/// protects the arena's ownership when the global is initialised.
-struct OwnedThing(Box<Thing>);
-
-static THINGS: OnceLock<Mutex<Vec<OwnedThing>>> = OnceLock::new();
-static TOTAL: AtomicI32 = AtomicI32::new(0);
-
-fn things() -> &'static Mutex<Vec<OwnedThing>> {
-    THINGS.get_or_init(|| Mutex::new(Vec::new()))
-}
+/// The raw-pointer helpers below are a thin adapter over this arena: they hand
+/// out the boxed object's stable address and translate it back to a handle on
+/// removal. Callers that have migrated keep the [`crate::item::arena::ThingId`]
+/// instead of the address.
+static OBJECTS: ThingArena = ThingArena::new();
 
 /// Prepend `item` to the actor `owner`'s pack list.
 pub unsafe fn attach_pack(owner: *mut Thing, item: *mut Thing) {
@@ -127,23 +119,13 @@ pub unsafe fn discard(item: *mut Thing) {
         crate::game::MONSTER_LIST.remove(id);
         return;
     }
-    let mut things = things().lock().expect("thing store poisoned");
-    if let Some(index) = things
-        .iter()
-        .position(|thing| (&*thing.0 as *const Thing).cast_mut() == item)
-    {
-        things.swap_remove(index);
-        TOTAL.fetch_sub(1, Ordering::Relaxed);
-    }
+    OBJECTS.remove_by_ptr(item);
 }
 
 /// Allocate an object (item) thing in the arena.
 pub unsafe fn new_object() -> *mut Thing {
-    let mut item = OwnedThing(Box::new(Thing::object(ThingObject::default())));
-    let pointer = (&mut *item.0) as *mut Thing;
-    things().lock().expect("thing store poisoned").push(item);
-    TOTAL.fetch_add(1, Ordering::Relaxed);
-    pointer
+    let id = OBJECTS.insert(Thing::object(ThingObject::default()));
+    OBJECTS.ptr(id)
 }
 
 /// Allocate an actor (monster) thing.
@@ -164,7 +146,7 @@ pub unsafe fn new_item() -> *mut Thing {
 }
 
 pub fn allocated_count() -> i32 {
-    TOTAL.load(Ordering::Relaxed)
+    OBJECTS.len() as i32
 }
 
 #[cfg(test)]
