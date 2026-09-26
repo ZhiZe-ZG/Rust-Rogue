@@ -29,6 +29,12 @@ const VS_MAGIC: i32 = 0o03;
 
 pub use crate::globals::CMonster;
 
+/// Monster-type letters (`'A'..='Z'`) ordered weakest → strongest and indexed by
+/// an adjusted dungeon depth (see [`randmonster`]).
+///
+/// `LVL_MONS[0]` is the weakest monster tier and `LVL_MONS[25]` the strongest.
+/// This is the source-of-truth ordering for *normal* (non-wandering) monster
+/// spawns, mirroring the `lvl_mons[]` table in the original `src/c/monsters.c`.
 static LVL_MONS: [u8; 26] = [
     b'K' as u8,
     b'E' as u8,
@@ -58,6 +64,13 @@ static LVL_MONS: [u8; 26] = [
     b'D' as u8,
 ];
 
+/// Like [`LVL_MONS`], but for *wandering* monster spawns.
+///
+/// The `0` entries are deliberate "holes": monster tiers excluded from
+/// wandering spawns because they are too strong to appear as a roamer.
+/// [`randmonster`] rerolls whenever it lands on a hole, so an absent tier is
+/// never spawned this way. Mirrors the `wand_mons[]` table in the original
+/// `src/c/monsters.c`.
 static WAND_MONS: [u8; 26] = [
     b'K' as u8,
     b'E' as u8,
