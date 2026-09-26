@@ -468,6 +468,8 @@ pub unsafe extern "C" fn rogue_main(
         }
     }
 
+    crate::globals::init_inv_t_names();
+    crate::globals::init_trap_names();
     init_probs();
     init_player();
     init_names();

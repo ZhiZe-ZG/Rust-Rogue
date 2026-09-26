@@ -30,12 +30,11 @@
 //! SUCH DAMAGE.
 
 use glam::IVec2;
-use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 
 use crate::daemon::{CDelayedAction, Daemon, D_LIST};
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject};
-use crate::ffi::{fread, free, fwrite, malloc, strcmp, strlen, CFile};
+use crate::ffi::{fread, fwrite, strcmp, strlen, CFile};
 use crate::game::PLAYER;
 use crate::game::{MONSTER_LIST, MONSTER_MAP};
 use crate::globals::{
@@ -164,7 +163,6 @@ unsafe extern "C" {
     static mut prbuf: [c_char; 2 * MAXSTR];
     static mut r_stones: [*mut c_char; MAXRINGS];
     static mut runch: c_char;
-    static mut s_names: [*mut c_char; MAXSCROLLS];
     static mut take: c_char;
     static mut whoami: [c_char; MAXSTR];
     static mut ws_made: [*mut c_char; MAXSTICKS];
@@ -173,13 +171,10 @@ unsafe extern "C" {
     static mut orig_dsusp: c_int;
     static mut fruit: [c_char; MAXSTR];
     static mut home: [c_char; MAXSTR];
-    static mut inv_t_name: [*mut c_char; 3];
     static mut l_last_comm: c_char;
     static mut l_last_dir: c_char;
     static mut last_comm: c_char;
     static mut last_dir: c_char;
-    static mut tr_name: [*mut c_char; 8];
-    static mut release: *mut c_char;
 
     // ints
     static mut n_objs: c_int;
@@ -680,45 +675,56 @@ unsafe fn rs_read_string(inf: *mut CFile, s: *mut c_char, max: c_int) -> c_int {
     read_stat()
 }
 
-/// Read a length-prefixed C string into an owned Rust [`String`] (`None` if the
-/// stored length was zero).
-unsafe fn rs_read_new_cstring(inf: *mut CFile, s: &mut Option<String>) -> c_int {
-    let mut buf: *mut c_char = std::ptr::null_mut();
-    let stat = rs_read_new_string(inf, &mut buf);
-    if buf.is_null() {
-        *s = None;
-    } else {
-        *s = Some(CStr::from_ptr(buf).to_string_lossy().into_owned());
-        free(buf as *mut c_void);
+/// Write an owned string using the legacy double-length record, or a zero
+/// record for `None`. Mirrors [`rs_write_string`] without needing a C string.
+unsafe fn rs_write_string_opt(savef: *mut CFile, text: Option<&str>) -> c_int {
+    if WRITE_ERROR != 0 {
+        return WRITE_ERROR;
     }
-    stat
+
+    match text {
+        None => {
+            let _ = rs_write_int(savef, 0);
+            let _ = rs_write_chars(savef, std::ptr::null_mut(), 0);
+            WRITE_ERROR
+        }
+        Some(value) => {
+            let mut bytes = value.as_bytes().to_vec();
+            bytes.push(0);
+            let len = bytes.len() as c_int;
+            let _ = rs_write_int(savef, len);
+            let _ = rs_write_chars(savef, bytes.as_mut_ptr() as *mut c_char, len);
+            WRITE_ERROR
+        }
+    }
 }
 
-unsafe fn rs_read_new_string(inf: *mut CFile, s: *mut *mut c_char) -> c_int {
+/// Read a length-prefixed string into an owned Rust [`String`] (`None` when the
+/// stored length was zero). Uses Rust `Vec`/`String` storage instead of the
+/// legacy `malloc`/`free` buffer.
+unsafe fn rs_read_string_owned(inf: *mut CFile) -> Option<String> {
     let mut len: c_int = 0;
-    let mut buf: *mut c_char = std::ptr::null_mut();
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
+        return None;
     }
 
     let _ = rs_read_int(inf, &mut len);
 
-    if len == 0 {
-        buf = std::ptr::null_mut();
-    } else {
-        buf = malloc(len as usize) as *mut c_char;
-
-        if buf.is_null() {
-            READ_ERROR = 1;
-        }
+    if len <= 0 {
+        // Still consume the inner length field for format symmetry.
+        let _ = rs_read_chars(inf, std::ptr::null_mut(), 0);
+        return None;
     }
 
-    let _ = rs_read_chars(inf, buf, len);
+    let mut buf = vec![0u8; len as usize];
+    let _ = rs_read_chars(inf, buf.as_mut_ptr() as *mut c_char, len);
 
-    *s = buf;
+    if buf.last() == Some(&0) {
+        buf.pop();
+    }
 
-    read_stat()
+    Some(String::from_utf8_lossy(&buf).into_owned())
 }
 
 unsafe fn rs_write_strings(savef: *mut CFile, s: *mut *mut c_char, count: c_int) -> c_int {
@@ -756,30 +762,6 @@ unsafe fn rs_read_strings(inf: *mut CFile, s: *mut *mut c_char, count: c_int, ma
     let mut n: c_int = 0;
     while n < count {
         if rs_read_string(inf, *s.add(n as usize), max) != 0 {
-            break;
-        }
-        n += 1;
-    }
-
-    read_stat()
-}
-
-unsafe fn rs_read_new_strings(inf: *mut CFile, s: *mut *mut c_char, count: c_int) -> c_int {
-    let mut value: c_int = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut value);
-
-    if value != count {
-        FORMAT_ERROR = 1;
-    }
-
-    let mut n: c_int = 0;
-    while n < count {
-        if rs_read_new_string(inf, &mut *s.add(n as usize)) != 0 {
             break;
         }
         n += 1;
@@ -1082,16 +1064,15 @@ unsafe fn rs_read_stone_index(
 
 /// Serializes the global scroll names to the save file.
 ///
-/// Uses globals: s_names.
+/// Uses [`crate::globals::SCROLL_NAMES`].
 unsafe fn rs_write_scrolls(savef: *mut CFile) -> c_int {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let mut i = 0;
-    while i < MAXSCROLLS {
-        let _ = rs_write_string(savef, s_names[i]);
-        i += 1;
+    for i in 0..MAXSCROLLS {
+        let name = crate::globals::scroll_name(i);
+        let _ = rs_write_string_opt(savef, Some(&name));
     }
 
     read_stat()
@@ -1099,16 +1080,17 @@ unsafe fn rs_write_scrolls(savef: *mut CFile) -> c_int {
 
 /// Restores the global scroll names from the save file.
 ///
-/// Uses globals: s_names.
+/// Uses [`crate::globals::SCROLL_NAMES`].
 unsafe fn rs_read_scrolls(inf: *mut CFile) -> c_int {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
-    let mut i = 0;
-    while i < MAXSCROLLS {
-        let _ = rs_read_new_string(inf, &mut s_names[i]);
-        i += 1;
+    for i in 0..MAXSCROLLS {
+        match rs_read_string_owned(inf) {
+            Some(name) => crate::globals::set_scroll_name(i, name),
+            None => crate::globals::set_scroll_name(i, String::new()),
+        }
     }
 
     read_stat()
@@ -1398,13 +1380,7 @@ unsafe fn rs_read_obj_info(inf: *mut CFile, mi: *mut CObjInfo, count: c_int) -> 
         // oi_name is constant, defined at compile time in all cases
         let _ = rs_read_int(inf, &mut (*mi.add(n as usize)).oi_prob);
         let _ = rs_read_int(inf, &mut (*mi.add(n as usize)).oi_worth);
-        let mut guess_ptr: *mut c_char = std::ptr::null_mut();
-        let _ = rs_read_new_string(inf, &mut guess_ptr);
-        (*mi.add(n as usize)).oi_guess = if guess_ptr.is_null() {
-            None
-        } else {
-            Some(CStr::from_ptr(guess_ptr).to_string_lossy().into_owned())
-        };
+        (*mi.add(n as usize)).oi_guess = rs_read_string_owned(inf);
         let mut know: c_uchar = 0;
         let _ = rs_read_boolean(inf, &mut know);
         (*mi.add(n as usize)).oi_know = know != 0;
@@ -1695,7 +1671,7 @@ unsafe fn rs_read_object(inf: *mut CFile, o: *mut Thing) -> c_int {
     let _ = rs_read_int(inf, &mut o_flags_bits);
     (*op).o_flags = crate::entity::player::ObjectFlags::from_bits(o_flags_bits);
     let _ = rs_read_int(inf, &mut (*op).o_group);
-    let _ = rs_read_new_cstring(inf, &mut (*op).o_label);
+    (*op).o_label = rs_read_string_owned(inf);
 
     read_stat()
 }
@@ -2338,7 +2314,8 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
         (2 * MAXSTR) as c_int,
     );
     let _ = rs_write_rings(savef);
-    let _ = rs_write_string(savef, release);
+    let release = crate::vers::release();
+    let _ = rs_write_string_opt(savef, Some(&release));
     let _ = rs_write_char(savef, runch);
     let _ = rs_write_scrolls(savef);
     let _ = rs_write_char(savef, take);
@@ -2347,12 +2324,20 @@ pub unsafe extern "C" fn rs_save_file(savef: *mut CFile) -> c_int {
     let _ = rs_write_int(savef, orig_dsusp);
     let _ = rs_write_chars(savef, (&raw mut fruit) as *mut c_char, MAXSTR as c_int);
     let _ = rs_write_chars(savef, (&raw mut home) as *mut c_char, MAXSTR as c_int);
-    let _ = rs_write_strings(savef, (&raw mut inv_t_name) as *mut *mut c_char, 3);
+    let inv_names = crate::globals::inv_t_names();
+    let _ = rs_write_int(savef, inv_names.len() as c_int);
+    for name in &inv_names {
+        let _ = rs_write_string_opt(savef, Some(name));
+    }
     let _ = rs_write_char(savef, l_last_comm);
     let _ = rs_write_char(savef, l_last_dir);
     let _ = rs_write_char(savef, last_comm);
     let _ = rs_write_char(savef, last_dir);
-    let _ = rs_write_strings(savef, (&raw mut tr_name) as *mut *mut c_char, 8);
+    let trap_names = crate::globals::trap_names();
+    let _ = rs_write_int(savef, trap_names.len() as c_int);
+    for name in &trap_names {
+        let _ = rs_write_string_opt(savef, Some(name));
+    }
     let _ = rs_write_int(savef, n_objs);
     let _ = rs_write_int(savef, ntraps);
     let _ = rs_write_int(savef, hungry_state);
@@ -2536,7 +2521,9 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_potions(inf);
     let _ = rs_read_chars(inf, (&raw mut prbuf) as *mut c_char, (2 * MAXSTR) as c_int);
     let _ = rs_read_rings(inf);
-    let _ = rs_read_new_string(inf, &mut release);
+    if let Some(value) = rs_read_string_owned(inf) {
+        crate::vers::set_release(value);
+    }
     let _ = rs_read_char(inf, &mut runch);
     let _ = rs_read_scrolls(inf);
     let _ = rs_read_char(inf, &mut take);
@@ -2545,12 +2532,28 @@ pub unsafe extern "C" fn rs_restore_file(inf: *mut CFile) -> c_int {
     let _ = rs_read_int(inf, &mut orig_dsusp);
     let _ = rs_read_chars(inf, (&raw mut fruit) as *mut c_char, MAXSTR as c_int);
     let _ = rs_read_chars(inf, (&raw mut home) as *mut c_char, MAXSTR as c_int);
-    let _ = rs_read_new_strings(inf, (&raw mut inv_t_name) as *mut *mut c_char, 3);
+    {
+        let mut count: c_int = 0;
+        let _ = rs_read_int(inf, &mut count);
+        for i in 0..count.max(0) as usize {
+            if let Some(name) = rs_read_string_owned(inf) {
+                crate::globals::set_inv_t_name(i, name);
+            }
+        }
+    }
     let _ = rs_read_char(inf, &mut l_last_comm);
     let _ = rs_read_char(inf, &mut l_last_dir);
     let _ = rs_read_char(inf, &mut last_comm);
     let _ = rs_read_char(inf, &mut last_dir);
-    let _ = rs_read_new_strings(inf, (&raw mut tr_name) as *mut *mut c_char, 8);
+    {
+        let mut count: c_int = 0;
+        let _ = rs_read_int(inf, &mut count);
+        for i in 0..count.max(0) as usize {
+            if let Some(name) = rs_read_string_owned(inf) {
+                crate::globals::set_trap_name(i, name);
+            }
+        }
+    }
     let _ = rs_read_int(inf, &mut n_objs);
     let _ = rs_read_int(inf, &mut ntraps);
     let _ = rs_read_int(inf, &mut hungry_state);

@@ -39,7 +39,6 @@ unsafe extern "C" {
     static mut fight_flush: c_uchar;
     static mut fruit: [c_char; MAXSTR];
     static mut home: [c_char; MAXSTR];
-    static mut inv_t_name: [*mut c_char; 3];
     static mut inv_type: c_int;
     static mut jump: c_uchar;
     static mut mpos: c_int;
@@ -209,10 +208,7 @@ unsafe fn put_inv_t(vp: *mut c_void) {
     let ip = vp as *mut c_int;
     let idx = *ip as usize;
     if idx < INV_T_NAME_LEN {
-        output::write_window_text(
-            Window::Stdscr,
-            &CStr::from_ptr(inv_t_name[idx]).to_string_lossy(),
-        );
+        output::write_window_text(Window::Stdscr, &crate::globals::inv_t_name(idx));
     }
 }
 
@@ -345,10 +341,7 @@ unsafe fn get_inv_t(vp: *mut c_void, win: Window) -> c_int {
 
     let origin = output::window_cursor(win);
     if *ip >= 0 && *ip < INV_T_NAME_LEN as c_int {
-        output::write_window_text(
-            win,
-            &CStr::from_ptr(inv_t_name[*ip as usize]).to_string_lossy(),
-        );
+        output::write_window_text(win, &crate::globals::inv_t_name(*ip as usize));
     }
     while bad {
         output::move_window_cursor(win, origin);
@@ -378,7 +371,7 @@ unsafe fn get_inv_t(vp: *mut c_void, win: Window) -> c_int {
         }
     }
     if *ip >= 0 && *ip < INV_T_NAME_LEN as c_int {
-        let name = CStr::from_ptr(inv_t_name[*ip as usize]).to_string_lossy();
+        let name = crate::globals::inv_t_name(*ip as usize);
         let out = format!("{}\n", name);
         output::move_window_cursor(win, origin);
         paint(win, &out);
@@ -436,13 +429,15 @@ pub unsafe extern "C" fn parse_opts(str: *mut c_char) {
                             *tmp = toupper(*tmp as c_int) as c_char;
                         }
                         for i in 0..INV_T_NAME_LEN {
-                            if !value.is_null()
-                                && !end.is_null()
-                                && strncmp(value, inv_t_name[i], (end as usize - value as usize))
-                                    == 0
-                            {
-                                inv_type = i as c_int;
-                                break;
+                            if !value.is_null() && !end.is_null() {
+                                let len = end as usize - value as usize;
+                                let value_bytes =
+                                    std::slice::from_raw_parts(value as *const u8, len);
+                                let option_name = crate::globals::inv_t_name(i);
+                                if value_bytes == option_name.as_bytes() {
+                                    inv_type = i as c_int;
+                                    break;
+                                }
                             }
                         }
                     } else {

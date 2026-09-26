@@ -13,14 +13,43 @@
 //! remain byte-for-byte identical.
 
 use std::os::raw::c_char;
+use std::sync::{Mutex, MutexGuard};
 
 /// The release version string (`char *release` in vers.c).
 ///
-/// Note: this is a `*mut c_char` static because `state.rs`
-/// (`rs_read_new_string`) reassigns it during save-file restore, exactly
-/// like the C code did.
-#[no_mangle]
-pub static mut release: *mut c_char = b"5.4.4\0".as_ptr() as *mut c_char;
+/// Backed by an owned Rust `String` behind a `Mutex`; the save/restore layer
+/// replaces it through [`set_release`], exactly like the C code reassigned the
+/// pointer. Read it with [`release`] or [`with_release`].
+static RELEASE: Mutex<String> = Mutex::new(String::new());
+
+fn release_lock() -> MutexGuard<'static, String> {
+    RELEASE
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner())
+}
+
+/// The release version string (defaults to `"5.4.4"` until set).
+pub fn release() -> String {
+    let mut value = release_lock();
+    if value.is_empty() {
+        *value = "5.4.4".to_owned();
+    }
+    value.clone()
+}
+
+/// Run `operation` with the release version string borrowed.
+pub fn with_release<R>(operation: impl FnOnce(&str) -> R) -> R {
+    let mut value = release_lock();
+    if value.is_empty() {
+        *value = "5.4.4".to_owned();
+    }
+    operation(value.as_str())
+}
+
+/// Replace the release version string (used by save-file restore).
+pub fn set_release(value: String) {
+    *release_lock() = value;
+}
 
 /// Encryption/obfuscation string (`char encstr[]` in vers.c) used by the
 /// legacy save-game identity.  Bytes match the C octal escapes exactly.

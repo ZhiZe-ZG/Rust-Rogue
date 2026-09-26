@@ -162,7 +162,6 @@ unsafe extern "C" {
     static mut prbuf: [c_char; 2 * MAXSTR];
     static mut purse: c_int;
     static mut q_comm: c_uchar;
-    static mut release: *mut c_char;
     static mut runch: c_char;
     static mut running: c_uchar;
     static mut save_msg: c_uchar;
@@ -171,10 +170,8 @@ unsafe extern "C" {
     static mut take: c_char;
     static mut terse: c_uchar;
     static mut to_death: c_uchar;
-    static mut tr_name: [*mut c_char; GameConfig::TRAP_KIND_COUNT as usize];
     static mut r_stones: [*mut c_char; 14];
     static mut p_colors: [*mut c_char; 14];
-    static mut s_names: [*mut c_char; 18];
     static mut ws_made: [*mut c_char; 14];
     static mut wizard: c_int;
 }
@@ -213,6 +210,16 @@ unsafe fn moat_at(y: c_int, x: c_int) -> *mut Thing {
 #[inline]
 unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
     !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
+}
+
+/// Copy a (possibly null) C string into an owned [`String`].
+#[inline]
+unsafe fn cstr_at(ptr: *mut c_char) -> String {
+    if ptr.is_null() {
+        String::new()
+    } else {
+        CStr::from_ptr(ptr).to_string_lossy().into_owned()
+    }
 }
 
 // ─── command() ────────────────────────────────────────────────────────────────
@@ -587,7 +594,7 @@ pub unsafe extern "C" fn command() {
                         after = false as c_uchar;
                         msg_str(&format!(
                             "version {}. (mctesq was here)",
-                            CStr::from_ptr(release).to_string_lossy()
+                            crate::vers::release()
                         ));
                     }
                     b'S' => {
@@ -612,20 +619,15 @@ pub unsafe extern "C" fn command() {
                             if !crate::draw::is_trap_cell(delta.y, delta.x) {
                                 msg_str("no trap there");
                             } else if player_has(MonsterFlags::HALU) {
-                                msg_str(
-                                    &CStr::from_ptr(
-                                        tr_name[rnd(GameConfig::TRAP_KIND_COUNT) as usize],
-                                    )
-                                    .to_string_lossy(),
+                                let name = crate::globals::trap_name(
+                                    rnd(GameConfig::TRAP_KIND_COUNT) as usize,
                                 );
+                                msg_str(&name);
                             } else {
-                                msg_str(
-                                    &CStr::from_ptr(
-                                        tr_name
-                                            [crate::draw::trap_kind_at(delta.y, delta.x) as usize],
-                                    )
-                                    .to_string_lossy(),
+                                let name = crate::globals::trap_name(
+                                    crate::draw::trap_kind_at(delta.y, delta.x) as usize,
                                 );
+                                msg_str(&name);
                                 crate::draw::set_seen_at(delta.y, delta.x);
                             }
                         }
@@ -889,19 +891,15 @@ pub unsafe extern "C" fn search() {
                                 addmsg_str("you found ");
                             }
                             if player_has(MonsterFlags::HALU) {
-                                msg_str(
-                                    &CStr::from_ptr(
-                                        tr_name[rnd(GameConfig::TRAP_KIND_COUNT) as usize],
-                                    )
-                                    .to_string_lossy(),
+                                let name = crate::globals::trap_name(
+                                    rnd(GameConfig::TRAP_KIND_COUNT) as usize,
                                 );
+                                msg_str(&name);
                             } else {
-                                msg_str(
-                                    &CStr::from_ptr(
-                                        tr_name[crate::draw::trap_kind_at(y, x) as usize],
-                                    )
-                                    .to_string_lossy(),
+                                let name = crate::globals::trap_name(
+                                    crate::draw::trap_kind_at(y, x) as usize,
                                 );
+                                msg_str(&name);
                             }
                             found = true;
                             count = false as c_uchar as c_int;
@@ -1063,15 +1061,16 @@ pub unsafe extern "C" fn call() {
             .add((*thing_o(obj)).o_which as usize),
     };
 
-    let mut elsewise: *mut c_char = match otype {
-        x if x == RING as u8 => r_stones[(*thing_o(obj)).o_which as usize],
-        x if x == POTION as u8 => p_colors[(*thing_o(obj)).o_which as usize],
-        x if x == SCROLL as u8 => s_names[(*thing_o(obj)).o_which as usize],
-        _ => ws_made[(*thing_o(obj)).o_which as usize],
+    let which = (*thing_o(obj)).o_which as usize;
+    let mut elsewise: String = match otype {
+        x if x == RING as u8 => cstr_at(r_stones[which]),
+        x if x == POTION as u8 => cstr_at(p_colors[which]),
+        x if x == SCROLL as u8 => crate::globals::scroll_name(which),
+        _ => cstr_at(ws_made[which]),
     };
 
     if let Some(guess) = &(*op).oi_guess {
-        elsewise = guess.as_ptr().cast::<c_char>().cast_mut();
+        elsewise = guess.clone();
     }
 
     if (*op).oi_know {
@@ -1083,10 +1082,7 @@ pub unsafe extern "C" fn call() {
         if terse == 0 {
             addmsg_str("Was ");
         }
-        msg_str(&format!(
-            "called \"{}\"",
-            CStr::from_ptr(elsewise).to_string_lossy()
-        ));
+        msg_str(&format!("called \"{}\"", elsewise));
     }
 
     if terse != 0 {
@@ -1096,11 +1092,10 @@ pub unsafe extern "C" fn call() {
     }
 
     let prbuf_ptr = std::ptr::addr_of_mut!(prbuf).cast::<c_char>();
-    if elsewise.is_null() {
-        prbuf[0] = 0;
-    } else {
-        strcpy(prbuf_ptr, elsewise);
-    }
+    let bytes = elsewise.as_bytes();
+    let copy_len = bytes.len().min(2 * MAXSTR - 1);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), prbuf_ptr, copy_len);
+    prbuf[copy_len] = 0;
     if get_str(prbuf_ptr.cast(), Window::Stdscr) == NORM {
         let text = CStr::from_ptr(std::ptr::addr_of!(prbuf).cast::<c_char>())
             .to_string_lossy()

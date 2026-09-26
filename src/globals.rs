@@ -2,11 +2,11 @@
 //!
 //! Mirrors the process-wide storage the original C code declared in
 //! `extern.c` and `init.c`: material tables, monster state, and other globals.
-use crate::config::GameConfig;
 use crate::entity::player::Thing as PlayerCThing;
 use crate::entity::stats::Stats;
 use glam::IVec2;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+use std::sync::{Mutex, MutexGuard};
 
 const MAXSTR: usize = 1024;
 
@@ -135,8 +135,6 @@ pub static mut r_stones: [*mut c_char; MAXRINGS] = [std::ptr::null_mut(); MAXRIN
 #[no_mangle]
 pub static mut runch: c_char = 0;
 #[no_mangle]
-pub static mut s_names: [*mut c_char; MAXSCROLLS] = [std::ptr::null_mut(); MAXSCROLLS];
-#[no_mangle]
 pub static mut take: c_char = 0;
 #[no_mangle]
 pub static mut whoami: [c_char; MAXSTR] = [0; MAXSTR];
@@ -151,12 +149,6 @@ pub static mut fruit: [c_char; MAXSTR] = fill_c_string("slime-mold");
 #[no_mangle]
 pub static mut home: [c_char; MAXSTR] = [0; MAXSTR];
 #[no_mangle]
-pub static mut inv_t_name: [*mut c_char; 3] = [
-    b"Overwrite\0".as_ptr() as *mut c_char,
-    b"Slow\0".as_ptr() as *mut c_char,
-    b"Clear\0".as_ptr() as *mut c_char,
-];
-#[no_mangle]
 pub static mut l_last_comm: c_char = 0;
 #[no_mangle]
 pub static mut l_last_dir: c_char = 0;
@@ -164,17 +156,6 @@ pub static mut l_last_dir: c_char = 0;
 pub static mut last_comm: c_char = 0;
 #[no_mangle]
 pub static mut last_dir: c_char = 0;
-#[no_mangle]
-pub static mut tr_name: [*mut c_char; GameConfig::TRAP_KIND_COUNT as usize] = [
-    b"a trapdoor\0".as_ptr() as *mut c_char,
-    b"an arrow trap\0".as_ptr() as *mut c_char,
-    b"a sleeping gas trap\0".as_ptr() as *mut c_char,
-    b"a beartrap\0".as_ptr() as *mut c_char,
-    b"a teleport trap\0".as_ptr() as *mut c_char,
-    b"a poison dart trap\0".as_ptr() as *mut c_char,
-    b"a rust trap\0".as_ptr() as *mut c_char,
-    b"a mysterious trap\0".as_ptr() as *mut c_char,
-];
 #[no_mangle]
 pub static mut numscores: c_uint = 10; // NUMSCORES from config.h
 #[no_mangle]
@@ -1314,4 +1295,126 @@ pub fn set_huh_string(text: &str) {
         );
         huh[copy_len] = 0;
     }
+}
+
+// ─── Rust-owned string tables ────────────────────────────────────────────────
+//
+// These were previously C strings allocated with `malloc`/`free` and addressed
+// through `[*mut c_char; N]` / `*mut c_char` globals. They are now owned Rust
+// `String`s behind a `Mutex`, matching the container-owner style used elsewhere
+// (`MONSTER_LIST`, `OBJECTS`, `PLAYER`). Callers read/write through the small
+// accessors below.
+
+/// Generated scroll names (one per scroll kind), previously `char *s_names[]`.
+pub static SCROLL_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Inventory display style names, previously `char *inv_t_name[]`.
+pub static INV_T_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Trap kind names, previously `char *tr_name[]`.
+pub static TRAP_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+fn lock<T>(cell: &Mutex<T>) -> MutexGuard<'_, T> {
+    cell.lock().unwrap_or_else(|poison| poison.into_inner())
+}
+
+/// Replace the scroll names with `total` entries produced by `fill`.
+pub fn set_scroll_names(total: usize, fill: impl Fn(usize) -> String) {
+    let mut names = lock(&SCROLL_NAMES);
+    names.clear();
+    names.reserve(total);
+    for i in 0..total {
+        names.push(fill(i));
+    }
+}
+
+/// Set the scroll name at `index`.
+pub fn set_scroll_name(index: usize, name: String) {
+    let mut names = lock(&SCROLL_NAMES);
+    if names.len() <= index {
+        names.resize_with(index + 1, String::new);
+    }
+    names[index] = name;
+}
+
+/// Get the scroll name at `index` (empty string when unset).
+pub fn scroll_name(index: usize) -> String {
+    lock(&SCROLL_NAMES)
+        .get(index)
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Number of scroll names currently stored.
+pub fn scroll_name_count() -> usize {
+    lock(&SCROLL_NAMES).len()
+}
+
+/// Install the default inventory display style names.
+pub fn init_inv_t_names() {
+    let mut names = lock(&INV_T_NAMES);
+    *names = vec![
+        "Overwrite".to_owned(),
+        "Slow".to_owned(),
+        "Clear".to_owned(),
+    ];
+}
+
+/// The inventory display style name at `index` (empty string when out of range).
+pub fn inv_t_name(index: usize) -> String {
+    lock(&INV_T_NAMES)
+        .get(index)
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Set the inventory display style name at `index`.
+pub fn set_inv_t_name(index: usize, name: String) {
+    let mut names = lock(&INV_T_NAMES);
+    if names.len() <= index {
+        names.resize_with(index + 1, String::new);
+    }
+    names[index] = name;
+}
+
+/// A snapshot clone of all inventory display style names.
+pub fn inv_t_names() -> Vec<String> {
+    lock(&INV_T_NAMES).clone()
+}
+
+/// Install the default trap names (one per trap kind).
+pub fn init_trap_names() {
+    let mut names = lock(&TRAP_NAMES);
+    *names = vec![
+        "a trapdoor".to_owned(),
+        "an arrow trap".to_owned(),
+        "a sleeping gas trap".to_owned(),
+        "a beartrap".to_owned(),
+        "a teleport trap".to_owned(),
+        "a poison dart trap".to_owned(),
+        "a rust trap".to_owned(),
+        "a mysterious trap".to_owned(),
+    ];
+}
+
+/// The trap name at `index` (empty string when out of range).
+pub fn trap_name(index: usize) -> String {
+    lock(&TRAP_NAMES)
+        .get(index)
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Set the trap name at `index`.
+pub fn set_trap_name(index: usize, name: String) {
+    let mut names = lock(&TRAP_NAMES);
+    if names.len() <= index {
+        names.resize_with(index + 1, String::new);
+    }
+    names[index] = name;
+}
+
+/// A snapshot clone of all trap names.
+pub fn trap_names() -> Vec<String> {
+    lock(&TRAP_NAMES).clone()
 }

@@ -8,7 +8,6 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-use crate::ffi::{malloc, strcpy, strlen};
 use crate::game::PLAYER;
 use crate::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
@@ -280,10 +279,9 @@ unsafe extern "C" {
     static mut food_left: c_int;
     static mut a_class: [c_int; 26];
 
-    // Per-item colour / material / name assignments (in extern.c)
+    // Per-item colour / material assignments (in extern.c)
     static mut p_colors: [*mut c_char; MAXPOTIONS];
     static mut r_stones: [*mut c_char; MAXRINGS];
-    static mut s_names: [*mut c_char; MAXSCROLLS];
     static mut ws_made: [*mut c_char; MAXSTICKS];
     static mut ws_type: [*mut c_char; MAXSTICKS];
 
@@ -370,43 +368,32 @@ pub unsafe extern "C" fn init_colors() {
 }
 
 /// Generate random pronounceable names for each scroll.
+///
+/// Builds each name as an owned Rust [`String`] (no `malloc`/`strcpy`) and
+/// stores it in [`crate::globals::SCROLL_NAMES`], preserving the syllable,
+/// word-count, and `MAXNAME` length limits of the original C routine.
 #[no_mangle]
 pub unsafe extern "C" fn init_names() {
-    for i in 0..MAXSCROLLS {
-        let prbuf_base: *mut c_char = (&raw mut prbuf) as *mut c_char;
-        let mut cp: *mut c_char = prbuf_base;
+    crate::globals::set_scroll_names(MAXSCROLLS, |_| {
+        let mut name = String::new();
         let mut nwords = rnd(3) + 2;
         while nwords > 0 {
             nwords -= 1;
             let mut nsyl = rnd(3) + 1;
             while nsyl > 0 {
                 nsyl -= 1;
-                let sp = SYLLS[rnd(SYLLS.len() as c_int) as usize];
-                let sp_ptr = sp.as_ptr() as *const c_char;
-                if (cp as *const c_char).add(strlen(sp_ptr))
-                    > (prbuf_base as *const c_char).add(MAXNAME)
-                {
+                let syllable = SYLLS[rnd(SYLLS.len() as c_int) as usize];
+                if name.len() + syllable.len() > MAXNAME {
                     break;
                 }
-                let mut p = sp_ptr;
-                while unsafe { *p != 0 } {
-                    unsafe {
-                        *cp = *p;
-                    }
-                    cp = cp.add(1);
-                    p = p.add(1);
-                }
+                name.push_str(syllable);
             }
-            *cp = b' ' as c_char;
-            cp = cp.add(1);
+            name.push(' ');
         }
-        // Back up over the trailing space and NUL-terminate
-        cp = cp.sub(1);
-        *cp = 0;
-        let len = strlen(prbuf_base as *const c_char);
-        s_names[i] = malloc(len + 1) as *mut c_char;
-        strcpy(s_names[i], prbuf_base as *const c_char);
-    }
+        // Back up over the trailing space.
+        name.pop();
+        name
+    });
 }
 
 /// Assign a random stone setting to each ring type.

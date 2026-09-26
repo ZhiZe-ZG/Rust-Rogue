@@ -11,7 +11,7 @@
 //! until Stage 3 turns them into owned state, and the platform/signal layer
 //! stays in `mdport`/`machdep`.
 
-use std::os::raw::{c_char, c_int, c_long, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_long, c_uint};
 
 /// Opaque C stdio stream handle.
 ///
@@ -23,10 +23,6 @@ pub struct CFile {
 }
 
 extern "C" {
-    // ── Allocation ───────────────────────────────────────────────────────
-    pub fn malloc(size: usize) -> *mut c_void;
-    pub fn free(ptr: *mut c_void);
-
     // ── String / ctype ───────────────────────────────────────────────────
     pub fn strlen(s: *const c_char) -> usize;
     pub fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
