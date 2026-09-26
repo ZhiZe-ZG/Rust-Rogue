@@ -3,6 +3,7 @@
 //! Ported from `src/c/move.c` to Rust, together with the shared `THING`,
 //! `PLACE`, and `COORD` layouts the rest of the port relies on.
 use crate::config::GameConfig;
+use crate::entity::monsters::MonsterType;
 use crate::draw::{
     enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room, turnref as draw_turnref,
     winat,
@@ -290,7 +291,10 @@ const VS_POISON: i32 = 0;
 pub struct ThingMonster {
     pub t_pos: IVec2,
     pub t_turn: bool,
-    pub t_type: u8,
+    /// The monster's real identity (its kind).
+    pub t_type: Option<MonsterType>,
+    /// The glyph actually drawn (usually `t_type.glyph()`, but hidden as an
+    /// item for Xerocs and randomized under hallucination).
     pub t_disguise: u8,
     pub t_oldch: u8,
     /// Chase destination for non-hero targets (monster, item, or room gold);
@@ -388,7 +392,7 @@ impl Default for ThingMonster {
         ThingMonster {
             t_pos: IVec2 { x: 0, y: 0 },
             t_turn: false,
-            t_type: 0,
+            t_type: None,
             t_disguise: 0,
             t_oldch: 0,
             t_dest: None,

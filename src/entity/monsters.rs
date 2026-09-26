@@ -29,75 +29,173 @@ const VS_MAGIC: i32 = 0o03;
 
 pub use crate::globals::CMonster;
 
+/// The identity of a monster kind — the typed replacement for the legacy
+/// `t_type` ASCII letter (`'A'`..=`'Z'`).
+///
+/// The variant order matches the `monsters` stat table in
+/// [`crate::globals`] (`Aquator` = index 0 … `Zombie` = index 25), so
+/// [`MonsterType::index`] is a direct table index and [`MonsterType::glyph`]
+/// reproduces the original `'A'..='Z'` byte used by the save format and by
+/// [`crate::globals::monsters`].
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MonsterType {
+    Aquator = b'A',
+    Bat = b'B',
+    Centaur = b'C',
+    Dragon = b'D',
+    Emu = b'E',
+    VenusFlytrap = b'F',
+    Griffin = b'G',
+    Hobgoblin = b'H',
+    IceMonster = b'I',
+    Jabberwock = b'J',
+    Kestrel = b'K',
+    Leprechaun = b'L',
+    Medusa = b'M',
+    Nymph = b'N',
+    Orc = b'O',
+    Phantom = b'P',
+    Quagga = b'Q',
+    Rattlesnake = b'R',
+    Snake = b'S',
+    Troll = b'T',
+    BlackUnicorn = b'U',
+    Vampire = b'V',
+    Wraith = b'W',
+    Xeroc = b'X',
+    Yeti = b'Y',
+    Zombie = b'Z',
+}
+
+impl MonsterType {
+    /// Number of monster kinds (the size of the `monsters` stat table).
+    pub const COUNT: usize = 26;
+
+    /// The legacy `'A'..='Z'` identity byte.
+    #[inline]
+    pub const fn glyph(self) -> u8 {
+        self as u8
+    }
+
+    /// The zero-based index into the `monsters` stat table.
+    #[inline]
+    pub const fn index(self) -> usize {
+        (self as u8 - b'A') as usize
+    }
+
+    /// Rebuild a kind from a legacy identity byte (`None` for the hero's `0`
+    /// or any non-`'A'..='Z'` byte).
+    #[inline]
+    pub const fn from_glyph(ch: u8) -> Option<Self> {
+        Some(match ch {
+            b'A' => Self::Aquator,
+            b'B' => Self::Bat,
+            b'C' => Self::Centaur,
+            b'D' => Self::Dragon,
+            b'E' => Self::Emu,
+            b'F' => Self::VenusFlytrap,
+            b'G' => Self::Griffin,
+            b'H' => Self::Hobgoblin,
+            b'I' => Self::IceMonster,
+            b'J' => Self::Jabberwock,
+            b'K' => Self::Kestrel,
+            b'L' => Self::Leprechaun,
+            b'M' => Self::Medusa,
+            b'N' => Self::Nymph,
+            b'O' => Self::Orc,
+            b'P' => Self::Phantom,
+            b'Q' => Self::Quagga,
+            b'R' => Self::Rattlesnake,
+            b'S' => Self::Snake,
+            b'T' => Self::Troll,
+            b'U' => Self::BlackUnicorn,
+            b'V' => Self::Vampire,
+            b'W' => Self::Wraith,
+            b'X' => Self::Xeroc,
+            b'Y' => Self::Yeti,
+            b'Z' => Self::Zombie,
+            _ => return None,
+        })
+    }
+
+    /// The monster's display name (from the `monsters` stat table).
+    #[inline]
+    pub fn name(self) -> &'static str {
+        // SAFETY: the `monsters` table is initialised before any monster exists.
+        unsafe { crate::globals::monsters[self.index()].m_name }
+    }
+}
+
 /// Monster-type letters (`'A'..='Z'`) ordered weakest → strongest and indexed by
 /// an adjusted dungeon depth (see [`randmonster`]).
 ///
 /// `LVL_MONS[0]` is the weakest monster tier and `LVL_MONS[25]` the strongest.
 /// This is the source-of-truth ordering for *normal* (non-wandering) monster
 /// spawns, mirroring the `lvl_mons[]` table in the original `src/c/monsters.c`.
-static LVL_MONS: [u8; 26] = [
-    b'K' as u8,
-    b'E' as u8,
-    b'B' as u8,
-    b'S' as u8,
-    b'H' as u8,
-    b'I' as u8,
-    b'R' as u8,
-    b'O' as u8,
-    b'Z' as u8,
-    b'L' as u8,
-    b'C' as u8,
-    b'Q' as u8,
-    b'A' as u8,
-    b'N' as u8,
-    b'Y' as u8,
-    b'F' as u8,
-    b'T' as u8,
-    b'W' as u8,
-    b'P' as u8,
-    b'X' as u8,
-    b'U' as u8,
-    b'M' as u8,
-    b'V' as u8,
-    b'G' as u8,
-    b'J' as u8,
-    b'D' as u8,
+static LVL_MONS: [MonsterType; 26] = [
+    MonsterType::Kestrel,
+    MonsterType::Emu,
+    MonsterType::Bat,
+    MonsterType::Snake,
+    MonsterType::Hobgoblin,
+    MonsterType::IceMonster,
+    MonsterType::Rattlesnake,
+    MonsterType::Orc,
+    MonsterType::Zombie,
+    MonsterType::Leprechaun,
+    MonsterType::Centaur,
+    MonsterType::Quagga,
+    MonsterType::Aquator,
+    MonsterType::Nymph,
+    MonsterType::Yeti,
+    MonsterType::VenusFlytrap,
+    MonsterType::Troll,
+    MonsterType::Wraith,
+    MonsterType::Phantom,
+    MonsterType::Xeroc,
+    MonsterType::BlackUnicorn,
+    MonsterType::Medusa,
+    MonsterType::Vampire,
+    MonsterType::Griffin,
+    MonsterType::Jabberwock,
+    MonsterType::Dragon,
 ];
 
 /// Like [`LVL_MONS`], but for *wandering* monster spawns.
 ///
-/// The `0` entries are deliberate "holes": monster tiers excluded from
+/// The `None` entries are deliberate "holes": monster tiers excluded from
 /// wandering spawns because they are too strong to appear as a roamer.
 /// [`randmonster`] rerolls whenever it lands on a hole, so an absent tier is
 /// never spawned this way. Mirrors the `wand_mons[]` table in the original
 /// `src/c/monsters.c`.
-static WAND_MONS: [u8; 26] = [
-    b'K' as u8,
-    b'E' as u8,
-    b'B' as u8,
-    b'S' as u8,
-    b'H' as u8,
-    0,
-    b'R' as u8,
-    b'O' as u8,
-    b'Z' as u8,
-    0,
-    b'C' as u8,
-    b'Q' as u8,
-    b'A' as u8,
-    0,
-    b'Y' as u8,
-    0,
-    b'T' as u8,
-    b'W' as u8,
-    b'P' as u8,
-    0,
-    b'U' as u8,
-    b'M' as u8,
-    b'V' as u8,
-    b'G' as u8,
-    b'J' as u8,
-    0,
+static WAND_MONS: [Option<MonsterType>; 26] = [
+    Some(MonsterType::Kestrel),
+    Some(MonsterType::Emu),
+    Some(MonsterType::Bat),
+    Some(MonsterType::Snake),
+    Some(MonsterType::Hobgoblin),
+    None,
+    Some(MonsterType::Rattlesnake),
+    Some(MonsterType::Orc),
+    Some(MonsterType::Zombie),
+    None,
+    Some(MonsterType::Centaur),
+    Some(MonsterType::Quagga),
+    Some(MonsterType::Aquator),
+    None,
+    Some(MonsterType::Yeti),
+    None,
+    Some(MonsterType::Troll),
+    Some(MonsterType::Wraith),
+    Some(MonsterType::Phantom),
+    None,
+    Some(MonsterType::BlackUnicorn),
+    Some(MonsterType::Medusa),
+    Some(MonsterType::Vampire),
+    Some(MonsterType::Griffin),
+    Some(MonsterType::Jabberwock),
+    None,
 ];
 
 use crate::globals::{max_level, wizard};
@@ -131,9 +229,8 @@ unsafe fn iswearing(which: RingType) -> bool {
             && RingType::from_raw((*thing_o(PLAYER.right_ring())).o_which) == Some(which))
 }
 
-/// Picks an appropriate monster glyph for the current depth.
-pub unsafe fn randmonster(wander: bool) -> u8 {
-    let mons = if wander { &WAND_MONS } else { &LVL_MONS };
+/// Picks an appropriate monster kind for the current depth.
+pub unsafe fn randmonster(wander: bool) -> MonsterType {
     let level = crate::game::current_depth();
     loop {
         let mut d = level + (rnd(10) - 6);
@@ -143,15 +240,19 @@ pub unsafe fn randmonster(wander: bool) -> u8 {
         if d > 25 {
             d = rnd(5) + 21;
         }
-        let m = mons[d as usize];
-        if m != 0 {
-            return m;
+        let m = if wander {
+            WAND_MONS[d as usize]
+        } else {
+            Some(LVL_MONS[d as usize])
+        };
+        if let Some(kind) = m {
+            return kind;
         }
     }
 }
 
 /// Initializes a freshly allocated monster thing and places it on the map.
-pub unsafe fn new_monster(tp: *mut Thing, monster_type: u8, cp: *mut IVec2) {
+pub unsafe fn new_monster(tp: *mut Thing, monster_type: MonsterType, cp: *mut IVec2) {
     let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
@@ -160,8 +261,8 @@ pub unsafe fn new_monster(tp: *mut Thing, monster_type: u8, cp: *mut IVec2) {
 
     // `tp` was already allocated into `MLIST` by `new_actor`; no attach needed.
 
-    (*thing_t(tp)).t_type = monster_type as u8;
-    (*thing_t(tp)).t_disguise = monster_type as u8;
+    (*thing_t(tp)).t_type = Some(monster_type);
+    (*thing_t(tp)).t_disguise = monster_type.glyph();
     (*thing_t(tp)).t_pos = *cp;
 
     (*thing_t(tp)).t_oldch = crate::draw::cell_glyph((*cp).y, (*cp).x) as u8;
@@ -169,7 +270,7 @@ pub unsafe fn new_monster(tp: *mut Thing, monster_type: u8, cp: *mut IVec2) {
     // Record the monster in the per-cell occupancy map.
     crate::game::set_monster((*cp).y, (*cp).x, tp);
 
-    let mp = &monsters[(monster_type as i32 - 'A' as i32) as usize];
+    let mp = &monsters[monster_type.index()];
     (*thing_t(tp)).t_stats.level = mp.m_stats.level + lev_add;
     (*thing_t(tp)).t_stats.max_hit_points = roll((*thing_t(tp)).t_stats.level, 8);
     (*thing_t(tp)).t_stats.hit_points = (*thing_t(tp)).t_stats.max_hit_points;
@@ -187,7 +288,7 @@ pub unsafe fn new_monster(tp: *mut Thing, monster_type: u8, cp: *mut IVec2) {
     if iswearing(RingType::Aggravate) {
         runto(cp);
     }
-    if monster_type == 'X' as u8 {
+    if monster_type == MonsterType::Xeroc {
         (*thing_t(tp)).t_disguise = rnd_thing() as u8;
     }
 }
@@ -225,9 +326,9 @@ pub unsafe fn wanderer() {
     if player_has(MonsterFlags::SEEMONST) {
         output::set_standout(true);
         if !player_has(MonsterFlags::HALU) {
-            output::write_glyph(((*thing_t(tp)).t_type as u8) as char);
+            output::write_glyph(crate::draw::monster_type_glyph(tp));
         } else {
-            output::write_glyph((rnd(26) as u8 + b'A') as char);
+            output::write_glyph(crate::draw::hallucination_glyph());
         }
         output::set_standout(false);
     }
@@ -237,7 +338,7 @@ pub unsafe fn wanderer() {
     if wizard != 0 {
         msg_str(&format!(
             "started a wandering {}",
-            monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_name
+            (*thing_t(tp)).t_type.map_or("", |m| m.name())
         ));
     }
 }
@@ -263,7 +364,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
         (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
     }
 
-    if ch == b'M'
+    if ch == Some(MonsterType::Medusa)
         && !player_has(MonsterFlags::BLIND)
         && !player_has(MonsterFlags::HALU)
         && !has_flag(tp, MonsterFlags::FOUND)
@@ -307,7 +408,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
 pub unsafe fn give_pack(tp: *mut Thing) {
     if crate::game::current_depth() >= max_level
-        && rnd(100) < monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry
+        && rnd(100) < monsters[(*thing_t(tp)).t_type.map_or(0, |m| m.index())].m_carry
     {
         attach_pack(tp, new_thing());
     }

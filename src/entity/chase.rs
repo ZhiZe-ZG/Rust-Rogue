@@ -10,6 +10,7 @@
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
 use crate::entity::player::{set_thing_dest, set_thing_dest_hero, thing_dest};
+use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::entity::rndmove::rndmove;
 use crate::game::MONSTER_LIST;
@@ -198,10 +199,10 @@ pub unsafe fn relocate(th: *mut Thing, new_loc: *mut IVec2) {
     }
     output::move_cursor(IVec2::new((*new_loc).x, (*new_loc).y));
     if see_monst(th) != false as u8 {
-        output::write_glyph(((*thing_t(th)).t_disguise as u8) as char);
+        output::write_glyph(crate::draw::monster_glyph(th));
     } else if player_has(MonsterFlags::SEEMONST) {
         output::set_standout(true);
-        output::write_glyph(((*thing_t(th)).t_type as u8) as char);
+        output::write_glyph(crate::draw::monster_type_glyph(th));
         output::set_standout(false);
     }
 }
@@ -268,7 +269,7 @@ pub unsafe fn do_chase(th: *mut Thing) -> i32 {
             // line from it, and (b) that it is within shooting distance,
             // but outside of striking range.
             let hero = hero_pos();
-            if (*thing_t(th)).t_type == b'D'
+            if (*thing_t(th)).t_type == Some(MonsterType::Dragon)
                 && ((*thing_t(th)).t_pos.y == hero.y
                     || (*thing_t(th)).t_pos.x == hero.x
                     || ((*thing_t(th)).t_pos.y - hero.y).abs()
@@ -322,11 +323,11 @@ pub unsafe fn do_chase(th: *mut Thing) -> i32 {
                 }
                 obj = crate::entity::player::thing_next(obj);
             }
-            if (*thing_t(th)).t_type != b'F' {
+            if (*thing_t(th)).t_type != Some(MonsterType::VenusFlytrap) {
                 stoprun = true;
             }
         }
-    } else if (*thing_t(th)).t_type == b'F' {
+    } else if (*thing_t(th)).t_type == Some(MonsterType::VenusFlytrap) {
         return 0;
     }
     relocate(th, &raw mut CH_RET);
@@ -432,8 +433,8 @@ pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> u8 {
     // Stalkers are slightly confused all of the time, and bats are
     // quite confused all the time.
     if (monster_has(tp, MonsterFlags::HUH) && rnd(5) != 0)
-        || ((*thing_t(tp)).t_type == b'P' && rnd(5) == 0)
-        || ((*thing_t(tp)).t_type == b'B' && rnd(2) == 0)
+        || ((*thing_t(tp)).t_type == Some(MonsterType::Phantom) && rnd(5) == 0)
+        || ((*thing_t(tp)).t_type == Some(MonsterType::Bat) && rnd(2) == 0)
     {
         // get a valid random move
         CH_RET = *rndmove(tp);
@@ -487,7 +488,7 @@ pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> u8 {
                         }
                         // It can also be a Xeroc, which we shouldn't step on.
                         let obj = moat_at(y, x);
-                        if !obj.is_null() && (*thing_t(obj)).t_type == b'X' {
+                        if !obj.is_null() && (*thing_t(obj)).t_type == Some(MonsterType::Xeroc) {
                             y += 1;
                             continue;
                         }
@@ -604,7 +605,7 @@ pub unsafe fn cansee(y: i32, x: i32) -> u8 {
 ///
 /// Uses globals: monsters, hero, proom, lvl_obj, mlist.
 pub unsafe fn update_dest(tp: *mut Thing) {
-    let prob = monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry;
+    let prob = monsters[(*thing_t(tp)).t_type.map_or(0, |m| m.index())].m_carry;
     if prob <= 0
         || (*thing_t(tp)).t_room == crate::game::PLAYER.room()
         || see_monst(tp) != false as u8

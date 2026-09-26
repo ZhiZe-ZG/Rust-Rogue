@@ -1600,7 +1600,7 @@ unsafe fn rs_write_thing(savef: &mut dyn Write, t: *mut Thing) -> i32 {
     let _ = rs_write_int(savef, 1);
     let _ = rs_write_coord(savef, (*thing_t(t)).t_pos);
     let _ = rs_write_boolean(savef, (*thing_t(t)).t_turn as i32);
-    let _ = rs_write_char(savef, (*thing_t(t)).t_type as u8);
+    let _ = rs_write_char(savef, (*thing_t(t)).t_type.map_or(0, |m| m.glyph()));
     let _ = rs_write_char(savef, (*thing_t(t)).t_disguise as u8);
     let _ = rs_write_char(savef, (*thing_t(t)).t_oldch as u8);
 
@@ -1686,7 +1686,7 @@ unsafe fn rs_read_thing(inf: &mut dyn Read, t: *mut Thing) -> i32 {
     (*thing_t(t)).t_turn = turn_byte != 0;
     let mut type_ch: u8 = 0;
     let _ = rs_read_char(inf, &mut type_ch);
-    (*thing_t(t)).t_type = type_ch as u8;
+    (*thing_t(t)).t_type = crate::entity::monsters::MonsterType::from_glyph(type_ch);
     let mut disguise_ch: u8 = 0;
     let _ = rs_read_char(inf, &mut disguise_ch);
     (*thing_t(t)).t_disguise = disguise_ch as u8;

@@ -167,6 +167,27 @@ pub(crate) unsafe fn redraw_cell(y: i32, x: i32) {
     output::write_glyph_at(IVec2::new(x, y), (cell_glyph(y, x) as u8) as char);
 }
 
+/// The glyph a *visible* monster is drawn as: its disguise, or a random letter
+/// under hallucination. This is the single place a monster's identity becomes a
+/// screen character; callers must not cast `t_type`/`t_disguise` themselves.
+#[inline]
+pub(crate) unsafe fn monster_glyph(tp: *mut Thing) -> char {
+    ((*thing_t(tp)).t_disguise) as char
+}
+
+/// The glyph a merely-*sensed* monster (`SEEMONST`) is drawn as: its real
+/// identity, or a random letter under hallucination.
+#[inline]
+pub(crate) unsafe fn monster_type_glyph(tp: *mut Thing) -> char {
+    (*thing_t(tp)).t_type.map_or(' ', |m| m.glyph() as char)
+}
+
+/// A random `'A'..='Z'` glyph used when the hero is hallucinating.
+#[inline]
+pub(crate) fn hallucination_glyph() -> char {
+    ((rnd(26) + b'A' as i32) as u8) as char
+}
+
 /// Visible glyph at `(y, x)`: a monster's disguise if one stands here,
 /// otherwise [`cell_glyph`].
 pub(crate) unsafe fn winat(y: i32, x: i32) -> u8 {
@@ -619,13 +640,13 @@ pub unsafe fn enter_room(cp: *mut IVec2) {
                 if see_monst(tp) == 0 {
                     if player_has(MonsterFlags::SEEMONST) {
                         output::set_standout(true);
-                        output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
+                        output::write_glyph(crate::draw::monster_glyph(tp));
                         output::set_standout(false);
                     } else {
                         output::write_glyph((ch as u8) as char);
                     }
                 } else {
-                    output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
+                    output::write_glyph(crate::draw::monster_glyph(tp));
                 }
             }
             x += 1;

@@ -477,7 +477,7 @@ pub unsafe fn invis_on() {
             {
                 output::write_glyph_at(
                     IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
-                    ((*thing_t(mp)).t_disguise as u8) as char,
+                    crate::draw::monster_glyph(mp),
                 );
             }
         }
@@ -502,9 +502,9 @@ pub unsafe fn turn_see(turn_off: u8) -> u8 {
                     output::set_standout(true);
                 }
                 if !player_has(MonsterFlags::HALU) {
-                    output::write_glyph(((*thing_t(mp)).t_type as u8) as char);
+                    output::write_glyph(crate::draw::monster_type_glyph(mp));
                 } else {
-                    output::write_glyph((rnd(26) as u8 + b'A') as char);
+                    output::write_glyph(crate::draw::hallucination_glyph());
                 }
                 if !can_see {
                     output::set_standout(false);

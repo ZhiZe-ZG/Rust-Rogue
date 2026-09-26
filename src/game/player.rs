@@ -115,7 +115,7 @@ fn default_player() -> Thing {
         data: ThingMonster {
             t_pos: IVec2 { x: 0, y: 0 },
             t_turn: false,
-            t_type: 0,
+            t_type: None,
             t_disguise: 0,
             t_oldch: 0,
             t_dest: None,

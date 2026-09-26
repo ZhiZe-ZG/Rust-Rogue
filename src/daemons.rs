@@ -17,7 +17,7 @@ use crate::ui::output::{addmsg_str, msg_str};
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon, Daemon};
 use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
-use crate::entity::monsters::wanderer;
+use crate::entity::monsters::{wanderer, MonsterType};
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game::MONSTER_LIST;
 use crate::game::PLAYER;
@@ -260,14 +260,14 @@ pub unsafe fn come_down() {
             output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
             if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
                 if !(*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS) || cansee_invis {
-                    output::write_glyph(((*thing_t(tp)).t_disguise as u8) as char);
+                    output::write_glyph(crate::draw::monster_glyph(tp));
                 }
                 // If invisible and player can't see invisible, skip (original code
                 // falls through to the else-if, but cansee returned true here,
                 // so seemonst branch is not reached — matching C behavior).
             } else if seemonst {
                 output::set_standout(true);
-                output::write_glyph(((*thing_t(tp)).t_type as u8) as char);
+                output::write_glyph(crate::draw::monster_type_glyph(tp));
                 output::set_standout(false);
             }
         }
@@ -307,14 +307,14 @@ pub unsafe fn visuals() {
         if let Some(tp) = MONSTER_LIST.handle(id) {
             output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
             if see_monst(tp) != 0 {
-                if (*thing_t(tp)).t_type == b'X' && (*thing_t(tp)).t_disguise != b'X' {
+                if (*thing_t(tp)).t_type == Some(MonsterType::Xeroc) && (*thing_t(tp)).t_disguise != b'X' {
                     output::write_glyph((rnd_thing() as u8) as char);
                 } else {
-                    output::write_glyph((rnd(26) as u8 + b'A') as char);
+                    output::write_glyph(crate::draw::hallucination_glyph());
                 }
             } else if seemonst {
                 output::set_standout(true);
-                output::write_glyph((rnd(26) as u8 + b'A') as char);
+                output::write_glyph(crate::draw::hallucination_glyph());
                 output::set_standout(false);
             }
         }

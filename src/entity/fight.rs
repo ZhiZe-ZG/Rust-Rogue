@@ -21,6 +21,7 @@ use crate::misc::{check_level, chg_str, choose_str};
 use crate::rip::death;
 use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
 
+use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::globals::{monsters, weap_info};
 use crate::item::rings::RingType;
@@ -153,7 +154,7 @@ pub unsafe fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: u8) -> i32 {
 
     // Let him know it was really a xeroc (if it was one).
     let mut ch: u8 = b'\0' as u8;
-    if (*thing_t(tp)).t_type == b'X'
+    if (*thing_t(tp)).t_type == Some(MonsterType::Xeroc)
         && (*thing_t(tp)).t_disguise != b'X'
         && !player_has(MonsterFlags::BLIND)
     {
@@ -224,7 +225,7 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
         kamikaze = false as u8;
     }
 
-    if (*thing_t(mp)).t_type == b'X'
+    if (*thing_t(mp)).t_type == Some(MonsterType::Xeroc)
         && (*thing_t(mp)).t_disguise != b'X'
         && !player_has(MonsterFlags::BLIND)
     {
@@ -232,7 +233,7 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
         if player_has(MonsterFlags::HALU) {
             output::write_glyph_at(
                 IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
-                (rnd(26) as u8 + b'A') as char,
+                crate::draw::hallucination_glyph(),
             );
         }
     }
@@ -241,7 +242,7 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
     let oldhp = PLAYER.stats().hit_points;
 
     if roll_em_to_hero(mp, std::ptr::null_mut(), false as u8) != 0 {
-        if (*thing_t(mp)).t_type != b'I' {
+        if (*thing_t(mp)).t_type != Some(MonsterType::IceMonster) {
             if has_hit != 0 {
                 addmsg_str(".  ");
             }
@@ -252,7 +253,7 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
         has_hit = false as u8;
 
         if PLAYER.stats().hit_points <= 0 {
-            death((*thing_t(mp)).t_type as u8);
+            death((*thing_t(mp)).t_type.map_or(0, |m| m.glyph()));
         } else if kamikaze == 0 {
             let damage_dealt = oldhp - PLAYER.stats().hit_points;
             if damage_dealt > max_hit {
@@ -265,10 +266,10 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
 
         if !on_p(mp, MonsterFlags::CANCELLED) {
             let mtype = (*thing_t(mp)).t_type;
-            if mtype == b'A' {
+            if mtype == Some(MonsterType::Aquator) {
                 // Aquator: corrode armor
                 rust_armor(PLAYER.armor());
-            } else if mtype == b'I' {
+            } else if mtype == Some(MonsterType::IceMonster) {
                 // Ice monster: freeze player
                 PLAYER.remove_flag(MonsterFlags::RUN);
                 if no_command == 0 {
@@ -282,7 +283,7 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                 if no_command > BORE_LEVEL {
                     death(b'h' as u8);
                 }
-            } else if mtype == b'R' {
+            } else if mtype == Some(MonsterType::Rattlesnake) {
                 // Rattlesnake: poisonous bite
                 if save(VS_POISON) == 0 {
                     if !iswearing(RingType::SustainStrength) {
@@ -300,12 +301,12 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                         }
                     }
                 }
-            } else if mtype == b'W' || mtype == b'V' {
+            } else if mtype == Some(MonsterType::Wraith) || mtype == Some(MonsterType::Vampire) {
                 // Wraith / Vampire: drain energy or max HP
-                let threshold = if mtype == b'W' { 15 } else { 30 };
+                let threshold = if mtype == Some(MonsterType::Wraith) { 15 } else { 30 };
                 if rnd(100) < threshold {
                     let fewer;
-                    if mtype == b'W' {
+                    if mtype == Some(MonsterType::Wraith) {
                         if PLAYER.stats().experience == 0 {
                             death(b'W' as u8);
                         }
@@ -335,12 +336,12 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                             }
                         });
                         if dead {
-                            death(mtype as u8);
+                            death(mtype.map_or(0, |m| m.glyph()));
                         }
                     }
                     msg_str("you suddenly feel weaker");
                 }
-            } else if mtype == b'F' {
+            } else if mtype == Some(MonsterType::VenusFlytrap) {
                 // Venus flytrap: holds the player, deals ongoing damage
                 PLAYER.add_flag(MonsterFlags::HELD);
                 vf_hit += 1;
@@ -354,7 +355,7 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                 if PLAYER.stats().hit_points <= 0 {
                     death(b'F' as u8);
                 }
-            } else if mtype == b'L' {
+            } else if mtype == Some(MonsterType::Leprechaun) {
                 // Leprechaun: steals gold
                 let level = crate::game::current_depth();
                 let lastpurse = purse;
@@ -379,7 +380,7 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                 count = 0;
                 status();
                 return -1;
-            } else if mtype == b'N' {
+            } else if mtype == Some(MonsterType::Nymph) {
                 // Nymph: steals a magic item
                 let mut steal: *mut Thing = std::ptr::null_mut();
                 let mut nobj: i32 = 0;
@@ -414,16 +415,16 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                 }
             }
         }
-    } else if (*thing_t(mp)).t_type != b'I' {
+    } else if (*thing_t(mp)).t_type != Some(MonsterType::IceMonster) {
         // Miss branch
         if has_hit != 0 {
             addmsg_str(".  ");
             has_hit = false as u8;
         }
-        if (*thing_t(mp)).t_type == b'F' {
+        if (*thing_t(mp)).t_type == Some(MonsterType::VenusFlytrap) {
             PLAYER.with_stats_mut(|stats| stats.hit_points -= vf_hit);
             if PLAYER.stats().hit_points <= 0 {
-                death((*thing_t(mp)).t_type as u8);
+                death((*thing_t(mp)).t_type.map_or(0, |m| m.glyph()));
             }
         }
         miss(Some(&mname), None, false as u8);
@@ -464,7 +465,7 @@ pub unsafe fn set_mname(tp: *mut Thing) -> String {
         };
         mname = monsters[idx].m_name;
     } else {
-        let idx = (*thing_t(tp)).t_type.wrapping_sub(b'A') as usize;
+        let idx = (*thing_t(tp)).t_type.map_or(0, |m| m.index());
         mname = monsters[idx].m_name;
     }
 
@@ -787,13 +788,13 @@ pub unsafe fn killed(tp: *mut Thing, pr: u8) {
 
     let mtype = (*thing_t(tp)).t_type;
 
-    if mtype == b'F' {
+    if mtype == Some(MonsterType::VenusFlytrap) {
         PLAYER.remove_flag(MonsterFlags::HELD);
         vf_hit = 0;
         // Reset damage string to "000x0"
         let damage = &mut monsters[(b'F' as usize) - (b'A' as usize)].m_stats.damage;
         damage[..b"000x0\0".len()].copy_from_slice(b"000x0\0");
-    } else if mtype == b'L' {
+    } else if mtype == Some(MonsterType::Leprechaun) {
         let tp_room = (*thing_t(tp)).t_room;
         let level = crate::game::current_depth();
         if tp_room.is_some()
