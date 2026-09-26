@@ -76,6 +76,30 @@ pack, potions, scrolls, sticks, thing_list, weapons}`, `machdep`, `misc`,
 `options`, `save`, `startup`, and `wizard`. Only imports the compiler flagged as
 unused were removed; no behavior changed.
 
+### Stage 3 progress (owned state / `static_mut_refs`)
+
+Started removing the `static_mut_refs` warnings (the largest remaining group)
+by replacing shared/mutable references to `static mut` with
+`std::ptr::addr_of!` / `std::ptr::addr_of_mut!` at access sites, which is the
+sound, behavior-preserving fix (and the Rust-2024-recommended form).
+
+| Command | Before Stage 3 | After Stage 3 (command.rs slice) |
+| --- | --- | --- |
+| `cargo check --all-targets` warnings | 411 | **400** |
+| `cargo test --all-targets` | 41 passed | **41 passed** |
+| `cargo clippy --all-targets` errors | 0 | **0** |
+
+- **`command.rs`**: the `call()` path that reads/writes the `prbuf`, `huh`,
+  and `ring_info`/`pot_info`/`scr_info`/`ws_info` statics now uses
+  `addr_of!`/`addr_of_mut!` instead of `.as_ptr()`/`.as_mut_ptr()`.
+
+Remaining `static_mut_refs` sites by module (to convert the same way):
+`state.rs` (60), `item/potions.rs` (11), `item/things.rs` (10),
+`startup.rs` (9), `rip.rs` (8), `init.rs` (7), `options.rs` (6),
+`wizard.rs` (4), `mdport.rs` (4), `misc.rs` (3), `machdep.rs` (3),
+`item/sticks.rs` (3), `entity/fight.rs` (3), `command.rs` (3),
+`item/pack.rs` (1), `globals.rs` (1).
+
 ### `cargo check` warning categories (top groups)
 
 | Count | Warning | Owning stage |

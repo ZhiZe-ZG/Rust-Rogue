@@ -17,7 +17,7 @@ use crate::entity::player::{
 };
 use crate::ffi::strcpy;
 use crate::game::PLAYER;
-use crate::globals::{pot_info, ring_info, scr_info, ws_info};
+use crate::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::help::{help, identify};
 use crate::item::armor::{take_off, wear};
 use crate::item::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
@@ -573,7 +573,10 @@ pub unsafe extern "C" fn command() {
                     }
                     CTRL_P => {
                         after = false as c_uchar;
-                        msg_str(&CStr::from_ptr(huh.as_ptr()).to_string_lossy());
+                        msg_str(
+                            &CStr::from_ptr(std::ptr::addr_of!(huh).cast::<c_char>())
+                                .to_string_lossy(),
+                        );
                     }
                     CTRL_R => {
                         after = false as c_uchar;
@@ -1020,16 +1023,17 @@ pub unsafe extern "C" fn call() {
             msg_str("what do you want to call it? ");
         }
 
+        let prbuf_ptr = std::ptr::addr_of_mut!(prbuf).cast::<c_char>();
         match (*thing_o(obj)).o_label.as_ref() {
             Some(elsewise) => {
-                strcpy(prbuf.as_mut_ptr(), elsewise.as_ptr().cast::<c_char>());
+                strcpy(prbuf_ptr, elsewise.as_ptr().cast::<c_char>());
             }
             None => {
                 prbuf[0] = 0;
             }
         }
-        if get_str(prbuf.as_mut_ptr().cast(), Window::Stdscr) == NORM {
-            let text = CStr::from_ptr(prbuf.as_ptr())
+        if get_str(prbuf_ptr.cast(), Window::Stdscr) == NORM {
+            let text = CStr::from_ptr(std::ptr::addr_of!(prbuf).cast::<c_char>())
                 .to_string_lossy()
                 .into_owned();
             (*thing_o(obj)).o_label = Some(text);
@@ -1039,10 +1043,18 @@ pub unsafe extern "C" fn call() {
 
     // Magic items keep their call-name in the obj-info table entry.
     let op = match otype {
-        x if x == RING as u8 => ring_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize),
-        x if x == POTION as u8 => pot_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize),
-        x if x == SCROLL as u8 => scr_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize),
-        _ => ws_info.as_mut_ptr().add((*thing_o(obj)).o_which as usize),
+        x if x == RING as u8 => std::ptr::addr_of_mut!(ring_info)
+            .cast::<CObjInfo>()
+            .add((*thing_o(obj)).o_which as usize),
+        x if x == POTION as u8 => std::ptr::addr_of_mut!(pot_info)
+            .cast::<CObjInfo>()
+            .add((*thing_o(obj)).o_which as usize),
+        x if x == SCROLL as u8 => std::ptr::addr_of_mut!(scr_info)
+            .cast::<CObjInfo>()
+            .add((*thing_o(obj)).o_which as usize),
+        _ => std::ptr::addr_of_mut!(ws_info)
+            .cast::<CObjInfo>()
+            .add((*thing_o(obj)).o_which as usize),
     };
 
     let mut elsewise: *mut c_char = match otype {
@@ -1077,13 +1089,14 @@ pub unsafe extern "C" fn call() {
         msg_str("what do you want to call it? ");
     }
 
+    let prbuf_ptr = std::ptr::addr_of_mut!(prbuf).cast::<c_char>();
     if elsewise.is_null() {
         prbuf[0] = 0;
     } else {
-        strcpy(prbuf.as_mut_ptr(), elsewise);
+        strcpy(prbuf_ptr, elsewise);
     }
-    if get_str(prbuf.as_mut_ptr().cast(), Window::Stdscr) == NORM {
-        let text = CStr::from_ptr(prbuf.as_ptr())
+    if get_str(prbuf_ptr.cast(), Window::Stdscr) == NORM {
+        let text = CStr::from_ptr(std::ptr::addr_of!(prbuf).cast::<c_char>())
             .to_string_lossy()
             .into_owned();
         (*op).oi_guess = Some(text);
