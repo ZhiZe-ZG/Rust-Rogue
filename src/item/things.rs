@@ -7,8 +7,6 @@ use crate::item::pack::{get_item, leave_pack};
 use crate::misc::chg_str;
 use crate::rnd::rnd;
 use crate::ui::output::msg_str;
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{ObjectFlags, Thing, ThingObject};
 use crate::globals::{
@@ -28,15 +26,15 @@ const MAXSCROLLS: usize = 18;
 const MAXWEAPONS: usize = 9;
 const MAXSTICKS: usize = 14;
 
-const POTION: c_int = b'!' as c_int;
-const SCROLL: c_int = b'?' as c_int;
-const FOOD: c_int = b':' as c_int;
-const WEAPON: c_int = b')' as c_int;
-const ARMOR: c_int = b']' as c_int;
-const RING: c_int = b'=' as c_int;
-const STICK: c_int = b'/' as c_int;
-const GOLD: c_int = b'*' as c_int;
-const AMULET: c_int = b',' as c_int;
+const POTION: i32 = b'!' as i32;
+const SCROLL: i32 = b'?' as i32;
+const FOOD: i32 = b':' as i32;
+const WEAPON: i32 = b')' as i32;
+const ARMOR: i32 = b']' as i32;
+const RING: i32 = b'=' as i32;
+const STICK: i32 = b'/' as i32;
+const GOLD: i32 = b'*' as i32;
+const AMULET: i32 = b',' as i32;
 
 use crate::globals::{a_class, inv_describe, no_food};
 
@@ -61,7 +59,7 @@ fn starts_with_article(name: &str) -> &'static str {
 }
 
 #[inline]
-unsafe fn item_name(typ: c_int, which: c_int) -> &'static str {
+unsafe fn item_name(typ: i32, which: i32) -> &'static str {
     match typ {
         POTION => pot_info[which as usize].oi_name,
         SCROLL => scr_info[which as usize].oi_name,
@@ -80,7 +78,7 @@ unsafe fn copy_to_prbuf(text: &str) -> String {
     text.to_owned()
 }
 
-fn adjust_inventory_case(name: &mut String, drop: c_uchar) {
+fn adjust_inventory_case(name: &mut String, drop: u8) {
     if name.is_empty() {
         return;
     }
@@ -96,7 +94,7 @@ fn adjust_inventory_case(name: &mut String, drop: c_uchar) {
 }
 
 #[inline]
-unsafe fn pick_one(info: *mut CObjInfo, nitems: c_int) -> c_int {
+unsafe fn pick_one(info: *mut CObjInfo, nitems: i32) -> i32 {
     let mut idx = rnd(100);
     let mut i = 0;
     while i < nitems {
@@ -109,7 +107,7 @@ unsafe fn pick_one(info: *mut CObjInfo, nitems: c_int) -> c_int {
     0
 }
 
-pub unsafe fn inv_name(obj: *mut Thing, drop: c_uchar) -> String {
+pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
     if obj.is_null() {
         return String::new();
     }
@@ -201,20 +199,20 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: c_uchar) -> String {
     copy_to_prbuf(&name)
 }
 
-pub unsafe fn dropcheck(obj: *mut Thing) -> c_uchar {
+pub unsafe fn dropcheck(obj: *mut Thing) -> u8 {
     if obj.is_null() {
-        return true as c_uchar;
+        return true as u8;
     }
     if obj != PLAYER.armor()
         && obj != PLAYER.weapon()
         && obj != PLAYER.left_ring()
         && obj != PLAYER.right_ring()
     {
-        return true as c_uchar;
+        return true as u8;
     }
     if (*thing_o(obj)).o_flags.contains(ObjectFlags::CURSED) {
         msg_str("you can't.  It appears to be cursed");
-        return false as c_uchar;
+        return false as u8;
     }
     if obj == PLAYER.weapon() {
         PLAYER.set_weapon(std::ptr::null_mut());
@@ -232,7 +230,7 @@ pub unsafe fn dropcheck(obj: *mut Thing) -> c_uchar {
             _ => {}
         }
     }
-    true as c_uchar
+    true as u8
 }
 
 pub unsafe fn new_thing() -> *mut Thing {
@@ -259,22 +257,22 @@ pub unsafe fn new_thing() -> *mut Thing {
     } else {
         pick_one(
             std::ptr::addr_of!(things).cast::<CObjInfo>().cast_mut(),
-            NUMTHINGS as c_int,
-        ) as c_int
+            NUMTHINGS as i32,
+        ) as i32
     };
     match choice {
         0 => {
             (*thing_o(cur)).o_type = POTION;
             (*thing_o(cur)).o_which = pick_one(
                 std::ptr::addr_of!(pot_info).cast::<CObjInfo>().cast_mut(),
-                MAXPOTIONS as c_int,
+                MAXPOTIONS as i32,
             );
         }
         1 => {
             (*thing_o(cur)).o_type = SCROLL;
             (*thing_o(cur)).o_which = pick_one(
                 std::ptr::addr_of!(scr_info).cast::<CObjInfo>().cast_mut(),
-                MAXSCROLLS as c_int,
+                MAXSCROLLS as i32,
             );
         }
         2 => {
@@ -292,7 +290,7 @@ pub unsafe fn new_thing() -> *mut Thing {
                 cur,
                 pick_one(
                     std::ptr::addr_of!(weap_info).cast::<CObjInfo>().cast_mut(),
-                    MAXWEAPONS as c_int,
+                    MAXWEAPONS as i32,
                 ),
             );
             let r = rnd(100);
@@ -307,7 +305,7 @@ pub unsafe fn new_thing() -> *mut Thing {
             (*thing_o(cur)).o_type = ARMOR;
             (*thing_o(cur)).o_which = pick_one(
                 std::ptr::addr_of!(arm_info).cast::<CObjInfo>().cast_mut(),
-                MAXARMORS as c_int,
+                MAXARMORS as i32,
             );
             (*thing_o(cur)).o_arm = a_class[(*thing_o(cur)).o_which as usize];
             let r = rnd(100);
@@ -322,10 +320,10 @@ pub unsafe fn new_thing() -> *mut Thing {
             (*thing_o(cur)).o_type = RING;
             let ring_type = RingType::from_raw(pick_one(
                 std::ptr::addr_of!(ring_info).cast::<CObjInfo>().cast_mut(),
-                MAXRINGS as c_int,
+                MAXRINGS as i32,
             ))
             .expect("ring metadata produced an invalid ring type");
-            (*thing_o(cur)).o_which = ring_type as c_int;
+            (*thing_o(cur)).o_which = ring_type as i32;
             match ring_type {
                 RingType::Protection
                 | RingType::SustainStrength
@@ -348,7 +346,7 @@ pub unsafe fn new_thing() -> *mut Thing {
             (*thing_o(cur)).o_type = STICK;
             (*thing_o(cur)).o_which = pick_one(
                 std::ptr::addr_of!(ws_info).cast::<CObjInfo>().cast_mut(),
-                MAXSTICKS as c_int,
+                MAXSTICKS as i32,
             );
             fix_stick(cur);
         }
@@ -367,20 +365,20 @@ pub unsafe fn drop() {
         return;
     }
     let all = if ((*thing_o(obj)).o_type & 0x1) == 0 {
-        true as c_uchar
+        true as u8
     } else {
-        false as c_uchar
+        false as u8
     };
-    let _ = leave_pack(obj, true as c_uchar, all);
+    let _ = leave_pack(obj, true as u8, all);
 }
 
 pub unsafe fn discovered() {}
 
-unsafe fn print_disc(_type: c_char) {}
+unsafe fn print_disc(_type: u8) {}
 
 /// Formats a single `%s` substitution from `fmt` and `arg` and hands the
 /// result to `msg_str`, mirroring the legacy `add_line` helper.
-pub unsafe fn add_line(fmt: &str, arg: &str) -> c_char {
+pub unsafe fn add_line(fmt: &str, arg: &str) -> u8 {
     let text = match fmt.find("%s") {
         Some(idx) => format!("{}{}{}", &fmt[..idx], arg, &fmt[idx + 2..]),
         None => fmt.to_string(),
@@ -391,7 +389,7 @@ pub unsafe fn add_line(fmt: &str, arg: &str) -> c_char {
 
 unsafe fn end_line() {}
 
-unsafe fn nothing(_type: c_char) -> String {
+unsafe fn nothing(_type: u8) -> String {
     copy_to_prbuf("Nothing found")
 }
 
@@ -400,14 +398,14 @@ pub unsafe fn nameit(
     typ: &str,
     which: &str,
     op: *mut CObjInfo,
-    prfunc: unsafe fn(*mut Thing) -> *mut c_char,
+    prfunc: unsafe fn(*mut Thing) -> String,
 ) {
     if op.is_null() || obj.is_null() {
         return;
     }
     let typ = typ;
     let which = which;
-    let pr_text = CStr::from_ptr(prfunc(obj)).to_string_lossy();
+    let pr_text = prfunc(obj);
     let count = (*thing_o(obj)).o_count;
 
     let text = if (*op).oi_know || (*op).oi_guess.is_some() {
@@ -432,15 +430,15 @@ pub unsafe fn nameit(
     copy_to_prbuf(&text);
 }
 
-unsafe fn nullstr(_: *mut Thing) -> *mut c_char {
-    b"\0".as_ptr() as *mut c_char
+unsafe fn nullstr(_: *mut Thing) -> String {
+    String::new()
 }
 
-unsafe fn pick_one_ex(info: *mut CObjInfo, nitems: c_int) -> c_int {
+unsafe fn pick_one_ex(info: *mut CObjInfo, nitems: i32) -> i32 {
     pick_one(info, nitems)
 }
 
-unsafe fn set_order(order: *mut c_int, numthings: c_int) {
+unsafe fn set_order(order: *mut i32, numthings: i32) {
     for i in 0..numthings {
         *order.add(i as usize) = i;
     }

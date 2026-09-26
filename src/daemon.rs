@@ -16,10 +16,9 @@
 //! dropped the argument, which was undefined behaviour for callbacks such as
 //! `turn_see`).
 
-use std::os::raw::c_int;
 
-const EMPTY: c_int = 0;
-const DAEMON: c_int = -1;
+const EMPTY: i32 = 0;
+const DAEMON: i32 = -1;
 const MAXDAEMONS: usize = 20;
 
 /// A delayed-action callback, identified by a stable tag.
@@ -52,7 +51,7 @@ impl Daemon {
     /// Every callback mutates process-wide game state through the global owners
     /// (`PLAYER`, `MONSTER_LIST`, `CURRENT_LEVEL`, ...); the game is
     /// single-threaded, so callers must not invoke this concurrently.
-    pub unsafe fn run(self, arg: c_int) {
+    pub unsafe fn run(self, arg: i32) {
         match self {
             Daemon::Rollwand => crate::daemons::rollwand(),
             Daemon::Doctor => crate::daemons::doctor(),
@@ -65,7 +64,7 @@ impl Daemon {
             Daemon::Sight => crate::daemons::sight(),
             Daemon::Visuals => crate::daemons::visuals(),
             Daemon::TurnSee => {
-                let _ = crate::item::potions::turn_see(arg as std::os::raw::c_uchar);
+                let _ = crate::item::potions::turn_see(arg as u8);
             }
             Daemon::ComeDown => crate::daemons::come_down(),
             Daemon::Land => crate::daemons::land(),
@@ -77,7 +76,7 @@ impl Daemon {
     /// Only the nine callbacks the original `state.c` recognised map to an id;
     /// the remaining callbacks serialise as `-1`, exactly as before, so the save
     /// bytes are unchanged.
-    pub const fn save_id(self) -> Option<c_int> {
+    pub const fn save_id(self) -> Option<i32> {
         match self {
             Daemon::Rollwand => Some(1),
             Daemon::Doctor => Some(2),
@@ -93,7 +92,7 @@ impl Daemon {
     }
 
     /// Rebuild a callback from its legacy save-file identifier.
-    pub const fn from_save_id(id: c_int) -> Option<Self> {
+    pub const fn from_save_id(id: i32) -> Option<Self> {
         match id {
             1 => Some(Daemon::Rollwand),
             2 => Some(Daemon::Doctor),
@@ -117,10 +116,10 @@ impl Daemon {
 /// stream stays readable.
 #[derive(Copy, Clone)]
 pub struct CDelayedAction {
-    pub d_type: c_int,
+    pub d_type: i32,
     pub d_func: Option<Daemon>,
-    pub d_arg: c_int,
-    pub d_time: c_int,
+    pub d_arg: i32,
+    pub d_time: i32,
 }
 
 const EMPTY_SLOT: CDelayedAction = CDelayedAction {
@@ -154,7 +153,7 @@ unsafe fn find_slot(func: Daemon) -> Option<usize> {
 ///
 /// # Safety
 /// Touches the process-wide `D_LIST`; single-threaded use only.
-pub unsafe fn start_daemon(func: Daemon, arg: c_int, typ: c_int) {
+pub unsafe fn start_daemon(func: Daemon, arg: i32, typ: i32) {
     if let Some(i) = d_slot() {
         D_LIST[i].d_type = typ;
         D_LIST[i].d_func = Some(func);
@@ -179,7 +178,7 @@ pub unsafe fn kill_daemon(func: Daemon) {
 ///
 /// # Safety
 /// Runs game-state callbacks; single-threaded use only.
-pub unsafe fn do_daemons(flag: c_int) {
+pub unsafe fn do_daemons(flag: i32) {
     for i in 0..MAXDAEMONS {
         if D_LIST[i].d_type == flag && D_LIST[i].d_time == DAEMON {
             // Capture the callback and its argument before the call, which may
@@ -195,7 +194,7 @@ pub unsafe fn do_daemons(flag: c_int) {
 ///
 /// # Safety
 /// Touches the process-wide `D_LIST`; single-threaded use only.
-pub unsafe fn fuse(func: Daemon, arg: c_int, time: c_int, typ: c_int) {
+pub unsafe fn fuse(func: Daemon, arg: i32, time: i32, typ: i32) {
     if let Some(i) = d_slot() {
         D_LIST[i].d_type = typ;
         D_LIST[i].d_func = Some(func);
@@ -208,7 +207,7 @@ pub unsafe fn fuse(func: Daemon, arg: c_int, time: c_int, typ: c_int) {
 ///
 /// # Safety
 /// Touches the process-wide `D_LIST`; single-threaded use only.
-pub unsafe fn lengthen(func: Daemon, xtime: c_int) {
+pub unsafe fn lengthen(func: Daemon, xtime: i32) {
     if let Some(i) = find_slot(func) {
         D_LIST[i].d_time += xtime;
     }
@@ -229,7 +228,7 @@ pub unsafe fn extinguish(func: Daemon) {
 ///
 /// # Safety
 /// Runs game-state callbacks; single-threaded use only.
-pub unsafe fn do_fuses(flag: c_int) {
+pub unsafe fn do_fuses(flag: i32) {
     for i in 0..MAXDAEMONS {
         if D_LIST[i].d_type == flag && D_LIST[i].d_time > 0 {
             D_LIST[i].d_time -= 1;

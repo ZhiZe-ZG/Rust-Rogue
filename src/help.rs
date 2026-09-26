@@ -1,6 +1,6 @@
 //! Command help and map-symbol identification.
 
-use std::os::raw::{c_int, c_uchar};
+
 
 use crate::config::GameConfig;
 use crate::globals::{lower_msg, monsters, mpos};
@@ -9,7 +9,7 @@ use crate::ui::output::msg_str;
 use crate::ui::{output, Window};
 use glam::IVec2;
 
-const ESCAPE: c_int = 27;
+const ESCAPE: i32 = 27;
 
 struct HelpEntry {
     ch: u8,
@@ -178,13 +178,13 @@ pub(crate) unsafe fn help() {
     if helpch != b'*' {
         output::move_cursor(IVec2::new(0, 0));
         if let Some(entry) = HELP_ENTRIES.iter().find(|entry| entry.ch == helpch) {
-            lower_msg = true as c_uchar;
+            lower_msg = true as u8;
             msg_str(&format!(
                 "{}{}",
                 output::format_key(entry.ch),
                 entry.desc
             ));
-            lower_msg = false as c_uchar;
+            lower_msg = false as u8;
         } else {
             msg_str(&format!(
                 "unknown character '{}'",
@@ -194,7 +194,7 @@ pub(crate) unsafe fn help() {
         return;
     }
 
-    let mut numprint = HELP_ENTRIES.iter().filter(|entry| entry.print).count() as c_int;
+    let mut numprint = HELP_ENTRIES.iter().filter(|entry| entry.print).count() as i32;
     if numprint & 1 != 0 {
         numprint += 1;
     }
@@ -208,7 +208,7 @@ pub(crate) unsafe fn help() {
         .take((numprint * 2) as usize)
         .enumerate()
     {
-        let count = count as c_int;
+        let count = count as i32;
         output::move_window_cursor(
             help_window,
             IVec2::new(
@@ -246,12 +246,12 @@ pub(crate) unsafe fn identify() {
         return;
     }
 
-    let description = if (b'A' as c_int..=b'Z' as c_int).contains(&ch) {
-        monsters[(ch - b'A' as c_int) as usize].m_name.to_owned()
+    let description = if (b'A' as i32..=b'Z' as i32).contains(&ch) {
+        monsters[(ch - b'A' as i32) as usize].m_name.to_owned()
     } else {
         IDENT_ITEMS
             .iter()
-            .find(|item| item.ch as c_int == ch)
+            .find(|item| item.ch as i32 == ch)
             .map_or("unknown character", |item| item.desc)
             .to_owned()
     };

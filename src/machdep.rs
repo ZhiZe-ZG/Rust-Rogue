@@ -9,7 +9,7 @@
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
 use std::fs::{File, OpenOptions};
-use std::os::raw::{c_int, c_uchar};
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::globals::{got_ltc, orig_dsusp, scoreboard};
@@ -168,28 +168,28 @@ pub unsafe fn start_score() {
 /// See if the file is not a regular file (i.e. a symbolic link or
 /// special file).
 #[allow(dead_code)]
-unsafe fn is_symlink(path: &str) -> c_uchar {
+unsafe fn is_symlink(path: &str) -> u8 {
     match std::fs::symlink_metadata(path) {
         Ok(md) => {
             // Original C: ((sbuf2.st_mode & S_IFMT) != S_IFREG)
             if md.file_type().is_file() {
-                false as c_uchar
+                false as u8
             } else {
-                true as c_uchar
+                true as u8
             }
         }
-        Err(_) => false as c_uchar,
+        Err(_) => false as u8,
     }
 }
 
 /// lock_sc:
 /// Lock the score file.  If it takes too long, ask the user if they
-/// care to wait.  Return true as c_uchar if the lock is successful.
+/// care to wait.  Return true as u8 if the lock is successful.
 ///
 /// Uses globals: lfd (static), prbuf.
-pub unsafe fn lock_sc() -> c_int {
+pub unsafe fn lock_sc() -> i32 {
     if !SCOREFILE_ENABLED || !LOCKFILE_ENABLED {
-        return true as c_uchar as c_int;
+        return true as u8 as i32;
     }
 
     let try_open = || File::create(LOCKFILE).ok();
@@ -197,14 +197,14 @@ pub unsafe fn lock_sc() -> c_int {
     'over: loop {
         LFD = try_open();
         if LFD.is_some() {
-            return true as c_uchar as c_int;
+            return true as u8 as i32;
         }
 
         for _ in 0..5 {
             md_sleep(1);
             LFD = try_open();
             if LFD.is_some() {
-                return true as c_uchar as c_int;
+                return true as u8 as i32;
             }
         }
 
@@ -212,12 +212,12 @@ pub unsafe fn lock_sc() -> c_int {
             None => {
                 // stat() failed -- the lock file is gone; try again.
                 LFD = try_open();
-                return true as c_uchar as c_int;
+                return true as u8 as i32;
             }
             Some(mtime) => {
                 if now_secs() - mtime > 10 {
                     if md_unlink(LOCKFILE) < 0 {
-                        return false as c_uchar as c_int;
+                        return false as u8 as i32;
                     }
                     continue 'over;
                 }
@@ -231,22 +231,22 @@ pub unsafe fn lock_sc() -> c_int {
                     loop {
                         LFD = try_open();
                         if LFD.is_some() {
-                            return true as c_uchar as c_int;
+                            return true as u8 as i32;
                         }
                         if let Some(mtime2) = lockfile_mtime(LOCKFILE) {
                             if now_secs() - mtime2 > 10 {
                                 if md_unlink(LOCKFILE) < 0 {
-                                    return false as c_uchar as c_int;
+                                    return false as u8 as i32;
                                 }
                             }
                         } else {
                             LFD = try_open();
-                            return true as c_uchar as c_int;
+                            return true as u8 as i32;
                         }
                         md_sleep(1);
                     }
                 }
-                return false as c_uchar as c_int;
+                return false as u8 as i32;
             }
         }
     }

@@ -29,7 +29,6 @@ use crate::ui::output::msg_str;
 use crate::wizard::teleport;
 use glam::IVec2;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
-use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr::NonNull;
 
 pub use crate::entity::stats::Stats;
@@ -271,20 +270,20 @@ impl From<ObjectFlags> for i32 {
     }
 }
 
-const DOOR: c_char = b'+' as c_char;
-const FLOOR: c_char = b'.' as c_char;
-const PASSAGE: c_char = b'#' as c_char;
-const TRAP: c_char = b'^' as c_char;
-const STAIRS: c_char = b'%' as c_char;
-const SPACE: c_char = b' ' as c_char;
-const H_WALL: c_char = b'-' as c_char;
-const V_WALL: c_char = b'|' as c_char;
+const DOOR: u8 = b'+' as u8;
+const FLOOR: u8 = b'.' as u8;
+const PASSAGE: u8 = b'#' as u8;
+const TRAP: u8 = b'^' as u8;
+const STAIRS: u8 = b'%' as u8;
+const SPACE: u8 = b' ' as u8;
+const H_WALL: u8 = b'-' as u8;
+const V_WALL: u8 = b'|' as u8;
 
-const F_PASS: c_char = 0x80u8 as c_char;
-const F_REAL: c_char = 0x10u8 as c_char;
+const F_PASS: u8 = 0x80u8 as u8;
+const F_REAL: u8 = 0x10u8 as u8;
 
-const ARROW: c_int = 3;
-const VS_POISON: c_int = 0;
+const ARROW: i32 = 3;
+const VS_POISON: i32 = 0;
 
 /// Monster/player (actor) data for a [`CThing`], using native Rust types.
 #[derive(Copy, Clone)]
@@ -666,25 +665,25 @@ unsafe fn coord_eq(a: IVec2, b: IVec2) -> bool {
 }
 
 #[inline]
-unsafe fn is_upper(ch: c_char) -> bool {
+unsafe fn is_upper(ch: u8) -> bool {
     (ch as u8).is_ascii_uppercase()
 }
 
 /// turn_ok:
 /// Decide whether it is legal to turn onto the given space.
-pub unsafe fn turn_ok(y: c_int, x: c_int) -> c_uchar {
+pub unsafe fn turn_ok(y: i32, x: i32) -> u8 {
     let flags = flat_at(y, x) as u8;
     if crate::game::is_door_at(y, x)
         || (flags & (F_REAL as u8 | F_PASS as u8)) == (F_REAL as u8 | F_PASS as u8)
     {
-        true as c_uchar
+        true as u8
     } else {
         0
     }
 }
 
 #[inline]
-unsafe fn move_stuff(next_pos: &mut IVec2, fl: c_char) {
+unsafe fn move_stuff(next_pos: &mut IVec2, fl: u8) {
     let hero = PLAYER.pos();
     output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
     if (fl as u8 & F_PASS as u8) != 0 && crate::game::is_door_at(oldpos.y, oldpos.x) {
@@ -707,7 +706,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
         return TrapType::Rust;
     }
 
-    running = false as c_uchar;
+    running = false as u8;
     count = 0;
     crate::level::with_current_level_mut(|current| {
         current.reveal_trap(pos.y as usize, pos.x as usize);
@@ -742,7 +741,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
                 init_weapon(arrow, ARROW);
                 (*thing_o(arrow)).o_count = 1;
                 (*thing_o(arrow)).o_pos = PLAYER.pos();
-                fall(arrow, false as c_uchar);
+                fall(arrow, false as u8);
                 hit = TrapHit::Miss;
             }
         }
@@ -786,9 +785,9 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
 
     if hit == TrapHit::Kill {
         death(if trap == TrapType::Arrow {
-            b'a' as c_char
+            b'a' as u8
         } else {
-            b'd' as c_char
+            b'd' as u8
         });
     }
 
@@ -797,7 +796,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
 }
 
 #[inline]
-unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
+unsafe fn try_passgo_turn(dy: &mut i32, dx: &mut i32) -> bool {
     let current_room = PLAYER.room();
     if passgo == 0
         || running == 0
@@ -809,33 +808,33 @@ unsafe fn try_passgo_turn(dy: &mut c_int, dx: &mut c_int) -> bool {
     }
 
     let hero = PLAYER.pos();
-    if runch == b'h' as c_char || runch == b'l' as c_char {
+    if runch == b'h' as u8 || runch == b'l' as u8 {
         let b1 = hero.y != 1 && turn_ok(hero.y - 1, hero.x) != 0;
         let b2 = hero.y != GameConfig::SCREEN_LINES - 2 && turn_ok(hero.y + 1, hero.x) != 0;
         if !(b1 ^ b2) {
             return false;
         }
         if b1 {
-            runch = b'k' as c_char;
+            runch = b'k' as u8;
             *dy = -1;
         } else {
-            runch = b'j' as c_char;
+            runch = b'j' as u8;
             *dy = 1;
         }
         *dx = 0;
         draw_turnref();
         true
-    } else if runch == b'j' as c_char || runch == b'k' as c_char {
+    } else if runch == b'j' as u8 || runch == b'k' as u8 {
         let b1 = hero.x != 0 && turn_ok(hero.y, hero.x - 1) != 0;
         let b2 = hero.x != GameConfig::SCREEN_COLS - 1 && turn_ok(hero.y, hero.x + 1) != 0;
         if !(b1 ^ b2) {
             return false;
         }
         if b1 {
-            runch = b'h' as c_char;
+            runch = b'h' as u8;
             *dx = -1;
         } else {
-            runch = b'l' as c_char;
+            runch = b'l' as u8;
             *dx = 1;
         }
         *dy = 0;
@@ -851,23 +850,23 @@ pub static mut nh: IVec2 = IVec2 { x: 0, y: 0 };
 
 /// do_run:
 /// Start the hero running in the chosen direction.
-pub unsafe fn do_run(ch: c_char) {
-    running = true as c_uchar;
-    after = false as c_uchar;
+pub unsafe fn do_run(ch: u8) {
+    running = true as u8;
+    after = false as u8;
     runch = ch;
 }
 
 /// do_move:
 /// Check to see that a move is legal. If it is, handle the consequences.
-pub unsafe fn do_move(dy: c_int, dx: c_int) {
+pub unsafe fn do_move(dy: i32, dx: i32) {
     let mut next_pos = IVec2 { x: 0, y: 0 };
     let mut current_dy = dy;
     let mut current_dx = dx;
     let hero = PLAYER.pos();
-    let mut ch: c_char;
-    let fl: c_char;
+    let mut ch: u8;
+    let fl: u8;
 
-    firstmove = false as c_uchar;
+    firstmove = false as u8;
     if no_move != 0 {
         no_move -= 1;
         msg_str("you are still stuck in the bear trap");
@@ -877,9 +876,9 @@ pub unsafe fn do_move(dy: c_int, dx: c_int) {
     if player_has(MonsterFlags::HUH) && rnd(5) != 0 {
         next_pos = crate::entity::rndmove::rndmove_from(hero);
         if coord_eq(next_pos, hero) {
-            after = false as c_uchar;
-            running = false as c_uchar;
-            to_death = false as c_uchar;
+            after = false as u8;
+            running = false as u8;
+            to_death = false as u8;
             return;
         }
     } else {
@@ -898,8 +897,8 @@ pub unsafe fn do_move(dy: c_int, dx: c_int) {
                 next_pos.x = hero.x + current_dx;
                 continue;
             }
-            running = false as c_uchar;
-            after = false as c_uchar;
+            running = false as u8;
+            after = false as u8;
             return;
         }
         break;
@@ -907,13 +906,13 @@ pub unsafe fn do_move(dy: c_int, dx: c_int) {
 
     let mut hero_copy = hero;
     if diag_ok(&raw mut hero_copy, &mut next_pos) == 0 {
-        after = false as c_uchar;
-        running = false as c_uchar;
+        after = false as u8;
+        running = false as u8;
         return;
     }
 
     if running != 0 && coord_eq(hero, next_pos) {
-        running = false as c_uchar;
+        running = false as u8;
     }
 
     fl = flat_at(next_pos.y, next_pos.x);
@@ -926,17 +925,17 @@ pub unsafe fn do_move(dy: c_int, dx: c_int) {
             });
             ch = TRAP;
         }
-    } else if player_has(MonsterFlags::HELD) && ch != b'F' as c_char {
+    } else if player_has(MonsterFlags::HELD) && ch != b'F' as u8 {
         msg_str("you are being held");
         return;
     }
     match ch {
         SPACE | H_WALL | V_WALL => {
-            running = false as c_uchar;
-            after = false as c_uchar;
+            running = false as u8;
+            after = false as u8;
         }
         DOOR => {
-            running = false as c_uchar;
+            running = false as u8;
             if (flat_at(hero.y, hero.x) as u8 & F_PASS as u8) != 0 {
                 draw_enter_room(&mut next_pos);
             }
@@ -961,19 +960,19 @@ pub unsafe fn do_move(dy: c_int, dx: c_int) {
             move_stuff(&mut next_pos, fl);
         }
         STAIRS => {
-            seenstairs = true as c_uchar;
-            running = false as c_uchar;
+            seenstairs = true as u8;
+            running = false as u8;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, game::PLAYER.weapon(), false as c_uchar);
+                fight(&mut next_pos, game::PLAYER.weapon(), false as u8);
             } else {
                 take = ch;
                 move_stuff(&mut next_pos, fl);
             }
         }
         _ => {
-            running = false as c_uchar;
+            running = false as u8;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, game::PLAYER.weapon(), false as c_uchar);
+                fight(&mut next_pos, game::PLAYER.weapon(), false as u8);
             } else {
                 if ch != STAIRS {
                     take = ch;

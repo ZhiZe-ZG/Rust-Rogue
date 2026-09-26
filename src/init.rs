@@ -14,7 +14,7 @@ use crate::globals::{
 };
 use crate::rnd::rnd;
 
-use std::os::raw::{c_int, c_uchar};
+
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::item::pack::add_pack;
@@ -34,24 +34,24 @@ const NUMTHINGS: usize = 7;
 const MAXWEAPONS: usize = 9;
 const MAXARMORS: usize = 8;
 
-const HUNGERTIME: c_int = 1300;
+const HUNGERTIME: i32 = 1300;
 
 // Item types
-const FOOD: c_int = b':' as c_int;
-const ARMOR: c_int = b']' as c_int;
-const WEAPON: c_int = b')' as c_int;
+const FOOD: i32 = b':' as i32;
+const ARMOR: i32 = b']' as i32;
+const WEAPON: i32 = b')' as i32;
 
 // Armor / weapon indices
-const RING_MAIL: c_int = 1;
-const MACE: c_int = 0;
-const BOW: c_int = 2;
-const ARROW: c_int = 3;
+const RING_MAIL: i32 = 1;
+const MACE: i32 = 0;
+const BOW: i32 = 2;
+const ARROW: i32 = 3;
 
 /// Matches the C `STONE` typedef used for ring stone names and values.
 #[repr(C)]
 pub struct CStone {
     pub st_name: &'static str,
-    pub st_value: c_int,
+    pub st_value: i32,
 }
 
 // Safety: CStone only carries `&'static str` references (string literals) that
@@ -95,7 +95,7 @@ pub static stones: [CStone; NSTONES] = [
 ];
 
 /// Count of entries in `stones`.  Exported as `int cNSTONES` for C.
-pub static mut cNSTONES: c_int = NSTONES as c_int;
+pub static mut cNSTONES: i32 = NSTONES as i32;
 
 /// Wand / staff wood materials.  Exported as `char *wood[]` for C.
 pub static wood: [&'static str; NWOOD] = [
@@ -135,7 +135,7 @@ pub static wood: [&'static str; NWOOD] = [
 ];
 
 /// Count of entries in `wood`.  Exported as `int cNWOOD` for C.
-pub static mut cNWOOD: c_int = NWOOD as c_int;
+pub static mut cNWOOD: i32 = NWOOD as i32;
 
 /// Wand metal materials.  Exported as `char *metal[]` for C.
 pub static metal: [&'static str; NMETAL] = [
@@ -164,7 +164,7 @@ pub static metal: [&'static str; NMETAL] = [
 ];
 
 /// Count of entries in `metal`.  Exported as `int cNMETAL` for C.
-pub static mut cNMETAL: c_int = NMETAL as c_int;
+pub static mut cNMETAL: i32 = NMETAL as i32;
 
 // ─── Private static data ─────────────────────────────────────────────────────
 
@@ -186,7 +186,7 @@ const SYLLS: &[&str] = &[
 // Size = max(potion colours 27, stones 26, wood 33) = 33.
 /// Shared boolean scratch array used by init_colors, init_stones,
 /// and init_materials (mirrors the C-side `static bool used[]`).
-static mut USED: [c_uchar; 33] = [0; 33];
+static mut USED: [u8; 33] = [0; 33];
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
@@ -216,7 +216,7 @@ pub unsafe fn init_player() {
     let obj = new_item();
     (*thing_o(obj)).o_type = FOOD;
     (*thing_o(obj)).o_count = 1;
-    add_pack(obj, true as c_uchar);
+    add_pack(obj, true as u8);
 
     // A suit of ring-mail armor
     let obj = new_item();
@@ -226,7 +226,7 @@ pub unsafe fn init_player() {
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     (*thing_o(obj)).o_count = 1;
     PLAYER.set_armor(obj);
-    add_pack(obj, true as c_uchar);
+    add_pack(obj, true as u8);
 
     // A +1 mace
     let obj = new_item();
@@ -234,7 +234,7 @@ pub unsafe fn init_player() {
     (*thing_o(obj)).o_hplus = 1;
     (*thing_o(obj)).o_dplus = 1;
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    add_pack(obj, true as c_uchar);
+    add_pack(obj, true as u8);
     PLAYER.set_weapon(obj);
 
     // A +1 bow
@@ -242,14 +242,14 @@ pub unsafe fn init_player() {
     init_weapon(obj, BOW);
     (*thing_o(obj)).o_hplus = 1;
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    add_pack(obj, true as c_uchar);
+    add_pack(obj, true as u8);
 
     // Arrows
     let obj = new_item();
     init_weapon(obj, ARROW);
     (*thing_o(obj)).o_count = rnd(15) + 25;
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    add_pack(obj, true as c_uchar);
+    add_pack(obj, true as u8);
 }
 
 /// Assign a random colour from [`crate::colors::POTION_COLORS`] to each potion.
@@ -259,7 +259,7 @@ pub unsafe fn init_colors() {
     }
     for i in 0..MAXPOTIONS {
         let j = loop {
-            let j = rnd(crate::colors::POTION_COLOR_COUNT as c_int) as usize;
+            let j = rnd(crate::colors::POTION_COLOR_COUNT as i32) as usize;
             if USED[j] == 0 {
                 break j;
             }
@@ -283,7 +283,7 @@ pub unsafe fn init_names() {
             let mut nsyl = rnd(3) + 1;
             while nsyl > 0 {
                 nsyl -= 1;
-                let syllable = SYLLS[rnd(SYLLS.len() as c_int) as usize];
+                let syllable = SYLLS[rnd(SYLLS.len() as i32) as usize];
                 if name.len() + syllable.len() > MAXNAME {
                     break;
                 }
@@ -304,7 +304,7 @@ pub unsafe fn init_stones() {
     }
     for i in 0..MAXRINGS {
         let j = loop {
-            let j = rnd(NSTONES as c_int) as usize;
+            let j = rnd(NSTONES as i32) as usize;
             if USED[j] == 0 {
                 break j;
             }
@@ -320,11 +320,11 @@ pub unsafe fn init_materials() {
     for i in 0..NWOOD {
         USED[i] = 0;
     }
-    let mut metused: [c_uchar; NMETAL] = [0; NMETAL];
+    let mut metused: [u8; NMETAL] = [0; NMETAL];
     for i in 0..MAXSTICKS {
         loop {
             if rnd(2) == 0 {
-                let j = rnd(NMETAL as c_int) as usize;
+                let j = rnd(NMETAL as i32) as usize;
                 if metused[j] == 0 {
                     crate::globals::ws_type[i] = "wand";
                     crate::globals::ws_made[i] = metal[j];
@@ -332,7 +332,7 @@ pub unsafe fn init_materials() {
                     break;
                 }
             } else {
-                let j = rnd(NWOOD as c_int) as usize;
+                let j = rnd(NWOOD as i32) as usize;
                 if USED[j] == 0 {
                     crate::globals::ws_type[i] = "staff";
                     crate::globals::ws_made[i] = wood[j];
@@ -347,7 +347,7 @@ pub unsafe fn init_materials() {
 /// Accumulate cumulative probabilities for one item-info table.
 ///
 /// Mirrors the C `sumprobs(struct obj_info *info, int bound)`.
-pub unsafe fn sumprobs(info: *mut CObjInfo, bound: c_int) {
+pub unsafe fn sumprobs(info: *mut CObjInfo, bound: i32) {
     let endp = info.add(bound as usize);
     let mut p = info.add(1);
     while p < endp {
@@ -358,16 +358,16 @@ pub unsafe fn sumprobs(info: *mut CObjInfo, bound: c_int) {
 
 /// Initialize cumulative probabilities for all item types.
 pub unsafe fn init_probs() {
-    sumprobs(std::ptr::addr_of_mut!(things).cast(), NUMTHINGS as c_int);
-    sumprobs(std::ptr::addr_of_mut!(pot_info).cast(), MAXPOTIONS as c_int);
-    sumprobs(std::ptr::addr_of_mut!(scr_info).cast(), MAXSCROLLS as c_int);
-    sumprobs(std::ptr::addr_of_mut!(ring_info).cast(), MAXRINGS as c_int);
-    sumprobs(std::ptr::addr_of_mut!(ws_info).cast(), MAXSTICKS as c_int);
+    sumprobs(std::ptr::addr_of_mut!(things).cast(), NUMTHINGS as i32);
+    sumprobs(std::ptr::addr_of_mut!(pot_info).cast(), MAXPOTIONS as i32);
+    sumprobs(std::ptr::addr_of_mut!(scr_info).cast(), MAXSCROLLS as i32);
+    sumprobs(std::ptr::addr_of_mut!(ring_info).cast(), MAXRINGS as i32);
+    sumprobs(std::ptr::addr_of_mut!(ws_info).cast(), MAXSTICKS as i32);
     sumprobs(
         std::ptr::addr_of_mut!(weap_info).cast(),
-        MAXWEAPONS as c_int,
+        MAXWEAPONS as i32,
     );
-    sumprobs(std::ptr::addr_of_mut!(arm_info).cast(), MAXARMORS as c_int);
+    sumprobs(std::ptr::addr_of_mut!(arm_info).cast(), MAXARMORS as i32);
 }
 
 /// Return a random colour if the player is hallucinating, otherwise

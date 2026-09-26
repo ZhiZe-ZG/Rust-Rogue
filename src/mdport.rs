@@ -12,7 +12,6 @@
 //! implemented in `src/c/mdport.c`.  The port targets POSIX (Linux/macOS)
 //! and retains the same C ABI so existing Rust callers keep working.
 
-use std::os::raw::{c_int, c_uint, c_void};
 
 use crate::save::auto_save;
 use crate::startup::{endit, quit, tstp};
@@ -37,37 +36,37 @@ unsafe fn c_ptr_to_string(p: *const u8) -> String {
 /// original C `mdport.c` key translation. The arrow keys reuse the derived
 /// integer codes; the remaining numeric literals are the ncurses keypad
 /// constants for this game's arrow/keypad mapping.
-const KEY_DOWN: c_int = 0o402; // 258
-const KEY_UP: c_int = 0o403; // 259
-const KEY_LEFT: c_int = 0o404; // 260
-const KEY_RIGHT: c_int = 0o405; // 261
-const KEY_HOME: c_int = 0o406; // 262
-const KEY_BACKSPACE: c_int = 0o407; // 263
-const KEY_NPAGE: c_int = 0o522; // 338
-const KEY_PPAGE: c_int = 0o523; // 339
-const KEY_LL: c_int = 0o545; // 357
-const KEY_A1: c_int = 0o534; // 348
-const KEY_A3: c_int = 0o536; // 350
-const KEY_B2: c_int = 0o541; // 353
-const KEY_C1: c_int = 0o542; // 354
-const KEY_C3: c_int = 0o544; // 356
-const KEY_END: c_int = 0o550; // 360
+const KEY_DOWN: i32 = 0o402; // 258
+const KEY_UP: i32 = 0o403; // 259
+const KEY_LEFT: i32 = 0o404; // 260
+const KEY_RIGHT: i32 = 0o405; // 261
+const KEY_HOME: i32 = 0o406; // 262
+const KEY_BACKSPACE: i32 = 0o407; // 263
+const KEY_NPAGE: i32 = 0o522; // 338
+const KEY_PPAGE: i32 = 0o523; // 339
+const KEY_LL: i32 = 0o545; // 357
+const KEY_A1: i32 = 0o534; // 348
+const KEY_A3: i32 = 0o536; // 350
+const KEY_B2: i32 = 0o541; // 353
+const KEY_C1: i32 = 0o542; // 354
+const KEY_C3: i32 = 0o544; // 356
+const KEY_END: i32 = 0o550; // 360
 
 // Extended keypad codes not covered above; values match ncurses `keys.h`.
-const KEY_B1: c_int = 353; // keypad lower-left
-const KEY_B3: c_int = 354; // keypad lower-right
-const KEY_A2: c_int = 355; // keypad up
-const KEY_C2: c_int = 356; // keypad down
-const KEY_SUP: c_int = 337; // shift up
-const KEY_SDOWN: c_int = 336; // shift down
-const KEY_SEND: c_int = 0o551; // 361
-const KEY_SHOME: c_int = 0o552; // 362
-const KEY_SLEFT: c_int = 0o553; // 363
-const KEY_SNEXT: c_int = 0o556; // 366
-const KEY_SPREVIOUS: c_int = 0o557; // 367
-const KEY_SRIGHT: c_int = 0o560; // 368
-const KEY_EOL: c_int = 0o600; // 384
-const ERR: c_int = -1;
+const KEY_B1: i32 = 353; // keypad lower-left
+const KEY_B3: i32 = 354; // keypad lower-right
+const KEY_A2: i32 = 355; // keypad up
+const KEY_C2: i32 = 356; // keypad down
+const KEY_SUP: i32 = 337; // shift up
+const KEY_SDOWN: i32 = 336; // shift down
+const KEY_SEND: i32 = 0o551; // 361
+const KEY_SHOME: i32 = 0o552; // 362
+const KEY_SLEFT: i32 = 0o553; // 363
+const KEY_SNEXT: i32 = 0o556; // 366
+const KEY_SPREVIOUS: i32 = 0o557; // 367
+const KEY_SRIGHT: i32 = 0o560; // 368
+const KEY_EOL: i32 = 0o600; // 384
+const ERR: i32 = -1;
 
 // -------------------------------------------------------------------------
 // Signal handling
@@ -155,7 +154,7 @@ pub unsafe fn md_init() {
 
 /// md_hasclreol:
 /// Return true if the terminal supports clear-to-end-of-line.
-pub unsafe fn md_hasclreol() -> c_int {
+pub unsafe fn md_hasclreol() -> i32 {
     // The ncurses crate doesn't expose clr_eol/CE directly.  Assume the
     // terminal supports it (all common terminals do).
     1
@@ -163,7 +162,7 @@ pub unsafe fn md_hasclreol() -> c_int {
 
 /// md_putchar:
 /// Output a single character.
-unsafe fn md_putchar(c: c_int) {
+unsafe fn md_putchar(c: i32) {
     libc::putchar(c);
 }
 
@@ -190,7 +189,7 @@ pub unsafe fn md_raw_standend() {
 /// md_unlink_open_file:
 /// Unlink an open file.  On POSIX there is nothing special to do beyond
 /// unlinking the path.
-pub unsafe fn md_unlink_open_file(file: &str, _inf: *mut c_void) -> c_int {
+pub unsafe fn md_unlink_open_file(file: &str, _inf: *mut u8) -> i32 {
     match std::fs::remove_file(file) {
         Ok(()) => 0,
         Err(_) => -1,
@@ -199,7 +198,7 @@ pub unsafe fn md_unlink_open_file(file: &str, _inf: *mut c_void) -> c_int {
 
 /// md_unlink:
 /// Remove a file.
-pub unsafe fn md_unlink(file: &str) -> c_int {
+pub unsafe fn md_unlink(file: &str) -> i32 {
     match std::fs::remove_file(file) {
         Ok(()) => 0,
         Err(_) => -1,
@@ -208,7 +207,7 @@ pub unsafe fn md_unlink(file: &str) -> c_int {
 
 /// md_chmod:
 /// Change file permissions.
-pub unsafe fn md_chmod(filename: &str, mode: c_int) -> c_int {
+pub unsafe fn md_chmod(filename: &str, mode: i32) -> i32 {
     use std::os::unix::fs::PermissionsExt;
     match std::fs::set_permissions(filename, std::fs::Permissions::from_mode(mode as u32)) {
         Ok(()) => 0,
@@ -258,10 +257,10 @@ pub unsafe fn md_normaluser() {
 
 /// md_getuid:
 /// Return the real user id.
-pub unsafe fn md_getuid() -> c_uint {
+pub unsafe fn md_getuid() -> u32 {
     #[cfg(unix)]
     {
-        libc::getuid() as c_uint
+        libc::getuid() as u32
     }
     #[cfg(not(unix))]
     {
@@ -271,10 +270,10 @@ pub unsafe fn md_getuid() -> c_uint {
 
 /// md_getpid:
 /// Return the process id.
-pub unsafe fn md_getpid() -> c_int {
+pub unsafe fn md_getpid() -> i32 {
     #[cfg(unix)]
     {
-std::process::id() as c_int
+std::process::id() as i32
     }
     #[cfg(not(unix))]
     {
@@ -338,7 +337,7 @@ pub unsafe fn md_gethomedir() -> String {
 
 /// md_sleep:
 /// Sleep for the given number of seconds.
-pub unsafe fn md_sleep(s: c_int) {
+pub unsafe fn md_sleep(s: i32) {
     #[cfg(unix)]
     {
         std::thread::sleep(std::time::Duration::from_secs(s as u64));
@@ -371,7 +370,7 @@ pub unsafe fn md_getshell() -> String {
 
 /// md_shellescape:
 /// Escape to a shell; return the exit status of the shell.
-pub unsafe fn md_shellescape() -> c_int {
+pub unsafe fn md_shellescape() -> i32 {
     #[cfg(unix)]
     {
         let sh = md_getshell();
@@ -381,7 +380,7 @@ pub unsafe fn md_shellescape() -> c_int {
             pid = libc::fork();
         }
 
-        let mut ret_status: c_int = 0;
+        let mut ret_status: i32 = 0;
 
         if pid == 0 {
             // Shell process: drop privileges then exec the shell.
@@ -420,7 +419,7 @@ pub unsafe fn md_shellescape() -> c_int {
 
 /// directory_exists:
 /// Return 1 if the given path is a directory, 0 otherwise.
-unsafe fn directory_exists(dirname: &str) -> c_int {
+unsafe fn directory_exists(dirname: &str) -> i32 {
     match std::fs::metadata(dirname) {
         Ok(md) => {
             if md.is_dir() {
@@ -436,7 +435,7 @@ unsafe fn directory_exists(dirname: &str) -> c_int {
 /// md_getrealname:
 /// Return the real (login) name for the given uid, or the numeric uid
 /// string if no passwd entry exists.
-unsafe fn md_getrealname(uid: c_int) -> String {
+unsafe fn md_getrealname(uid: i32) -> String {
     #[cfg(unix)]
     {
         let pw = libc::getpwuid(uid as libc::uid_t);
@@ -453,38 +452,38 @@ unsafe fn md_getrealname(uid: c_int) -> String {
 
 /// md_erasechar:
 /// Return the terminal erase character.
-unsafe fn md_erasechar() -> c_int {
-    input::erase_key() as c_int
+unsafe fn md_erasechar() -> i32 {
+    input::erase_key() as i32
 }
 
 /// md_killchar:
 /// Return the terminal kill character.
-unsafe fn md_killchar() -> c_int {
-    input::kill_key() as c_int
+unsafe fn md_killchar() -> i32 {
+    input::kill_key() as i32
 }
 
 /// md_dsuspchar:
 /// Return the terminal delete-suspend character.
-pub unsafe fn md_dsuspchar() -> c_int {
+pub unsafe fn md_dsuspchar() -> i32 {
     // No portable POSIX VDSUSP; use 0 (which the caller treats as "disabled").
     0
 }
 
 /// md_setdsuspchar:
 /// Set the terminal delete-suspend character.
-pub unsafe fn md_setdsuspchar(_c: c_int) -> c_int {
+pub unsafe fn md_setdsuspchar(_c: i32) -> i32 {
     0
 }
 
 /// md_suspchar:
 /// Return the terminal suspend character.
-pub unsafe fn md_suspchar() -> c_int {
+pub unsafe fn md_suspchar() -> i32 {
     #[cfg(unix)]
     {
         let mut attr = std::mem::zeroed::<libc::termios>();
         // STDIN_FILENO === 0 on POSIX.
         if libc::tcgetattr(0, &mut attr) == 0 {
-            return attr.c_cc[libc::VSUSP] as c_int;
+            return attr.c_cc[libc::VSUSP] as i32;
         }
         0
     }
@@ -496,7 +495,7 @@ pub unsafe fn md_suspchar() -> c_int {
 
 /// md_setsuspchar:
 /// Set the terminal suspend character.
-unsafe fn md_setsuspchar(_c: c_int) -> c_int {
+unsafe fn md_setsuspchar(_c: i32) -> i32 {
     // Changing the suspend char is rarely needed; keep the ncurses setting.
     0
 }
@@ -505,15 +504,15 @@ unsafe fn md_setsuspchar(_c: c_int) -> c_int {
 // Cursor / keypad support
 // -------------------------------------------------------------------------
 
-const M_NORMAL: c_int = 0;
-const M_ESC: c_int = 1;
-const M_KEYPAD: c_int = 2;
-const M_TRAIL: c_int = 3;
+const M_NORMAL: i32 = 0;
+const M_ESC: i32 = 1;
+const M_KEYPAD: i32 = 2;
+const M_TRAIL: i32 = 3;
 
 /// md_readchar:
 /// Read a character, translating cursor/keypad escape sequences into the
 /// classic rogue movement commands (h j k l y u b n, plus Ctrl-modified runs).
-pub unsafe fn md_readchar() -> c_int {
+pub unsafe fn md_readchar() -> i32 {
     let mut ch = 0;
     let mut lastch = 0;
     let mut mode = M_NORMAL;
@@ -533,12 +532,12 @@ pub unsafe fn md_readchar() -> c_int {
 
         if mode == M_TRAIL {
             // msys console: '^' prefix means modified.
-            if ch == '^' as c_int {
+            if ch == '^' as i32 {
                 ch = ctrl_upcase(lastch);
             }
             // cygwin/telnet: '~' suffix means normal.
-            if ch == '~' as c_int {
-                ch = (lastch as u8).to_ascii_lowercase() as c_int;
+            if ch == '~' as i32 {
+                ch = (lastch as u8).to_ascii_lowercase() as i32;
             }
             if mode2 == M_ESC {
                 ch = ctrl_upcase(ch);
@@ -551,7 +550,7 @@ pub unsafe fn md_readchar() -> c_int {
                 mode2 = M_ESC;
                 continue;
             }
-            if ch == 'F' as c_int || ch == 'O' as c_int || ch == '[' as c_int {
+            if ch == 'F' as i32 || ch == 'O' as i32 || ch == '[' as i32 {
                 mode = M_KEYPAD;
                 continue;
             }
@@ -577,7 +576,7 @@ pub unsafe fn md_readchar() -> c_int {
                 0x5E => ch = ctrl('H'), // '^'
                 0x24 => ch = ctrl('L'), // '$'
                 // Interix: home.
-                0x48 => ch = 'y' as c_int, // 'H'
+                0x48 => ch = 'y' as i32, // 'H'
                 // Interix: ctrl-keypad.
                 1 => ch = ctrl('K'),
                 2 => ch = ctrl('J'),
@@ -588,32 +587,32 @@ pub unsafe fn md_readchar() -> c_int {
                 20 => ch = ctrl('N'),
                 21 => ch = ctrl('B'),
                 // Cygwin: keypad 5.
-                0x47 => ch = '.' as c_int, // 'G'
+                0x47 => ch = '.' as i32, // 'G'
                 // Cygwin: ctrl-home/page.
                 0x37 => {
                     // '7'
-                    lastch = 'Y' as c_int;
+                    lastch = 'Y' as i32;
                     mode = M_TRAIL;
                 }
                 0x35 => {
                     // '5'
-                    lastch = 'U' as c_int;
+                    lastch = 'U' as i32;
                     mode = M_TRAIL;
                 }
                 0x36 => {
                     // '6'
-                    lastch = 'N' as c_int;
+                    lastch = 'N' as i32;
                     mode = M_TRAIL;
                 }
                 // Win32 telnet / PuTTY: home/end.
                 0x31 => {
                     // '1'
-                    lastch = 'y' as c_int;
+                    lastch = 'y' as i32;
                     mode = M_TRAIL;
                 }
                 0x34 => {
                     // '4'
-                    lastch = 'b' as c_int;
+                    lastch = 'b' as i32;
                     mode = M_TRAIL;
                 }
                 // PuTTY ESC O sequences.
@@ -621,15 +620,15 @@ pub unsafe fn md_readchar() -> c_int {
                 0x43 => ch = ctrl('L'),    // 'C'
                 0x41 => ch = ctrl('K'),    // 'A'
                 0x42 => ch = ctrl('J'),    // 'B'
-                0x74 => ch = 'h' as c_int, // 't'
-                0x76 => ch = 'l' as c_int, // 'v'
-                0x78 => ch = 'k' as c_int, // 'x'
-                0x72 => ch = 'j' as c_int, // 'r'
-                0x77 => ch = 'y' as c_int, // 'w'
-                0x79 => ch = 'u' as c_int, // 'y'
-                0x73 => ch = 'n' as c_int, // 's'
-                0x71 => ch = 'b' as c_int, // 'q'
-                0x75 => ch = '.' as c_int, // 'u'
+                0x74 => ch = 'h' as i32, // 't'
+                0x76 => ch = 'l' as i32, // 'v'
+                0x78 => ch = 'k' as i32, // 'x'
+                0x72 => ch = 'j' as i32, // 'r'
+                0x77 => ch = 'y' as i32, // 'w'
+                0x79 => ch = 'u' as i32, // 'y'
+                0x73 => ch = 'n' as i32, // 's'
+                0x71 => ch = 'b' as i32, // 'q'
+                0x75 => ch = '.' as i32, // 'u'
                 _ => {}
             }
 
@@ -646,25 +645,25 @@ pub unsafe fn md_readchar() -> c_int {
 
         // Handle cooked curses keys.
         match ch {
-            KEY_LEFT => ch = 'h' as c_int,
-            KEY_DOWN => ch = 'j' as c_int,
-            KEY_UP => ch = 'k' as c_int,
-            KEY_RIGHT => ch = 'l' as c_int,
-            KEY_HOME => ch = 'y' as c_int,
-            KEY_PPAGE => ch = 'u' as c_int,
-            KEY_END => ch = 'b' as c_int,
-            KEY_LL => ch = 'b' as c_int,
-            KEY_NPAGE => ch = 'n' as c_int,
-            KEY_B1 => ch = 'h' as c_int,
-            KEY_C2 => ch = 'j' as c_int,
-            KEY_A2 => ch = 'k' as c_int,
-            KEY_B3 => ch = 'l' as c_int,
-            KEY_A1 => ch = 'y' as c_int,
-            KEY_A3 => ch = 'u' as c_int,
-            KEY_C1 => ch = 'b' as c_int,
-            KEY_C3 => ch = 'n' as c_int,
+            KEY_LEFT => ch = 'h' as i32,
+            KEY_DOWN => ch = 'j' as i32,
+            KEY_UP => ch = 'k' as i32,
+            KEY_RIGHT => ch = 'l' as i32,
+            KEY_HOME => ch = 'y' as i32,
+            KEY_PPAGE => ch = 'u' as i32,
+            KEY_END => ch = 'b' as i32,
+            KEY_LL => ch = 'b' as i32,
+            KEY_NPAGE => ch = 'n' as i32,
+            KEY_B1 => ch = 'h' as i32,
+            KEY_C2 => ch = 'j' as i32,
+            KEY_A2 => ch = 'k' as i32,
+            KEY_B3 => ch = 'l' as i32,
+            KEY_A1 => ch = 'y' as i32,
+            KEY_A3 => ch = 'u' as i32,
+            KEY_C1 => ch = 'b' as i32,
+            KEY_C3 => ch = 'n' as i32,
             // next should be '.', but there is a problem with putty/linux
-            KEY_B2 => ch = 'u' as c_int,
+            KEY_B2 => ch = 'u' as i32,
             KEY_SRIGHT => ch = ctrl('L'),
             KEY_SLEFT => ch = ctrl('H'),
             KEY_SUP => ch = ctrl('K'),
@@ -690,13 +689,13 @@ pub unsafe fn md_readchar() -> c_int {
 
 /// ctrl(c): return the control character for c.
 #[inline]
-fn ctrl(c: char) -> c_int {
-    (c as u8 & 0x1f) as c_int
+fn ctrl(c: char) -> i32 {
+    (c as u8 & 0x1f) as i32
 }
 
 /// ctrl_upcase(c): CTRL(toupper(c)).
 #[inline]
-fn ctrl_upcase(c: c_int) -> c_int {
+fn ctrl_upcase(c: i32) -> i32 {
     let up = (c as u8).to_ascii_uppercase();
     ctrl(up as char)
 }
@@ -706,7 +705,7 @@ fn ctrl_upcase(c: c_int) -> c_int {
 // -------------------------------------------------------------------------
 
 unsafe extern "C" {
-    fn getloadavg(loadavg: *mut f64, nelem: c_int) -> c_int;
+    fn getloadavg(loadavg: *mut f64, nelem: i32) -> i32;
 }
 
 
@@ -732,7 +731,7 @@ unsafe fn md_loadav(avg: *mut f64) {
 /// which lived in mach_dep.c under `#ifdef CHECKTIME`.  CHECKTIME is not
 /// enabled in the standard build, so we only need the exported symbol; the
 /// alarm is not armed.
-unsafe fn md_start_checkout_timer(_time: c_int) {
+unsafe fn md_start_checkout_timer(_time: i32) {
     // CHECKTIME is disabled in the standard build; keep SIGALRM at its
     // default disposition so no reference to the removed `checkout()` is
     // emitted.

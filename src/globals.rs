@@ -5,7 +5,6 @@
 use crate::entity::player::Thing as PlayerCThing;
 use crate::entity::stats::Stats;
 use glam::IVec2;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 use std::sync::{Mutex, MutexGuard};
 
 const MAXSTR: usize = 1024;
@@ -56,80 +55,80 @@ pub type CThing = PlayerCThing;
 pub type CThingMonster = crate::entity::player::ThingMonster;
 pub type CThingObject = crate::entity::player::ThingObject;
 
-pub static mut allscore: c_uchar = 1; // ALLSCORES is enabled in the standard build
-pub static mut after: c_uchar = 0;
-pub static mut again: c_uchar = 0;
-pub static mut noscore: c_int = 0;
-pub static mut seenstairs: c_uchar = 0;
-pub static mut amulet: c_uchar = 0;
-pub static mut door_stop: c_uchar = 0;
-pub static mut fight_flush: c_uchar = 0;
-pub static mut firstmove: c_uchar = 0;
-pub static mut got_ltc: c_uchar = 0;
-pub static mut has_hit: c_uchar = 0;
-pub static mut in_shell: c_uchar = 0;
-pub static mut inv_describe: c_uchar = 1;
-pub static mut jump: c_uchar = 0;
-pub static mut kamikaze: c_uchar = 0;
-pub static mut lower_msg: c_uchar = 0;
-pub static mut move_on: c_uchar = 0;
-pub static mut msg_esc: c_uchar = 0;
-pub static mut passgo: c_uchar = 0;
-pub static mut playing: c_uchar = 1;
-pub static mut q_comm: c_uchar = 0;
-pub static mut running: c_uchar = 0;
-pub static mut save_msg: c_uchar = 1;
-pub static mut see_floor: c_uchar = 1;
-pub static mut stat_msg: c_uchar = 0;
-pub static mut terse: c_uchar = 0;
-pub static mut to_death: c_uchar = 0;
-pub static mut tombstone: c_uchar = 1;
-pub static master_mode_enabled: c_uchar = 1;
-pub static mut wizard: c_int = 0;
-pub static mut pack_used: [c_uchar; 26] = [0; 26];
+pub static mut allscore: u8 = 1; // ALLSCORES is enabled in the standard build
+pub static mut after: u8 = 0;
+pub static mut again: u8 = 0;
+pub static mut noscore: i32 = 0;
+pub static mut seenstairs: u8 = 0;
+pub static mut amulet: u8 = 0;
+pub static mut door_stop: u8 = 0;
+pub static mut fight_flush: u8 = 0;
+pub static mut firstmove: u8 = 0;
+pub static mut got_ltc: u8 = 0;
+pub static mut has_hit: u8 = 0;
+pub static mut in_shell: u8 = 0;
+pub static mut inv_describe: u8 = 1;
+pub static mut jump: u8 = 0;
+pub static mut kamikaze: u8 = 0;
+pub static mut lower_msg: u8 = 0;
+pub static mut move_on: u8 = 0;
+pub static mut msg_esc: u8 = 0;
+pub static mut passgo: u8 = 0;
+pub static mut playing: u8 = 1;
+pub static mut q_comm: u8 = 0;
+pub static mut running: u8 = 0;
+pub static mut save_msg: u8 = 1;
+pub static mut see_floor: u8 = 1;
+pub static mut stat_msg: u8 = 0;
+pub static mut terse: u8 = 0;
+pub static mut to_death: u8 = 0;
+pub static mut tombstone: u8 = 1;
+pub static master_mode_enabled: u8 = 1;
+pub static mut wizard: i32 = 0;
+pub static mut pack_used: [u8; 26] = [0; 26];
 
-pub static mut dir_ch: c_char = 0;
+pub static mut dir_ch: u8 = 0;
 /// Per-item colour names (`char *p_colors[]`), now Rust string slices.
 pub static mut p_colors: [&'static str; MAXPOTIONS] = [""; MAXPOTIONS];
 /// Per-ring stone names (`char *r_stones[]`), now Rust string slices.
 pub static mut r_stones: [&'static str; MAXRINGS] = [""; MAXRINGS];
-pub static mut runch: c_char = 0;
-pub static mut take: c_char = 0;
+pub static mut runch: u8 = 0;
+pub static mut take: u8 = 0;
 /// Wand/staff material names (`char *ws_made[]`), now Rust string slices.
 pub static mut ws_made: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
 /// Wand/staff kind names (`char *ws_type[]`), now Rust string slices.
 pub static mut ws_type: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
-pub static mut orig_dsusp: c_int = 0;
-pub static mut l_last_comm: c_char = 0;
-pub static mut l_last_dir: c_char = 0;
-pub static mut last_comm: c_char = 0;
-pub static mut last_dir: c_char = 0;
-pub static mut numscores: c_uint = 10; // NUMSCORES from config.h
+pub static mut orig_dsusp: i32 = 0;
+pub static mut l_last_comm: u8 = 0;
+pub static mut l_last_dir: u8 = 0;
+pub static mut last_comm: u8 = 0;
+pub static mut last_dir: u8 = 0;
+pub static mut numscores: u32 = 10; // NUMSCORES from config.h
 /// The number label for the scoreboard (`NUMNAME` from config.h).
 pub const NUMNAME: &str = "Ten";
-pub static mut n_objs: c_int = 0;
-pub static mut ntraps: c_int = 0;
-pub static mut hungry_state: c_int = 0;
-pub static mut inpack: c_int = 0;
-pub static mut inv_type: c_int = 0;
-pub static mut max_hit: c_int = 0;
-pub static mut max_level: c_int = 0;
-pub static mut mpos: c_int = 0;
-pub static mut no_food: c_int = 0;
-pub static mut a_class: [c_int; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
-pub static mut count: c_int = 0;
+pub static mut n_objs: i32 = 0;
+pub static mut ntraps: i32 = 0;
+pub static mut hungry_state: i32 = 0;
+pub static mut inpack: i32 = 0;
+pub static mut inv_type: i32 = 0;
+pub static mut max_hit: i32 = 0;
+pub static mut max_level: i32 = 0;
+pub static mut mpos: i32 = 0;
+pub static mut no_food: i32 = 0;
+pub static mut a_class: [i32; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
+pub static mut count: i32 = 0;
 /// The open score file, or `None` when it is not open.
 pub static mut scoreboard: Option<std::fs::File> = None;
-pub static mut food_left: c_int = 0;
-pub static mut lastscore: c_int = -1;
-pub static mut no_command: c_int = 0;
-pub static mut no_move: c_int = 0;
-pub static mut purse: c_int = 0;
-pub static mut quiet: c_int = 0;
-pub static mut vf_hit: c_int = 0;
-pub static mut dnum: c_int = 0;
-pub static mut seed: c_int = 0;
-pub static mut e_levels: [c_int; 21] = [
+pub static mut food_left: i32 = 0;
+pub static mut lastscore: i32 = -1;
+pub static mut no_command: i32 = 0;
+pub static mut no_move: i32 = 0;
+pub static mut purse: i32 = 0;
+pub static mut quiet: i32 = 0;
+pub static mut vf_hit: i32 = 0;
+pub static mut dnum: i32 = 0;
+pub static mut seed: i32 = 0;
+pub static mut e_levels: [i32; 21] = [
     10, 20, 40, 80, 160, 320, 640, 1300, 2600, 5200, 13000, 26000, 50000, 100000, 200000, 400000,
     800000, 2000000, 4000000, 8000000, 0,
 ];
@@ -1280,7 +1279,7 @@ pub fn set_prbuf(value: String) {
 // ─── Rust-owned string tables ────────────────────────────────────────────────
 //
 // These were previously C strings allocated with `malloc`/`free` and addressed
-// through `[*mut c_char; N]` / `*mut c_char` globals. They are now owned Rust
+// through `[*mut u8; N]` / `*mut u8` globals. They are now owned Rust
 // `String`s behind a `Mutex`, matching the container-owner style used elsewhere
 // (`MONSTER_LIST`, `OBJECTS`, `PLAYER`). Callers read/write through the small
 // accessors below.

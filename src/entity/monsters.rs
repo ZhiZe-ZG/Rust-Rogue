@@ -19,73 +19,71 @@ use crate::ui::output;
 use crate::ui::output::{addmsg_str, msg_str};
 use crate::ui::runtime;
 use glam::IVec2;
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int};
 
 use crate::globals::monsters;
 
-const LAMPDIST: c_int = 3;
-const HUHDURATION: c_int = 20;
-const AFTER: c_int = 2;
-const VS_MAGIC: c_int = 0o03;
+const LAMPDIST: i32 = 3;
+const HUHDURATION: i32 = 20;
+const AFTER: i32 = 2;
+const VS_MAGIC: i32 = 0o03;
 
 pub use crate::globals::CMonster;
 
-static LVL_MONS: [c_char; 26] = [
-    b'K' as c_char,
-    b'E' as c_char,
-    b'B' as c_char,
-    b'S' as c_char,
-    b'H' as c_char,
-    b'I' as c_char,
-    b'R' as c_char,
-    b'O' as c_char,
-    b'Z' as c_char,
-    b'L' as c_char,
-    b'C' as c_char,
-    b'Q' as c_char,
-    b'A' as c_char,
-    b'N' as c_char,
-    b'Y' as c_char,
-    b'F' as c_char,
-    b'T' as c_char,
-    b'W' as c_char,
-    b'P' as c_char,
-    b'X' as c_char,
-    b'U' as c_char,
-    b'M' as c_char,
-    b'V' as c_char,
-    b'G' as c_char,
-    b'J' as c_char,
-    b'D' as c_char,
+static LVL_MONS: [u8; 26] = [
+    b'K' as u8,
+    b'E' as u8,
+    b'B' as u8,
+    b'S' as u8,
+    b'H' as u8,
+    b'I' as u8,
+    b'R' as u8,
+    b'O' as u8,
+    b'Z' as u8,
+    b'L' as u8,
+    b'C' as u8,
+    b'Q' as u8,
+    b'A' as u8,
+    b'N' as u8,
+    b'Y' as u8,
+    b'F' as u8,
+    b'T' as u8,
+    b'W' as u8,
+    b'P' as u8,
+    b'X' as u8,
+    b'U' as u8,
+    b'M' as u8,
+    b'V' as u8,
+    b'G' as u8,
+    b'J' as u8,
+    b'D' as u8,
 ];
 
-static WAND_MONS: [c_char; 26] = [
-    b'K' as c_char,
-    b'E' as c_char,
-    b'B' as c_char,
-    b'S' as c_char,
-    b'H' as c_char,
+static WAND_MONS: [u8; 26] = [
+    b'K' as u8,
+    b'E' as u8,
+    b'B' as u8,
+    b'S' as u8,
+    b'H' as u8,
     0,
-    b'R' as c_char,
-    b'O' as c_char,
-    b'Z' as c_char,
+    b'R' as u8,
+    b'O' as u8,
+    b'Z' as u8,
     0,
-    b'C' as c_char,
-    b'Q' as c_char,
-    b'A' as c_char,
+    b'C' as u8,
+    b'Q' as u8,
+    b'A' as u8,
     0,
-    b'Y' as c_char,
+    b'Y' as u8,
     0,
-    b'T' as c_char,
-    b'W' as c_char,
-    b'P' as c_char,
+    b'T' as u8,
+    b'W' as u8,
+    b'P' as u8,
     0,
-    b'U' as c_char,
-    b'M' as c_char,
-    b'V' as c_char,
-    b'G' as c_char,
-    b'J' as c_char,
+    b'U' as u8,
+    b'M' as u8,
+    b'V' as u8,
+    b'G' as u8,
+    b'J' as u8,
     0,
 ];
 
@@ -121,7 +119,7 @@ unsafe fn iswearing(which: RingType) -> bool {
 }
 
 /// Picks an appropriate monster glyph for the current depth.
-pub unsafe fn randmonster(wander: bool) -> c_char {
+pub unsafe fn randmonster(wander: bool) -> u8 {
     let mons = if wander { &WAND_MONS } else { &LVL_MONS };
     let level = crate::game::current_depth();
     loop {
@@ -140,7 +138,7 @@ pub unsafe fn randmonster(wander: bool) -> c_char {
 }
 
 /// Initializes a freshly allocated monster thing and places it on the map.
-pub unsafe fn new_monster(tp: *mut Thing, monster_type: c_char, cp: *mut IVec2) {
+pub unsafe fn new_monster(tp: *mut Thing, monster_type: u8, cp: *mut IVec2) {
     let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
@@ -176,13 +174,13 @@ pub unsafe fn new_monster(tp: *mut Thing, monster_type: c_char, cp: *mut IVec2) 
     if iswearing(RingType::Aggravate) {
         runto(cp);
     }
-    if monster_type == 'X' as c_char {
+    if monster_type == 'X' as u8 {
         (*thing_t(tp)).t_disguise = rnd_thing() as u8;
     }
 }
 
 /// Computes bonus experience from a monster's level and max HP.
-pub unsafe fn exp_add(tp: *mut Thing) -> c_int {
+pub unsafe fn exp_add(tp: *mut Thing) -> i32 {
     let mut modu = if (*thing_t(tp)).t_stats.level == 1 {
         (*thing_t(tp)).t_stats.max_hit_points / 8
     } else {
@@ -232,7 +230,7 @@ pub unsafe fn wanderer() {
 }
 
 /// Wakes and updates an adjacent monster's pursuit behavior and special gaze logic.
-pub unsafe fn wake_monster(y: c_int, x: c_int) -> *mut Thing {
+pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
     let tp = crate::game::monster_at(y, x);
     if tp.is_null() {
         runtime::shutdown();
@@ -303,14 +301,14 @@ pub unsafe fn give_pack(tp: *mut Thing) {
 }
 
 /// Rolls a saving throw for any creature against an effect category.
-pub unsafe fn save_throw(which: c_int, tp: *mut Thing) -> c_int {
+pub unsafe fn save_throw(which: i32, tp: *mut Thing) -> i32 {
     save_throw_for_level(which, (*thing_t(tp)).t_stats.level)
 }
 
 /// Roll a saving throw using an explicit caster level (used for the hero, whose
 /// `Thing` is no longer reachable as a raw pointer).
 #[inline]
-fn save_throw_for_level(which: c_int, level: c_int) -> c_int {
+fn save_throw_for_level(which: i32, level: i32) -> i32 {
     let need = 14 + which - level / 2;
     if unsafe { roll(1, 20) } >= need {
         1
@@ -320,7 +318,7 @@ fn save_throw_for_level(which: c_int, level: c_int) -> c_int {
 }
 
 /// Rolls the hero's saving throw, applying ring of protection magic adjustment.
-pub unsafe fn save(which: c_int) -> c_int {
+pub unsafe fn save(which: i32) -> i32 {
     let mut adj = which;
     if which == VS_MAGIC {
         if !PLAYER.left_ring().is_null()

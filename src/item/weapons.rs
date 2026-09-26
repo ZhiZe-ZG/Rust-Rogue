@@ -10,35 +10,33 @@ use crate::rnd::rnd;
 use crate::ui::output;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::globals::weap_info;
 use crate::entity::player::discard;
 use crate::item::things::{dropcheck, inv_name};
 
-const NO_WEAPON: c_int = -1;
+const NO_WEAPON: i32 = -1;
 
-const FLOOR: c_int = '.' as c_int;
-const PASSAGE: c_int = '#' as c_int;
-const DOOR: c_int = '+' as c_int;
-const WEAPON: c_char = ')' as c_char;
-const ARMOR: c_char = ']' as c_char;
+const FLOOR: i32 = '.' as i32;
+const PASSAGE: i32 = '#' as i32;
+const DOOR: i32 = '+' as i32;
+const WEAPON: u8 = ')' as u8;
+const ARMOR: u8 = ']' as u8;
 
-const BOW: c_int = 2;
-const DAGGER: c_int = 4;
+const BOW: i32 = 2;
+const DAGGER: i32 = 4;
 const MAXWEAPONS: usize = 9;
 
-const ISMISL: c_int = 0o000004;
-const ISMANY: c_int = 0o000010;
+const ISMISL: i32 = 0o000004;
+const ISMANY: i32 = 0o000010;
 
 #[derive(Copy, Clone)]
 struct InitWeap {
     iw_dam: &'static [u8],
     iw_hrl: &'static [u8],
-    iw_launch: c_int,
-    iw_flags: c_int,
+    iw_launch: i32,
+    iw_flags: i32,
 }
 
 static INIT_DAM: [InitWeap; MAXWEAPONS] = [
@@ -98,7 +96,7 @@ static INIT_DAM: [InitWeap; MAXWEAPONS] = [
     },
 ];
 
-pub static mut group: c_int = 2;
+pub static mut group: i32 = 2;
 
 static mut FALL_POS: IVec2 = IVec2 { x: 0, y: 0 };
 
@@ -121,12 +119,12 @@ fn hero() -> IVec2 {
 }
 
 #[inline]
-unsafe fn chat(y: c_int, x: c_int) -> c_int {
-    crate::draw::cell_glyph(y, x) as c_uchar as c_int
+unsafe fn chat(y: i32, x: i32) -> i32 {
+    crate::draw::cell_glyph(y, x) as u8 as i32
 }
 
 #[inline]
-unsafe fn moat(y: c_int, x: c_int) -> *mut Thing {
+unsafe fn moat(y: i32, x: i32) -> *mut Thing {
     crate::game::monster_at(y, x)
 }
 
@@ -144,8 +142,8 @@ unsafe fn copy_c_bytes(dst: &mut [u8], src: &[u8]) {
 }
 
 /// Throws a selected weapon in the provided direction and resolves impact/fall behavior.
-pub unsafe fn missile(ydelta: c_int, xdelta: c_int) {
-    let mut obj = get_item("throw", WEAPON as c_int);
+pub unsafe fn missile(ydelta: i32, xdelta: i32) {
+    let mut obj = get_item("throw", WEAPON as i32);
     if obj.is_null() {
         return;
     }
@@ -153,19 +151,19 @@ pub unsafe fn missile(ydelta: c_int, xdelta: c_int) {
         return;
     }
 
-    obj = leave_pack(obj, true as c_uchar, false as c_uchar);
+    obj = leave_pack(obj, true as u8, false as u8);
     do_motion(obj, ydelta, xdelta);
 
     let o = thing_o(obj);
     if moat((*o).o_pos.y, (*o).o_pos.x).is_null()
         || hit_monster((*o).o_pos.y, (*o).o_pos.x, obj) == 0
     {
-        fall(obj, true as c_uchar);
+        fall(obj, true as u8);
     }
 }
 
 /// Animates projectile movement until it hits blocking terrain or a door.
-pub unsafe fn do_motion(obj: *mut Thing, ydelta: c_int, xdelta: c_int) {
+pub unsafe fn do_motion(obj: *mut Thing, ydelta: i32, xdelta: i32) {
     let o = thing_o(obj);
     (*o).o_pos = hero();
 
@@ -177,7 +175,7 @@ pub unsafe fn do_motion(obj: *mut Thing, ydelta: c_int, xdelta: c_int) {
         {
             let mut ch = chat((*o).o_pos.y, (*o).o_pos.x);
             if ch == FLOOR && !show_floor() {
-                ch = ' ' as c_int;
+                ch = ' ' as i32;
             }
             output::write_glyph_at(IVec2::new((*o).o_pos.x, (*o).o_pos.y), (ch as u8) as char);
         }
@@ -202,7 +200,7 @@ pub unsafe fn do_motion(obj: *mut Thing, ydelta: c_int, xdelta: c_int) {
 }
 
 /// Drops an item near its current position or discards it if no floor slot is available.
-pub unsafe fn fall(obj: *mut Thing, pr: c_uchar) {
+pub unsafe fn fall(obj: *mut Thing, pr: u8) {
     if fallpos(&mut (*thing_o(obj)).o_pos, &raw mut FALL_POS) != 0 {
         // Objects render from the `lvl_obj` list; no glyph write needed.
         (*thing_o(obj)).o_pos = FALL_POS;
@@ -238,9 +236,9 @@ pub unsafe fn fall(obj: *mut Thing, pr: c_uchar) {
 }
 
 /// Initializes a weapon object with baseline damage, flags, and stack counts.
-pub unsafe fn init_weapon(weap: *mut Thing, which: c_int) {
+pub unsafe fn init_weapon(weap: *mut Thing, which: i32) {
     let o = thing_o(weap);
-    (*o).o_type = WEAPON as c_int;
+    (*o).o_type = WEAPON as i32;
     (*o).o_which = which;
 
     let iwp = INIT_DAM[which as usize];
@@ -266,13 +264,13 @@ pub unsafe fn init_weapon(weap: *mut Thing, which: c_int) {
 }
 
 /// Resolves thrown-weapon combat against the target tile.
-pub unsafe fn hit_monster(y: c_int, x: c_int, obj: *mut Thing) -> c_int {
+pub unsafe fn hit_monster(y: i32, x: i32, obj: *mut Thing) -> i32 {
     let mut mp = IVec2 { x, y };
-    fight(&mut mp, obj, true as c_uchar)
+    fight(&mut mp, obj, true as u8)
 }
 
 /// Formats signed enchantment numbers for armor and weapons.
-pub fn num(n1: c_int, n2: c_int, obj_type: c_char) -> String {
+pub fn num(n1: i32, n2: i32, obj_type: u8) -> String {
     if obj_type == WEAPON {
         format!("{:+},{:+}", n1, n2)
     } else {
@@ -289,13 +287,13 @@ pub unsafe fn wield() {
     }
     PLAYER.set_weapon(oweapon);
 
-    let obj = get_item("wield", WEAPON as c_int);
+    let obj = get_item("wield", WEAPON as i32);
     if obj.is_null() {
         after = 0;
         return;
     }
 
-    if (*thing_o(obj)).o_type == ARMOR as c_int {
+    if (*thing_o(obj)).o_type == ARMOR as i32 {
         msg_str("you can't wield armor");
         after = 0;
         return;
@@ -305,7 +303,7 @@ pub unsafe fn wield() {
         return;
     }
 
-    let sp = inv_name(obj, true as c_uchar);
+    let sp = inv_name(obj, true as u8);
     PLAYER.set_weapon(obj);
     if terse == 0 {
         addmsg_str("you are now ");
@@ -318,7 +316,7 @@ pub unsafe fn wield() {
 }
 
 /// Chooses a nearby floor/passage location to drop an item and returns whether one was found.
-pub unsafe fn fallpos(pos: *mut IVec2, newpos: *mut IVec2) -> c_uchar {
+pub unsafe fn fallpos(pos: *mut IVec2, newpos: *mut IVec2) -> u8 {
     let mut cnt = 0;
     for y in ((*pos).y - 1)..=((*pos).y + 1) {
         for x in ((*pos).x - 1)..=((*pos).x + 1) {
@@ -337,8 +335,8 @@ pub unsafe fn fallpos(pos: *mut IVec2, newpos: *mut IVec2) -> c_uchar {
         }
     }
     if cnt != 0 {
-        true as c_uchar
+        true as u8
     } else {
-        false as c_uchar
+        false as u8
     }
 }

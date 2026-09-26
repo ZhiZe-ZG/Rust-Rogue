@@ -9,12 +9,11 @@ use crate::item::rings::RingType;
 use crate::item::things::{dropcheck, inv_name};
 use crate::misc::spread;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
-use std::ffi::CStr;
-use std::os::raw::{c_int, c_uchar};
+
 
 use crate::globals::{after, terse, to_death};
 
-const ARMOR: c_int = ']' as c_int;
+const ARMOR: i32 = ']' as i32;
 
 #[inline]
 unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
@@ -39,7 +38,7 @@ pub unsafe fn wear() {
             addmsg_str(".  You'll have to take it off first");
         }
         endmsg();
-        after = false as c_uchar;
+        after = false as u8;
         return;
     }
 
@@ -50,7 +49,7 @@ pub unsafe fn wear() {
 
     waste_time();
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    let sp = inv_name(obj, true as c_uchar);
+    let sp = inv_name(obj, true as u8);
     PLAYER.set_armor(obj);
     if terse == 0 {
         addmsg_str("you are now ");
@@ -62,7 +61,7 @@ pub unsafe fn wear() {
 pub unsafe fn take_off() {
     let obj = PLAYER.armor();
     if obj.is_null() {
-        after = false as c_uchar;
+        after = false as u8;
         if terse != 0 {
             msg_str("not wearing armor");
         } else {
@@ -84,7 +83,7 @@ pub unsafe fn take_off() {
     msg_str(&format!(
         " wearing {}) {}",
         (*thing_o(obj)).o_packch as char,
-        inv_name(obj, true as c_uchar)
+        inv_name(obj, true as u8)
     ));
 }
 

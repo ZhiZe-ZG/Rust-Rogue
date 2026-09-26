@@ -1,9 +1,7 @@
 //! Death handling, the scoreboard display, and tombstones.
 //!
 //! Ported from `src/c/rip.c` to Rust.
-use std::ffi::{CStr, CString};
 use std::io::Write;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_ushort};
 
 use crate::globals::{allscore, monsters, numscores, CMonster, NUMNAME};
 use crate::item::things::inv_name;
@@ -33,18 +31,18 @@ pub const RIP_ART: &[&str] = &[
     "         ________)/\\\\_//(\\/(/\\)/\\//\\/|_)_______\n",
 ];
 
-static mut KILLNAME_BUFFER: [c_char; MAXSTR] = [0; MAXSTR];
+static mut KILLNAME_BUFFER: [u8; MAXSTR] = [0; MAXSTR];
 
 #[repr(C)]
 #[derive(Clone)]
 pub struct Score {
-    pub sc_uid: c_uint,
-    pub sc_score: c_int,
-    pub sc_flags: c_uint,
-    pub sc_monster: c_ushort,
-    pub sc_name: [c_char; MAXSTR],
-    pub sc_level: c_int,
-    pub sc_time: c_uint,
+    pub sc_uid: u32,
+    pub sc_score: i32,
+    pub sc_flags: u32,
+    pub sc_monster: u16,
+    pub sc_name: [u8; MAXSTR],
+    pub sc_level: i32,
+    pub sc_time: u32,
 }
 
 use crate::globals::{amulet, max_level, noscore, purse, tombstone, wizard};
@@ -88,15 +86,15 @@ fn vowelstr(s: &str) -> &'static str {
 }
 
 #[inline]
-unsafe fn center_string(s: &str) -> c_int {
-    28 - (((s.len() as c_int) + 1) / 2)
+unsafe fn center_string(s: &str) -> i32 {
+    28 - (((s.len() as i32) + 1) / 2)
 }
 
-pub unsafe fn center(s: &str) -> c_int {
+pub unsafe fn center(s: &str) -> i32 {
     center_string(s)
 }
 
-pub unsafe fn killname(monst: c_char, doart: bool) -> String {
+pub unsafe fn killname(monst: u8, doart: bool) -> String {
     let mut article = false;
     let mut name = String::from("Wally the Wonder Badger");
     if (monst as u8).is_ascii_uppercase() {
@@ -130,40 +128,40 @@ pub unsafe fn killname(monst: c_char, doart: bool) -> String {
     name
 }
 
-pub unsafe fn death_monst() -> c_char {
-    static POSS: [c_char; 33] = [
-        b'A' as c_char,
-        b'B' as c_char,
-        b'C' as c_char,
-        b'D' as c_char,
-        b'E' as c_char,
-        b'F' as c_char,
-        b'G' as c_char,
-        b'H' as c_char,
-        b'I' as c_char,
-        b'J' as c_char,
-        b'K' as c_char,
-        b'L' as c_char,
-        b'M' as c_char,
-        b'N' as c_char,
-        b'O' as c_char,
-        b'P' as c_char,
-        b'Q' as c_char,
-        b'R' as c_char,
-        b'S' as c_char,
-        b'T' as c_char,
-        b'U' as c_char,
-        b'V' as c_char,
-        b'W' as c_char,
-        b'X' as c_char,
-        b'Y' as c_char,
-        b'Z' as c_char,
-        b'a' as c_char,
-        b'b' as c_char,
-        b'h' as c_char,
-        b'd' as c_char,
-        b's' as c_char,
-        b' ' as c_char,
+pub unsafe fn death_monst() -> u8 {
+    static POSS: [u8; 33] = [
+        b'A' as u8,
+        b'B' as u8,
+        b'C' as u8,
+        b'D' as u8,
+        b'E' as u8,
+        b'F' as u8,
+        b'G' as u8,
+        b'H' as u8,
+        b'I' as u8,
+        b'J' as u8,
+        b'K' as u8,
+        b'L' as u8,
+        b'M' as u8,
+        b'N' as u8,
+        b'O' as u8,
+        b'P' as u8,
+        b'Q' as u8,
+        b'R' as u8,
+        b'S' as u8,
+        b'T' as u8,
+        b'U' as u8,
+        b'V' as u8,
+        b'W' as u8,
+        b'X' as u8,
+        b'Y' as u8,
+        b'Z' as u8,
+        b'a' as u8,
+        b'b' as u8,
+        b'h' as u8,
+        b'd' as u8,
+        b's' as u8,
+        b' ' as u8,
         0,
     ];
 
@@ -171,7 +169,7 @@ pub unsafe fn death_monst() -> c_char {
     POSS[idx]
 }
 
-pub unsafe fn score(amount: c_int, flags: c_int, monst: c_char) {
+pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
     let mut top_ten = Vec::with_capacity(numscores as usize);
     for _ in 0..numscores as usize {
         top_ten.push(Score {
@@ -242,16 +240,16 @@ pub unsafe fn score(amount: c_int, flags: c_int, monst: c_char) {
             let bytes = name.as_bytes();
             let entry = &mut top_ten[insert_at];
             entry.sc_score = amount;
-            entry.sc_flags = flags as c_uint;
+            entry.sc_flags = flags as u32;
             entry.sc_level = if flags == 2 {
                 max_level
             } else {
                 crate::game::current_depth()
             };
-            entry.sc_monster = monst as c_ushort;
+            entry.sc_monster = monst as u16;
             entry.sc_uid = uid;
             for (idx, byte) in bytes.iter().enumerate() {
-                entry.sc_name[idx] = *byte as c_char;
+                entry.sc_name[idx] = *byte as u8;
             }
             entry.sc_name[bytes.len()] = 0;
             if let Some(pos) = sc2 {
@@ -276,17 +274,17 @@ pub unsafe fn score(amount: c_int, flags: c_int, monst: c_char) {
                 3 => "killed with Amulet",
                 _ => "killed",
             };
-            let name = CStr::from_ptr(entry.sc_name.as_ptr()).to_string_lossy();
+            let name = scal_name(&entry.sc_name);
             print!(
                 "{:2} {:5} {}: {} on level {}",
-                idx as c_int + 1,
+                idx as i32 + 1,
                 entry.sc_score,
                 name,
                 reason,
                 entry.sc_level,
             );
             if entry.sc_flags == 0 || entry.sc_flags == 3 {
-                let killer = killname(entry.sc_monster as c_char, true);
+                let killer = killname(entry.sc_monster as u8, true);
                 print!(" by {}", killer);
             }
             println!(".");
@@ -301,7 +299,7 @@ pub unsafe fn score(amount: c_int, flags: c_int, monst: c_char) {
     }
 }
 
-pub unsafe fn death(monst: c_char) {
+pub unsafe fn death(monst: u8) {
     let mut killer = killname(monst, false);
     purse -= purse / 10;
     output::clear_screen();
@@ -309,7 +307,7 @@ pub unsafe fn death(monst: c_char) {
     if tombstone == 0 {
         // Legacy C path: print a compact death message when tombstones are disabled.
         output::write_text_at(IVec2::new(0, 23), "Killed by ");
-        if monst != b's' as c_char && monst != b'h' as c_char {
+        if monst != b's' as u8 && monst != b'h' as u8 {
             let article = if matches!(
                 killer.as_bytes().first(),
                 Some(b'a')
@@ -347,11 +345,11 @@ pub unsafe fn death(monst: c_char) {
         let v = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(date as u64);
         let _ = v;
         for i in 0..rogue_rip_count() {
-            output::write_text(&CStr::from_ptr(rogue_rip_line(i)).to_string_lossy());
+            output::write_text(rogue_rip_line(i));
         }
-        let killer_x = center_string(&killer) as c_int;
+        let killer_x = center_string(&killer) as i32;
         output::write_text_at(IVec2::new(killer_x, 17), &killer);
-        if monst == b's' as c_char || monst == b'h' as c_char {
+        if monst == b's' as u8 || monst == b'h' as u8 {
             output::write_text_at(IVec2::new(32, 16), " ");
         } else {
             let article = if matches!(
@@ -378,11 +376,11 @@ pub unsafe fn death(monst: c_char) {
         }
         let hero_name = crate::globals::whoami();
         output::write_text_at(
-            IVec2::new(center_string(&hero_name) as c_int, 14),
+            IVec2::new(center_string(&hero_name) as i32, 14),
             &hero_name,
         );
         let score_text = format!("{} Au", std::ptr::addr_of!(purse).read());
-        output::move_cursor(IVec2::new(center_string(&score_text) as c_int, 15));
+        output::move_cursor(IVec2::new(center_string(&score_text) as i32, 15));
         output::write_text(&score_text);
         let year = 1900 + 0;
         let year_text = format!("{:4}", year);
@@ -435,7 +433,7 @@ pub unsafe fn total_winner() {
         if worth < 0 {
             worth = 0;
         }
-        let packch = (*thing_o(obj)).o_packch as c_char;
+        let packch = (*thing_o(obj)).o_packch as u8;
         let item_name = inv_name(obj, 0);
         let line = format!("{} ) {:5}  {}\n", packch, worth, item_name);
         output::write_text(&line);
@@ -445,7 +443,7 @@ pub unsafe fn total_winner() {
     let summary = format!("   {:5}  Gold Pieces          ", oldpurse);
     output::write_text(&summary);
     output::refresh();
-    score(purse, 2, b' ' as c_char);
+    score(purse, 2, b' ' as u8);
     my_exit(0);
 }
 
@@ -459,9 +457,16 @@ pub fn rogue_rip_count() -> usize {
     RIP_ART.len()
 }
 
-/// Returns a pointer to a specific RIP artwork line for C FFI callers.
-pub fn rogue_rip_line(index: usize) -> *const c_char {
-    RIP_ART[index].as_ptr() as *const c_char
+/// Returns a specific RIP artwork line.
+pub fn rogue_rip_line(index: usize) -> &'static str {
+    RIP_ART[index]
+}
+
+/// Interpret a NUL-terminated fixed-width scoreboard name buffer as a Rust
+/// string (the legacy `sc_name` field).
+fn scal_name(buf: &[u8]) -> String {
+    let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+    String::from_utf8_lossy(&buf[..end]).into_owned()
 }
 
 #[cfg(test)]
@@ -472,13 +477,13 @@ mod tests {
     fn center_keeps_text_centered() {
         assert_eq!(
             unsafe { center("You") },
-            28 - ((("You".len() as c_int) + 1) / 2)
+            28 - ((("You".len() as i32) + 1) / 2)
         );
     }
 
     #[test]
     fn killname_uses_monster_names() {
-        let s = unsafe { killname(b'F' as c_char, false) };
+        let s = unsafe { killname(b'F' as u8, false) };
         assert!(!s.is_empty());
     }
 }

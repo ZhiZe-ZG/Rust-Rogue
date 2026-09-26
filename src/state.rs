@@ -31,7 +31,6 @@
 
 use glam::IVec2;
 use std::io::{Read, Write};
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_uint, c_ushort, c_void};
 
 use crate::daemon::{CDelayedAction, Daemon, D_LIST};
 use crate::entity::player::{Stats, Thing, ThingMonster, ThingObject};
@@ -48,30 +47,30 @@ use crate::structure::Room;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const RSID_STATS: c_int = 0xABCD0001u32 as c_int;
-const RSID_THING: c_int = 0xABCD0002u32 as c_int;
-const RSID_THING_NULL: c_int = 0xDEAD0002u32 as c_int;
-const RSID_OBJECT: c_int = 0xABCD0003u32 as c_int;
-const RSID_MAGICITEMS: c_int = 0xABCD0004u32 as c_int;
-const RSID_KNOWS: c_int = 0xABCD0005u32 as c_int;
-const RSID_GUESSES: c_int = 0xABCD0006u32 as c_int;
-const RSID_OBJECTLIST: c_int = 0xABCD0007u32 as c_int;
-const RSID_BAGOBJECT: c_int = 0xABCD0008u32 as c_int;
-const RSID_MONSTERLIST: c_int = 0xABCD0009u32 as c_int;
-const RSID_MONSTERSTATS: c_int = 0xABCD000Au32 as c_int;
-const RSID_MONSTERS: c_int = 0xABCD000Bu32 as c_int;
-const RSID_TRAP: c_int = 0xABCD000Cu32 as c_int;
-const RSID_WINDOW: c_int = 0xABCD000Du32 as c_int;
-const RSID_DAEMONS: c_int = 0xABCD000Eu32 as c_int;
-const RSID_IWEAPS: c_int = 0xABCD000Fu32 as c_int;
-const RSID_IARMOR: c_int = 0xABCD0010u32 as c_int;
-const RSID_SPELLS: c_int = 0xABCD0011u32 as c_int;
-const RSID_ILIST: c_int = 0xABCD0012u32 as c_int;
-const RSID_HLIST: c_int = 0xABCD0013u32 as c_int;
-const RSID_DEATHTYPE: c_int = 0xABCD0014u32 as c_int;
-const RSID_CTYPES: c_int = 0xABCD0015u32 as c_int;
-const RSID_COORDLIST: c_int = 0xABCD0016u32 as c_int;
-const RSID_ROOMS: c_int = 0xABCD0017u32 as c_int;
+const RSID_STATS: i32 = 0xABCD0001u32 as i32;
+const RSID_THING: i32 = 0xABCD0002u32 as i32;
+const RSID_THING_NULL: i32 = 0xDEAD0002u32 as i32;
+const RSID_OBJECT: i32 = 0xABCD0003u32 as i32;
+const RSID_MAGICITEMS: i32 = 0xABCD0004u32 as i32;
+const RSID_KNOWS: i32 = 0xABCD0005u32 as i32;
+const RSID_GUESSES: i32 = 0xABCD0006u32 as i32;
+const RSID_OBJECTLIST: i32 = 0xABCD0007u32 as i32;
+const RSID_BAGOBJECT: i32 = 0xABCD0008u32 as i32;
+const RSID_MONSTERLIST: i32 = 0xABCD0009u32 as i32;
+const RSID_MONSTERSTATS: i32 = 0xABCD000Au32 as i32;
+const RSID_MONSTERS: i32 = 0xABCD000Bu32 as i32;
+const RSID_TRAP: i32 = 0xABCD000Cu32 as i32;
+const RSID_WINDOW: i32 = 0xABCD000Du32 as i32;
+const RSID_DAEMONS: i32 = 0xABCD000Eu32 as i32;
+const RSID_IWEAPS: i32 = 0xABCD000Fu32 as i32;
+const RSID_IARMOR: i32 = 0xABCD0010u32 as i32;
+const RSID_SPELLS: i32 = 0xABCD0011u32 as i32;
+const RSID_ILIST: i32 = 0xABCD0012u32 as i32;
+const RSID_HLIST: i32 = 0xABCD0013u32 as i32;
+const RSID_DEATHTYPE: i32 = 0xABCD0014u32 as i32;
+const RSID_CTYPES: i32 = 0xABCD0015u32 as i32;
+const RSID_COORDLIST: i32 = 0xABCD0016u32 as i32;
+const RSID_ROOMS: i32 = 0xABCD0017u32 as i32;
 
 const MAXSTR: usize = 1024;
 
@@ -92,10 +91,10 @@ const MASTER: bool = true;
 
 // ─── Module state (mirrors C statics) ────────────────────────────────────────
 
-static mut READ_ERROR: c_int = 0;
-static mut WRITE_ERROR: c_int = 0;
-static mut FORMAT_ERROR: c_int = 0;
-static ENDIAN: c_int = 0x01020304;
+static mut READ_ERROR: i32 = 0;
+static mut WRITE_ERROR: i32 = 0;
+static mut FORMAT_ERROR: i32 = 0;
+static ENDIAN: i32 = 0x01020304;
 
 #[inline]
 unsafe fn big_endian() -> bool {
@@ -103,7 +102,7 @@ unsafe fn big_endian() -> bool {
 }
 
 #[inline]
-unsafe fn read_stat() -> c_int {
+unsafe fn read_stat() -> i32 {
     if FORMAT_ERROR != 0 || READ_ERROR != 0 {
         1
     } else {
@@ -118,7 +117,7 @@ unsafe fn read_stat() -> c_int {
 #[repr(C)]
 pub struct CStone {
     pub st_name: &'static str,
-    pub st_value: c_int,
+    pub st_value: i32,
 }
 
 // ─── Extern C globals (defined in vers.c) ────────────────────────────────────
@@ -145,7 +144,7 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 // ─── Low-level primitives ────────────────────────────────────────────────────
 
 #[inline]
-unsafe fn rs_write(savef: &mut dyn Write, ptr: *const c_void, size: usize) -> c_int {
+unsafe fn rs_write(savef: &mut dyn Write, ptr: *const u8, size: usize) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -159,7 +158,7 @@ unsafe fn rs_write(savef: &mut dyn Write, ptr: *const c_void, size: usize) -> c_
 }
 
 #[inline]
-unsafe fn rs_read(inf: &mut dyn Read, ptr: *mut u8, size: usize) -> c_int {
+unsafe fn rs_read(inf: &mut dyn Read, ptr: *mut u8, size: usize) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -172,7 +171,7 @@ unsafe fn rs_read(inf: &mut dyn Read, ptr: *mut u8, size: usize) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_int(savef: &mut dyn Write, c: c_int) -> c_int {
+unsafe fn rs_write_int(savef: &mut dyn Write, c: i32) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -180,21 +179,21 @@ unsafe fn rs_write_int(savef: &mut dyn Write, c: c_int) -> c_int {
     if big_endian() {
         let src = (&raw const c) as *const u8;
         let bytes = [*src.add(3), *src.add(2), *src.add(1), *src.add(0)];
-        rs_write(savef, bytes.as_ptr() as *const c_void, 4);
+        rs_write(savef, bytes.as_ptr() as *const u8, 4);
     } else {
-        rs_write(savef, (&raw const c) as *const c_void, 4);
+        rs_write(savef, (&raw const c) as *const u8, 4);
     }
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_int(inf: &mut dyn Read, i: *mut c_int) -> c_int {
+unsafe fn rs_read_int(inf: &mut dyn Read, i: *mut i32) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
-    let mut input: c_int = 0;
-    let _ = rs_read(inf, (&mut input as *mut c_int) as *mut u8, 4);
+    let mut input: i32 = 0;
+    let _ = rs_read(inf, (&mut input as *mut i32) as *mut u8, 4);
 
     if big_endian() {
         let src = (&raw const input) as *const u8;
@@ -207,17 +206,17 @@ unsafe fn rs_read_int(inf: &mut dyn Read, i: *mut c_int) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_char(savef: &mut dyn Write, c: c_char) -> c_int {
+unsafe fn rs_write_char(savef: &mut dyn Write, c: u8) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    rs_write(savef, (&raw const c) as *const c_void, 1);
+    rs_write(savef, (&raw const c) as *const u8, 1);
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_char(inf: &mut dyn Read, c: *mut c_char) -> c_int {
+unsafe fn rs_read_char(inf: &mut dyn Read, c: *mut u8) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -227,21 +226,21 @@ unsafe fn rs_read_char(inf: &mut dyn Read, c: *mut c_char) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_chars(savef: &mut dyn Write, c: *mut c_char, count: c_int) -> c_int {
+unsafe fn rs_write_chars(savef: &mut dyn Write, c: *mut u8, count: i32) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
     let _ = rs_write_int(savef, count);
     if count > 0 {
-        let _ = rs_write(savef, c as *const c_void, count as usize);
+        let _ = rs_write(savef, c as *const u8, count as usize);
     }
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_chars(inf: &mut dyn Read, i: *mut c_char, count: c_int) -> c_int {
-    let mut value: c_int = 0;
+unsafe fn rs_read_chars(inf: &mut dyn Read, i: *mut u8, count: i32) -> i32 {
+    let mut value: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -260,8 +259,8 @@ unsafe fn rs_read_chars(inf: &mut dyn Read, i: *mut c_char, count: c_int) -> c_i
     read_stat()
 }
 
-unsafe fn rs_write_ints(savef: &mut dyn Write, c: *mut c_int, count: c_int) -> c_int {
-    let mut n: c_int = 0;
+unsafe fn rs_write_ints(savef: &mut dyn Write, c: *mut i32, count: i32) -> i32 {
+    let mut n: i32 = 0;
 
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -279,8 +278,8 @@ unsafe fn rs_write_ints(savef: &mut dyn Write, c: *mut c_int, count: c_int) -> c
     WRITE_ERROR
 }
 
-unsafe fn rs_read_ints(inf: &mut dyn Read, i: *mut c_int, count: c_int) -> c_int {
-    let mut value: c_int = 0;
+unsafe fn rs_read_ints(inf: &mut dyn Read, i: *mut i32, count: i32) -> i32 {
+    let mut value: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -292,7 +291,7 @@ unsafe fn rs_read_ints(inf: &mut dyn Read, i: *mut c_int, count: c_int) -> c_int
         FORMAT_ERROR = 1;
     }
 
-    let mut n: c_int = 0;
+    let mut n: i32 = 0;
     while n < count {
         if rs_read_int(inf, &mut *i.add(n as usize)) != 0 {
             break;
@@ -303,18 +302,18 @@ unsafe fn rs_read_ints(inf: &mut dyn Read, i: *mut c_int, count: c_int) -> c_int
     read_stat()
 }
 
-unsafe fn rs_write_boolean(savef: &mut dyn Write, c: c_int) -> c_int {
+unsafe fn rs_write_boolean(savef: &mut dyn Write, c: i32) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
     let buf: u8 = if c == 0 { 0 } else { 1 };
-    rs_write(savef, (&raw const buf) as *const c_void, 1);
+    rs_write(savef, (&raw const buf) as *const u8, 1);
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_boolean(inf: &mut dyn Read, i: *mut c_uchar) -> c_int {
+unsafe fn rs_read_boolean(inf: &mut dyn Read, i: *mut u8) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -327,8 +326,8 @@ unsafe fn rs_read_boolean(inf: &mut dyn Read, i: *mut c_uchar) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_booleans(savef: &mut dyn Write, c: *mut c_uchar, count: c_int) -> c_int {
-    let mut n: c_int = 0;
+unsafe fn rs_write_booleans(savef: &mut dyn Write, c: *mut u8, count: i32) -> i32 {
+    let mut n: i32 = 0;
 
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -337,7 +336,7 @@ unsafe fn rs_write_booleans(savef: &mut dyn Write, c: *mut c_uchar, count: c_int
     let _ = rs_write_int(savef, count);
 
     while n < count {
-        if rs_write_boolean(savef, *c.add(n as usize) as c_int) != 0 {
+        if rs_write_boolean(savef, *c.add(n as usize) as i32) != 0 {
             break;
         }
         n += 1;
@@ -346,8 +345,8 @@ unsafe fn rs_write_booleans(savef: &mut dyn Write, c: *mut c_uchar, count: c_int
     WRITE_ERROR
 }
 
-unsafe fn rs_read_booleans(inf: &mut dyn Read, i: *mut c_uchar, count: c_int) -> c_int {
-    let mut value: c_int = 0;
+unsafe fn rs_read_booleans(inf: &mut dyn Read, i: *mut u8, count: i32) -> i32 {
+    let mut value: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -359,7 +358,7 @@ unsafe fn rs_read_booleans(inf: &mut dyn Read, i: *mut c_uchar, count: c_int) ->
         FORMAT_ERROR = 1;
     }
 
-    let mut n: c_int = 0;
+    let mut n: i32 = 0;
     while n < count {
         if rs_read_boolean(inf, &mut *i.add(n as usize)) != 0 {
             break;
@@ -370,7 +369,7 @@ unsafe fn rs_read_booleans(inf: &mut dyn Read, i: *mut c_uchar, count: c_int) ->
     read_stat()
 }
 
-unsafe fn rs_write_short(savef: &mut dyn Write, c: c_short) -> c_int {
+unsafe fn rs_write_short(savef: &mut dyn Write, c: i16) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -378,21 +377,21 @@ unsafe fn rs_write_short(savef: &mut dyn Write, c: c_short) -> c_int {
     if big_endian() {
         let src = (&raw const c) as *const u8;
         let bytes = [*src.add(1), *src.add(0)];
-        rs_write(savef, bytes.as_ptr() as *const c_void, 2);
+        rs_write(savef, bytes.as_ptr() as *const u8, 2);
     } else {
-        rs_write(savef, (&raw const c) as *const c_void, 2);
+        rs_write(savef, (&raw const c) as *const u8, 2);
     }
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_short(inf: &mut dyn Read, i: *mut c_short) -> c_int {
+unsafe fn rs_read_short(inf: &mut dyn Read, i: *mut i16) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
-    let mut input: c_short = 0;
-    let _ = rs_read(inf, (&mut input as *mut c_short) as *mut u8, 2);
+    let mut input: i16 = 0;
+    let _ = rs_read(inf, (&mut input as *mut i16) as *mut u8, 2);
 
     if big_endian() {
         let src = (&raw const input) as *const u8;
@@ -405,8 +404,8 @@ unsafe fn rs_read_short(inf: &mut dyn Read, i: *mut c_short) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_shorts(savef: &mut dyn Write, c: *mut c_short, count: c_int) -> c_int {
-    let mut n: c_int = 0;
+unsafe fn rs_write_shorts(savef: &mut dyn Write, c: *mut i16, count: i32) -> i32 {
+    let mut n: i32 = 0;
 
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -424,8 +423,8 @@ unsafe fn rs_write_shorts(savef: &mut dyn Write, c: *mut c_short, count: c_int) 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_shorts(inf: &mut dyn Read, i: *mut c_short, count: c_int) -> c_int {
-    let mut value: c_int = 0;
+unsafe fn rs_read_shorts(inf: &mut dyn Read, i: *mut i16, count: i32) -> i32 {
+    let mut value: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -438,7 +437,7 @@ unsafe fn rs_read_shorts(inf: &mut dyn Read, i: *mut c_short, count: c_int) -> c
     }
 
     // NOTE: mirrors the C loop bound (uses the read `value`, not `count`).
-    let mut n: c_int = 0;
+    let mut n: i32 = 0;
     while n < value {
         if rs_read_short(inf, &mut *i.add(n as usize)) != 0 {
             break;
@@ -449,7 +448,7 @@ unsafe fn rs_read_shorts(inf: &mut dyn Read, i: *mut c_short, count: c_int) -> c
     read_stat()
 }
 
-unsafe fn rs_write_ushort(savef: &mut dyn Write, c: c_ushort) -> c_int {
+unsafe fn rs_write_ushort(savef: &mut dyn Write, c: u16) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -457,21 +456,21 @@ unsafe fn rs_write_ushort(savef: &mut dyn Write, c: c_ushort) -> c_int {
     if big_endian() {
         let src = (&raw const c) as *const u8;
         let bytes = [*src.add(1), *src.add(0)];
-        rs_write(savef, bytes.as_ptr() as *const c_void, 2);
+        rs_write(savef, bytes.as_ptr() as *const u8, 2);
     } else {
-        rs_write(savef, (&raw const c) as *const c_void, 2);
+        rs_write(savef, (&raw const c) as *const u8, 2);
     }
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_ushort(inf: &mut dyn Read, i: *mut c_ushort) -> c_int {
+unsafe fn rs_read_ushort(inf: &mut dyn Read, i: *mut u16) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
-    let mut input: c_ushort = 0;
-    let _ = rs_read(inf, (&mut input as *mut c_ushort) as *mut u8, 2);
+    let mut input: u16 = 0;
+    let _ = rs_read(inf, (&mut input as *mut u16) as *mut u8, 2);
 
     if big_endian() {
         let src = (&raw const input) as *const u8;
@@ -484,7 +483,7 @@ unsafe fn rs_read_ushort(inf: &mut dyn Read, i: *mut c_ushort) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_uint(savef: &mut dyn Write, c: c_uint) -> c_int {
+unsafe fn rs_write_uint(savef: &mut dyn Write, c: u32) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -492,21 +491,21 @@ unsafe fn rs_write_uint(savef: &mut dyn Write, c: c_uint) -> c_int {
     if big_endian() {
         let src = (&raw const c) as *const u8;
         let bytes = [*src.add(3), *src.add(2), *src.add(1), *src.add(0)];
-        rs_write(savef, bytes.as_ptr() as *const c_void, 4);
+        rs_write(savef, bytes.as_ptr() as *const u8, 4);
     } else {
-        rs_write(savef, (&raw const c) as *const c_void, 4);
+        rs_write(savef, (&raw const c) as *const u8, 4);
     }
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_uint(inf: &mut dyn Read, i: *mut c_uint) -> c_int {
+unsafe fn rs_read_uint(inf: &mut dyn Read, i: *mut u32) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
-    let mut input: c_uint = 0;
-    let _ = rs_read(inf, (&mut input as *mut c_uint) as *mut u8, 4);
+    let mut input: u32 = 0;
+    let _ = rs_read(inf, (&mut input as *mut u32) as *mut u8, 4);
 
     if big_endian() {
         let src = (&raw const input) as *const u8;
@@ -519,7 +518,7 @@ unsafe fn rs_read_uint(inf: &mut dyn Read, i: *mut c_uint) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_marker(savef: &mut dyn Write, id: c_int) -> c_int {
+unsafe fn rs_write_marker(savef: &mut dyn Write, id: i32) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -529,8 +528,8 @@ unsafe fn rs_write_marker(savef: &mut dyn Write, id: c_int) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_marker(inf: &mut dyn Read, id: c_int) -> c_int {
-    let mut nid: c_int = 0;
+unsafe fn rs_read_marker(inf: &mut dyn Read, id: i32) -> i32 {
+    let mut nid: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -549,12 +548,12 @@ unsafe fn rs_read_marker(inf: &mut dyn Read, id: c_int) -> c_int {
 
 /// Writes a fixed-width, NUL-padded string record (`count` bytes) using the
 /// legacy `rs_write_chars` framing (an int length followed by the bytes).
-unsafe fn rs_write_fixed_string(savef: &mut dyn Write, text: &str, count: usize) -> c_int {
+unsafe fn rs_write_fixed_string(savef: &mut dyn Write, text: &str, count: usize) -> i32 {
     let mut buf = vec![0u8; count];
     let bytes = text.as_bytes();
     let copy_len = bytes.len().min(count.saturating_sub(1));
     buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
-    let _ = rs_write_chars(savef, buf.as_mut_ptr() as *mut c_char, count as c_int);
+    let _ = rs_write_chars(savef, buf.as_mut_ptr() as *mut u8, count as i32);
     WRITE_ERROR
 }
 
@@ -562,53 +561,14 @@ unsafe fn rs_write_fixed_string(savef: &mut dyn Write, text: &str, count: usize)
 /// an owned [`String`].
 unsafe fn rs_read_fixed_string(inf: &mut dyn Read, count: usize) -> String {
     let mut buf = vec![0u8; count];
-    let _ = rs_read_chars(inf, buf.as_mut_ptr() as *mut c_char, count as c_int);
+    let _ = rs_read_chars(inf, buf.as_mut_ptr() as *mut u8, count as i32);
     let end = buf.iter().position(|b| *b == 0).unwrap_or(count);
     String::from_utf8_lossy(&buf[..end]).into_owned()
 }
 
-unsafe fn rs_write_string(savef: &mut dyn Write, s: *const c_char) -> c_int {
-    if WRITE_ERROR != 0 {
-        return WRITE_ERROR;
-    }
-
-    let len: c_int = if s.is_null() {
-        0
-    } else {
-        let mut n = 0usize;
-        while *s.add(n) != 0 {
-            n += 1;
-        }
-        n as c_int + 1
-    };
-
-    let _ = rs_write_int(savef, len);
-    let _ = rs_write_chars(savef, s as *mut c_char, len);
-
-    WRITE_ERROR
-}
-
-unsafe fn rs_read_string(inf: &mut dyn Read, s: *mut c_char, max: c_int) -> c_int {
-    let mut len: c_int = 0;
-
-    if READ_ERROR != 0 || FORMAT_ERROR != 0 {
-        return read_stat();
-    }
-
-    let _ = rs_read_int(inf, &mut len);
-
-    if len > max {
-        FORMAT_ERROR = 1;
-    }
-
-    let _ = rs_read_chars(inf, s, len);
-
-    read_stat()
-}
-
 /// Write an owned string using the legacy double-length record, or a zero
-/// record for `None`. Mirrors [`rs_write_string`] without needing a C string.
-unsafe fn rs_write_string_opt(savef: &mut dyn Write, text: Option<&str>) -> c_int {
+/// record for `None`.
+unsafe fn rs_write_string_opt(savef: &mut dyn Write, text: Option<&str>) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -622,9 +582,9 @@ unsafe fn rs_write_string_opt(savef: &mut dyn Write, text: Option<&str>) -> c_in
         Some(value) => {
             let mut bytes = value.as_bytes().to_vec();
             bytes.push(0);
-            let len = bytes.len() as c_int;
+            let len = bytes.len() as i32;
             let _ = rs_write_int(savef, len);
-            let _ = rs_write_chars(savef, bytes.as_mut_ptr() as *mut c_char, len);
+            let _ = rs_write_chars(savef, bytes.as_mut_ptr() as *mut u8, len);
             WRITE_ERROR
         }
     }
@@ -634,7 +594,7 @@ unsafe fn rs_write_string_opt(savef: &mut dyn Write, text: Option<&str>) -> c_in
 /// stored length was zero). Uses Rust `Vec`/`String` storage instead of the
 /// legacy `malloc`/`free` buffer.
 unsafe fn rs_read_string_owned(inf: &mut dyn Read) -> Option<String> {
-    let mut len: c_int = 0;
+    let mut len: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return None;
@@ -649,7 +609,7 @@ unsafe fn rs_read_string_owned(inf: &mut dyn Read) -> Option<String> {
     }
 
     let mut buf = vec![0u8; len as usize];
-    let _ = rs_read_chars(inf, buf.as_mut_ptr() as *mut c_char, len);
+    let _ = rs_read_chars(inf, buf.as_mut_ptr() as *mut u8, len);
 
     if buf.last() == Some(&0) {
         buf.pop();
@@ -658,7 +618,7 @@ unsafe fn rs_read_string_owned(inf: &mut dyn Read) -> Option<String> {
     Some(String::from_utf8_lossy(&buf).into_owned())
 }
 
-unsafe fn rs_write_str_t(savef: &mut dyn Write, st: c_uint) -> c_int {
+unsafe fn rs_write_str_t(savef: &mut dyn Write, st: u32) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -668,7 +628,7 @@ unsafe fn rs_write_str_t(savef: &mut dyn Write, st: c_uint) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_str_t(inf: &mut dyn Read, st: *mut c_uint) -> c_int {
+unsafe fn rs_read_str_t(inf: &mut dyn Read, st: *mut u32) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -680,7 +640,7 @@ unsafe fn rs_read_str_t(inf: &mut dyn Read, st: *mut c_uint) -> c_int {
 
 // ─── Coords / windows ────────────────────────────────────────────────────────
 
-unsafe fn rs_write_coord(savef: &mut dyn Write, c: IVec2) -> c_int {
+unsafe fn rs_write_coord(savef: &mut dyn Write, c: IVec2) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -691,7 +651,7 @@ unsafe fn rs_write_coord(savef: &mut dyn Write, c: IVec2) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_coord(inf: &mut dyn Read, c: *mut IVec2) -> c_int {
+unsafe fn rs_read_coord(inf: &mut dyn Read, c: *mut IVec2) -> i32 {
     let mut in_coord: IVec2 = IVec2 { x: 0, y: 0 };
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -711,7 +671,7 @@ unsafe fn rs_read_coord(inf: &mut dyn Read, c: *mut IVec2) -> c_int {
 
 /// Dump the visible screen grid to the save file using the legacy window
 /// header (height, width, then one cell per position).
-unsafe fn rs_write_window(savef: &mut dyn Write) -> c_int {
+unsafe fn rs_write_window(savef: &mut dyn Write) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -724,11 +684,11 @@ unsafe fn rs_write_window(savef: &mut dyn Write) -> c_int {
     let _ = rs_write_int(savef, height);
     let _ = rs_write_int(savef, width);
 
-    let mut row: c_int = 0;
+    let mut row: i32 = 0;
     while row < height {
-        let mut col: c_int = 0;
+        let mut col: i32 = 0;
         while col < width {
-            let cell = crate::ui::screen_cell(row, col) as c_int;
+            let cell = crate::ui::screen_cell(row, col) as i32;
             if rs_write_int(savef, cell) != 0 {
                 return WRITE_ERROR;
             }
@@ -742,7 +702,7 @@ unsafe fn rs_write_window(savef: &mut dyn Write) -> c_int {
 
 /// Reload the visible screen grid from the save file, clipping the stored
 /// dimensions to the fixed terminal size.
-unsafe fn rs_read_window(inf: &mut dyn Read) -> c_int {
+unsafe fn rs_read_window(inf: &mut dyn Read) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -753,16 +713,16 @@ unsafe fn rs_read_window(inf: &mut dyn Read) -> c_int {
 
     let _ = rs_read_marker(inf, RSID_WINDOW);
 
-    let mut maxlines: c_int = 0;
-    let mut maxcols: c_int = 0;
+    let mut maxlines: i32 = 0;
+    let mut maxcols: i32 = 0;
     let _ = rs_read_int(inf, &mut maxlines);
     let _ = rs_read_int(inf, &mut maxcols);
 
-    let mut row: c_int = 0;
+    let mut row: i32 = 0;
     while row < maxlines {
-        let mut col: c_int = 0;
+        let mut col: i32 = 0;
         while col < maxcols {
-            let mut value: c_int = 0;
+            let mut value: i32 = 0;
             if rs_read_int(inf, &mut value) != 0 {
                 return read_stat();
             }
@@ -780,8 +740,8 @@ unsafe fn rs_read_window(inf: &mut dyn Read) -> c_int {
 
 // ─── List helpers ────────────────────────────────────────────────────────────
 
-unsafe fn get_list_item(mut l: *mut Thing, i: c_int) -> *mut Thing {
-    let mut count: c_int = 0;
+unsafe fn get_list_item(mut l: *mut Thing, i: i32) -> *mut Thing {
+    let mut count: i32 = 0;
 
     while !l.is_null() {
         if count == i {
@@ -794,11 +754,11 @@ unsafe fn get_list_item(mut l: *mut Thing, i: c_int) -> *mut Thing {
     std::ptr::null_mut()
 }
 
-unsafe fn find_list_ptr(mut l: *mut Thing, ptr: *const c_void) -> c_int {
-    let mut count: c_int = 0;
+unsafe fn find_list_ptr(mut l: *mut Thing, ptr: *const u8) -> i32 {
+    let mut count: i32 = 0;
 
     while !l.is_null() {
-        if l as *const c_void == ptr {
+        if l as *const u8 == ptr {
             return count;
         }
         count += 1;
@@ -808,8 +768,8 @@ unsafe fn find_list_ptr(mut l: *mut Thing, ptr: *const c_void) -> c_int {
     -1
 }
 
-unsafe fn list_size(mut l: *mut Thing) -> c_int {
-    let mut count: c_int = 0;
+unsafe fn list_size(mut l: *mut Thing) -> i32 {
+    let mut count: i32 = 0;
 
     while !l.is_null() {
         count += 1;
@@ -821,7 +781,7 @@ unsafe fn list_size(mut l: *mut Thing) -> c_int {
 
 // ─── Stats / stone / item tables ─────────────────────────────────────────────
 
-unsafe fn rs_write_stats(savef: &mut dyn Write, s: *mut Stats) -> c_int {
+unsafe fn rs_write_stats(savef: &mut dyn Write, s: *mut Stats) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -832,13 +792,13 @@ unsafe fn rs_write_stats(savef: &mut dyn Write, s: *mut Stats) -> c_int {
     let _ = rs_write_int(savef, (*s).level);
     let _ = rs_write_int(savef, (*s).armor);
     let _ = rs_write_int(savef, (*s).hit_points);
-    let _ = rs_write_chars(savef, (&raw mut (*s).damage) as *mut c_char, 13);
+    let _ = rs_write_chars(savef, (&raw mut (*s).damage) as *mut u8, 13);
     let _ = rs_write_int(savef, (*s).max_hit_points);
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_stats(inf: &mut dyn Read, s: *mut Stats) -> c_int {
+unsafe fn rs_read_stats(inf: &mut dyn Read, s: *mut Stats) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -849,7 +809,7 @@ unsafe fn rs_read_stats(inf: &mut dyn Read, s: *mut Stats) -> c_int {
     let _ = rs_read_int(inf, &mut (*s).level);
     let _ = rs_read_int(inf, &mut (*s).armor);
     let _ = rs_read_int(inf, &mut (*s).hit_points);
-    let _ = rs_read_chars(inf, (&raw mut (*s).damage) as *mut c_char, 13);
+    let _ = rs_read_chars(inf, (&raw mut (*s).damage) as *mut u8, 13);
     let _ = rs_read_int(inf, &mut (*s).max_hit_points);
 
     read_stat()
@@ -858,14 +818,14 @@ unsafe fn rs_read_stats(inf: &mut dyn Read, s: *mut Stats) -> c_int {
 unsafe fn rs_write_stone_index(
     savef: &mut dyn Write,
     master: &[crate::init::CStone],
-    max: c_int,
+    max: i32,
     s: &str,
-) -> c_int {
+) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let mut i: c_int = 0;
+    let mut i: i32 = 0;
     while i < max {
         if s == master[i as usize].st_name {
             let _ = rs_write_int(savef, i);
@@ -882,10 +842,10 @@ unsafe fn rs_write_stone_index(
 unsafe fn rs_read_stone_index(
     inf: &mut dyn Read,
     master: &[crate::init::CStone],
-    maxindex: c_int,
+    maxindex: i32,
     s: &mut &'static str,
-) -> c_int {
-    let mut i: c_int = 0;
+) -> i32 {
+    let mut i: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -907,7 +867,7 @@ unsafe fn rs_read_stone_index(
 /// Serializes the global scroll names to the save file.
 ///
 /// Uses [`crate::globals::SCROLL_NAMES`].
-unsafe fn rs_write_scrolls(savef: &mut dyn Write) -> c_int {
+unsafe fn rs_write_scrolls(savef: &mut dyn Write) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -923,7 +883,7 @@ unsafe fn rs_write_scrolls(savef: &mut dyn Write) -> c_int {
 /// Restores the global scroll names from the save file.
 ///
 /// Uses [`crate::globals::SCROLL_NAMES`].
-unsafe fn rs_read_scrolls(inf: &mut dyn Read) -> c_int {
+unsafe fn rs_read_scrolls(inf: &mut dyn Read) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -941,17 +901,17 @@ unsafe fn rs_read_scrolls(inf: &mut dyn Read) -> c_int {
 /// Index of `ptr` within [`crate::colors::POTION_COLORS`], or `-1` if it is not
 /// a potion colour. Bridges the legacy `p_colors` pointer array to the Rust
 /// colour table.
-fn potion_color_index(name: &str) -> c_int {
+fn potion_color_index(name: &str) -> i32 {
     crate::colors::POTION_COLORS
         .iter()
         .position(|color| *color == name)
-        .map_or(-1, |i| i as c_int)
+        .map_or(-1, |i| i as i32)
 }
 
 /// Serializes the global potion colors to the save file.
 ///
 /// Uses globals: p_colors.
-unsafe fn rs_write_potions(savef: &mut dyn Write) -> c_int {
+unsafe fn rs_write_potions(savef: &mut dyn Write) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -968,14 +928,14 @@ unsafe fn rs_write_potions(savef: &mut dyn Write) -> c_int {
 /// Restores the global potion colors from the save file.
 ///
 /// Uses globals: p_colors.
-unsafe fn rs_read_potions(inf: &mut dyn Read) -> c_int {
+unsafe fn rs_read_potions(inf: &mut dyn Read) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
     let mut i = 0;
     while i < MAXPOTIONS {
-        let mut idx: c_int = 0;
+        let mut idx: i32 = 0;
         let _ = rs_read_int(inf, &mut idx);
         p_colors[i] = if idx >= 0 && (idx as usize) < crate::colors::POTION_COLOR_COUNT {
             crate::colors::POTION_COLORS[idx as usize]
@@ -991,7 +951,7 @@ unsafe fn rs_read_potions(inf: &mut dyn Read) -> c_int {
 /// Serializes the global ring stone settings to the save file.
 ///
 /// Uses globals: stones, r_stones.
-unsafe fn rs_write_rings(savef: &mut dyn Write) -> c_int {
+unsafe fn rs_write_rings(savef: &mut dyn Write) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1008,7 +968,7 @@ unsafe fn rs_write_rings(savef: &mut dyn Write) -> c_int {
 /// Restores the global ring stone settings from the save file.
 ///
 /// Uses globals: stones, r_stones.
-unsafe fn rs_read_rings(inf: &mut dyn Read) -> c_int {
+unsafe fn rs_read_rings(inf: &mut dyn Read) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1025,7 +985,7 @@ unsafe fn rs_read_rings(inf: &mut dyn Read) -> c_int {
 /// Serializes the global wand/staff descriptions to the save file.
 ///
 /// Uses globals: ws_type, ws_made, wood, metal.
-unsafe fn rs_write_sticks(savef: &mut dyn Write) -> c_int {
+unsafe fn rs_write_sticks(savef: &mut dyn Write) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1036,14 +996,14 @@ unsafe fn rs_write_sticks(savef: &mut dyn Write) -> c_int {
             let idx = crate::init::wood
                 .iter()
                 .position(|w| *w == crate::globals::ws_made[i])
-                .map_or(-1, |p| p as c_int);
+                .map_or(-1, |p| p as i32);
             let _ = rs_write_int(savef, idx);
         } else {
             let _ = rs_write_int(savef, 1);
             let idx = crate::init::metal
                 .iter()
                 .position(|m| *m == crate::globals::ws_made[i])
-                .map_or(-1, |p| p as c_int);
+                .map_or(-1, |p| p as i32);
             let _ = rs_write_int(savef, idx);
         }
     }
@@ -1054,14 +1014,14 @@ unsafe fn rs_write_sticks(savef: &mut dyn Write) -> c_int {
 /// Restores the global wand/staff descriptions from the save file.
 ///
 /// Uses globals: ws_type, ws_made, wood, metal.
-unsafe fn rs_read_sticks(inf: &mut dyn Read) -> c_int {
+unsafe fn rs_read_sticks(inf: &mut dyn Read) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
     for i in 0..MAXSTICKS {
-        let mut list: c_int = 0;
-        let mut idx: c_int = 0;
+        let mut list: i32 = 0;
+        let mut idx: i32 = 0;
         let _ = rs_read_int(inf, &mut list);
         let _ = rs_read_int(inf, &mut idx);
 
@@ -1083,8 +1043,8 @@ unsafe fn rs_read_sticks(inf: &mut dyn Read) -> c_int {
 
 // ─── Daemons ─────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_daemons(savef: &mut dyn Write, dl: *mut CDelayedAction, cnt: c_int) -> c_int {
-    let mut i: c_int = 0;
+unsafe fn rs_write_daemons(savef: &mut dyn Write, dl: *mut CDelayedAction, cnt: i32) -> i32 {
+    let mut i: i32 = 0;
 
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -1097,7 +1057,7 @@ unsafe fn rs_write_daemons(savef: &mut dyn Write, dl: *mut CDelayedAction, cnt: 
         // Map the typed callback back to the legacy integer identity. Callbacks
         // the original `state.c` did not know (and empty slots) serialise as 0
         // or -1, exactly as before, so the bytes are unchanged.
-        let func: c_int = match (*dl.add(i as usize)).d_func {
+        let func: i32 = match (*dl.add(i as usize)).d_func {
             None => 0,
             Some(d) => d.save_id().unwrap_or(-1),
         };
@@ -1113,10 +1073,10 @@ unsafe fn rs_write_daemons(savef: &mut dyn Write, dl: *mut CDelayedAction, cnt: 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_daemons(inf: &mut dyn Read, dl: *mut CDelayedAction, cnt: c_int) -> c_int {
-    let mut i: c_int = 0;
-    let mut func: c_int = 0;
-    let mut value: c_int = 0;
+unsafe fn rs_read_daemons(inf: &mut dyn Read, dl: *mut CDelayedAction, cnt: i32) -> i32 {
+    let mut i: i32 = 0;
+    let mut func: i32 = 0;
+    let mut value: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1157,7 +1117,7 @@ unsafe fn rs_read_daemons(inf: &mut dyn Read, dl: *mut CDelayedAction, cnt: c_in
 
 // ─── Object info tables ──────────────────────────────────────────────────────
 
-unsafe fn rs_write_obj_info(savef: &mut dyn Write, info: *mut CObjInfo, count: c_int) -> c_int {
+unsafe fn rs_write_obj_info(savef: &mut dyn Write, info: *mut CObjInfo, count: i32) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1165,23 +1125,22 @@ unsafe fn rs_write_obj_info(savef: &mut dyn Write, info: *mut CObjInfo, count: c
     let _ = rs_write_marker(savef, RSID_MAGICITEMS);
     let _ = rs_write_int(savef, count);
 
-    let mut n: c_int = 0;
+    let mut n: i32 = 0;
     while n < count {
         // oi_name is constant, defined at compile time in all cases
         let _ = rs_write_int(savef, (*info.add(n as usize)).oi_prob);
         let _ = rs_write_int(savef, (*info.add(n as usize)).oi_worth);
         let guess = (*info.add(n as usize)).oi_guess.as_deref();
-        let guess_ptr = guess.map_or(std::ptr::null(), |s| s.as_ptr());
-        let _ = rs_write_string(savef, guess_ptr as *const c_char);
-        let _ = rs_write_boolean(savef, (*info.add(n as usize)).oi_know as c_int);
+        let _ = rs_write_string_opt(savef, guess);
+        let _ = rs_write_boolean(savef, (*info.add(n as usize)).oi_know as i32);
         n += 1;
     }
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_obj_info(inf: &mut dyn Read, mi: *mut CObjInfo, count: c_int) -> c_int {
-    let mut value: c_int = 0;
+unsafe fn rs_read_obj_info(inf: &mut dyn Read, mi: *mut CObjInfo, count: i32) -> i32 {
+    let mut value: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1194,13 +1153,13 @@ unsafe fn rs_read_obj_info(inf: &mut dyn Read, mi: *mut CObjInfo, count: c_int) 
         FORMAT_ERROR = 1;
     }
 
-    let mut n: c_int = 0;
+    let mut n: i32 = 0;
     while n < value {
         // oi_name is constant, defined at compile time in all cases
         let _ = rs_read_int(inf, &mut (*mi.add(n as usize)).oi_prob);
         let _ = rs_read_int(inf, &mut (*mi.add(n as usize)).oi_worth);
         (*mi.add(n as usize)).oi_guess = rs_read_string_owned(inf);
-        let mut know: c_uchar = 0;
+        let mut know: u8 = 0;
         let _ = rs_read_boolean(inf, &mut know);
         (*mi.add(n as usize)).oi_know = know != 0;
         n += 1;
@@ -1211,7 +1170,7 @@ unsafe fn rs_read_obj_info(inf: &mut dyn Read, mi: *mut CObjInfo, count: c_int) 
 
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_room(savef: &mut dyn Write, r: &Room) -> c_int {
+unsafe fn rs_write_room(savef: &mut dyn Write, r: &Room) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1220,9 +1179,9 @@ unsafe fn rs_write_room(savef: &mut dyn Write, r: &Room) -> c_int {
     let _ = rs_write_coord(savef, r.size);
     let _ = rs_write_coord(savef, r.gold);
     let _ = rs_write_int(savef, r.goldval);
-    let _ = rs_write_boolean(savef, r.gone as c_int);
-    let _ = rs_write_boolean(savef, r.dark as c_int);
-    let _ = rs_write_boolean(savef, r.maze as c_int);
+    let _ = rs_write_boolean(savef, r.gone as i32);
+    let _ = rs_write_boolean(savef, r.dark as i32);
+    let _ = rs_write_boolean(savef, r.maze as i32);
     let _ = rs_write_int(savef, r.entry_point_count);
     let mut i = 0;
     while i < 12 {
@@ -1234,7 +1193,7 @@ unsafe fn rs_write_room(savef: &mut dyn Write, r: &Room) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_room(inf: &mut dyn Read, r: &mut Room) -> c_int {
+unsafe fn rs_read_room(inf: &mut dyn Read, r: &mut Room) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1273,12 +1232,12 @@ unsafe fn rs_read_room(inf: &mut dyn Read, r: &mut Room) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_rooms(savef: &mut dyn Write, rooms: &[Room]) -> c_int {
+unsafe fn rs_write_rooms(savef: &mut dyn Write, rooms: &[Room]) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let _ = rs_write_int(savef, rooms.len() as c_int);
+    let _ = rs_write_int(savef, rooms.len() as i32);
 
     for room in rooms {
         let _ = rs_write_room(savef, room);
@@ -1287,8 +1246,8 @@ unsafe fn rs_write_rooms(savef: &mut dyn Write, rooms: &[Room]) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_rooms(inf: &mut dyn Read, rooms: &mut [Room]) -> c_int {
-    let mut value: c_int = 0;
+unsafe fn rs_read_rooms(inf: &mut dyn Read, rooms: &mut [Room]) -> i32 {
+    let mut value: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1300,7 +1259,7 @@ unsafe fn rs_read_rooms(inf: &mut dyn Read, rooms: &mut [Room]) -> c_int {
         FORMAT_ERROR = 1;
     }
 
-    let mut n: c_int = 0;
+    let mut n: i32 = 0;
     while n < value && (n as usize) < rooms.len() {
         let _ = rs_read_room(inf, &mut rooms[n as usize]);
         n += 1;
@@ -1309,14 +1268,14 @@ unsafe fn rs_read_rooms(inf: &mut dyn Read, rooms: &mut [Room]) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_passage_links(savef: &mut dyn Write, links: &[PassageLinks]) -> c_int {
+unsafe fn rs_write_passage_links(savef: &mut dyn Write, links: &[PassageLinks]) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let _ = rs_write_int(savef, links.len() as c_int);
+    let _ = rs_write_int(savef, links.len() as i32);
     for link in links {
-        let _ = rs_write_int(savef, link.exits.len() as c_int);
+        let _ = rs_write_int(savef, link.exits.len() as i32);
         for exit in &link.exits {
             let _ = rs_write_coord(savef, *exit);
         }
@@ -1325,7 +1284,7 @@ unsafe fn rs_write_passage_links(savef: &mut dyn Write, links: &[PassageLinks]) 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_passage_links(inf: &mut dyn Read, links: &mut Vec<PassageLinks>) -> c_int {
+unsafe fn rs_read_passage_links(inf: &mut dyn Read, links: &mut Vec<PassageLinks>) -> i32 {
     let mut count = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
@@ -1358,18 +1317,18 @@ unsafe fn rs_read_passage_links(inf: &mut dyn Read, links: &mut Vec<PassageLinks
     read_stat()
 }
 
-unsafe fn rs_write_room_reference(savef: &mut dyn Write, room: Option<usize>) -> c_int {
+unsafe fn rs_write_room_reference(savef: &mut dyn Write, room: Option<usize>) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let _ = rs_write_int(savef, room.map_or(-1, |i| i as c_int));
+    let _ = rs_write_int(savef, room.map_or(-1, |i| i as i32));
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_room_reference(inf: &mut dyn Read, room: &mut Option<usize>) -> c_int {
-    let mut i: c_int = 0;
+unsafe fn rs_read_room_reference(inf: &mut dyn Read, room: &mut Option<usize>) -> i32 {
+    let mut i: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1388,7 +1347,7 @@ unsafe fn rs_read_room_reference(inf: &mut dyn Read, room: &mut Option<usize>) -
 
 // ─── Monsters ────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_monsters(savef: &mut dyn Write, m: *mut CMonster, count: c_int) -> c_int {
+unsafe fn rs_write_monsters(savef: &mut dyn Write, m: *mut CMonster, count: i32) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1396,7 +1355,7 @@ unsafe fn rs_write_monsters(savef: &mut dyn Write, m: *mut CMonster, count: c_in
     let _ = rs_write_marker(savef, RSID_MONSTERS);
     let _ = rs_write_int(savef, count);
 
-    let mut n: c_int = 0;
+    let mut n: i32 = 0;
     while n < count {
         let _ = rs_write_stats(savef, &mut (*m.add(n as usize)).m_stats);
         n += 1;
@@ -1405,8 +1364,8 @@ unsafe fn rs_write_monsters(savef: &mut dyn Write, m: *mut CMonster, count: c_in
     WRITE_ERROR
 }
 
-unsafe fn rs_read_monsters(inf: &mut dyn Read, m: *mut CMonster, count: c_int) -> c_int {
-    let mut value: c_int = 0;
+unsafe fn rs_read_monsters(inf: &mut dyn Read, m: *mut CMonster, count: i32) -> i32 {
+    let mut value: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1419,7 +1378,7 @@ unsafe fn rs_read_monsters(inf: &mut dyn Read, m: *mut CMonster, count: c_int) -
         FORMAT_ERROR = 1;
     }
 
-    let mut n: c_int = 0;
+    let mut n: i32 = 0;
     while n < count {
         let _ = rs_read_stats(inf, &mut (*m.add(n as usize)).m_stats);
         n += 1;
@@ -1430,7 +1389,7 @@ unsafe fn rs_read_monsters(inf: &mut dyn Read, m: *mut CMonster, count: c_int) -
 
 // ─── Objects ─────────────────────────────────────────────────────────────────
 
-unsafe fn rs_write_object(savef: &mut dyn Write, o: *mut Thing) -> c_int {
+unsafe fn rs_write_object(savef: &mut dyn Write, o: *mut Thing) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1441,9 +1400,9 @@ unsafe fn rs_write_object(savef: &mut dyn Write, o: *mut Thing) -> c_int {
     let _ = rs_write_int(savef, (*op).o_type);
     let _ = rs_write_coord(savef, (*op).o_pos);
     let _ = rs_write_int(savef, (*op).o_launch);
-    let _ = rs_write_char(savef, (*op).o_packch as c_char);
-    let _ = rs_write_chars(savef, (&raw mut (*op).o_damage) as *mut c_char, 8);
-    let _ = rs_write_chars(savef, (&raw mut (*op).o_hurldmg) as *mut c_char, 8);
+    let _ = rs_write_char(savef, (*op).o_packch as u8);
+    let _ = rs_write_chars(savef, (&raw mut (*op).o_damage) as *mut u8, 8);
+    let _ = rs_write_chars(savef, (&raw mut (*op).o_hurldmg) as *mut u8, 8);
     let _ = rs_write_int(savef, (*op).o_count);
     let _ = rs_write_int(savef, (*op).o_which);
     let _ = rs_write_int(savef, (*op).o_hplus);
@@ -1451,21 +1410,12 @@ unsafe fn rs_write_object(savef: &mut dyn Write, o: *mut Thing) -> c_int {
     let _ = rs_write_int(savef, (*op).o_arm);
     let _ = rs_write_int(savef, (*op).o_flags.bits());
     let _ = rs_write_int(savef, (*op).o_group);
-    let label_c = (*op)
-        .o_label
-        .as_ref()
-        .and_then(|label| std::ffi::CString::new(label.as_str()).ok());
-    let _ = rs_write_string(
-        savef,
-        label_c
-            .as_ref()
-            .map_or(std::ptr::null(), |label| label.as_ptr()),
-    );
+    let _ = rs_write_string_opt(savef, (*op).o_label.as_deref());
 
     WRITE_ERROR
 }
 
-unsafe fn rs_read_object(inf: &mut dyn Read, o: *mut Thing) -> c_int {
+unsafe fn rs_read_object(inf: &mut dyn Read, o: *mut Thing) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
@@ -1476,17 +1426,17 @@ unsafe fn rs_read_object(inf: &mut dyn Read, o: *mut Thing) -> c_int {
     let _ = rs_read_int(inf, &mut (*op).o_type);
     let _ = rs_read_coord(inf, &mut (*op).o_pos);
     let _ = rs_read_int(inf, &mut (*op).o_launch);
-    let mut packch_ch: c_char = 0;
+    let mut packch_ch: u8 = 0;
     let _ = rs_read_char(inf, &mut packch_ch);
     (*op).o_packch = packch_ch as u8;
-    let _ = rs_read_chars(inf, (&raw mut (*op).o_damage) as *mut c_char, 8);
-    let _ = rs_read_chars(inf, (&raw mut (*op).o_hurldmg) as *mut c_char, 8);
+    let _ = rs_read_chars(inf, (&raw mut (*op).o_damage) as *mut u8, 8);
+    let _ = rs_read_chars(inf, (&raw mut (*op).o_hurldmg) as *mut u8, 8);
     let _ = rs_read_int(inf, &mut (*op).o_count);
     let _ = rs_read_int(inf, &mut (*op).o_which);
     let _ = rs_read_int(inf, &mut (*op).o_hplus);
     let _ = rs_read_int(inf, &mut (*op).o_dplus);
     let _ = rs_read_int(inf, &mut (*op).o_arm);
-    let mut o_flags_bits: c_int = 0;
+    let mut o_flags_bits: i32 = 0;
     let _ = rs_read_int(inf, &mut o_flags_bits);
     (*op).o_flags = crate::entity::player::ObjectFlags::from_bits(o_flags_bits);
     let _ = rs_read_int(inf, &mut (*op).o_group);
@@ -1495,7 +1445,7 @@ unsafe fn rs_read_object(inf: &mut dyn Read, o: *mut Thing) -> c_int {
     read_stat()
 }
 
-unsafe fn rs_write_object_list(savef: &mut dyn Write, mut l: *mut Thing) -> c_int {
+unsafe fn rs_write_object_list(savef: &mut dyn Write, mut l: *mut Thing) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1511,8 +1461,8 @@ unsafe fn rs_write_object_list(savef: &mut dyn Write, mut l: *mut Thing) -> c_in
     WRITE_ERROR
 }
 
-unsafe fn rs_read_object_list(inf: &mut dyn Read, list: *mut *mut Thing) -> c_int {
-    let mut cnt: c_int = 0;
+unsafe fn rs_read_object_list(inf: &mut dyn Read, list: *mut *mut Thing) -> i32 {
+    let mut cnt: i32 = 0;
     let mut l: *mut Thing = std::ptr::null_mut();
     let mut previous: *mut Thing = std::ptr::null_mut();
     let mut head: *mut Thing = std::ptr::null_mut();
@@ -1524,7 +1474,7 @@ unsafe fn rs_read_object_list(inf: &mut dyn Read, list: *mut *mut Thing) -> c_in
     let _ = rs_read_marker(inf, RSID_OBJECTLIST);
     let _ = rs_read_int(inf, &mut cnt);
 
-    let mut i: c_int = 0;
+    let mut i: i32 = 0;
     while i < cnt {
         // new_item() zero-allocates, matching the C memset(l, 0, sizeof(THING)).
         l = new_item();
@@ -1558,12 +1508,12 @@ unsafe fn rs_write_object_reference(
     savef: &mut dyn Write,
     list: *mut Thing,
     item: *mut Thing,
-) -> c_int {
+) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let i = find_list_ptr(list, item as *const c_void);
+    let i = find_list_ptr(list, item as *const u8);
 
     rs_write_int(savef, i)
 }
@@ -1572,8 +1522,8 @@ unsafe fn rs_read_object_reference(
     inf: &mut dyn Read,
     list: *mut Thing,
     item: *mut *mut Thing,
-) -> c_int {
-    let mut i: c_int = 0;
+) -> i32 {
+    let mut i: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1588,8 +1538,8 @@ unsafe fn rs_read_object_reference(
 
 // ─── Thing serialization ─────────────────────────────────────────────────────
 
-unsafe fn find_room_coord(c: *mut IVec2) -> c_int {
-    let mut i: c_int = 0;
+unsafe fn find_room_coord(c: *mut IVec2) -> i32 {
+    let mut i: i32 = 0;
 
     while (i as usize) < crate::config::GameConfig::MAX_ROOMS {
         if crate::game::room_gold_ptr(Some(i as usize)) == c {
@@ -1601,12 +1551,12 @@ unsafe fn find_room_coord(c: *mut IVec2) -> c_int {
     -1
 }
 
-unsafe fn find_thing_coord(_monlist: *mut Thing, c: *mut IVec2) -> c_int {
+unsafe fn find_thing_coord(_monlist: *mut Thing, c: *mut IVec2) -> i32 {
     // Monsters live in `MLIST`; resolve the chase target by traversal position.
     for (i, id) in MONSTER_LIST.ids().iter().enumerate() {
         if let Some(mitem) = MONSTER_LIST.handle(*id) {
             if c == (&raw mut (*thing_t(mitem)).t_pos) as *mut IVec2 {
-                return i as c_int;
+                return i as i32;
             }
         }
     }
@@ -1614,9 +1564,9 @@ unsafe fn find_thing_coord(_monlist: *mut Thing, c: *mut IVec2) -> c_int {
     -1
 }
 
-unsafe fn find_object_coord(objlist: *mut Thing, c: *mut IVec2) -> c_int {
+unsafe fn find_object_coord(objlist: *mut Thing, c: *mut IVec2) -> i32 {
     let mut oitem: *mut Thing = objlist;
-    let mut i: c_int = 0;
+    let mut i: i32 = 0;
 
     while !oitem.is_null() {
         if c == (&raw mut (*thing_o(oitem)).o_pos) as *mut IVec2 {
@@ -1633,8 +1583,8 @@ unsafe fn find_object_coord(objlist: *mut Thing, c: *mut IVec2) -> c_int {
 /// into the global mlist, lvl_obj, rooms or hero.
 ///
 /// Uses globals: hero, mlist, lvl_obj, rooms.
-unsafe fn rs_write_thing(savef: &mut dyn Write, t: *mut Thing) -> c_int {
-    let mut i: c_int = -1;
+unsafe fn rs_write_thing(savef: &mut dyn Write, t: *mut Thing) -> i32 {
+    let mut i: i32 = -1;
 
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
@@ -1649,10 +1599,10 @@ unsafe fn rs_write_thing(savef: &mut dyn Write, t: *mut Thing) -> c_int {
 
     let _ = rs_write_int(savef, 1);
     let _ = rs_write_coord(savef, (*thing_t(t)).t_pos);
-    let _ = rs_write_boolean(savef, (*thing_t(t)).t_turn as c_int);
-    let _ = rs_write_char(savef, (*thing_t(t)).t_type as c_char);
-    let _ = rs_write_char(savef, (*thing_t(t)).t_disguise as c_char);
-    let _ = rs_write_char(savef, (*thing_t(t)).t_oldch as c_char);
+    let _ = rs_write_boolean(savef, (*thing_t(t)).t_turn as i32);
+    let _ = rs_write_char(savef, (*thing_t(t)).t_type as u8);
+    let _ = rs_write_char(savef, (*thing_t(t)).t_disguise as u8);
+    let _ = rs_write_char(savef, (*thing_t(t)).t_oldch as u8);
 
     /*
         t_dest can be:
@@ -1715,9 +1665,9 @@ unsafe fn rs_write_thing(savef: &mut dyn Write, t: *mut Thing) -> c_int {
 /// the global hero, mlist, lvl_obj and rooms tables.
 ///
 /// Uses globals: hero, mlist, lvl_obj, rooms.
-unsafe fn rs_read_thing(inf: &mut dyn Read, t: *mut Thing) -> c_int {
-    let mut listid: c_int = 0;
-    let mut index: c_int = -1;
+unsafe fn rs_read_thing(inf: &mut dyn Read, t: *mut Thing) -> i32 {
+    let mut listid: i32 = 0;
+    let mut index: i32 = -1;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1731,16 +1681,16 @@ unsafe fn rs_read_thing(inf: &mut dyn Read, t: *mut Thing) -> c_int {
     }
 
     let _ = rs_read_coord(inf, &mut (*thing_t(t)).t_pos);
-    let mut turn_byte: c_uchar = 0;
+    let mut turn_byte: u8 = 0;
     let _ = rs_read_boolean(inf, &mut turn_byte);
     (*thing_t(t)).t_turn = turn_byte != 0;
-    let mut type_ch: c_char = 0;
+    let mut type_ch: u8 = 0;
     let _ = rs_read_char(inf, &mut type_ch);
     (*thing_t(t)).t_type = type_ch as u8;
-    let mut disguise_ch: c_char = 0;
+    let mut disguise_ch: u8 = 0;
     let _ = rs_read_char(inf, &mut disguise_ch);
     (*thing_t(t)).t_disguise = disguise_ch as u8;
-    let mut oldch_ch: c_char = 0;
+    let mut oldch_ch: u8 = 0;
     let _ = rs_read_char(inf, &mut oldch_ch);
     (*thing_t(t)).t_oldch = oldch_ch as u8;
 
@@ -1798,7 +1748,7 @@ unsafe fn rs_read_thing(inf: &mut dyn Read, t: *mut Thing) -> c_int {
         crate::entity::player::set_thing_dest(t, std::ptr::null_mut());
     }
 
-    let mut t_flags_bits: c_short = 0;
+    let mut t_flags_bits: i16 = 0;
     let _ = rs_read_short(inf, &mut t_flags_bits);
     (*thing_t(t)).t_flags = crate::entity::player::MonsterFlags::from_bits(t_flags_bits);
     let _ = rs_read_stats(inf, &raw mut (*thing_t(t)).t_stats);
@@ -1825,7 +1775,7 @@ unsafe fn rs_fix_thing(t: *mut Thing) {
     }
 }
 
-unsafe fn rs_write_thing_list(savef: &mut dyn Write, _l: *mut Thing) -> c_int {
+unsafe fn rs_write_thing_list(savef: &mut dyn Write, _l: *mut Thing) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1833,7 +1783,7 @@ unsafe fn rs_write_thing_list(savef: &mut dyn Write, _l: *mut Thing) -> c_int {
     let _ = rs_write_marker(savef, RSID_MONSTERLIST);
 
     let ids = MONSTER_LIST.ids();
-    let cnt = ids.len() as c_int;
+    let cnt = ids.len() as i32;
 
     let _ = rs_write_int(savef, cnt);
 
@@ -1850,8 +1800,8 @@ unsafe fn rs_write_thing_list(savef: &mut dyn Write, _l: *mut Thing) -> c_int {
     WRITE_ERROR
 }
 
-unsafe fn rs_read_thing_list(inf: &mut dyn Read, _list: *mut *mut Thing) -> c_int {
-    let mut cnt: c_int = 0;
+unsafe fn rs_read_thing_list(inf: &mut dyn Read, _list: *mut *mut Thing) -> i32 {
+    let mut cnt: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1860,7 +1810,7 @@ unsafe fn rs_read_thing_list(inf: &mut dyn Read, _list: *mut *mut Thing) -> c_in
     let _ = rs_read_marker(inf, RSID_MONSTERLIST);
     let _ = rs_read_int(inf, &mut cnt);
 
-    let mut i: c_int = 0;
+    let mut i: i32 = 0;
     while i < cnt {
         let l = new_actor();
         let _ = rs_read_thing(inf, l);
@@ -1882,7 +1832,7 @@ unsafe fn rs_write_thing_reference(
     savef: &mut dyn Write,
     _list: *mut Thing,
     item: *mut Thing,
-) -> c_int {
+) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
@@ -1895,7 +1845,7 @@ unsafe fn rs_write_thing_reference(
         let mut found = -1;
         for (pos, id) in MONSTER_LIST.ids().iter().enumerate() {
             if MONSTER_LIST.handle(*id).map_or(false, |h| h == item) {
-                found = pos as c_int;
+                found = pos as i32;
                 break;
             }
         }
@@ -1909,8 +1859,8 @@ unsafe fn rs_read_thing_reference(
     inf: &mut dyn Read,
     _list: *mut Thing,
     item: *mut *mut Thing,
-) -> c_int {
-    let mut i: c_int = 0;
+) -> i32 {
+    let mut i: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -1934,13 +1884,13 @@ unsafe fn rs_write_thing_references(
     savef: &mut dyn Write,
     list: *mut Thing,
     items: *mut *mut Thing,
-    count: c_int,
-) -> c_int {
+    count: i32,
+) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let mut i: c_int = 0;
+    let mut i: i32 = 0;
     while i < count {
         let _ = rs_write_thing_reference(savef, list, *items.add(i as usize));
         i += 1;
@@ -1953,13 +1903,13 @@ unsafe fn rs_read_thing_references(
     inf: &mut dyn Read,
     list: *mut Thing,
     items: *mut *mut Thing,
-    count: c_int,
-) -> c_int {
+    count: i32,
+) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
-    let mut i: c_int = 0;
+    let mut i: i32 = 0;
     while i < count {
         let _ = rs_read_thing_reference(inf, list, &mut *items.add(i as usize));
         i += 1;
@@ -1975,13 +1925,13 @@ unsafe fn rs_read_thing_references(
 /// kind, and the per-cell monster reference (indexed into the global `mlist`).
 ///
 /// Uses globals: mlist, places (via crate::game), CURRENT_LEVEL.
-unsafe fn rs_write_places(savef: &mut dyn Write, count: c_int) -> c_int {
+unsafe fn rs_write_places(savef: &mut dyn Write, count: i32) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
     crate::game::with_current_level(|lvl| {
-        let mut i: c_int = 0;
+        let mut i: i32 = 0;
         while i < count {
             let y = i / crate::config::GameConfig::SCREEN_COLS;
             let x = i % crate::config::GameConfig::SCREEN_COLS;
@@ -1990,12 +1940,12 @@ unsafe fn rs_write_places(savef: &mut dyn Write, count: c_int) -> c_int {
                 .map
                 .get(y as usize, x as usize)
                 .unwrap_or(crate::tile::Tile::Empty);
-            let _ = rs_write_char(savef, tile.to_u8() as c_char);
-            let _ = rs_write_boolean(savef, lvl.flags.real[idx] as c_int);
-            let _ = rs_write_boolean(savef, lvl.flags.passage[idx] as c_int);
-            let _ = rs_write_boolean(savef, lvl.flags.seen[idx] as c_int);
-            let _ = rs_write_char(savef, lvl.flags.passnum[idx] as c_char);
-            let _ = rs_write_char(savef, tile.trap() as u8 as c_char);
+            let _ = rs_write_char(savef, tile.to_u8() as u8);
+            let _ = rs_write_boolean(savef, lvl.flags.real[idx] as i32);
+            let _ = rs_write_boolean(savef, lvl.flags.passage[idx] as i32);
+            let _ = rs_write_boolean(savef, lvl.flags.seen[idx] as i32);
+            let _ = rs_write_char(savef, lvl.flags.passnum[idx] as u8);
+            let _ = rs_write_char(savef, tile.trap() as u8);
             // Per-cell monster occupancy.
             let monst = MONSTER_MAP
                 .at(y as usize, x as usize)
@@ -2014,24 +1964,24 @@ unsafe fn rs_write_places(savef: &mut dyn Write, count: c_int) -> c_int {
 /// monster map.
 ///
 /// Uses globals: mlist, places (via crate::game), CURRENT_LEVEL.
-unsafe fn rs_read_places(inf: &mut dyn Read, count: c_int) -> c_int {
+unsafe fn rs_read_places(inf: &mut dyn Read, count: i32) -> i32 {
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
     }
 
     crate::game::with_current_level_mut(|lvl| {
-        let mut i: c_int = 0;
+        let mut i: i32 = 0;
         while i < count {
             let y = i / crate::config::GameConfig::SCREEN_COLS;
             let x = i % crate::config::GameConfig::SCREEN_COLS;
             let idx = (y as usize) * crate::config::GameConfig::LEVEL_WIDTH + (x as usize);
 
-            let mut tile_disc: c_char = 0;
-            let mut real: c_uchar = 0;
-            let mut passage: c_uchar = 0;
-            let mut seen: c_uchar = 0;
-            let mut passnum: c_char = 0;
-            let mut trap_kind: c_char = 0;
+            let mut tile_disc: u8 = 0;
+            let mut real: u8 = 0;
+            let mut passage: u8 = 0;
+            let mut seen: u8 = 0;
+            let mut passnum: u8 = 0;
+            let mut trap_kind: u8 = 0;
             let mut monst: *mut Thing = std::ptr::null_mut();
 
             let _ = rs_read_char(inf, &mut tile_disc);
@@ -2083,45 +2033,45 @@ unsafe fn rs_read_places(inf: &mut dyn Read, count: c_int) -> c_int {
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
 /// scr_info, weap_info, ws_info, D_LIST, total, between, nh, group.
-pub unsafe fn rs_save_file(savef: &mut dyn Write) -> c_int {
+pub unsafe fn rs_save_file(savef: &mut dyn Write) -> i32 {
     if WRITE_ERROR != 0 {
         return WRITE_ERROR;
     }
 
-    let _ = rs_write_boolean(savef, after as c_int); /* 1  */
+    let _ = rs_write_boolean(savef, after as i32); /* 1  */
     /* extern.c */
-    let _ = rs_write_boolean(savef, again as c_int); /* 2  */
+    let _ = rs_write_boolean(savef, again as i32); /* 2  */
     let _ = rs_write_int(savef, noscore); /* 3  */
-    let _ = rs_write_boolean(savef, seenstairs as c_int); /* 4  */
-    let _ = rs_write_boolean(savef, amulet as c_int); /* 5  */
-    let _ = rs_write_boolean(savef, door_stop as c_int); /* 6  */
-    let _ = rs_write_boolean(savef, fight_flush as c_int); /* 7  */
-    let _ = rs_write_boolean(savef, firstmove as c_int); /* 8  */
-    let _ = rs_write_boolean(savef, got_ltc as c_int); /* 9  */
-    let _ = rs_write_boolean(savef, has_hit as c_int); /* 10 */
-    let _ = rs_write_boolean(savef, in_shell as c_int); /* 11 */
-    let _ = rs_write_boolean(savef, inv_describe as c_int); /* 12 */
-    let _ = rs_write_boolean(savef, jump as c_int); /* 13 */
-    let _ = rs_write_boolean(savef, kamikaze as c_int); /* 14 */
-    let _ = rs_write_boolean(savef, lower_msg as c_int); /* 15 */
-    let _ = rs_write_boolean(savef, move_on as c_int); /* 16 */
-    let _ = rs_write_boolean(savef, msg_esc as c_int); /* 17 */
-    let _ = rs_write_boolean(savef, passgo as c_int); /* 18 */
-    let _ = rs_write_boolean(savef, playing as c_int); /* 19 */
-    let _ = rs_write_boolean(savef, q_comm as c_int); /* 20 */
-    let _ = rs_write_boolean(savef, running as c_int); /* 21 */
-    let _ = rs_write_boolean(savef, save_msg as c_int); /* 22 */
-    let _ = rs_write_boolean(savef, see_floor as c_int); /* 23 */
-    let _ = rs_write_boolean(savef, stat_msg as c_int); /* 24 */
-    let _ = rs_write_boolean(savef, terse as c_int); /* 25 */
-    let _ = rs_write_boolean(savef, to_death as c_int); /* 26 */
-    let _ = rs_write_boolean(savef, tombstone as c_int); /* 27 */
+    let _ = rs_write_boolean(savef, seenstairs as i32); /* 4  */
+    let _ = rs_write_boolean(savef, amulet as i32); /* 5  */
+    let _ = rs_write_boolean(savef, door_stop as i32); /* 6  */
+    let _ = rs_write_boolean(savef, fight_flush as i32); /* 7  */
+    let _ = rs_write_boolean(savef, firstmove as i32); /* 8  */
+    let _ = rs_write_boolean(savef, got_ltc as i32); /* 9  */
+    let _ = rs_write_boolean(savef, has_hit as i32); /* 10 */
+    let _ = rs_write_boolean(savef, in_shell as i32); /* 11 */
+    let _ = rs_write_boolean(savef, inv_describe as i32); /* 12 */
+    let _ = rs_write_boolean(savef, jump as i32); /* 13 */
+    let _ = rs_write_boolean(savef, kamikaze as i32); /* 14 */
+    let _ = rs_write_boolean(savef, lower_msg as i32); /* 15 */
+    let _ = rs_write_boolean(savef, move_on as i32); /* 16 */
+    let _ = rs_write_boolean(savef, msg_esc as i32); /* 17 */
+    let _ = rs_write_boolean(savef, passgo as i32); /* 18 */
+    let _ = rs_write_boolean(savef, playing as i32); /* 19 */
+    let _ = rs_write_boolean(savef, q_comm as i32); /* 20 */
+    let _ = rs_write_boolean(savef, running as i32); /* 21 */
+    let _ = rs_write_boolean(savef, save_msg as i32); /* 22 */
+    let _ = rs_write_boolean(savef, see_floor as i32); /* 23 */
+    let _ = rs_write_boolean(savef, stat_msg as i32); /* 24 */
+    let _ = rs_write_boolean(savef, terse as i32); /* 25 */
+    let _ = rs_write_boolean(savef, to_death as i32); /* 26 */
+    let _ = rs_write_boolean(savef, tombstone as i32); /* 27 */
     if MASTER {
         let _ = rs_write_int(savef, wizard); /* 28 */
     } else {
         let _ = rs_write_int(savef, 0); /* 28 */
     }
-    let _ = rs_write_booleans(savef, (&raw mut pack_used) as *mut c_uchar, 26); /* 29 */
+    let _ = rs_write_booleans(savef, (&raw mut pack_used) as *mut u8, 26); /* 29 */
     let _ = rs_write_char(savef, dir_ch);
     let _ = rs_write_fixed_string(savef, &crate::globals::file_name(), MAXSTR);
     let _ = rs_write_fixed_string(savef, &crate::globals::huh_string(), MAXSTR);
@@ -2139,7 +2089,7 @@ pub unsafe fn rs_save_file(savef: &mut dyn Write) -> c_int {
     let _ = rs_write_fixed_string(savef, &crate::globals::fruit(), MAXSTR);
     let _ = rs_write_fixed_string(savef, &crate::globals::get_home(), MAXSTR);
     let inv_names = crate::globals::inv_t_names();
-    let _ = rs_write_int(savef, inv_names.len() as c_int);
+    let _ = rs_write_int(savef, inv_names.len() as i32);
     for name in &inv_names {
         let _ = rs_write_string_opt(savef, Some(name));
     }
@@ -2148,7 +2098,7 @@ pub unsafe fn rs_save_file(savef: &mut dyn Write) -> c_int {
     let _ = rs_write_char(savef, last_comm);
     let _ = rs_write_char(savef, last_dir);
     let trap_names = crate::globals::trap_names();
-    let _ = rs_write_int(savef, trap_names.len() as c_int);
+    let _ = rs_write_int(savef, trap_names.len() as i32);
     for name in &trap_names {
         let _ = rs_write_string_opt(savef, Some(name));
     }
@@ -2161,7 +2111,7 @@ pub unsafe fn rs_save_file(savef: &mut dyn Write) -> c_int {
     let _ = rs_write_int(savef, max_level);
     let _ = rs_write_int(savef, mpos);
     let _ = rs_write_int(savef, no_food);
-    let _ = rs_write_ints(savef, (&raw mut a_class) as *mut c_int, MAXARMORS as c_int);
+    let _ = rs_write_ints(savef, (&raw mut a_class) as *mut i32, MAXARMORS as i32);
     let _ = rs_write_int(savef, crate::globals::count);
     let _ = rs_write_int(savef, food_left);
     let _ = rs_write_int(savef, lastscore);
@@ -2172,7 +2122,7 @@ pub unsafe fn rs_save_file(savef: &mut dyn Write) -> c_int {
     let _ = rs_write_int(savef, vf_hit);
     let _ = rs_write_int(savef, dnum);
     let _ = rs_write_int(savef, seed);
-    let _ = rs_write_ints(savef, (&raw mut e_levels) as *mut c_int, 21);
+    let _ = rs_write_ints(savef, (&raw mut e_levels) as *mut i32, 21);
     let _ = rs_write_coord(savef, delta);
     let _ = rs_write_coord(savef, oldpos);
     let _ = rs_write_coord(savef, crate::game::stairs());
@@ -2209,48 +2159,48 @@ pub unsafe fn rs_save_file(savef: &mut dyn Write) -> c_int {
     let _ = rs_write_monsters(
         savef,
         (&raw mut monsters) as *mut CMonster,
-        MAXMONSTERS as c_int,
+        MAXMONSTERS as i32,
     );
     let _ = rs_write_obj_info(
         savef,
         (&raw mut things) as *mut CObjInfo,
-        NUMTHINGS as c_int,
+        NUMTHINGS as i32,
     );
     let _ = rs_write_obj_info(
         savef,
         (&raw mut arm_info) as *mut CObjInfo,
-        MAXARMORS as c_int,
+        MAXARMORS as i32,
     );
     let _ = rs_write_obj_info(
         savef,
         (&raw mut pot_info) as *mut CObjInfo,
-        MAXPOTIONS as c_int,
+        MAXPOTIONS as i32,
     );
     let _ = rs_write_obj_info(
         savef,
         (&raw mut ring_info) as *mut CObjInfo,
-        MAXRINGS as c_int,
+        MAXRINGS as i32,
     );
     let _ = rs_write_obj_info(
         savef,
         (&raw mut scr_info) as *mut CObjInfo,
-        MAXSCROLLS as c_int,
+        MAXSCROLLS as i32,
     );
     let _ = rs_write_obj_info(
         savef,
         (&raw mut weap_info) as *mut CObjInfo,
-        (MAXWEAPONS + 1) as c_int,
+        (MAXWEAPONS + 1) as i32,
     );
     let _ = rs_write_obj_info(
         savef,
         (&raw mut ws_info) as *mut CObjInfo,
-        MAXSTICKS as c_int,
+        MAXSTICKS as i32,
     );
 
     let _ = rs_write_daemons(
         savef,
         (&raw mut D_LIST) as *mut CDelayedAction,
-        MAXDAEMONS as c_int,
+        MAXDAEMONS as i32,
     );
     if MASTER {
         let _ = rs_write_int(savef, allocated_count()); /* 5.4-list.c */
@@ -2284,9 +2234,9 @@ pub unsafe fn rs_save_file(savef: &mut dyn Write) -> c_int {
 /// last_pick, lvl_obj, mlist, places, max_stats, rooms, oldrp,
 /// passages, monsters, things, arm_info, pot_info, ring_info,
 /// scr_info, weap_info, ws_info, D_LIST, total, between, nh, group.
-pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
-    let mut dummyint: c_int = 0;
-    let mut depth: c_int = 0;
+pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> i32 {
+    let mut dummyint: i32 = 0;
+    let mut depth: i32 = 0;
 
     if READ_ERROR != 0 || FORMAT_ERROR != 0 {
         return read_stat();
@@ -2309,7 +2259,7 @@ pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
     let _ = rs_read_boolean(inf, &mut kamikaze); /* 14 */
     let _ = rs_read_boolean(inf, &mut lower_msg); /* 15 */
     let _ = rs_read_boolean(inf, &mut move_on); /* 16 */
-    let mut msg_esc_byte = msg_esc as c_uchar;
+    let mut msg_esc_byte = msg_esc as u8;
     let _ = rs_read_boolean(inf, &mut msg_esc_byte); /* 17 */
     msg_esc = msg_esc_byte;
     let _ = rs_read_boolean(inf, &mut passgo); /* 18 */
@@ -2327,7 +2277,7 @@ pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
     } else {
         let _ = rs_read_int(inf, &mut dummyint); /* 28 */
     }
-    let _ = rs_read_booleans(inf, (&raw mut pack_used) as *mut c_uchar, 26); /* 29 */
+    let _ = rs_read_booleans(inf, (&raw mut pack_used) as *mut u8, 26); /* 29 */
     let _ = rs_read_char(inf, &mut dir_ch);
     crate::globals::set_file_name(rs_read_fixed_string(inf, MAXSTR));
     crate::globals::set_huh_string(&rs_read_fixed_string(inf, MAXSTR));
@@ -2346,7 +2296,7 @@ pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
     crate::globals::set_fruit(rs_read_fixed_string(inf, MAXSTR));
     crate::globals::set_home(rs_read_fixed_string(inf, MAXSTR));
     {
-        let mut count: c_int = 0;
+        let mut count: i32 = 0;
         let _ = rs_read_int(inf, &mut count);
         for i in 0..count.max(0) as usize {
             if let Some(name) = rs_read_string_owned(inf) {
@@ -2359,7 +2309,7 @@ pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
     let _ = rs_read_char(inf, &mut last_comm);
     let _ = rs_read_char(inf, &mut last_dir);
     {
-        let mut count: c_int = 0;
+        let mut count: i32 = 0;
         let _ = rs_read_int(inf, &mut count);
         for i in 0..count.max(0) as usize {
             if let Some(name) = rs_read_string_owned(inf) {
@@ -2377,7 +2327,7 @@ pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
     let _ = rs_read_int(inf, &mut max_level);
     let _ = rs_read_int(inf, &mut mpos);
     let _ = rs_read_int(inf, &mut no_food);
-    let _ = rs_read_ints(inf, (&raw mut a_class) as *mut c_int, MAXARMORS as c_int);
+    let _ = rs_read_ints(inf, (&raw mut a_class) as *mut i32, MAXARMORS as i32);
     let _ = rs_read_int(inf, &mut crate::globals::count);
     let _ = rs_read_int(inf, &mut food_left);
     let _ = rs_read_int(inf, &mut lastscore);
@@ -2388,7 +2338,7 @@ pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
     let _ = rs_read_int(inf, &mut vf_hit);
     let _ = rs_read_int(inf, &mut dnum);
     let _ = rs_read_int(inf, &mut seed);
-    let _ = rs_read_ints(inf, (&raw mut e_levels) as *mut c_int, 21);
+    let _ = rs_read_ints(inf, (&raw mut e_levels) as *mut i32, 21);
     let _ = rs_read_coord(inf, &mut delta);
     let _ = rs_read_coord(inf, &mut oldpos);
     let mut stairs = IVec2::ZERO;
@@ -2434,40 +2384,40 @@ pub unsafe fn rs_restore_file(inf: &mut dyn Read) -> c_int {
     let _ = rs_read_monsters(
         inf,
         (&raw mut monsters) as *mut CMonster,
-        MAXMONSTERS as c_int,
+        MAXMONSTERS as i32,
     );
-    let _ = rs_read_obj_info(inf, (&raw mut things) as *mut CObjInfo, NUMTHINGS as c_int);
+    let _ = rs_read_obj_info(inf, (&raw mut things) as *mut CObjInfo, NUMTHINGS as i32);
     let _ = rs_read_obj_info(
         inf,
         (&raw mut arm_info) as *mut CObjInfo,
-        MAXARMORS as c_int,
+        MAXARMORS as i32,
     );
     let _ = rs_read_obj_info(
         inf,
         (&raw mut pot_info) as *mut CObjInfo,
-        MAXPOTIONS as c_int,
+        MAXPOTIONS as i32,
     );
     let _ = rs_read_obj_info(
         inf,
         (&raw mut ring_info) as *mut CObjInfo,
-        MAXRINGS as c_int,
+        MAXRINGS as i32,
     );
     let _ = rs_read_obj_info(
         inf,
         (&raw mut scr_info) as *mut CObjInfo,
-        MAXSCROLLS as c_int,
+        MAXSCROLLS as i32,
     );
     let _ = rs_read_obj_info(
         inf,
         (&raw mut weap_info) as *mut CObjInfo,
-        (MAXWEAPONS + 1) as c_int,
+        (MAXWEAPONS + 1) as i32,
     );
-    let _ = rs_read_obj_info(inf, (&raw mut ws_info) as *mut CObjInfo, MAXSTICKS as c_int);
+    let _ = rs_read_obj_info(inf, (&raw mut ws_info) as *mut CObjInfo, MAXSTICKS as i32);
 
     let _ = rs_read_daemons(
         inf,
         (&raw mut D_LIST) as *mut CDelayedAction,
-        MAXDAEMONS as c_int,
+        MAXDAEMONS as i32,
     );
     let _ = rs_read_int(inf, &mut dummyint); /* total */
     /* 5.4-list.c */

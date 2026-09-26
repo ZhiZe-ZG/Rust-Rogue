@@ -12,37 +12,35 @@ use crate::rnd::rnd;
 use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, msg_str};
 use glam::IVec2;
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint};
 
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game::MONSTER_LIST;
 use crate::startup::roll;
 
-const PASSAGE: c_char = b'#' as c_char;
-const DOOR: c_char = b'+' as c_char;
-const FLOOR: c_char = b'.' as c_char;
-const TRAP: c_char = b'^' as c_char;
-const STAIRS: c_char = b'%' as c_char;
-const GOLD: c_char = b'*' as c_char;
-const POTION: c_char = b'!' as c_char;
-const SCROLL: c_char = b'?' as c_char;
-const MAGIC: c_char = b'$' as c_char;
-const FOOD: c_char = b':' as c_char;
-const WEAPON: c_char = b')' as c_char;
-const ARMOR: c_char = b']' as c_char;
-const AMULET: c_char = b',' as c_char;
-const RING: c_char = b'=' as c_char;
-const STICK: c_char = b'/' as c_char;
+const PASSAGE: u8 = b'#' as u8;
+const DOOR: u8 = b'+' as u8;
+const FLOOR: u8 = b'.' as u8;
+const TRAP: u8 = b'^' as u8;
+const STAIRS: u8 = b'%' as u8;
+const GOLD: u8 = b'*' as u8;
+const POTION: u8 = b'!' as u8;
+const SCROLL: u8 = b'?' as u8;
+const MAGIC: u8 = b'$' as u8;
+const FOOD: u8 = b':' as u8;
+const WEAPON: u8 = b')' as u8;
+const ARMOR: u8 = b']' as u8;
+const AMULET: u8 = b',' as u8;
+const RING: u8 = b'=' as u8;
+const STICK: u8 = b'/' as u8;
 
-const F_PASS: c_char = 0x80u8 as c_char;
+const F_PASS: u8 = 0x80u8 as u8;
 const MAXSTR: usize = 1024;
-const HUNGERTIME: c_int = 1300;
-const STOMACHSIZE: c_int = 2000;
-const AFTER: c_int = 2;
-const ESCAPE: c_int = 27;
-const NORM: c_int = 0;
-const F_SEEN: c_uchar = 0x40;
+const HUNGERTIME: i32 = 1300;
+const STOMACHSIZE: i32 = 2000;
+const AFTER: i32 = 2;
+const ESCAPE: i32 = 27;
+const NORM: i32 = 0;
+const F_SEEN: u8 = 0x40;
 
 use crate::globals::{after, again, amulet, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump, last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running, see_floor, seenstairs, terse};
 
@@ -68,8 +66,9 @@ fn player_has(flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn first_is_vowel(s: *const c_char) -> bool {
-    let bytes = CStr::from_ptr(s).to_bytes();
+#[allow(dead_code)]
+fn first_is_vowel(s: &str) -> bool {
+    let bytes = s.as_bytes();
     if bytes.is_empty() {
         return false;
     }
@@ -92,7 +91,7 @@ pub unsafe fn show_floor() -> bool {
     true
 }
 
-pub unsafe fn find_obj(y: c_int, x: c_int) -> *mut Thing {
+pub unsafe fn find_obj(y: i32, x: i32) -> *mut Thing {
     let mut obj = crate::game::with_current_level(|level| level.items.head());
     while !obj.is_null() {
         if (*thing_o(obj)).o_pos.y == y && (*thing_o(obj)).o_pos.x == x {
@@ -104,11 +103,11 @@ pub unsafe fn find_obj(y: c_int, x: c_int) -> *mut Thing {
 }
 
 pub unsafe fn eat() {
-    let obj = get_item("eat", FOOD as c_int);
+    let obj = get_item("eat", FOOD as i32);
     if obj.is_null() {
         return;
     }
-    if (*thing_o(obj)).o_type != FOOD as c_int {
+    if (*thing_o(obj)).o_type != FOOD as i32 {
         if terse == 0 {
             msg_str("ugh, you would get ill if you ate that");
         } else {
@@ -136,12 +135,12 @@ pub unsafe fn eat() {
     } else {
         msg_str("yum, that tasted good");
     }
-    leave_pack(obj, false as c_uchar, false as c_uchar);
+    leave_pack(obj, false as u8, false as u8);
 }
 
 pub unsafe fn check_level() {
     let experience = PLAYER.stats().experience;
-    let mut i: c_int = 0;
+    let mut i: i32 = 0;
     while e_levels[i as usize] != 0 {
         if e_levels[i as usize] > experience {
             break;
@@ -161,38 +160,38 @@ pub unsafe fn check_level() {
     }
 }
 
-pub unsafe fn chg_str(amt: c_int) {
+pub unsafe fn chg_str(amt: i32) {
     if amt == 0 {
         return;
     }
-    let mut new_strength = PLAYER.stats().strength as c_int + amt;
+    let mut new_strength = PLAYER.stats().strength as i32 + amt;
     if new_strength < 3 {
         new_strength = 3;
     } else if new_strength > 31 {
         new_strength = 31;
     }
-    PLAYER.with_stats_mut(|stats| stats.strength = new_strength as c_uint);
+    PLAYER.with_stats_mut(|stats| stats.strength = new_strength as u32);
     let mut comp = PLAYER.stats().strength;
 
     if !PLAYER.left_ring().is_null() {
         let ring = PLAYER.left_ring();
-        let bonus = (*thing_o(ring)).o_arm as c_int;
-        let reduced = comp as c_int - bonus;
-        comp = if reduced < 3 { 3 } else { reduced as c_uint };
+        let bonus = (*thing_o(ring)).o_arm as i32;
+        let reduced = comp as i32 - bonus;
+        comp = if reduced < 3 { 3 } else { reduced as u32 };
     }
     if !PLAYER.right_ring().is_null() {
         let ring = PLAYER.right_ring();
-        let bonus = (*thing_o(ring)).o_arm as c_int;
-        let reduced = comp as c_int - bonus;
-        comp = if reduced < 3 { 3 } else { reduced as c_uint };
+        let bonus = (*thing_o(ring)).o_arm as i32;
+        let reduced = comp as i32 - bonus;
+        comp = if reduced < 3 { 3 } else { reduced as u32 };
     }
     if comp > max_stats.strength {
         max_stats.strength = comp;
     }
 }
 
-pub unsafe fn add_str(sp: *mut c_uint, amt: c_int) {
-    let newv = (*sp).wrapping_add(amt as c_uint);
+pub unsafe fn add_str(sp: *mut u32, amt: i32) {
+    let newv = (*sp).wrapping_add(amt as u32);
     if newv < 3 {
         *sp = 3;
     } else if newv > 31 {
@@ -244,7 +243,7 @@ pub unsafe fn is_current(obj: *mut Thing) -> bool {
     false
 }
 
-pub unsafe fn get_dir() -> c_uchar {
+pub unsafe fn get_dir() -> u8 {
     let mut gotit: bool;
     let mut last_delt: IVec2 = IVec2 { x: 0, y: 0 };
 
@@ -258,7 +257,7 @@ pub unsafe fn get_dir() -> c_uchar {
         }
         loop {
             gotit = true;
-            dir_ch = readchar() as c_char;
+            dir_ch = readchar() as u8;
             match dir_ch as u8 {
                 b'h' | b'H' => {
                     delta.y = 0;
@@ -292,10 +291,10 @@ pub unsafe fn get_dir() -> c_uchar {
                     delta.y = 1;
                     delta.x = 1;
                 }
-                c if c as c_int == ESCAPE => {
+                c if c as i32 == ESCAPE => {
                     last_dir = 0;
                     reset_last();
-                    return false as c_uchar;
+                    return false as u8;
                 }
                 _ => {
                     mpos = 0;
@@ -308,7 +307,7 @@ pub unsafe fn get_dir() -> c_uchar {
             }
         }
         if (dir_ch as u8).is_ascii_uppercase() {
-            dir_ch = (dir_ch as u8).to_ascii_lowercase() as c_char;
+            dir_ch = (dir_ch as u8).to_ascii_lowercase() as u8;
         }
         last_dir = dir_ch;
         last_delt.y = delta.y;
@@ -325,10 +324,10 @@ pub unsafe fn get_dir() -> c_uchar {
         }
     }
     mpos = 0;
-    true as c_uchar
+    true as u8
 }
 
-pub unsafe fn sign(nm: c_int) -> c_int {
+pub unsafe fn sign(nm: i32) -> i32 {
     if nm < 0 {
         -1
     } else if nm > 0 {
@@ -338,7 +337,7 @@ pub unsafe fn sign(nm: c_int) -> c_int {
     }
 }
 
-pub unsafe fn spread(nm: c_int) -> c_int {
+pub unsafe fn spread(nm: i32) -> i32 {
     nm - nm / 20 + rnd(nm / 10)
 }
 
@@ -357,14 +356,14 @@ pub unsafe fn call_it(info: &mut CObjInfo) {
     }
 }
 
-pub unsafe fn rnd_thing() -> c_char {
+pub unsafe fn rnd_thing() -> u8 {
     let thing_list = [
         POTION, SCROLL, RING, STICK, FOOD, WEAPON, ARMOR, STAIRS, GOLD, AMULET,
     ];
     let idx = if crate::game::current_depth() >= GameConfig::AMULET_LEVEL {
-        rnd(thing_list.len() as c_int)
+        rnd(thing_list.len() as i32)
     } else {
-        rnd((thing_list.len() - 1) as c_int)
+        rnd((thing_list.len() - 1) as i32)
     };
     thing_list[idx as usize]
 }

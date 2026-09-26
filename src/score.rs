@@ -4,7 +4,6 @@
 //! top-ten score-file format.
 use crate::globals::{numscores, scoreboard};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::os::raw::{c_char, c_int, c_uint, c_ushort};
 
 const MAXSTR: usize = 1024;
 const SCORELINE_LEN: usize = 100;
@@ -12,13 +11,13 @@ const SCORELINE_LEN: usize = 100;
 /// On-disk scoreboard entry layout (legacy score-file representation).
 #[repr(C)]
 pub struct Score {
-    pub sc_uid: c_uint,
-    pub sc_score: c_int,
-    pub sc_flags: c_uint,
-    pub sc_monster: c_ushort,
+    pub sc_uid: u32,
+    pub sc_score: i32,
+    pub sc_flags: u32,
+    pub sc_monster: u16,
     pub sc_name: [u8; MAXSTR],
-    pub sc_level: c_int,
-    pub sc_time: c_uint,
+    pub sc_level: i32,
+    pub sc_time: u32,
 }
 
 /// Parses a legacy scoreline (`" uid score flags monster level time "`) into
@@ -108,7 +107,7 @@ pub unsafe fn wr_score(top_ten: *mut Score) {
     let _ = file.seek(SeekFrom::Start(0));
 }
 
-// Keep the `c_char` import meaningful for platforms where it is only used in
+// Keep the `u8` import meaningful for platforms where it is only used in
 // the struct's sibling types above.
 #[allow(dead_code)]
-type Char = c_char;
+type Char = u8;

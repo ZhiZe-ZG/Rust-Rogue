@@ -15,7 +15,6 @@
 //! `crate::draw`, which computes them from the [`Level`] tile map and flag
 //! grids on the fly.
 
-use std::os::raw::c_int;
 use std::sync::RwLock;
 
 use crate::config::GameConfig;
@@ -74,7 +73,7 @@ impl CurrentLevel {
 /// The per-cell map stores a pointer-free [`MonsterId`]; this resolves it to the
 /// monster's stable raw address for the legacy engine boundary.
 #[inline]
-pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut Thing {
+pub unsafe fn monster_at(y: i32, x: i32) -> *mut Thing {
     match MONSTER_MAP.at(y as usize, x as usize) {
         Some(id) => crate::game::MONSTER_LIST
             .handle(id)
@@ -85,20 +84,20 @@ pub unsafe fn monster_at(y: c_int, x: c_int) -> *mut Thing {
 
 /// Place `tp` at `(y, x)` in the per-cell monster occupancy map.
 #[inline]
-pub unsafe fn set_monster(y: c_int, x: c_int, tp: *mut Thing) {
+pub unsafe fn set_monster(y: i32, x: i32, tp: *mut Thing) {
     let id = crate::game::MONSTER_LIST.find(tp);
     MONSTER_MAP.set(y as usize, x as usize, id);
 }
 
 /// Read the monster map at `(y, x)` (equivalent to [`monster_at`]).
 #[inline]
-pub unsafe fn moat_at(y: c_int, x: c_int) -> *mut Thing {
+pub unsafe fn moat_at(y: i32, x: i32) -> *mut Thing {
     monster_at(y, x)
 }
 
 /// Place a monster in the per-cell monster occupancy map.
 #[inline]
-pub unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut Thing) {
+pub unsafe fn set_moat_at(y: i32, x: i32, tp: *mut Thing) {
     set_monster(y, x, tp);
 }
 
@@ -109,7 +108,7 @@ pub unsafe fn clear_level() {
 
 /// Whether the cell at `(y, x)` can be entered: no monster stands there and the
 /// terrain tile is walkable.
-pub unsafe fn cell_is_walkable(y: c_int, x: c_int) -> bool {
+pub unsafe fn cell_is_walkable(y: i32, x: i32) -> bool {
     if !monster_at(y, x).is_null() {
         return false;
     }
@@ -117,13 +116,13 @@ pub unsafe fn cell_is_walkable(y: c_int, x: c_int) -> bool {
 }
 
 /// The tile at `(y, x)`, defaulting to [`Tile::Empty`] outside the map.
-pub unsafe fn tile_at(y: c_int, x: c_int) -> Tile {
+pub unsafe fn tile_at(y: i32, x: i32) -> Tile {
     with_current_level(|level| level.tile_at(y as usize, x as usize))
 }
 
 /// Whether `(y, x)` is a door: an ordinary door, or a hidden door that has been
 /// revealed.
-pub unsafe fn is_door_at(y: c_int, x: c_int) -> bool {
+pub unsafe fn is_door_at(y: i32, x: i32) -> bool {
     with_current_level(|level| level.is_door_at(y as usize, x as usize))
 }
 

@@ -2,8 +2,6 @@
 //!
 //! Ported from `src/c/scrolls.c` to Rust.
 use crate::rnd::rnd;
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::config::GameConfig;
 use crate::draw::{look, map_cell_reveal};
@@ -22,26 +20,26 @@ use crate::ui::{output, Window};
 use crate::wizard::{teleport, whatis};
 use glam::IVec2;
 
-const SLEEPTIME: c_int = 5;
+const SLEEPTIME: i32 = 5;
 
-const DOOR: c_int = '+' as c_int;
-const FLOOR: c_int = '.' as c_int;
-const PASSAGE: c_int = '#' as c_int;
-const TRAP: c_int = '^' as c_int;
-const STAIRS: c_int = '%' as c_int;
-const H_WALL: c_int = '-' as c_int;
-const V_WALL: c_int = '|' as c_int;
-const SPACE: c_int = ' ' as c_int;
-const FOOD: c_int = ':' as c_int;
-const POTION: c_int = '!' as c_int;
-const SCROLL: c_int = '?' as c_int;
-const WEAPON: c_int = ')' as c_int;
-const ARMOR: c_int = ']' as c_int;
-const R_OR_S: c_int = -2;
+const DOOR: i32 = '+' as i32;
+const FLOOR: i32 = '.' as i32;
+const PASSAGE: i32 = '#' as i32;
+const TRAP: i32 = '^' as i32;
+const STAIRS: i32 = '%' as i32;
+const H_WALL: i32 = '-' as i32;
+const V_WALL: i32 = '|' as i32;
+const SPACE: i32 = ' ' as i32;
+const FOOD: i32 = ':' as i32;
+const POTION: i32 = '!' as i32;
+const SCROLL: i32 = '?' as i32;
+const WEAPON: i32 = ')' as i32;
+const ARMOR: i32 = ']' as i32;
+const R_OR_S: i32 = -2;
 
-const F_PASS: c_char = 0x80u8 as c_char;
-const F_SEEN: c_char = 0x40u8 as c_char;
-const F_REAL: c_char = 0x10;
+const F_PASS: u8 = 0x80u8 as u8;
+const F_SEEN: u8 = 0x40u8 as u8;
+const F_REAL: u8 = 0x10;
 
 const MAXSCROLLS: usize = 18;
 
@@ -70,7 +68,7 @@ pub enum ScrollType {
 
 impl ScrollType {
     #[inline]
-    fn from_raw(value: c_int) -> Self {
+    fn from_raw(value: i32) -> Self {
         match value {
             0 => Self::Confuse,
             1 => Self::Map,
@@ -124,7 +122,7 @@ fn proom() -> Option<usize> {
 }
 
 #[inline]
-unsafe fn moat(y: c_int, x: c_int) -> *mut Thing {
+unsafe fn moat(y: i32, x: i32) -> *mut Thing {
     game::monster_at(y, x) as *mut Thing
 }
 
@@ -163,7 +161,7 @@ pub unsafe fn read_scroll() {
     }
 
     let discardit = (*thing_o(obj)).o_count == 1;
-    leave_pack(obj, false as c_uchar, false as c_uchar);
+    leave_pack(obj, false as u8, false as u8);
     let orig_obj = obj;
 
     let scroll_type = ScrollType::from_raw((*thing_o(obj)).o_which);
@@ -185,7 +183,7 @@ pub unsafe fn read_scroll() {
             }
         }
         ScrollType::Hold => {
-            let mut ch: c_char = 0;
+            let mut ch: u8 = 0;
             let h = hero();
             for x in (h.x - 2)..=(h.x + 2) {
                 if !(0..GameConfig::SCREEN_COLS).contains(&x) {
@@ -239,8 +237,8 @@ pub unsafe fn read_scroll() {
                     }
                     let found = find_obj(y, x);
                     if !found.is_null()
-                        && (*thing_o(found)).o_type == SCROLL as c_int
-                        && (*thing_o(found)).o_which == ScrollType::Scare as c_int
+                        && (*thing_o(found)).o_type == SCROLL as i32
+                        && (*thing_o(found)).o_which == ScrollType::Scare as i32
                     {
                         continue;
                     }
@@ -264,14 +262,14 @@ pub unsafe fn read_scroll() {
         | ScrollType::IdentifyWeapon
         | ScrollType::IdentifyArmor
         | ScrollType::IdentifyRingOrStick => {
-            let id_type: [c_int; ScrollType::IdentifyRingOrStick.index() + 1] =
+            let id_type: [i32; ScrollType::IdentifyRingOrStick.index() + 1] =
                 [0, 0, 0, 0, 0, POTION, SCROLL, WEAPON, ARMOR, R_OR_S];
             scr_info[(*thing_o(obj)).o_which as usize].oi_know = true;
             msg_str(&format!(
                 "this scroll is an {} scroll",
                 scr_info[(*thing_o(obj)).o_which as usize].oi_name
             ));
-            whatis(true as c_uchar, id_type[(*thing_o(obj)).o_which as usize]);
+            whatis(true as u8, id_type[(*thing_o(obj)).o_which as usize]);
         }
         ScrollType::Map => {
             scr_info[ScrollType::Map.index()].oi_know = true;
@@ -293,13 +291,13 @@ pub unsafe fn read_scroll() {
             }
         }
         ScrollType::FindFood => {
-            let mut found = false as c_uchar;
+            let mut found = false as u8;
             let window = Window::Stdscr;
             output::clear_window(window);
             let mut it = crate::game::with_current_level(|level| level.items.head());
             while !it.is_null() {
                 if (*thing_o(it)).o_type == FOOD {
-                    found = true as c_uchar;
+                    found = true as u8;
                     output::move_window_cursor(
                         window,
                         IVec2::new((*thing_o(it)).o_pos.x, (*thing_o(it)).o_pos.y),
@@ -373,7 +371,7 @@ pub unsafe fn read_scroll() {
     }
 
     obj = orig_obj;
-    look(true as c_uchar);
+    look(true as u8);
     status();
 
     call_it(&mut scr_info[(*thing_o(obj)).o_which as usize]);

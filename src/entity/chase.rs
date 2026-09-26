@@ -6,7 +6,6 @@
 //! Rust `const` values so the debug behavior is always available and there is
 //! no need for preprocessor conditionals in Rust.
 
-use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
@@ -24,17 +23,17 @@ use crate::ui::output;
 use crate::ui::output::{endmsg, msg_str};
 use glam::IVec2;
 
-const DRAGONSHOT: c_int = 5; // one chance in DRAGONSHOT that a dragon will flame
+const DRAGONSHOT: i32 = 5; // one chance in DRAGONSHOT that a dragon will flame
 
-const F_PASS: c_char = 0x80u8 as c_char;
-const F_PNUM: c_char = 0x0fu8 as c_char;
+const F_PASS: u8 = 0x80u8 as u8;
+const F_PNUM: u8 = 0x0fu8 as u8;
 
-const DOOR: c_char = b'+' as c_char;
-const FLOOR: c_char = b'.' as c_char;
-const PASSAGE: c_char = b'#' as c_char;
-const SCROLL: c_char = b'?' as c_char;
-const BOLT_LENGTH: c_int = 6;
-const LAMPDIST: c_int = 3;
+const DOOR: u8 = b'+' as u8;
+const FLOOR: u8 = b'.' as u8;
+const PASSAGE: u8 = b'#' as u8;
+const SCROLL: u8 = b'?' as u8;
+const BOLT_LENGTH: i32 = 6;
+const LAMPDIST: i32 = 3;
 
 /// `#ifdef MASTER` helper: replaced by a plain `const` so the preprocessor
 /// conditional disappears.  The C build is compiled without `-DMASTER`, so the
@@ -100,17 +99,17 @@ unsafe fn coord_eq(a: IVec2, b: IVec2) -> bool {
 }
 
 #[inline]
-unsafe fn flat_at(y: c_int, x: c_int) -> c_char {
+unsafe fn flat_at(y: i32, x: i32) -> u8 {
     crate::draw::flat_at(y, x)
 }
 
 #[inline]
-unsafe fn moat_at(y: c_int, x: c_int) -> *mut Thing {
+unsafe fn moat_at(y: i32, x: i32) -> *mut Thing {
     crate::game::monster_at(y, x)
 }
 
 #[inline]
-unsafe fn set_moat_at(y: c_int, x: c_int, tp: *mut Thing) {
+unsafe fn set_moat_at(y: i32, x: i32, tp: *mut Thing) {
     crate::game::set_monster(y, x, tp);
 }
 
@@ -140,20 +139,20 @@ pub unsafe fn runners() {
                 }
                 if wastarget && !coord_eq(orig_pos, (*thing_t(tp)).t_pos) {
                     (*thing_t(tp)).t_flags.remove(MonsterFlags::TARGET);
-                    to_death = false as c_uchar;
+                    to_death = false as u8;
                 }
             }
         }
     }
     if has_hit != 0 {
         endmsg();
-        has_hit = false as c_uchar;
+        has_hit = false as u8;
     }
 }
 
 /// move_monst:
 /// Execute a single turn of running for a monster
-pub unsafe fn move_monst(tp: *mut Thing) -> c_int {
+pub unsafe fn move_monst(tp: *mut Thing) -> i32 {
     if !monster_has(tp, MonsterFlags::SLOW) || (*thing_t(tp)).t_turn {
         if do_chase(tp) == -1 {
             return -1;
@@ -198,7 +197,7 @@ pub unsafe fn relocate(th: *mut Thing, new_loc: *mut IVec2) {
         set_moat_at((*new_loc).y, (*new_loc).x, th);
     }
     output::move_cursor(IVec2::new((*new_loc).x, (*new_loc).y));
-    if see_monst(th) != false as c_uchar {
+    if see_monst(th) != false as u8 {
         output::write_glyph(((*thing_t(th)).t_disguise as u8) as char);
     } else if player_has(MonsterFlags::SEEMONST) {
         output::set_standout(true);
@@ -212,10 +211,10 @@ pub unsafe fn relocate(th: *mut Thing, new_loc: *mut IVec2) {
 ///
 /// Uses globals: hero, proom, passages, places (via flat/chat/moat),
 /// delta, running, count, quiet, to_death, kamikaze, lvl_obj.
-pub unsafe fn do_chase(th: *mut Thing) -> c_int {
-    let mut mindist: c_int = 32767;
-    let mut curdist: c_int;
-    let mut stoprun = false; // true as c_uchar means we are there
+pub unsafe fn do_chase(th: *mut Thing) -> i32 {
+    let mut mindist: i32 = 32767;
+    let mut curdist: i32;
+    let mut stoprun = false; // true as u8 means we are there
     let door: bool;
     let mut obj: *mut Thing;
 
@@ -290,17 +289,13 @@ pub unsafe fn do_chase(th: *mut Thing) -> c_int {
                 if has_hit != 0 {
                     endmsg();
                 }
-                fire_bolt(
-                    &raw mut (*thing_t(th)).t_pos,
-                    &raw mut delta,
-                    "flame",
-                );
-                running = false as c_uchar;
+                fire_bolt((*thing_t(th)).t_pos, delta, "flame");
+                running = false as u8;
                 count = 0;
                 quiet = 0;
                 if to_death != 0 && !monster_has(th, MonsterFlags::TARGET) {
-                    to_death = false as c_uchar;
-                    kamikaze = false as c_uchar;
+                    to_death = false as u8;
+                    kamikaze = false as u8;
                 }
                 return 0;
             }
@@ -311,7 +306,7 @@ pub unsafe fn do_chase(th: *mut Thing) -> c_int {
     // This now contains what we want to run to this time
     // so we run to it.  If we hit it we either want to fight it
     // or stop running.
-    if chase(th, &raw mut THIS) == false as c_uchar {
+    if chase(th, &raw mut THIS) == false as u8 {
         if coord_eq(THIS, hero_pos()) {
             return attack(th);
         } else if coord_eq(THIS, dest_coord(th)) {
@@ -365,15 +360,15 @@ pub unsafe fn set_oldch(tp: *mut Thing, cp: *mut IVec2) {
 }
 
 /// see_monst:
-/// Return true as c_uchar if the hero can see the monster
+/// Return true as u8 if the hero can see the monster
 ///
 /// Uses globals: player, hero, proom, places (via chat).
-pub unsafe fn see_monst(mp: *mut Thing) -> c_uchar {
+pub unsafe fn see_monst(mp: *mut Thing) -> u8 {
     if player_has(MonsterFlags::BLIND) {
-        return false as c_uchar;
+        return false as u8;
     }
     if monster_has(mp, MonsterFlags::INVIS) && !player_has(MonsterFlags::CANSEE) {
-        return false as c_uchar;
+        return false as u8;
     }
     let y = (*thing_t(mp)).t_pos.y;
     let x = (*thing_t(mp)).t_pos.x;
@@ -383,17 +378,17 @@ pub unsafe fn see_monst(mp: *mut Thing) -> c_uchar {
             && !crate::game::tile_at(y, hero_pos().x).is_walkable()
             && !crate::game::tile_at(hero_pos().y, x).is_walkable()
         {
-            return false as c_uchar;
+            return false as u8;
         }
-        return true as c_uchar;
+        return true as u8;
     }
     if (*thing_t(mp)).t_room != crate::game::PLAYER.room() {
-        return false as c_uchar;
+        return false as u8;
     }
     if crate::game::room_dark((*thing_t(mp)).t_room) {
-        false as c_uchar
+        false as u8
     } else {
-        true as c_uchar
+        true as u8
     }
 }
 
@@ -423,13 +418,13 @@ pub unsafe fn runto(runner: *mut IVec2) {
 
 /// chase:
 /// Find the spot for the chaser(er) to move closer to the
-/// chasee(ee).  Returns true as c_uchar if we want to keep on chasing later
-/// false as c_uchar if we reach the goal.
+/// chasee(ee).  Returns true as u8 if we want to keep on chasing later
+/// false as u8 if we reach the goal.
 ///
 /// Uses globals: hero, lvl_obj, places (via moat/chat/winat).
-pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> c_uchar {
-    let mut curdist: c_int;
-    let mut thisdist: c_int;
+pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> u8 {
+    let mut curdist: i32;
+    let mut thisdist: i32;
     let er = &raw mut (*thing_t(tp)).t_pos;
     let mut plcnt = 1;
 
@@ -472,7 +467,7 @@ pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> c_uchar {
                 let mut y = (*er).y - 1;
                 while y <= ey {
                     TRYP.y = y;
-                    if diag_ok(er, &raw mut TRYP) == false as c_uchar {
+                    if diag_ok(er, &raw mut TRYP) == false as u8 {
                         y += 1;
                         continue;
                     }
@@ -486,7 +481,7 @@ pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> c_uchar {
                             }
                             obj = crate::entity::player::thing_next(obj);
                         }
-                        if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
+                        if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as i32 {
                             y += 1;
                             continue;
                         }
@@ -517,9 +512,9 @@ pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> c_uchar {
         }
     }
     if curdist != 0 && !coord_eq(CH_RET, hero_pos()) {
-        true as c_uchar
+        true as u8
     } else {
-        false as c_uchar
+        false as u8
     }
 }
 
@@ -548,23 +543,23 @@ pub unsafe fn roomin(cp: *mut IVec2) -> Option<usize> {
 /// Check to see if the move is legal if it is diagonal
 ///
 /// Uses globals: places (via chat).
-pub unsafe fn diag_ok(sp: *mut IVec2, ep: *mut IVec2) -> c_uchar {
+pub unsafe fn diag_ok(sp: *mut IVec2, ep: *mut IVec2) -> u8 {
     if (*ep).x < 0
         || (*ep).x >= GameConfig::SCREEN_COLS
         || (*ep).y <= 0
         || (*ep).y >= GameConfig::SCREEN_LINES - 1
     {
-        return false as c_uchar;
+        return false as u8;
     }
     if (*ep).x == (*sp).x || (*ep).y == (*sp).y {
-        return true as c_uchar;
+        return true as u8;
     }
     if crate::game::tile_at((*ep).y, (*sp).x).is_walkable()
         && crate::game::tile_at((*sp).y, (*ep).x).is_walkable()
     {
-        true as c_uchar
+        true as u8
     } else {
-        false as c_uchar
+        false as u8
     }
 }
 
@@ -572,9 +567,9 @@ pub unsafe fn diag_ok(sp: *mut IVec2, ep: *mut IVec2) -> c_uchar {
 /// Returns true if the hero can see a certain coordinate.
 ///
 /// Uses globals: player, hero, proom, places (via flat/chat).
-pub unsafe fn cansee(y: c_int, x: c_int) -> c_uchar {
+pub unsafe fn cansee(y: i32, x: i32) -> u8 {
     if player_has(MonsterFlags::BLIND) {
-        return false as c_uchar;
+        return false as u8;
     }
     if dist(y, x, hero_pos().y, hero_pos().x) < LAMPDIST {
         if (flat_at(y, x) & F_PASS) != 0 {
@@ -583,10 +578,10 @@ pub unsafe fn cansee(y: c_int, x: c_int) -> c_uchar {
                 && !crate::game::tile_at(y, hero_pos().x).is_walkable()
                 && !crate::game::tile_at(hero_pos().y, x).is_walkable()
             {
-                return false as c_uchar;
+                return false as u8;
             }
         }
-        return true as c_uchar;
+        return true as u8;
     }
     // We can only see if the hero in the same room as
     // the coordinate and the room is lit or if it is close.
@@ -594,9 +589,9 @@ pub unsafe fn cansee(y: c_int, x: c_int) -> c_uchar {
     CANSEE_TP.x = x;
     let rer = roomin(&raw mut CANSEE_TP);
     if rer == crate::game::PLAYER.room() && !crate::game::room_dark(rer) {
-        true as c_uchar
+        true as u8
     } else {
-        false as c_uchar
+        false as u8
     }
 }
 
@@ -612,15 +607,15 @@ pub unsafe fn update_dest(tp: *mut Thing) {
     let prob = monsters[((*thing_t(tp)).t_type as i32 - 'A' as i32) as usize].m_carry;
     if prob <= 0
         || (*thing_t(tp)).t_room == crate::game::PLAYER.room()
-        || see_monst(tp) != false as c_uchar
+        || see_monst(tp) != false as u8
     {
         set_thing_dest_hero(tp);
         return;
     }
     let mut obj = crate::game::with_current_level(|level| level.items.head());
     while !obj.is_null() {
-        if (*thing_o(obj)).o_type == SCROLL as c_int
-            && (*thing_o(obj)).o_which == ScrollType::Scare as c_int
+        if (*thing_o(obj)).o_type == SCROLL as i32
+            && (*thing_o(obj)).o_which == ScrollType::Scare as i32
         {
             obj = crate::entity::player::thing_next(obj);
             continue;
@@ -650,12 +645,12 @@ pub unsafe fn update_dest(tp: *mut Thing) {
 /// Calculate the "distance" between to points.  Actually,
 /// this calculates d^2, not d, but that's good enough for
 /// our purposes, since it's only used comparitively.
-pub unsafe fn dist(y1: c_int, x1: c_int, y2: c_int, x2: c_int) -> c_int {
+pub unsafe fn dist(y1: i32, x1: i32, y2: i32, x2: i32) -> i32 {
     (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)
 }
 
 /// dist_cp:
 /// Call dist() with appropriate arguments for coord pointers
-pub unsafe fn dist_cp(c1: *mut IVec2, c2: *mut IVec2) -> c_int {
+pub unsafe fn dist_cp(c1: *mut IVec2, c2: *mut IVec2) -> i32 {
     dist((*c1).y, (*c1).x, (*c2).y, (*c2).x)
 }

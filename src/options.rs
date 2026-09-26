@@ -1,7 +1,6 @@
 //! Runtime option handling and the option screen.
 //!
 //! Ported from `src/c/options.c` to Rust.
-use std::os::raw::{c_int, c_uchar, c_void, c_void as c_void_t};
 
 use crate::draw::{erase_lamp, look};
 use crate::entity::player::{Thing, ThingMonster};
@@ -9,15 +8,15 @@ use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::{output, Window};
 use glam::IVec2;
 
-const ESCAPE: c_int = 27;
-const NORM: c_int = 0;
-const QUIT: c_int = 1;
-const MINUS: c_int = 2;
+const ESCAPE: i32 = 27;
+const NORM: i32 = 0;
+const QUIT: i32 = 1;
+const MINUS: i32 = 2;
 const MAXSTR: usize = 1024;
 const MAXINP: usize = 50;
-const INV_OVER: c_int = 0;
-const INV_SLOW: c_int = 1;
-const INV_CLEAR: c_int = 2;
+const INV_OVER: i32 = 0;
+const INV_SLOW: i32 = 1;
+const INV_CLEAR: i32 = 2;
 /// Number of `inv_t_name` entries (the inventory display styles).
 const INV_T_NAME_LEN: usize = 3;
 
@@ -30,15 +29,48 @@ enum StrTarget {
     File,
 }
 
+/// Typed target for an option's backing global, replacing the former
+/// type-erased `*mut u8`. Each variant carries a raw pointer to the exact
+/// global it edits, so the option screen never has to guess the pointee type.
+#[derive(Clone, Copy)]
+enum OptTarget {
+    /// No backing global (string options edit via [`StrTarget`]).
+    None,
+    /// A boolean flag stored in a global `u8`.
+    Bool(*mut u8),
+    /// The inventory display style, stored in a global `i32`.
+    InvType(*mut i32),
+}
+
+impl OptTarget {
+    /// The backing `u8` flag, or null when this target is not boolean.
+    #[inline]
+    fn bool_ptr(self) -> *mut u8 {
+        match self {
+            OptTarget::Bool(p) => p,
+            _ => std::ptr::null_mut(),
+        }
+    }
+
+    /// The backing `i32`, or null when this target is not the inventory style.
+    #[inline]
+    fn int_ptr(self) -> *mut i32 {
+        match self {
+            OptTarget::InvType(p) => p,
+            _ => std::ptr::null_mut(),
+        }
+    }
+}
+
 /// One configurable option: its prompt, the global it edits, and the
 /// callbacks that render and read it on the option screen.
 pub struct OPTION {
     o_name: &'static str,
     o_prompt: &'static str,
-    o_opt: *mut c_void,
+    o_target: OptTarget,
     o_str: StrTarget,
     o_putfunc: unsafe fn(&OPTION),
-    o_getfunc: unsafe fn(&OPTION, Window) -> c_int,
+    o_getfunc: unsafe fn(&OPTION, Window) -> i32,
 }
 
 use crate::globals::{after, fight_flush, inv_type, jump, mpos, passgo, see_floor, terse, tombstone};
@@ -61,7 +93,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "terse",
             o_prompt: "Terse output",
-            o_opt: (&raw mut terse) as *mut c_void,
+            o_target: OptTarget::Bool(&raw mut terse),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
@@ -69,7 +101,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "flush",
             o_prompt: "Flush typeahead during battle",
-            o_opt: (&raw mut fight_flush) as *mut c_void,
+            o_target: OptTarget::Bool(&raw mut fight_flush),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
@@ -77,7 +109,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "jump",
             o_prompt: "Show position only at end of run",
-            o_opt: (&raw mut jump) as *mut c_void,
+            o_target: OptTarget::Bool(&raw mut jump),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
@@ -85,7 +117,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "seefloor",
             o_prompt: "Show the lamp-illuminated floor",
-            o_opt: (&raw mut see_floor) as *mut c_void,
+            o_target: OptTarget::Bool(&raw mut see_floor),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_sf,
@@ -93,7 +125,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "passgo",
             o_prompt: "Follow turnings in passageways",
-            o_opt: (&raw mut passgo) as *mut c_void,
+            o_target: OptTarget::Bool(&raw mut passgo),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
@@ -101,7 +133,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "tombstone",
             o_prompt: "Print out tombstone when killed",
-            o_opt: (&raw mut tombstone) as *mut c_void,
+            o_target: OptTarget::Bool(&raw mut tombstone),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
@@ -109,7 +141,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "inven",
             o_prompt: "Inventory style",
-            o_opt: (&raw mut inv_type) as *mut c_void,
+            o_target: OptTarget::InvType(&raw mut inv_type),
             o_str: StrTarget::None,
             o_putfunc: put_inv_t,
             o_getfunc: get_inv_t,
@@ -117,7 +149,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "name",
             o_prompt: "Name",
-            o_opt: std::ptr::null_mut(),
+            o_target: OptTarget::None,
             o_str: StrTarget::Name,
             o_putfunc: put_str,
             o_getfunc: get_str,
@@ -125,7 +157,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "fruit",
             o_prompt: "Fruit",
-            o_opt: std::ptr::null_mut(),
+            o_target: OptTarget::None,
             o_str: StrTarget::Fruit,
             o_putfunc: put_str,
             o_getfunc: get_str,
@@ -133,7 +165,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "file",
             o_prompt: "Save file",
-            o_opt: std::ptr::null_mut(),
+            o_target: OptTarget::None,
             o_str: StrTarget::File,
             o_putfunc: put_str,
             o_getfunc: get_str,
@@ -170,7 +202,7 @@ unsafe fn pr_optname_slot(op: &OPTION) {
 
 pub unsafe fn option() {
     let mut optlist = option_list();
-    let mut retval: c_int;
+    let mut retval: i32;
 
     let options_window = Window::Stdscr;
     output::clear_window(options_window);
@@ -203,7 +235,7 @@ pub unsafe fn option() {
     wait_for(' ');
     output::set_clear_on_refresh(Window::Stdscr, true);
     output::touch_window(Window::Stdscr);
-    after = false as c_uchar;
+    after = false as u8;
 }
 
 unsafe fn pr_optname(op: *mut OPTION) {
@@ -214,7 +246,7 @@ unsafe fn pr_optname(op: *mut OPTION) {
 }
 
 unsafe fn put_bool(op: &OPTION) {
-    let bp = op.o_opt as *mut c_uchar;
+    let bp = op.o_target.bool_ptr();
     output::write_window_text(Window::Stdscr, if *bp != 0 { "True" } else { "False" });
 }
 
@@ -224,15 +256,15 @@ unsafe fn put_str(op: &OPTION) {
 }
 
 unsafe fn put_inv_t(op: &OPTION) {
-    let ip = op.o_opt as *mut c_int;
+    let ip = op.o_target.int_ptr();
     let idx = *ip as usize;
     if idx < INV_T_NAME_LEN {
         output::write_window_text(Window::Stdscr, &crate::globals::inv_t_name(idx));
     }
 }
 
-unsafe fn get_bool(op: &OPTION, win: Window) -> c_int {
-    let bp = op.o_opt as *mut c_uchar;
+unsafe fn get_bool(op: &OPTION, win: Window) -> i32 {
+    let bp = op.o_target.bool_ptr();
     let mut bad = true;
 
     let origin = output::window_cursor(win);
@@ -241,19 +273,19 @@ unsafe fn get_bool(op: &OPTION, win: Window) -> c_int {
         output::move_window_cursor(win, origin);
         output::refresh_window(win);
         match readchar() {
-            ch if ch == 't' as c_int || ch == 'T' as c_int => {
-                *bp = true as c_uchar;
+            ch if ch == 't' as i32 || ch == 'T' as i32 => {
+                *bp = true as u8;
                 bad = false;
             }
-            ch if ch == 'f' as c_int || ch == 'F' as c_int => {
-                *bp = false as c_uchar;
+            ch if ch == 'f' as i32 || ch == 'F' as i32 => {
+                *bp = false as u8;
                 bad = false;
             }
-            ch if ch == '\n' as c_int || ch == '\r' as c_int => {
+            ch if ch == '\n' as i32 || ch == '\r' as i32 => {
                 bad = false;
             }
             ESCAPE => return QUIT,
-            ch if ch == '-' as c_int => return MINUS,
+            ch if ch == '-' as i32 => return MINUS,
             _ => {
                 output::move_window_cursor(win, IVec2::new(origin.x + 10, origin.y));
                 output::write_window_text(win, "(T or F)");
@@ -266,8 +298,8 @@ unsafe fn get_bool(op: &OPTION, win: Window) -> c_int {
     NORM
 }
 
-unsafe fn get_sf(op: &OPTION, win: Window) -> c_int {
-    let bp = op.o_opt as *mut c_uchar;
+unsafe fn get_sf(op: &OPTION, win: Window) -> i32 {
+    let bp = op.o_target.bool_ptr();
     let was_sf = *bp != 0;
     let retval = get_bool(op, win);
     if retval == QUIT {
@@ -276,11 +308,11 @@ unsafe fn get_sf(op: &OPTION, win: Window) -> c_int {
     if was_sf != (*bp != 0) {
         if *bp == 0 {
             let mut hero = hero_pos();
-            see_floor = true as c_uchar;
+            see_floor = true as u8;
             erase_lamp(&mut hero, proom_ptr());
-            see_floor = false as c_uchar;
+            see_floor = false as u8;
         } else {
-            look(false as c_uchar);
+            look(false as u8);
         }
     }
     NORM
@@ -293,20 +325,20 @@ pub unsafe fn read_line(initial: &str, win: Window) -> Option<String> {
 
     let origin = output::window_cursor(win);
     output::refresh_window(win);
-    let mut c: c_int;
+    let mut c: i32;
     loop {
         c = readchar();
-        if c == '\n' as c_int || c == '\r' as c_int || c == ESCAPE {
+        if c == '\n' as i32 || c == '\r' as i32 || c == ESCAPE {
             break;
         }
         if c == -1 {
             continue;
         }
-        if c == input::erase_key() as c_int {
+        if c == input::erase_key() as i32 {
             buf.pop();
             continue;
         }
-        if c == input::kill_key() as c_int {
+        if c == input::kill_key() as i32 {
             buf.clear();
             output::move_window_cursor(win, origin);
             continue;
@@ -326,7 +358,7 @@ pub unsafe fn read_line(initial: &str, win: Window) -> Option<String> {
     paint(win, &out);
     output::refresh_window(win);
     if win == Window::Stdscr {
-        mpos += buf.len() as c_int;
+        mpos += buf.len() as i32;
     }
 
     if c == ESCAPE {
@@ -338,7 +370,7 @@ pub unsafe fn read_line(initial: &str, win: Window) -> Option<String> {
 
 /// Read a line of text, editing within `win`, and store it in the option's
 /// target. Returns the legacy `get_str` status code.
-pub unsafe fn get_str(op: &OPTION, win: Window) -> c_int {
+pub unsafe fn get_str(op: &OPTION, win: Window) -> i32 {
     let initial = str_target_value(op.o_str);
     match read_line(&initial, win) {
         None => QUIT,
@@ -349,42 +381,42 @@ pub unsafe fn get_str(op: &OPTION, win: Window) -> c_int {
     }
 }
 
-unsafe fn get_inv_t(op: &OPTION, win: Window) -> c_int {
-    let ip = op.o_opt as *mut c_int;
+unsafe fn get_inv_t(op: &OPTION, win: Window) -> i32 {
+    let ip = op.o_target.int_ptr();
     let mut bad = true;
 
     let origin = output::window_cursor(win);
-    if *ip >= 0 && *ip < INV_T_NAME_LEN as c_int {
+    if *ip >= 0 && *ip < INV_T_NAME_LEN as i32 {
         output::write_window_text(win, &crate::globals::inv_t_name(*ip as usize));
     }
     while bad {
         output::move_window_cursor(win, origin);
         output::refresh_window(win);
         match readchar() {
-            ch if ch == 'o' as c_int || ch == 'O' as c_int => {
+            ch if ch == 'o' as i32 || ch == 'O' as i32 => {
                 *ip = INV_OVER;
                 bad = false;
             }
-            ch if ch == 's' as c_int || ch == 'S' as c_int => {
+            ch if ch == 's' as i32 || ch == 'S' as i32 => {
                 *ip = INV_SLOW;
                 bad = false;
             }
-            ch if ch == 'c' as c_int || ch == 'C' as c_int => {
+            ch if ch == 'c' as i32 || ch == 'C' as i32 => {
                 *ip = INV_CLEAR;
                 bad = false;
             }
-            ch if ch == '\n' as c_int || ch == '\r' as c_int => {
+            ch if ch == '\n' as i32 || ch == '\r' as i32 => {
                 bad = false;
             }
             ESCAPE => return QUIT,
-            ch if ch == '-' as c_int => return MINUS,
+            ch if ch == '-' as i32 => return MINUS,
             _ => {
                 output::move_window_cursor(win, IVec2::new(origin.x + 15, origin.y));
                 output::write_window_text(win, "(O, S, or C)");
             }
         }
     }
-    if *ip >= 0 && *ip < INV_T_NAME_LEN as c_int {
+    if *ip >= 0 && *ip < INV_T_NAME_LEN as i32 {
         let name = crate::globals::inv_t_name(*ip as usize);
         let out = format!("{}\n", name);
         output::move_window_cursor(win, origin);
@@ -419,8 +451,8 @@ pub unsafe fn parse_opts(s: &str) {
             if op.o_name == name {
                 if op.o_str == StrTarget::None && op.o_name != "inven" {
                     // Boolean option: set it true.
-                    let bp = op.o_opt as *mut c_uchar;
-                    *bp = true as c_uchar;
+                    let bp = op.o_target.bool_ptr();
+                    *bp = true as u8;
                 } else if op.o_name == "inven" {
                     // Inventory style: skip '=' then a single letter.
                     while i < bytes.len() && bytes[i] == b'=' {
@@ -440,7 +472,7 @@ pub unsafe fn parse_opts(s: &str) {
                         let value = &s[start_idx..start_idx + 1];
                         for idx in 0..INV_T_NAME_LEN {
                             if value == &crate::globals::inv_t_name(idx)[..1.min(crate::globals::inv_t_name(idx).len())] {
-                                inv_type = idx as c_int;
+                                inv_type = idx as i32;
                                 break;
                             }
                         }
@@ -496,7 +528,3 @@ pub fn filter_printable(src: &str) -> String {
         .filter(|ch| ch.is_ascii_graphic() || *ch == ' ')
         .collect()
 }
-
-// Silence the unused alias import warning while keeping the type name handy.
-#[allow(dead_code)]
-type Void = c_void_t;

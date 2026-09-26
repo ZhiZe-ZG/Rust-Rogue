@@ -2,14 +2,13 @@
 //!
 //! Split out from the movement logic originally found in `src/c/move.c`.
 use glam::IVec2;
-use std::os::raw::{c_char, c_int};
 
 use crate::entity::chase::diag_ok;
 use crate::entity::player::{Thing, ThingObject};
 use crate::item::scrolls::ScrollType;
 use crate::rnd::rnd;
 
-const SCROLL: c_char = b'?' as c_char;
+const SCROLL: u8 = b'?' as u8;
 
 #[inline]
 unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
@@ -52,7 +51,7 @@ pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
         }
         obj = crate::entity::player::thing_next(obj);
     }
-    if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as c_int {
+    if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as i32 {
         return pos;
     }
 

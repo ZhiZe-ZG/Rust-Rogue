@@ -39,50 +39,48 @@ use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
 use crate::ui::Window;
 use crate::wizard::{create_obj, show_map, teleport, whatis};
 use glam::IVec2;
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAXSTR: usize = 1024;
 
 // Glyphs
-const PASSAGE: c_char = b'#' as c_char;
-const DOOR: c_char = b'+' as c_char;
-const FLOOR: c_char = b'.' as c_char;
-const TRAP: c_char = b'^' as c_char;
-const STAIRS: c_char = b'%' as c_char;
-const GOLD: c_char = b'*' as c_char;
-const POTION: c_char = b'!' as c_char;
-const SCROLL: c_char = b'?' as c_char;
-const FOOD: c_char = b':' as c_char;
-const WEAPON: c_char = b')' as c_char;
-const ARMOR: c_char = b']' as c_char;
-const AMULET: c_char = b',' as c_char;
-const RING: c_char = b'=' as c_char;
-const STICK: c_char = b'/' as c_char;
+const PASSAGE: u8 = b'#' as u8;
+const DOOR: u8 = b'+' as u8;
+const FLOOR: u8 = b'.' as u8;
+const TRAP: u8 = b'^' as u8;
+const STAIRS: u8 = b'%' as u8;
+const GOLD: u8 = b'*' as u8;
+const POTION: u8 = b'!' as u8;
+const SCROLL: u8 = b'?' as u8;
+const FOOD: u8 = b':' as u8;
+const WEAPON: u8 = b')' as u8;
+const ARMOR: u8 = b']' as u8;
+const AMULET: u8 = b',' as u8;
+const RING: u8 = b'=' as u8;
+const STICK: u8 = b'/' as u8;
 
 // Object "types" used by get_item()
-const CALLABLE: c_int = -1;
+const CALLABLE: i32 = -1;
 
 // Map flags
-const F_REAL: c_char = 0x10u8 as c_char;
-const F_SEEN: c_char = 0x40u8 as c_char;
-const F_TMASK: c_char = 0x07u8 as c_char;
+const F_REAL: u8 = 0x10u8 as u8;
+const F_SEEN: u8 = 0x40u8 as u8;
+const F_TMASK: u8 = 0x07u8 as u8;
 
 // Escape
-const ESCAPE: c_int = 27;
+const ESCAPE: i32 = 27;
 
 // get_str() return codes
-const NORM: c_int = 0;
+const NORM: i32 = 0;
 
 // Weapon/armor kinds for the wizard ('^I' = CTRL-I) cheat
-const TWOSWORD: c_int = 5;
-const PLATE_MAIL: c_int = 7;
+const TWOSWORD: i32 = 5;
+const PLATE_MAIL: i32 = 7;
 
 // Delayed-action phases
-const BEFORE: c_int = 1;
-const AFTER: c_int = 2;
+const BEFORE: i32 = 1;
+const AFTER: i32 = 2;
 
 /// CTRL(c) macro from rogue.h: `c & 037`.
 ///
@@ -123,9 +121,9 @@ const MASTER: bool = true;
 
 // ─── Static locals for command() ─────────────────────────────────────────────
 
-static mut COUNTCH: c_char = 0;
-static mut DIRECTION: c_char = 0;
-static mut NEWCOUNT: c_uchar = false as c_uchar;
+static mut COUNTCH: u8 = 0;
+static mut DIRECTION: u8 = 0;
+static mut NEWCOUNT: u8 = false as u8;
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
@@ -159,7 +157,7 @@ fn player_has(flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn moat_at(y: c_int, x: c_int) -> *mut Thing {
+unsafe fn moat_at(y: i32, x: i32) -> *mut Thing {
     crate::game::monster_at(y, x)
 }
 
@@ -188,7 +186,7 @@ fn cstr_at(s: &str) -> String {
 /// tr_name, stat_msg, inpack, food_left, equipment, inv_describe.
 pub unsafe fn command() {
     let mut ch: u8;
-    let mut ntimes: c_int = 1; // Number of player moves
+    let mut ntimes: i32 = 1; // Number of player moves
     let mut mp: *mut Thing;
 
     if player_has(MonsterFlags::HASTE) {
@@ -203,11 +201,11 @@ pub unsafe fn command() {
 
     while ntimes > 0 {
         ntimes -= 1;
-        again = false as c_uchar;
+        again = false as u8;
         if has_hit != 0 {
-            look(false as c_uchar);
+            look(false as u8);
             endmsg();
-            has_hit = false as c_uchar;
+            has_hit = false as u8;
         }
 
         /*
@@ -224,9 +222,9 @@ pub unsafe fn command() {
             std::process::exit(1);
         }
 
-        look(true as c_uchar);
+        look(true as u8);
         if running == 0 {
-            door_stop = false as c_uchar;
+            door_stop = false as u8;
         }
         status();
         lastscore = purse;
@@ -236,7 +234,7 @@ pub unsafe fn command() {
             output::refresh(); // Draw screen
         }
         take = 0;
-        after = true as c_uchar;
+        after = true as u8;
 
         /*
          * Read command or continue run
@@ -252,7 +250,7 @@ pub unsafe fn command() {
                 ch = COUNTCH as u8;
             } else {
                 ch = readchar() as u8;
-                move_on = false as c_uchar;
+                move_on = false as u8;
                 if mpos != 0 {
                     // Erase message if it's there
                     msg_str("");
@@ -272,18 +270,18 @@ pub unsafe fn command() {
             /*
              * check for prefixes
              */
-            NEWCOUNT = false as c_uchar;
+            NEWCOUNT = false as u8;
             if ch.is_ascii_digit() {
                 count = 0;
-                NEWCOUNT = true as c_uchar;
+                NEWCOUNT = true as u8;
                 while ch.is_ascii_digit() {
-                    count = count * 10 + (ch - b'0') as c_int;
+                    count = count * 10 + (ch - b'0') as i32;
                     if count > 255 {
                         count = 255;
                     }
                     ch = readchar() as u8;
                 }
-                COUNTCH = ch as c_char;
+                COUNTCH = ch as u8;
                 /*
                  * turn off count for commands which don't make sense
                  * to repeat
@@ -341,8 +339,8 @@ pub unsafe fn command() {
                 l_last_comm = last_comm;
                 l_last_dir = last_dir;
                 l_last_pick = last_pick;
-                last_comm = ch as c_char;
-                last_dir = b'\0' as c_char;
+                last_comm = ch as u8;
+                last_dir = b'\0' as u8;
                 last_pick = std::ptr::null_mut();
             }
 
@@ -367,7 +365,7 @@ pub unsafe fn command() {
 
                         if found {
                             if levit_check() == 0 {
-                                pick_up((*thing_o(obj)).o_type as c_char);
+                                pick_up((*thing_o(obj)).o_type as u8);
                             }
                         } else {
                             if terse == 0 {
@@ -391,14 +389,14 @@ pub unsafe fn command() {
                     b'u' => do_move(-1, 1),
                     b'b' => do_move(1, -1),
                     b'n' => do_move(1, 1),
-                    b'H' => do_run(b'h' as c_char),
-                    b'J' => do_run(b'j' as c_char),
-                    b'K' => do_run(b'k' as c_char),
-                    b'L' => do_run(b'l' as c_char),
-                    b'Y' => do_run(b'y' as c_char),
-                    b'U' => do_run(b'u' as c_char),
-                    b'B' => do_run(b'b' as c_char),
-                    b'N' => do_run(b'n' as c_char),
+                    b'H' => do_run(b'h' as u8),
+                    b'J' => do_run(b'j' as u8),
+                    b'K' => do_run(b'k' as u8),
+                    b'L' => do_run(b'l' as u8),
+                    b'Y' => do_run(b'y' as u8),
+                    b'U' => do_run(b'u' as u8),
+                    b'B' => do_run(b'b' as u8),
+                    b'N' => do_run(b'n' as u8),
                     v if v == ctrl(b'H')
                         || v == ctrl(b'J')
                         || v == ctrl(b'K')
@@ -409,24 +407,24 @@ pub unsafe fn command() {
                         || v == ctrl(b'N') =>
                     {
                         if !player_has(MonsterFlags::BLIND) {
-                            door_stop = true as c_uchar;
-                            firstmove = true as c_uchar;
+                            door_stop = true as u8;
+                            firstmove = true as u8;
                         }
                         if count != 0 && NEWCOUNT == 0 {
                             ch = DIRECTION as u8;
                         } else {
                             // ('A' - CTRL('A')) == 64
                             ch = ch.wrapping_add(64);
-                            DIRECTION = ch as c_char;
+                            DIRECTION = ch as u8;
                         }
                         continue 'dispatch;
                     }
                     b'f' | b'F' => {
                         if ch == b'F' {
-                            kamikaze = true as c_uchar;
+                            kamikaze = true as u8;
                         }
                         if get_dir() == 0 {
-                            after = false as c_uchar;
+                            after = false as u8;
                         } else {
                             let hero = hero_pos();
                             delta.y += hero.y;
@@ -439,12 +437,12 @@ pub unsafe fn command() {
                                     addmsg_str("I see ");
                                 }
                                 msg_str("no monster there");
-                                after = false as c_uchar;
+                                after = false as u8;
                             } else if {
                                 let mut hero_copy = hero_pos();
                                 diag_ok(&raw mut hero_copy, &raw mut delta) != 0
                             } {
-                                to_death = true as c_uchar;
+                                to_death = true as u8;
                                 max_hit = 0;
                                 (*thing_t(mp)).t_flags.insert(MonsterFlags::TARGET);
                                 runch = dir_ch;
@@ -455,7 +453,7 @@ pub unsafe fn command() {
                     }
                     b't' => {
                         if get_dir() == 0 {
-                            after = false as c_uchar;
+                            after = false as u8;
                         } else {
                             missile(delta.y, delta.x);
                         }
@@ -463,26 +461,26 @@ pub unsafe fn command() {
                     b'a' => {
                         if last_comm == 0 {
                             msg_str("you haven't typed a command yet");
-                            after = false as c_uchar;
+                            after = false as u8;
                         } else {
                             ch = last_comm as u8;
-                            again = true as c_uchar;
+                            again = true as u8;
                             continue 'dispatch;
                         }
                     }
                     b'q' => quaff(),
                     b'Q' => {
-                        after = false as c_uchar;
-                        q_comm = true as c_uchar;
+                        after = false as u8;
+                        q_comm = true as u8;
                         quit(0);
-                        q_comm = false as c_uchar;
+                        q_comm = false as u8;
                     }
                     b'i' => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         inventory(crate::game::PLAYER.pack(), 0);
                     }
                     b'I' => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         picky_inven();
                     }
                     b'd' => drop(),
@@ -495,26 +493,26 @@ pub unsafe fn command() {
                     b'R' => ring_off(),
                     b'o' => {
                         option();
-                        after = false as c_uchar;
+                        after = false as u8;
                     }
                     b'c' => {
                         call();
-                        after = false as c_uchar;
+                        after = false as u8;
                     }
                     b'>' => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         d_level();
                     }
                     b'<' => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         u_level();
                     }
                     b'?' => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         help();
                     }
                     b'/' => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         identify();
                     }
                     b's' => search(),
@@ -522,41 +520,41 @@ pub unsafe fn command() {
                         if get_dir() != 0 {
                             do_zap();
                         } else {
-                            after = false as c_uchar;
+                            after = false as u8;
                         }
                     }
                     b'D' => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         discovered();
                     }
                     CTRL_P => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         msg_str(&crate::globals::huh_string());
                     }
                     CTRL_R => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         output::set_clear_on_refresh(Window::Curscr, true);
                         output::refresh_window(Window::Curscr);
                     }
                     b'v' => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         msg_str(&format!(
                             "version {}. (mctesq was here)",
                             crate::vers::release()
                         ));
                     }
                     b'S' => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         save_game();
                     }
                     b'.' => {
                         // Rest command
                     }
                     b' ' => {
-                        after = false as c_uchar; // "Legal" illegal command
+                        after = false as u8; // "Legal" illegal command
                     }
                     b'^' => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         if get_dir() != 0 {
                             let hero = hero_pos();
                             delta.y += hero.y;
@@ -582,16 +580,16 @@ pub unsafe fn command() {
                     }
                     b'+' => {
                         // Wizard toggle (was the `when '+'` arm under `#ifdef MASTER`)
-                        after = false as c_uchar;
+                        after = false as u8;
                         if MASTER {
                             if wizard != 0 {
                                 wizard = 0;
-                                turn_see(true as c_uchar);
+                                turn_see(true as u8);
                                 msg_str("not wizard any more");
                             } else {
                                 wizard = 1;
                                 noscore = 1;
-                                turn_see(false as c_uchar);
+                                turn_see(false as u8);
                                 msg_str(&format!(
                                     "you are suddenly as smart as Ken Arnold in dungeon #{}",
                                     std::ptr::addr_of!(dnum).read()
@@ -600,15 +598,15 @@ pub unsafe fn command() {
                         }
                     }
                     v if v == ESCAPE as u8 => {
-                        door_stop = false as c_uchar;
+                        door_stop = false as u8;
                         count = 0;
-                        after = false as c_uchar;
-                        again = false as c_uchar;
+                        after = false as u8;
+                        again = false as u8;
                     }
                     b'm' => {
-                        move_on = true as c_uchar;
+                        move_on = true as u8;
                         if get_dir() == 0 {
-                            after = false as c_uchar;
+                            after = false as u8;
                         } else {
                             ch = dir_ch as u8;
                             COUNTCH = dir_ch;
@@ -642,13 +640,13 @@ pub unsafe fn command() {
                         );
                     }
                     b'@' => {
-                        stat_msg = true as c_uchar;
+                        stat_msg = true as u8;
                         status();
-                        stat_msg = false as c_uchar;
-                        after = false as c_uchar;
+                        stat_msg = false as u8;
+                        after = false as u8;
                     }
                     _ => {
-                        after = false as c_uchar;
+                        after = false as u8;
                         if MASTER && wizard != 0 {
                             match ch {
                                 b'|' => {
@@ -668,7 +666,7 @@ pub unsafe fn command() {
                                         0,
                                     );
                                 }
-                                CTRL_W => whatis(false as c_uchar, 0),
+                                CTRL_W => whatis(false as u8, 0),
                                 CTRL_D => {
                                     crate::game::set_current_depth(
                                         crate::game::current_depth() + 1,
@@ -692,13 +690,13 @@ pub unsafe fn command() {
                                 CTRL_C => add_pass(),
                                 CTRL_X => {
                                     turn_see(if player_has(MonsterFlags::SEEMONST) {
-                                        true as c_uchar
+                                        true as u8
                                     } else {
-                                        false as c_uchar
+                                        false as u8
                                     });
                                 }
                                 CTRL_TILDE => {
-                                    let item = get_item("charge", STICK as c_int);
+                                    let item = get_item("charge", STICK as i32);
                                     if !item.is_null() {
                                         (*thing_o(item)).o_arm = 10000;
                                     }
@@ -716,26 +714,26 @@ pub unsafe fn command() {
                                     init_weapon(obj, TWOSWORD);
                                     (*thing_o(obj)).o_hplus = 1;
                                     (*thing_o(obj)).o_dplus = 1;
-                                    add_pack(obj, true as c_uchar);
+                                    add_pack(obj, true as u8);
                                     PLAYER.set_weapon(obj);
                                     /*
                                      * And his suit of armor
                                      */
                                     obj = new_item();
-                                    (*thing_o(obj)).o_type = ARMOR as c_int;
+                                    (*thing_o(obj)).o_type = ARMOR as i32;
                                     (*thing_o(obj)).o_which = PLATE_MAIL;
                                     (*thing_o(obj)).o_arm = -5;
                                     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
                                     (*thing_o(obj)).o_count = 1;
                                     (*thing_o(obj)).o_group = 0;
                                     PLAYER.set_armor(obj);
-                                    add_pack(obj, true as c_uchar);
+                                    add_pack(obj, true as u8);
                                 }
                                 b'*' => pr_list(),
-                                _ => illcom(ch as c_int),
+                                _ => illcom(ch as i32),
                             }
                         } else {
-                            illcom(ch as c_int);
+                            illcom(ch as i32);
                         }
                     }
                 }
@@ -750,7 +748,7 @@ pub unsafe fn command() {
             pick_up(take);
         }
         if running == 0 {
-            door_stop = false as c_uchar;
+            door_stop = false as u8;
         }
         if after == 0 {
             ntimes += 1;
@@ -777,14 +775,14 @@ pub unsafe fn command() {
 /// What to do with an illegal command.
 ///
 /// Uses globals: save_msg, count.
-pub unsafe fn illcom(ch: c_int) {
-    save_msg = false as c_uchar;
+pub unsafe fn illcom(ch: i32) {
+    save_msg = false as u8;
     count = 0;
     msg_str(&format!(
         "illegal command '{}'",
         output::format_key(ch as u8)
     ));
-    save_msg = true as c_uchar;
+    save_msg = true as u8;
 }
 
 // ─── search() ─────────────────────────────────────────────────────────────────
@@ -798,7 +796,7 @@ pub unsafe fn search() {
     let hero = hero_pos();
     let ey = hero.y + 1;
     let ex = hero.x + 1;
-    let mut probinc: c_int = 0;
+    let mut probinc: i32 = 0;
     let mut found = false;
 
     if player_has(MonsterFlags::HALU) {
@@ -824,8 +822,8 @@ pub unsafe fn search() {
                             crate::draw::reveal_secret_at(y, x);
                             msg_str("a secret door");
                             found = true;
-                            count = false as c_uchar as c_int;
-                            running = false as c_uchar;
+                            count = false as u8 as i32;
+                            running = false as u8;
                         }
                     }
                     crate::tile::Tile::Trap(_) => {
@@ -848,16 +846,16 @@ pub unsafe fn search() {
                                 msg_str(&name);
                             }
                             found = true;
-                            count = false as c_uchar as c_int;
-                            running = false as c_uchar;
+                            count = false as u8 as i32;
+                            running = false as u8;
                         }
                     }
                     crate::tile::Tile::Empty => {
                         if rnd(3 + probinc) == 0 {
                             crate::draw::reveal_secret_at(y, x);
                             found = true;
-                            count = false as c_uchar as c_int;
-                            running = false as c_uchar;
+                            count = false as u8 as i32;
+                            running = false as u8;
                         }
                     }
                     _ => {}
@@ -869,7 +867,7 @@ pub unsafe fn search() {
     }
 
     if found {
-        look(false as c_uchar);
+        look(false as u8);
     }
 }
 
@@ -888,7 +886,7 @@ pub unsafe fn d_level() {
         msg_str("I see no way down");
     } else {
         crate::game::set_current_depth(crate::game::current_depth() + 1);
-        seenstairs = false as c_uchar;
+        seenstairs = false as u8;
         new_level();
     }
 }
@@ -923,12 +921,12 @@ pub unsafe fn u_level() {
 /// appropriate message.
 ///
 /// Uses globals: player.
-pub unsafe fn levit_check() -> c_uchar {
+pub unsafe fn levit_check() -> u8 {
     if !player_has(MonsterFlags::LEVIT) {
-        return false as c_uchar;
+        return false as u8;
     }
     msg_str("You can't.  You're floating off the ground!");
-    true as c_uchar
+    true as u8
 }
 
 // ─── call() ───────────────────────────────────────────────────────────────────
@@ -1034,7 +1032,7 @@ pub unsafe fn call() {
 ///
 /// Uses globals: after, terse, inv_describe.
 pub unsafe fn current(cur: *mut Thing, how: &str, where_: &str) {
-    after = false as c_uchar;
+    after = false as u8;
     if !cur.is_null() {
         if terse == 0 {
             addmsg_str(&format!(
@@ -1042,13 +1040,13 @@ pub unsafe fn current(cur: *mut Thing, how: &str, where_: &str) {
                 how
             ));
         }
-        inv_describe = false as c_uchar;
+        inv_describe = false as u8;
         addmsg_str(&format!(
             "{}) {}",
             (*thing_o(cur)).o_packch as char,
-            inv_name(cur, true as c_uchar)
+            inv_name(cur, true as u8)
         ));
-        inv_describe = true as c_uchar;
+        inv_describe = true as u8;
         if !where_.is_empty() {
             addmsg_str(&format!(" {}", where_));
         }
@@ -1080,7 +1078,7 @@ pub unsafe fn pr_list() {
         msg_str(&format!(
             "{}) {}",
             (*thing_o(obj)).o_type as u8 as char,
-            inv_name(obj, false as c_uchar)
+            inv_name(obj, false as u8)
         ));
         obj = crate::entity::player::thing_next(obj);
     }

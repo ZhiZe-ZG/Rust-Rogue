@@ -13,12 +13,11 @@ use crate::startup::roll;
 use crate::ui::output;
 use crate::ui::output::msg_str;
 use glam::IVec2;
-use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
-const STICK: c_int = '/' as c_int;
-const WEAPON: c_int = ')' as c_int;
-const FLAME: c_int = 9;
-const VS_MAGIC: c_int = 3;
+const STICK: i32 = '/' as i32;
+const WEAPON: i32 = ')' as i32;
+const FLAME: i32 = 9;
+const VS_MAGIC: i32 = 3;
 
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -42,7 +41,7 @@ enum StickType {
 impl StickType {
     const COUNT: usize = 14;
 
-    fn from_raw(value: c_int) -> Option<Self> {
+    fn from_raw(value: i32) -> Option<Self> {
         match value {
             0 => Some(Self::Light),
             1 => Some(Self::Invis),
@@ -88,12 +87,12 @@ fn hero_pos() -> IVec2 {
 }
 
 #[inline]
-unsafe fn moat_at(y: c_int, x: c_int) -> *mut Thing {
+unsafe fn moat_at(y: i32, x: i32) -> *mut Thing {
     crate::game::monster_at(y, x) as *mut Thing
 }
 
 #[inline]
-unsafe fn ce_coord(a: IVec2, b: IVec2) -> c_uchar {
+unsafe fn ce_coord(a: IVec2, b: IVec2) -> u8 {
     if a.x == b.x && a.y == b.y {
         1
     } else {
@@ -147,7 +146,7 @@ pub unsafe fn do_zap() {
         return;
     }
     if (*thing_o(obj)).o_type != STICK {
-        after = false as c_uchar;
+        after = false as u8;
         msg_str("you can't zap with that!");
         return;
     }
@@ -228,8 +227,8 @@ pub unsafe fn do_zap() {
                 Some(StickType::Fire) => "flame",
                 _ => "ice",
             };
-            let mut hero = hero_pos();
-            fire_bolt(&mut hero, &raw mut delta, name);
+            let hero = hero_pos();
+            fire_bolt(hero, delta, name);
             if let Some(kind) = kind {
                 ws_info[kind.index()].oi_know = true;
             }
@@ -256,10 +255,10 @@ pub unsafe fn drain() {
 
 /// fire_bolt:
 /// Fire a bolt in a given direction from a specific starting place.
-pub unsafe fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, _name: &str) {
-    let mut pos = *start;
-    let mut hero = hero_pos();
-    let hit_hero = start != &mut hero;
+pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
+    let mut pos = start;
+    let hero = hero_pos();
+    let hit_hero = start != hero;
     let mut bolt = Thing::object(ThingObject::default());
 
     (*thing_o(&mut bolt)).o_type = WEAPON;
@@ -268,12 +267,12 @@ pub unsafe fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, _name: &str) {
     (*thing_o(&mut bolt)).o_hplus = 100;
     (*thing_o(&mut bolt)).o_dplus = 0;
 
-    pos.y += (*dir).y;
-    pos.x += (*dir).x;
+    pos.y += dir.y;
+    pos.x += dir.x;
     if hit_hero && ce_coord(pos, hero) != 0 {
         if save(VS_MAGIC) == 0 {
             if (crate::game::PLAYER.stats().hit_points - roll(6, 6)) <= 0 {
-                death('b' as c_char);
+                death('b' as u8);
             }
             msg_str("the bolt hits");
         } else {
@@ -291,19 +290,3 @@ pub unsafe fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, _name: &str) {
     output::refresh();
 }
 
-/// charge_str:
-/// Return an appropriate string for a wand charge display.
-unsafe fn charge_str(obj: *mut Thing) -> *mut c_char {
-    static mut BUF: [u8; 20] = [0; 20];
-    let buf = std::slice::from_raw_parts_mut(std::ptr::addr_of_mut!(BUF).cast::<u8>(), 20);
-    if !(*thing_o(obj)).o_flags.contains(ObjectFlags::KNOW) {
-        buf[0] = 0;
-    } else if terse != 0 {
-        let text = format!(" [{}]", (*thing_o(obj)).o_arm);
-        set_c_string(buf, &text);
-    } else {
-        let text = format!(" [{} charges]", (*thing_o(obj)).o_arm);
-        set_c_string(buf, &text);
-    }
-    std::ptr::addr_of_mut!(BUF).cast::<c_char>()
-}

@@ -1,8 +1,6 @@
 //! Process startup sequence, ported from `src/c/main.c`.
 
-use std::ffi::CStr;
 use std::io::Write;
-use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::command::command;
 use crate::config::GameConfig;
@@ -28,10 +26,10 @@ use crate::ui::Window;
 use glam::IVec2;
 
 const MAXSTR: usize = 1024;
-const AFTER: c_int = 2;
-const WANDERTIME: c_int = 70;
-const INV_CLEAR: c_int = 2;
-const SIGINT: c_int = 2;
+const AFTER: i32 = 2;
+const WANDERTIME: i32 = 70;
+const INV_CLEAR: i32 = 2;
+const SIGINT: i32 = 2;
 
 /// Flushes the process stdout stream (replaces the C `fflush(stdout)` calls).
 #[inline]
@@ -48,7 +46,7 @@ unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
 }
 
 #[inline]
-unsafe fn arg_at(argv: *mut *mut c_char, index: usize) -> *mut c_char {
+unsafe fn arg_at(argv: *mut *mut u8, index: usize) -> *mut u8 {
     *argv.add(index)
 }
 
@@ -58,7 +56,7 @@ unsafe fn arg_at(argv: *mut *mut c_char, index: usize) -> *mut c_char {
 /// Exit the program abnormally.
 ///
 /// No globals used directly.
-pub unsafe extern "C" fn endit(sig: c_int) {
+pub unsafe extern "C" fn endit(sig: i32) {
     let _ = sig;
     fatal("Okay, bye bye!\n");
 }
@@ -81,7 +79,7 @@ pub unsafe fn fatal(s: &str) {
 /// Roll a number of dice.
 ///
 /// No globals used directly (uses rnd()).
-pub unsafe fn roll(mut number: c_int, sides: c_int) -> c_int {
+pub unsafe fn roll(mut number: i32, sides: i32) -> i32 {
     let mut dtotal = 0;
 
     while number > 0 {
@@ -93,7 +91,7 @@ pub unsafe fn roll(mut number: c_int, sides: c_int) -> c_int {
 
 /// tstp:
 /// Handle stop and start signals.
-pub unsafe extern "C" fn tstp(ignored: c_int) {
+pub unsafe extern "C" fn tstp(ignored: i32) {
     let _ = ignored;
 
     /*
@@ -135,9 +133,9 @@ pub unsafe fn playit() {
      * set up defaults for slow terminals
      */
     if runtime::baud_rate() <= 1200 {
-        terse = true as c_uchar;
-        jump = true as c_uchar;
-        see_floor = false as c_uchar;
+        terse = true as u8;
+        jump = true as u8;
+        see_floor = false as u8;
     }
 
     if md_hasclreol() != 0 {
@@ -155,7 +153,7 @@ pub unsafe fn playit() {
     oldpos = crate::game::PLAYER.pos();
     let mut hero_pos = crate::game::PLAYER.pos();
     oldrp = roomin(&raw mut hero_pos);
-    while playing != false as c_uchar {
+    while playing != false as u8 {
         command(); /* Command execution */
     }
     endit(0);
@@ -165,18 +163,18 @@ pub unsafe fn playit() {
 /// Have player make certain, then exit.
 ///
 /// Uses globals: q_comm, mpos, purse, count, to_death.
-pub unsafe extern "C" fn quit(sig: c_int) {
+pub unsafe extern "C" fn quit(sig: i32) {
     let _ = sig;
 
     /*
      * Reset the signal in case we got here via an interrupt
      */
-    if q_comm == false as c_uchar {
+    if q_comm == false as u8 {
         mpos = 0;
     }
     let old_cursor = output::window_cursor(Window::Curscr);
     msg_str("really quit?");
-    if readchar() == b'y' as c_int {
+    if readchar() == b'y' as i32 {
         libc::signal(libc::SIGINT, leave as libc::sighandler_t);
         output::clear_screen();
         let line = format!(
@@ -196,13 +194,13 @@ pub unsafe extern "C" fn quit(sig: c_int) {
         output::refresh();
         mpos = 0;
         count = 0;
-        to_death = false as c_uchar;
+        to_death = false as u8;
     }
 }
 
 /// leave:
 /// Leave quickly, but curteously.
-pub unsafe extern "C" fn leave(sig: c_int) {
+pub unsafe extern "C" fn leave(sig: i32) {
     let _ = sig;
 
     if !runtime::is_shutdown() {
@@ -230,8 +228,8 @@ pub unsafe fn shell() {
     runtime::shutdown();
     resetltchars();
     let _ = std::io::stdout().write_all(b"\n");
-    in_shell = true as c_uchar;
-    after = false as c_uchar;
+    in_shell = true as u8;
+    after = false as u8;
     flush_stdout();
     /*
      * Fork and do a shell
@@ -244,7 +242,7 @@ pub unsafe fn shell() {
     input::set_raw_mode(true);
     input::set_keypad(Window::Stdscr, true);
     playltchars();
-    in_shell = false as c_uchar;
+    in_shell = false as u8;
     wait_for('\n');
     output::set_clear_on_refresh(Window::Stdscr, true);
 }
@@ -253,7 +251,7 @@ pub unsafe fn shell() {
 /// Leave the process properly.
 ///
 /// No globals used directly.
-pub unsafe fn my_exit(st: c_int) -> ! {
+pub unsafe fn my_exit(st: i32) -> ! {
     resetltchars();
     if !runtime::is_shutdown() {
         input::set_echo(true);
@@ -267,7 +265,7 @@ pub unsafe fn my_exit(st: c_int) -> ! {
 /// The game entry point. `args` mirrors the process `argv` (including the
 /// program name at index 0); `src/bin/rogue.rs` calls this with
 /// `std::env::args()`.
-pub unsafe fn rogue_main(args: &[String]) -> c_int {
+pub unsafe fn rogue_main(args: &[String]) -> i32 {
     md_init();
 
     let mut argv: Vec<String> = args.to_vec();
@@ -276,7 +274,7 @@ pub unsafe fn rogue_main(args: &[String]) -> c_int {
         crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
         argv.remove(1);
     }
-    let argc = argv.len() as c_int;
+    let argc = argv.len() as i32;
 
     let home_dir = md_gethomedir();
     crate::globals::set_home(home_dir.clone());
@@ -293,7 +291,7 @@ pub unsafe fn rogue_main(args: &[String]) -> c_int {
         crate::globals::set_whoami(crate::options::filter_printable(&username));
     }
 
-    let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as c_int).unwrap_or(0);
+    let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i32).unwrap_or(0);
     let clock_seed = now_secs + md_getpid();
     dnum = if master_mode_enabled != 0 && wizard != 0 {
         std::env::var("SEED")

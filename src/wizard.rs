@@ -2,8 +2,6 @@
 //!
 //! Ported from `src/c/wizard.c` to Rust.
 use crate::rnd::rnd;
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr;
 
 use crate::config::GameConfig;
@@ -23,20 +21,20 @@ use crate::ui::output::{msg_str, show_win};
 use crate::ui::{output, Window};
 use glam::IVec2;
 
-const POTION: c_int = b'!' as c_int;
-const SCROLL: c_int = b'?' as c_int;
-const FOOD: c_int = b':' as c_int;
-const R_OR_S: c_int = -2;
-const RING: c_int = b'=' as c_int;
-const STICK: c_int = b'/' as c_int;
-const WEAPON: c_int = b')' as c_int;
-const ARMOR: c_int = b']' as c_int;
-const GOLD: c_int = b'*' as c_int;
+const POTION: i32 = b'!' as i32;
+const SCROLL: i32 = b'?' as i32;
+const FOOD: i32 = b':' as i32;
+const R_OR_S: i32 = -2;
+const RING: i32 = b'=' as i32;
+const STICK: i32 = b'/' as i32;
+const WEAPON: i32 = b')' as i32;
+const ARMOR: i32 = b']' as i32;
+const GOLD: i32 = b'*' as i32;
 
-const F_REAL: c_char = 0x10u8 as c_char;
+const F_REAL: u8 = 0x10u8 as u8;
 
-static mut master_mode_enabled: c_uchar = 1;
-static mut wizard: c_int = 0;
+static mut master_mode_enabled: u8 = 1;
+static mut wizard: i32 = 0;
 
 #[inline]
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
@@ -59,24 +57,24 @@ fn proom() -> Option<usize> {
 }
 
 #[inline]
-unsafe fn flat(y: c_int, x: c_int) -> c_char {
+unsafe fn flat(y: i32, x: i32) -> u8 {
     draw::flat_at(y, x)
 }
 
 #[inline]
-unsafe fn chat(y: c_int, x: c_int) -> c_int {
-    draw::cell_glyph(y, x) as c_uchar as c_int
+unsafe fn chat(y: i32, x: i32) -> i32 {
+    draw::cell_glyph(y, x) as u8 as i32
 }
 
 #[inline]
-unsafe fn get_num(ptr: *mut c_int) {
+unsafe fn get_num(ptr: *mut i32) {
     let mut value = 0;
     let mut ch = readchar();
-    while ch == (b' ' as c_int) || ch == (b'\t' as c_int) {
+    while ch == (b' ' as i32) || ch == (b'\t' as i32) {
         ch = readchar();
     }
-    while ch >= (b'0' as c_int) && ch <= (b'9' as c_int) {
-        value = value * 10 + (ch - b'0' as c_int);
+    while ch >= (b'0' as i32) && ch <= (b'9' as i32) {
+        value = value * 10 + (ch - b'0' as i32);
         ch = readchar();
     }
     *ptr = value;
@@ -90,7 +88,7 @@ unsafe fn master_enabled() -> bool {
 use crate::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hit};
 
 
-pub unsafe fn whatis(insist: c_uchar, item_type: c_int) {
+pub unsafe fn whatis(insist: u8, item_type: i32) {
     let pack = crate::game::PLAYER.pack();
     if pack.is_null() {
         msg_str("you don't have anything in your pack to identify");
@@ -135,7 +133,7 @@ pub unsafe fn whatis(insist: c_uchar, item_type: c_int) {
         _ => {}
     }
 
-    msg_str(&inv_name(obj, false as c_uchar));
+    msg_str(&inv_name(obj, false as u8));
 }
 
 pub unsafe fn set_know(obj: *mut Thing, info: *mut CObjInfo) {
@@ -150,7 +148,7 @@ pub unsafe fn set_know(obj: *mut Thing, info: *mut CObjInfo) {
     item.oi_guess = None;
 }
 
-pub fn type_name(item_type: c_int) -> &'static str {
+pub fn type_name(item_type: i32) -> &'static str {
     match item_type {
         x if x == POTION => "potion",
         x if x == SCROLL => "scroll",
@@ -170,7 +168,7 @@ pub unsafe fn create_obj() {
     }
 
     let obj = new_item();
-    let mut ch: c_int;
+    let mut ch: i32;
 
     msg_str("type of item: ");
     (*thing_o(obj)).o_type = readchar();
@@ -181,9 +179,9 @@ pub unsafe fn create_obj() {
     ));
     ch = readchar();
     (*thing_o(obj)).o_which = if (ch as u8).is_ascii_digit() {
-        ch - b'0' as c_int
+        ch - b'0' as i32
     } else {
-        ch - b'a' as c_int + 10
+        ch - b'a' as i32 + 10
     };
 
     (*thing_o(obj)).o_group = 0;
@@ -192,25 +190,25 @@ pub unsafe fn create_obj() {
 
     if (*thing_o(obj)).o_type == WEAPON || (*thing_o(obj)).o_type == ARMOR {
         msg_str("blessing? (+,-,n)");
-        let bless = readchar() as c_char;
+        let bless = readchar() as u8;
         mpos = 0;
-        if bless == ('-' as c_char) {
+        if bless == ('-' as u8) {
             (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
         }
         if (*thing_o(obj)).o_type == WEAPON {
             init_weapon(obj, (*thing_o(obj)).o_which);
-            if bless == ('-' as c_char) {
+            if bless == ('-' as u8) {
                 (*thing_o(obj)).o_hplus -= rnd(3) + 1;
             }
-            if bless == ('+' as c_char) {
+            if bless == ('+' as u8) {
                 (*thing_o(obj)).o_hplus += rnd(3) + 1;
             }
         } else {
             (*thing_o(obj)).o_arm = a_class[(*thing_o(obj)).o_which as usize];
-            if bless == ('-' as c_char) {
+            if bless == ('-' as u8) {
                 (*thing_o(obj)).o_arm += rnd(3) + 1;
             }
-            if bless == ('+' as c_char) {
+            if bless == ('+' as u8) {
                 (*thing_o(obj)).o_arm -= rnd(3) + 1;
             }
         }
@@ -218,12 +216,12 @@ pub unsafe fn create_obj() {
         match (*thing_o(obj)).o_which {
             0 | 1 | 2 | 3 | 6 | 7 => {
                 msg_str("blessing? (+,-,n)");
-                let bless = readchar() as c_char;
+                let bless = readchar() as u8;
                 mpos = 0;
-                if bless == ('-' as c_char) {
+                if bless == ('-' as u8) {
                     (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
                 }
-                (*thing_o(obj)).o_arm = if bless == ('-' as c_char) {
+                (*thing_o(obj)).o_arm = if bless == ('-' as u8) {
                     -1
                 } else {
                     rnd(2) + 1
@@ -241,7 +239,7 @@ pub unsafe fn create_obj() {
         get_num(&mut amount);
     }
 
-    add_pack(obj, false as c_uchar);
+    add_pack(obj, false as u8);
 }
 
 pub unsafe fn teleport() {
@@ -255,7 +253,7 @@ pub unsafe fn teleport() {
         enter_room(&mut hero);
     } else {
         hero = c;
-        look(true as c_uchar);
+        look(true as u8);
     }
     crate::game::PLAYER.set_pos(hero);
     output::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
@@ -269,7 +267,7 @@ pub unsafe fn teleport() {
     }
     no_move = 0;
     count = 0;
-    running = false as c_uchar;
+    running = false as u8;
     flush_type();
 }
 

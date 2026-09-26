@@ -13,8 +13,6 @@ use crate::ui::output;
 use glam::IVec2;
 
 use crate::ui::output::{addmsg_str, msg_str};
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon, Daemon};
 use crate::draw::enter_room;
@@ -31,15 +29,15 @@ use crate::startup::roll;
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 // d_type flags (BEFORE/AFTER)
-const BEFORE: c_int = 1; // spread(1) == 1 always
-const AFTER: c_int = 2; // spread(2) == 2 always
+const BEFORE: i32 = 1; // spread(1) == 1 always
+const AFTER: i32 = 2; // spread(2) == 2 always
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
 
 // Food constants
-const MORETIME: c_int = 150;
-const STARVETIME: c_int = 850;
+const MORETIME: i32 = 150;
+const STARVETIME: i32 = 850;
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
@@ -68,7 +66,7 @@ unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
 
 /// Counter used by rollwand() to pace wandering-monster checks.
 /// Originally defined in daemons.c as `int between = 0;`.
-pub static mut between: c_int = 0;
+pub static mut between: i32 = 0;
 
 // ─── Daemon / fuse callbacks ──────────────────────────────────────────────────
 
@@ -181,7 +179,7 @@ pub unsafe fn stomach() {
         let old_food = food_left;
         food_left -= 1;
         if old_food < -STARVETIME {
-            death(b's' as c_char);
+            death(b's' as u8);
         }
         // The hero is fainting.
         if no_command != 0 || rnd(5) != 0 {
@@ -198,7 +196,7 @@ pub unsafe fn stomach() {
         msg_str(choose_str("You freak out", "You faint"));
     } else {
         let oldfood = food_left;
-        food_left -= ring_eat(LEFT as c_int) + ring_eat(RIGHT as c_int) + 1 - amulet as c_int;
+        food_left -= ring_eat(LEFT as i32) + ring_eat(RIGHT as i32) + 1 - amulet as i32;
 
         if food_left < MORETIME && oldfood >= MORETIME {
             hungry_state = 2;
@@ -221,8 +219,8 @@ pub unsafe fn stomach() {
 
     if hungry_state != orig_hungry {
         PLAYER.remove_flag(MonsterFlags::RUN);
-        running = false as c_uchar;
-        to_death = false as c_uchar;
+        running = false as u8;
+        to_death = false as u8;
         count = 0;
     }
 }

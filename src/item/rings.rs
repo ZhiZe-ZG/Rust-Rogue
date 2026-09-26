@@ -4,8 +4,6 @@
 use crate::entity::player::{ObjectFlags, Thing, ThingObject};
 use crate::item::potions::invis_on;
 use crate::rnd::rnd;
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::game::PLAYER;
 use crate::item::pack::get_item;
@@ -17,7 +15,7 @@ use crate::ui::output::{addmsg_str, msg_str};
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
-const RING_TYPE: c_int = '=' as c_int;
+const RING_TYPE: i32 = '=' as i32;
 const ESCAPE: u8 = 27;
 
 #[repr(u8)]
@@ -43,7 +41,7 @@ impl RingType {
     pub const COUNT: usize = 14;
 
     #[inline]
-    pub const fn from_raw(value: c_int) -> Option<Self> {
+    pub const fn from_raw(value: i32) -> Option<Self> {
         match value {
             0 => Some(Self::Protection),
             1 => Some(Self::AddStrength),
@@ -69,7 +67,7 @@ impl RingType {
     }
 }
 
-const USES: [c_int; RingType::COUNT] = [
+const USES: [i32; RingType::COUNT] = [
     1,  // Protection
     1,  // AddStrength
     1,  // SustainStrength
@@ -197,7 +195,7 @@ pub unsafe fn ring_off() {
 }
 
 /// Asks which hand the player means and returns LEFT, RIGHT, or -1 on escape.
-pub unsafe fn gethand() -> c_int {
+pub unsafe fn gethand() -> i32 {
     loop {
         if terse != 0 {
             msg_str("left or right ring? ");
@@ -212,10 +210,10 @@ pub unsafe fn gethand() -> c_int {
 
         mpos = 0;
         if c == b'l' || c == b'L' {
-            return LEFT as c_int;
+            return LEFT as i32;
         }
         if c == b'r' || c == b'R' {
-            return RIGHT as c_int;
+            return RIGHT as i32;
         }
 
         if terse != 0 {
@@ -227,7 +225,7 @@ pub unsafe fn gethand() -> c_int {
 }
 
 /// Computes per-turn food impact for the ring on the given hand.
-pub unsafe fn ring_eat(hand: c_int) -> c_int {
+pub unsafe fn ring_eat(hand: i32) -> i32 {
     let hand_idx = hand as usize;
     if hand_idx > RIGHT {
         return 0;
@@ -271,7 +269,7 @@ unsafe fn ring_num(obj: *mut Thing) -> String {
         Some(
             RingType::Protection | RingType::AddStrength | RingType::AddDamage | RingType::AddHit,
         ) => {
-            let inner = num((*thing_o(obj)).o_arm, 0, RING_TYPE as c_char);
+            let inner = num((*thing_o(obj)).o_arm, 0, RING_TYPE as u8);
             format!(" [{}]", inner)
         }
         _ => String::new(),

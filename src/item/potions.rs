@@ -2,7 +2,6 @@
 //!
 //! Ported from `src/c/potions.c` to Rust.
 use crate::rnd::rnd;
-use std::os::raw::{c_char, c_int, c_short, c_uchar, c_void};
 use std::ptr;
 
 use crate::daemon::{fuse, lengthen, start_daemon, Daemon};
@@ -22,27 +21,26 @@ use crate::startup::roll;
 use crate::ui::output::{self, msg_str, show_win, status};
 use crate::ui::Window;
 use glam::IVec2;
-use std::ffi::CStr;
 
 /// Potion and status-effect handling for the Rust FFI bridge.
 /// These helpers implement the C-side potion logic so the game can call
 /// them through exported C entry points.
-const POTION: c_int = '!' as c_int;
-const SCROLL: c_int = '?' as c_int;
-const WEAPON: c_int = ')' as c_int;
-const ARMOR: c_int = ']' as c_int;
-const RING: c_int = '=' as c_int;
-const STICK: c_int = '/' as c_int;
-const AMULET: c_int = ',' as c_int;
-const FOOD: c_int = ':' as c_int;
-const MAGIC: c_int = '$' as c_int;
-const STAIRS: c_int = '%' as c_int;
-const FLOOR: c_int = '.' as c_int;
-const PASSAGE: c_int = '#' as c_int;
-const SPACE: c_int = ' ' as c_int;
-const H_WALL: c_int = '-' as c_int;
-const V_WALL: c_int = '|' as c_int;
-const TRAP: c_int = '^' as c_int;
+const POTION: i32 = '!' as i32;
+const SCROLL: i32 = '?' as i32;
+const WEAPON: i32 = ')' as i32;
+const ARMOR: i32 = ']' as i32;
+const RING: i32 = '=' as i32;
+const STICK: i32 = '/' as i32;
+const AMULET: i32 = ',' as i32;
+const FOOD: i32 = ':' as i32;
+const MAGIC: i32 = '$' as i32;
+const STAIRS: i32 = '%' as i32;
+const FLOOR: i32 = '.' as i32;
+const PASSAGE: i32 = '#' as i32;
+const SPACE: i32 = ' ' as i32;
+const H_WALL: i32 = '-' as i32;
+const V_WALL: i32 = '|' as i32;
+const TRAP: i32 = '^' as i32;
 
 const MAXPOTIONS: usize = 14;
 
@@ -67,7 +65,7 @@ enum PotionType {
 
 impl PotionType {
     #[inline]
-    fn from_raw(value: c_int) -> Self {
+    fn from_raw(value: i32) -> Self {
         match value {
             0 => Self::Confuse,
             1 => Self::Lsd,
@@ -93,20 +91,11 @@ impl PotionType {
     }
 }
 
-const HUHDURATION: c_int = 20;
-const SEEDURATION: c_int = 850;
-const HEALTIME: c_int = 30;
-const BEFORE: c_int = 1;
-const AFTER: c_int = 2;
-
-#[repr(C)]
-struct PACT {
-    pa_flags: c_short,
-    pa_daemon: *const c_void,
-    pa_time: c_int,
-    pa_high: *const c_char,
-    pa_straight: *const c_char,
-}
+const HUHDURATION: i32 = 20;
+const SEEDURATION: i32 = 850;
+const HEALTIME: i32 = 30;
+const BEFORE: i32 = 1;
+const AFTER: i32 = 2;
 
 /// External C symbols that provide game state, UI helpers, and gameplay
 /// primitives used by the potion effects.
@@ -162,7 +151,7 @@ unsafe fn next_thing(tp: *mut Thing) -> *mut Thing {
 }
 
 #[inline]
-unsafe fn moat(y: c_int, x: c_int) -> *mut Thing {
+unsafe fn moat(y: i32, x: i32) -> *mut Thing {
     crate::game::monster_at(y, x)
 }
 
@@ -182,7 +171,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
     let (flags, daemon, base_time, high_msg, straight_msg): (
         MonsterFlags,
         Option<Daemon>,
-        c_int,
+        i32,
         String,
         String,
     ) = {
@@ -240,7 +229,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
     if !player_has(flags) {
         crate::game::PLAYER.add_flag(flags);
         fuse(daemon, 0, t, AFTER);
-        look(false as c_uchar);
+        look(false as u8);
     } else {
         lengthen(daemon, t);
     }
@@ -278,7 +267,7 @@ pub unsafe fn quaff() {
     }
 
     discardit = (*thing_o(obj)).o_count == 1;
-    leave_pack(obj, false as c_uchar, false as c_uchar);
+    leave_pack(obj, false as u8, false as u8);
 
     let potion = PotionType::from_raw((*thing_o(obj)).o_which);
     match potion {
@@ -316,11 +305,11 @@ pub unsafe fn quaff() {
             crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
             fuse(
                 Daemon::TurnSee,
-                true as c_uchar as c_int,
+                true as u8 as i32,
                 HUHDURATION,
                 AFTER,
             );
-            if turn_see(false as c_uchar) == 0 {
+            if turn_see(false as u8) == 0 {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
                     choose_str("normal", "strange")
@@ -375,7 +364,7 @@ pub unsafe fn quaff() {
         PotionType::Lsd => {
             if !trip {
                 if player_has(MonsterFlags::SEEMONST) {
-                    turn_see(false as c_uchar);
+                    turn_see(false as u8);
                 }
                 start_daemon(Daemon::Visuals, 0, BEFORE);
                 seenstairs = seen_stairs();
@@ -413,7 +402,7 @@ pub unsafe fn quaff() {
         }
         PotionType::Haste => {
             pot_info_at(PotionType::Haste.index()).oi_know = true;
-            after = false as c_uchar;
+            after = false as u8;
             if add_haste(true) {
                 msg_str("you feel yourself moving much faster");
             }
@@ -465,7 +454,7 @@ pub unsafe fn quaff() {
 
 /// is_magic:
 /// Returns true if an object radiates magic.
-pub unsafe fn is_magic(obj: *mut Thing) -> c_uchar {
+pub unsafe fn is_magic(obj: *mut Thing) -> u8 {
     if obj.is_null() {
         return 0;
     }
@@ -497,7 +486,7 @@ pub unsafe fn invis_on() {
 
 /// turn_see:
 /// Put on or off seeing monsters on this level.
-pub unsafe fn turn_see(turn_off: c_uchar) -> c_uchar {
+pub unsafe fn turn_see(turn_off: u8) -> u8 {
     let mut add_new = 0;
 
     for id in MONSTER_LIST.ids() {
@@ -540,12 +529,12 @@ pub unsafe fn turn_see(turn_off: c_uchar) -> c_uchar {
 
 /// seen_stairs:
 /// Return true if the player has seen the stairs.
-pub unsafe fn seen_stairs() -> c_uchar {
+pub unsafe fn seen_stairs() -> u8 {
     let tp: *mut Thing;
     let stairs = crate::game::stairs();
 
     output::move_cursor(IVec2::new(stairs.x, stairs.y));
-    if output::glyph_at_cursor() as c_int == STAIRS {
+    if output::glyph_at_cursor() as i32 == STAIRS {
         return 1;
     }
     if hero().x == stairs.x && hero().y == stairs.y {
@@ -557,7 +546,7 @@ pub unsafe fn seen_stairs() -> c_uchar {
         if see_monst(tp) != 0 && thing_has(tp, MonsterFlags::RUN) {
             return 1;
         }
-        if player_has(MonsterFlags::SEEMONST) && (*thing_t(tp)).t_oldch as c_int == STAIRS {
+        if player_has(MonsterFlags::SEEMONST) && (*thing_t(tp)).t_oldch as i32 == STAIRS {
             return 1;
         }
     }
@@ -575,6 +564,6 @@ pub unsafe fn raise_level() {
 
 /// do_pot:
 /// Do a potion with the standard fuse/flag setup.
-unsafe fn do_pot(type_id: c_int, knowit: bool) {
+unsafe fn do_pot(type_id: i32, knowit: bool) {
     do_pot_impl(PotionType::from_raw(type_id), knowit);
 }

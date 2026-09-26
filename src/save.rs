@@ -18,11 +18,11 @@ use crate::ui::Window;
 use glam::IVec2;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::os::raw::{c_int, c_uchar};
+
 use std::path::Path;
 
 
-const ESCAPE: c_int = 27;
+const ESCAPE: i32 = 27;
 
 // The version banner written as the header of saved games (was `char version[]`).
 const VERSION: &[u8] = b"rogue (rogueforge) 09/05/07\0";
@@ -37,7 +37,7 @@ unsafe fn restore_player_dead() -> bool {
 
 /// Implements the interactive save command flow and then delegates the actual write to save_file.
 pub unsafe fn save_game() {
-    let mut c: c_int;
+    let mut c: i32;
     let mut buf = crate::globals::file_name();
 
     mpos = 0;
@@ -52,14 +52,14 @@ pub unsafe fn save_game() {
                     msg_str("");
                     return;
                 }
-                if c == 'n' as c_int || c == 'N' as c_int || c == 'y' as c_int || c == 'Y' as c_int
+                if c == 'n' as i32 || c == 'N' as i32 || c == 'y' as i32 || c == 'Y' as i32
                 {
                     break;
                 }
                 msg_str("please answer Y or N");
             }
 
-            if c == 'y' as c_int || c == 'Y' as c_int {
+            if c == 'y' as i32 || c == 'Y' as i32 {
                 output::write_text("Yes\n");
                 output::refresh();
                 buf = crate::globals::file_name();
@@ -93,10 +93,10 @@ pub unsafe fn save_game() {
                         msg_str("");
                         return;
                     }
-                    if c == 'y' as c_int || c == 'Y' as c_int {
+                    if c == 'y' as i32 || c == 'Y' as i32 {
                         break;
                     }
-                    if c == 'n' as c_int || c == 'N' as c_int {
+                    if c == 'n' as i32 || c == 'N' as i32 {
                         continue 'over;
                     }
                     msg_str("Please answer Y or N");
@@ -142,10 +142,10 @@ pub unsafe fn save_file(savef: &mut File) {
 }
 
 /// Restores a saved game from disk, rebuilds runtime state, and resumes the main game loop.
-pub unsafe fn restore(file: &str) -> c_uchar {
+pub unsafe fn restore(file: &str) -> u8 {
     let mut in_buf = [0u8; 1024];
-    let mut lines: c_int = 0;
-    let mut cols: c_int = 0;
+    let mut lines: i32 = 0;
+    let mut cols: i32 = 0;
 
     // The caller passes a file argument (typically "-r").
     let mut file_name = file.to_string();
@@ -238,7 +238,7 @@ pub unsafe fn restore(file: &str) -> c_uchar {
 }
 
 /// Handles signal-triggered autosave by reopening the current save file and delegating to save_file.
-pub unsafe extern "C" fn auto_save(sig: c_int) {
+pub unsafe extern "C" fn auto_save(sig: i32) {
     let _ = sig;
 
     md_ignoreallsignals();

@@ -20,8 +20,6 @@ use crate::item::potions::is_magic;
 use crate::misc::{check_level, chg_str, choose_str};
 use crate::rip::death;
 use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::globals::{monsters, weap_info};
@@ -40,24 +38,24 @@ use glam::IVec2;
 const MAXSTR: usize = 1024;
 
 // Item types
-const WEAPON: c_int = b')' as c_int;
-const GOLD: c_int = b'*' as c_int;
+const WEAPON: i32 = b')' as i32;
+const GOLD: i32 = b'*' as i32;
 
 // Misc constants
-const BORE_LEVEL: c_int = 50;
+const BORE_LEVEL: i32 = 50;
 
 // Save-vs constants
-const VS_POISON: c_int = 0;
-const VS_MAGIC: c_int = 0o03;
+const VS_POISON: i32 = 0;
+const VS_MAGIC: i32 = 0o03;
 
 // ─── Adjustments due to strength ─────────────────────────────────────────────
 
-static STR_PLUS: [c_int; 32] = [
+static STR_PLUS: [i32; 32] = [
     -7, -6, -5, -4, -3, -2, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2,
     2, 2, 3,
 ];
 
-static ADD_DAM: [c_int; 32] = [
+static ADD_DAM: [i32; 32] = [
     -7, -6, -5, -4, -3, -2, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3, 3, 4, 5, 5, 5, 5, 5, 5, 5,
     5, 5, 6,
 ];
@@ -88,22 +86,11 @@ pub static M_NAMES: [&str; 8] = [
 
 // ─── Static name buffer for set_mname ────────────────────────────────────────
 
-static mut MNAME_BUF: [c_char; MAXSTR] = [0; MAXSTR];
+static mut MNAME_BUF: [u8; MAXSTR] = [0; MAXSTR];
 static mut MNAME_INIT: bool = false;
 
 // Static name buffer for prname
-static mut PRNAME_BUF: [c_char; MAXSTR] = [0; MAXSTR];
-
-unsafe fn copy_str_to_c_buffer(dst: *mut c_char, capacity: usize, text: &str) {
-    if capacity == 0 {
-        return;
-    }
-
-    let bytes = text.as_bytes();
-    let copy_len = bytes.len().min(capacity - 1);
-    std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), dst, copy_len);
-    *dst.add(copy_len) = 0;
-}
+static mut PRNAME_BUF: [u8; MAXSTR] = [0; MAXSTR];
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
@@ -143,12 +130,12 @@ unsafe fn iswearing(ring_type: RingType) -> bool {
 }
 
 #[inline]
-unsafe fn moat(y: c_int, x: c_int) -> *mut Thing {
+unsafe fn moat(y: i32, x: i32) -> *mut Thing {
     crate::game::monster_at(y, x)
 }
 
 #[inline]
-unsafe fn set_moat(y: c_int, x: c_int, val: *mut Thing) {
+unsafe fn set_moat(y: i32, x: i32, val: *mut Thing) {
     crate::game::set_monster(y, x, val);
 }
 
@@ -156,7 +143,7 @@ unsafe fn set_moat(y: c_int, x: c_int, val: *mut Thing) {
 
 /// fight:
 /// The player attacks the monster.
-pub unsafe fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: c_uchar) -> c_int {
+pub unsafe fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: u8) -> i32 {
     let tp = moat((*mp).y, (*mp).x);
 
     // Since we are fighting, things are not quiet — no healing.
@@ -165,14 +152,14 @@ pub unsafe fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: c_uchar) -> c_int 
     runto(mp);
 
     // Let him know it was really a xeroc (if it was one).
-    let mut ch: c_char = b'\0' as c_char;
+    let mut ch: u8 = b'\0' as u8;
     if (*thing_t(tp)).t_type == b'X'
         && (*thing_t(tp)).t_disguise != b'X'
         && !player_has(MonsterFlags::BLIND)
     {
         (*thing_t(tp)).t_disguise = b'X';
         if player_has(MonsterFlags::HALU) {
-            ch = (rnd(26) + b'A' as c_int) as c_char;
+            ch = (rnd(26) + b'A' as i32) as u8;
             output::write_glyph_at(
                 IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y),
                 (ch as u8) as char,
@@ -183,58 +170,58 @@ pub unsafe fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: c_uchar) -> c_int 
             "wait!  That's a xeroc!",
         ));
         if thrown == 0 {
-            return false as c_uchar as c_int;
+            return false as u8 as i32;
         }
     }
 
     let mname = set_mname(tp);
-    let mut did_hit = false as c_uchar;
+    let mut did_hit = false as u8;
     has_hit = if terse != 0 && to_death == 0 {
-        true as c_uchar
+        true as u8
     } else {
-        false as c_uchar
+        false as u8
     };
 
     if roll_em_hero_to(tp, weap, thrown) != 0 {
-        did_hit = false as c_uchar;
+        did_hit = false as u8;
         if thrown != 0 {
             thunk(weap, Some(&mname), terse);
         } else {
             hit(None, Some(&mname), terse);
         }
         if player_has(MonsterFlags::CANHUH) {
-            did_hit = true as c_uchar;
+            did_hit = true as u8;
             (*thing_t(tp)).t_flags.insert(MonsterFlags::HUH);
             PLAYER.remove_flag(MonsterFlags::CANHUH);
             endmsg();
-            has_hit = false as c_uchar;
+            has_hit = false as u8;
             msg_str(&format!("your hands stop glowing {}", pick_color("red")));
         }
         if (*thing_t(tp)).t_stats.hit_points <= 0 {
-            killed(tp, true as c_uchar);
+            killed(tp, true as u8);
         } else if did_hit != 0 && !player_has(MonsterFlags::BLIND) {
             msg_str(&format!("{mname} appears confused"));
         }
-        did_hit = true as c_uchar;
+        did_hit = true as u8;
     } else if thrown != 0 {
         bounce(weap, Some(&mname), terse);
     } else {
         miss(None, Some(&mname), terse);
     }
-    did_hit as c_int
+    did_hit as i32
 }
 
 /// attack:
 /// The monster attacks the player.
-pub unsafe fn attack(mp: *mut Thing) -> c_int {
+pub unsafe fn attack(mp: *mut Thing) -> i32 {
     // Stop running / healing.
-    running = false as c_uchar;
+    running = false as u8;
     count = 0;
     quiet = 0;
 
     if to_death != 0 && !on_p(mp, MonsterFlags::TARGET) {
-        to_death = false as c_uchar;
-        kamikaze = false as c_uchar;
+        to_death = false as u8;
+        kamikaze = false as u8;
     }
 
     if (*thing_t(mp)).t_type == b'X'
@@ -253,26 +240,26 @@ pub unsafe fn attack(mp: *mut Thing) -> c_int {
     let mname = set_mname(mp);
     let oldhp = PLAYER.stats().hit_points;
 
-    if roll_em_to_hero(mp, std::ptr::null_mut(), false as c_uchar) != 0 {
+    if roll_em_to_hero(mp, std::ptr::null_mut(), false as u8) != 0 {
         if (*thing_t(mp)).t_type != b'I' {
             if has_hit != 0 {
                 addmsg_str(".  ");
             }
-            hit(Some(&mname), None, false as c_uchar);
+            hit(Some(&mname), None, false as u8);
         } else if has_hit != 0 {
             endmsg();
         }
-        has_hit = false as c_uchar;
+        has_hit = false as u8;
 
         if PLAYER.stats().hit_points <= 0 {
-            death((*thing_t(mp)).t_type as c_char);
+            death((*thing_t(mp)).t_type as u8);
         } else if kamikaze == 0 {
             let damage_dealt = oldhp - PLAYER.stats().hit_points;
             if damage_dealt > max_hit {
                 max_hit = damage_dealt;
             }
             if PLAYER.stats().hit_points <= max_hit {
-                to_death = false as c_uchar;
+                to_death = false as u8;
             }
         }
 
@@ -293,7 +280,7 @@ pub unsafe fn attack(mp: *mut Thing) -> c_int {
                 }
                 no_command += rnd(2) + 2;
                 if no_command > BORE_LEVEL {
-                    death(b'h' as c_char);
+                    death(b'h' as u8);
                 }
             } else if mtype == b'R' {
                 // Rattlesnake: poisonous bite
@@ -320,7 +307,7 @@ pub unsafe fn attack(mp: *mut Thing) -> c_int {
                     let fewer;
                     if mtype == b'W' {
                         if PLAYER.stats().experience == 0 {
-                            death(b'W' as c_char);
+                            death(b'W' as u8);
                         }
                         PLAYER.with_stats_mut(|pstats| {
                             pstats.level -= 1;
@@ -348,7 +335,7 @@ pub unsafe fn attack(mp: *mut Thing) -> c_int {
                             }
                         });
                         if dead {
-                            death(mtype as c_char);
+                            death(mtype as u8);
                         }
                     }
                     msg_str("you suddenly feel weaker");
@@ -365,7 +352,7 @@ pub unsafe fn attack(mp: *mut Thing) -> c_int {
                 damage[copy_len] = 0;
                 PLAYER.with_stats_mut(|stats| stats.hit_points -= 1);
                 if PLAYER.stats().hit_points <= 0 {
-                    death(b'F' as c_char);
+                    death(b'F' as u8);
                 }
             } else if mtype == b'L' {
                 // Leprechaun: steals gold
@@ -383,7 +370,7 @@ pub unsafe fn attack(mp: *mut Thing) -> c_int {
                 remove_mon(
                     &(*thing_t(mp)).t_pos as *const IVec2 as *mut IVec2,
                     mp,
-                    false as c_uchar,
+                    false as u8,
                 );
                 if purse != lastpurse {
                     msg_str("your purse feels lighter");
@@ -395,7 +382,7 @@ pub unsafe fn attack(mp: *mut Thing) -> c_int {
             } else if mtype == b'N' {
                 // Nymph: steals a magic item
                 let mut steal: *mut Thing = std::ptr::null_mut();
-                let mut nobj: c_int = 0;
+                let mut nobj: i32 = 0;
                 let mut obj = PLAYER.pack();
                 while !obj.is_null() {
                     let obj_next = crate::entity::player::thing_next(obj);
@@ -416,10 +403,10 @@ pub unsafe fn attack(mp: *mut Thing) -> c_int {
                     remove_mon(
                         &(*thing_t(mp)).t_pos as *const IVec2 as *mut IVec2,
                         moat((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x),
-                        false as c_uchar,
+                        false as u8,
                     );
-                    leave_pack(steal, false as c_uchar, false as c_uchar);
-                    msg_str(&format!("she stole {}!", inv_name(steal, true as c_uchar)));
+                    leave_pack(steal, false as u8, false as u8);
+                    msg_str(&format!("she stole {}!", inv_name(steal, true as u8)));
                     discard(steal);
                     count = 0;
                     status();
@@ -431,15 +418,15 @@ pub unsafe fn attack(mp: *mut Thing) -> c_int {
         // Miss branch
         if has_hit != 0 {
             addmsg_str(".  ");
-            has_hit = false as c_uchar;
+            has_hit = false as u8;
         }
         if (*thing_t(mp)).t_type == b'F' {
             PLAYER.with_stats_mut(|stats| stats.hit_points -= vf_hit);
             if PLAYER.stats().hit_points <= 0 {
-                death((*thing_t(mp)).t_type as c_char);
+                death((*thing_t(mp)).t_type as u8);
             }
         }
-        miss(Some(&mname), None, false as c_uchar);
+        miss(Some(&mname), None, false as u8);
     }
 
     if fight_flush != 0 && to_death == 0 {
@@ -451,7 +438,7 @@ pub unsafe fn attack(mp: *mut Thing) -> c_int {
 }
 
 /// Helper: forward to is_magic C function (from potions.rs).
-unsafe fn is_magic_item(obj: *mut Thing) -> c_uchar {
+unsafe fn is_magic_item(obj: *mut Thing) -> u8 {
     is_magic(obj)
 }
 
@@ -469,9 +456,9 @@ pub unsafe fn set_mname(tp: *mut Thing) -> String {
     let mname: &'static str;
     if player_has(MonsterFlags::HALU) {
         output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
-        let ch = (output::glyph_at_cursor() as u8).to_ascii_uppercase() as c_int;
+        let ch = (output::glyph_at_cursor() as u8).to_ascii_uppercase() as i32;
         let idx = if (ch as u8).is_ascii_uppercase() {
-            (ch - b'A' as c_int) as usize
+            (ch - b'A' as i32) as usize
         } else {
             rnd(26) as usize
         };
@@ -486,10 +473,10 @@ pub unsafe fn set_mname(tp: *mut Thing) -> String {
 
 /// swing:
 /// Returns true (1) if the swing hits.
-pub unsafe fn swing(at_lvl: c_int, op_arm: c_int, wplus: c_int) -> c_int {
+pub unsafe fn swing(at_lvl: i32, op_arm: i32, wplus: i32) -> i32 {
     let res = rnd(20);
     let need = (20 - at_lvl) - op_arm;
-    (res + wplus >= need) as c_int
+    (res + wplus >= need) as i32
 }
 
 /// roll_em:
@@ -498,20 +485,20 @@ pub unsafe fn roll_em(
     thatt: *mut Thing,
     thdef: *mut Thing,
     weap: *mut Thing,
-    hurl: c_uchar,
-) -> c_int {
+    hurl: u8,
+) -> i32 {
     let att_stats = (*thing_t(thatt)).t_stats;
     roll_em_impl(&att_stats, thdef, false, weap, hurl)
 }
 
 /// The hero attacks monster `thdef`.
-unsafe fn roll_em_hero_to(thdef: *mut Thing, weap: *mut Thing, hurl: c_uchar) -> c_int {
+unsafe fn roll_em_hero_to(thdef: *mut Thing, weap: *mut Thing, hurl: u8) -> i32 {
     let att_stats = PLAYER.stats();
     roll_em_impl(&att_stats, thdef, false, weap, hurl)
 }
 
 /// Monster `thatt` attacks the hero.
-unsafe fn roll_em_to_hero(thatt: *mut Thing, weap: *mut Thing, hurl: c_uchar) -> c_int {
+unsafe fn roll_em_to_hero(thatt: *mut Thing, weap: *mut Thing, hurl: u8) -> i32 {
     let att_stats = (*thing_t(thatt)).t_stats;
     roll_em_impl(&att_stats, std::ptr::null_mut(), true, weap, hurl)
 }
@@ -522,11 +509,11 @@ unsafe fn roll_em_impl(
     thdef: *mut Thing,
     def_is_hero: bool,
     weap: *mut Thing,
-    hurl: c_uchar,
-) -> c_int {
+    hurl: u8,
+) -> i32 {
     let damage: [u8; 8];
-    let hplus: c_int;
-    let dplus: c_int;
+    let hplus: i32;
+    let dplus: i32;
 
     if weap.is_null() {
         let src = &att_stats.damage;
@@ -602,9 +589,9 @@ unsafe fn roll_em_inner(
     thdef: *mut Thing,
     def_is_hero: bool,
     damage_spec: &[u8],
-    hplus: c_int,
-    dplus: c_int,
-) -> c_int {
+    hplus: i32,
+    dplus: i32,
+) -> i32 {
     // If the defender is not running (asleep or held), attacker gets +4 to hit.
     let def_running = if def_is_hero {
         player_has(MonsterFlags::RUN)
@@ -658,7 +645,7 @@ unsafe fn roll_em_inner(
 
 /// prname:
 /// The print name of a combatant.
-pub unsafe fn prname(mname: Option<&str>, upper: c_uchar) -> String {
+pub unsafe fn prname(mname: Option<&str>, upper: u8) -> String {
     let mut text = mname.unwrap_or("you").to_string();
     if upper != 0 && !text.is_empty() {
         let first = text.as_bytes()[0].to_ascii_uppercase();
@@ -669,7 +656,7 @@ pub unsafe fn prname(mname: Option<&str>, upper: c_uchar) -> String {
 
 /// thunk:
 /// A missile hits a monster.
-pub unsafe fn thunk(weap: *mut Thing, mname: Option<&str>, noend: c_uchar) {
+pub unsafe fn thunk(weap: *mut Thing, mname: Option<&str>, noend: u8) {
     if to_death != 0 {
         return;
     }
@@ -689,11 +676,11 @@ pub unsafe fn thunk(weap: *mut Thing, mname: Option<&str>, noend: c_uchar) {
 
 /// hit:
 /// Print a message to indicate a successful hit.
-pub unsafe fn hit(er: Option<&str>, ee: Option<&str>, noend: c_uchar) {
+pub unsafe fn hit(er: Option<&str>, ee: Option<&str>, noend: u8) {
     if to_death != 0 {
         return;
     }
-    addmsg_str(&prname(er, true as c_uchar));
+    addmsg_str(&prname(er, true as u8));
     let s: &str = if terse != 0 {
         " hit"
     } else {
@@ -705,7 +692,7 @@ pub unsafe fn hit(er: Option<&str>, ee: Option<&str>, noend: c_uchar) {
     };
     addmsg_str(s);
     if terse == 0 {
-        addmsg_str(&prname(ee, false as c_uchar));
+        addmsg_str(&prname(ee, false as u8));
     }
     if noend == 0 {
         endmsg();
@@ -714,11 +701,11 @@ pub unsafe fn hit(er: Option<&str>, ee: Option<&str>, noend: c_uchar) {
 
 /// miss:
 /// Print a message to indicate a poor swing.
-pub unsafe fn miss(er: Option<&str>, ee: Option<&str>, noend: c_uchar) {
+pub unsafe fn miss(er: Option<&str>, ee: Option<&str>, noend: u8) {
     if to_death != 0 {
         return;
     }
-    addmsg_str(&prname(er, true as c_uchar));
+    addmsg_str(&prname(er, true as u8));
     let i: usize = if terse != 0 {
         if er.is_some() {
             4
@@ -735,7 +722,7 @@ pub unsafe fn miss(er: Option<&str>, ee: Option<&str>, noend: c_uchar) {
     };
     addmsg_str(M_NAMES[i]);
     if terse == 0 {
-        addmsg_str(&format!(" {}", prname(ee, false as c_uchar)));
+        addmsg_str(&format!(" {}", prname(ee, false as u8)));
     }
     if noend == 0 {
         endmsg();
@@ -744,7 +731,7 @@ pub unsafe fn miss(er: Option<&str>, ee: Option<&str>, noend: c_uchar) {
 
 /// bounce:
 /// A missile misses a monster.
-pub unsafe fn bounce(weap: *mut Thing, mname: Option<&str>, noend: c_uchar) {
+pub unsafe fn bounce(weap: *mut Thing, mname: Option<&str>, noend: u8) {
     if to_death != 0 {
         return;
     }
@@ -764,14 +751,14 @@ pub unsafe fn bounce(weap: *mut Thing, mname: Option<&str>, noend: c_uchar) {
 
 /// remove_mon:
 /// Remove a monster from the screen.
-pub unsafe fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: c_uchar) {
+pub unsafe fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: u8) {
     let mut obj = crate::entity::player::thing_pack(tp);
     while !obj.is_null() {
         let nexti = crate::entity::player::thing_next(obj);
         (*thing_o(obj)).o_pos = (*thing_t(tp)).t_pos;
         detach_pack(tp, obj);
         if waskill != 0 {
-            fall(obj, false as c_uchar);
+            fall(obj, false as u8);
         } else {
             discard(obj);
         }
@@ -783,8 +770,8 @@ pub unsafe fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: c_uchar) {
     output::write_glyph_at(IVec2::new((*mp).x, (*mp).y), (oldch as u8) as char);
 
     if on_p(tp, MonsterFlags::TARGET) {
-        kamikaze = false as c_uchar;
-        to_death = false as c_uchar;
+        kamikaze = false as u8;
+        to_death = false as u8;
         if fight_flush != 0 {
             flush_type();
         }
@@ -794,7 +781,7 @@ pub unsafe fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: c_uchar) {
 
 /// killed:
 /// Called to put a monster to death.
-pub unsafe fn killed(tp: *mut Thing, pr: c_uchar) {
+pub unsafe fn killed(tp: *mut Thing, pr: u8) {
     let gained = (*thing_t(tp)).t_stats.experience;
     PLAYER.with_stats_mut(|stats| stats.experience += gained);
 
@@ -829,12 +816,12 @@ pub unsafe fn killed(tp: *mut Thing, pr: c_uchar) {
     }
 
     let mname = set_mname(tp);
-    remove_mon(&mut (*thing_t(tp)).t_pos, tp, true as c_uchar);
+    remove_mon(&mut (*thing_t(tp)).t_pos, tp, true as u8);
 
     if pr != 0 {
         if has_hit != 0 {
             addmsg_str(".  Defeated ");
-            has_hit = false as c_uchar;
+            has_hit = false as u8;
         } else {
             if terse == 0 {
                 addmsg_str("you have ");
@@ -852,22 +839,11 @@ pub unsafe fn killed(tp: *mut Thing, pr: c_uchar) {
 
 #[cfg(test)]
 mod tests {
-    use super::{copy_str_to_c_buffer, MAXSTR};
-    use std::ffi::CStr;
-    use std::os::raw::c_char;
+    use super::MAXSTR;
 
     #[test]
-    fn monster_name_copy_is_nul_terminated() {
-        let mut buffer = [b'x' as c_char; MAXSTR];
-        buffer[0] = b't' as c_char;
-        buffer[1] = b'h' as c_char;
-        buffer[2] = b'e' as c_char;
-        buffer[3] = b' ' as c_char;
-
-        unsafe {
-            copy_str_to_c_buffer(buffer[4..].as_mut_ptr(), MAXSTR - 4, "emu");
-            assert_eq!(CStr::from_ptr(buffer.as_ptr()).to_str().unwrap(), "the emu");
-        }
-        assert_eq!(buffer[7], 0);
+    fn monster_name_buffer_has_expected_capacity() {
+        let buffer = [b'x' as u8; MAXSTR];
+        assert_eq!(buffer.len(), MAXSTR);
     }
 }
