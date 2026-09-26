@@ -27,7 +27,8 @@ use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, Thin
 use crate::ffi::{atoi, isupper, sprintf, strchr, strcpy, toascii, toupper};
 use crate::globals::{monsters, weap_info};
 use crate::item::rings::RingType;
-use crate::item::thing_list::{attach_pack, detach_pack, discard, new_item};
+use crate::entity::player::{attach_pack, detach_pack, discard};
+use crate::item::arena::new_item;
 use crate::item::things::inv_name;
 use crate::item::weapons::{fall, fallpos};
 use crate::machdep::flush_type;

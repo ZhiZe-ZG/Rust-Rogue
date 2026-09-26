@@ -78,6 +78,14 @@ impl MonsterList {
         self.spawn(Thing::actor(ThingMonster::default()))
     }
 
+    /// Store a fresh default actor and return its stable raw handle.
+    ///
+    /// Producing the pointer uses only safe casts (no `unsafe` block).
+    pub fn new_actor(&self) -> *mut Thing {
+        let id = self.spawn_actor();
+        self.handle(id).unwrap_or(std::ptr::null_mut())
+    }
+
     /// Remove and return the monster behind `id`, if still present.
     pub fn remove(&self, id: MonsterId) -> Option<Thing> {
         let mut slots = self.lock();
@@ -185,3 +193,8 @@ impl MonsterList {
 
 /// The monster list for the live level.
 pub static MONSTER_LIST: MonsterList = MonsterList::new();
+
+/// Allocate a fresh actor (monster) thing and return its stable raw handle.
+pub fn new_actor() -> *mut Thing {
+    MONSTER_LIST.new_actor()
+}

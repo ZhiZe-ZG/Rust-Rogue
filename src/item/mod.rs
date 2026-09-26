@@ -11,6 +11,5 @@ pub mod potions;
 pub mod rings;
 pub mod scrolls;
 pub mod sticks;
-pub mod thing_list;
 pub mod things;
 pub mod weapons;

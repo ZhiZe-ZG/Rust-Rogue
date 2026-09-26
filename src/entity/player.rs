@@ -15,7 +15,7 @@ use crate::game::PLAYER;
 use crate::item::armor::rust_armor;
 use crate::item::pack::floor_at;
 use crate::item::rings::RingType;
-use crate::item::thing_list::new_item;
+use crate::item::arena::new_item;
 use crate::item::weapons::{fall, init_weapon};
 use crate::level::new_level;
 use crate::machdep::flush_type;
@@ -508,6 +508,118 @@ pub unsafe fn set_thing_pack(tp: *mut Thing, value: *mut Thing) {
     (*thing_t(tp)).t_pack = NonNull::new(value);
 }
 
+/// Prepend `item` to the actor `owner`'s pack list.
+pub unsafe fn attach_pack(owner: *mut Thing, item: *mut Thing) {
+    let head = thing_pack(owner);
+    set_thing_next(item, head);
+    set_thing_prev(item, std::ptr::null_mut());
+    if !head.is_null() {
+        set_thing_prev(head, item);
+    }
+    set_thing_pack(owner, item);
+}
+
+/// Unlink `item` from the global player's pack list.
+///
+/// The player is not reachable as a `*mut Thing`, so this mirrors
+/// [`detach_pack`] against the safe [`crate::game::PLAYER`] pack accessors.
+pub unsafe fn detach_pack_from_player(item: *mut Thing) {
+    let prev = thing_prev(item);
+    let next = thing_next(item);
+
+    if crate::game::PLAYER.pack() == item {
+        crate::game::PLAYER.set_pack(next);
+    }
+    if !prev.is_null() {
+        set_thing_next(prev, next);
+    }
+    if !next.is_null() {
+        set_thing_prev(next, prev);
+    }
+    set_thing_next(item, std::ptr::null_mut());
+    set_thing_prev(item, std::ptr::null_mut());
+}
+
+/// Unlink `item` from the actor `owner`'s pack list.
+pub unsafe fn detach_pack(owner: *mut Thing, item: *mut Thing) {
+    let prev = thing_prev(item);
+    let next = thing_next(item);
+
+    if thing_pack(owner) == item {
+        set_thing_pack(owner, next);
+    }
+    if !prev.is_null() {
+        set_thing_next(prev, next);
+    }
+    if !next.is_null() {
+        set_thing_prev(next, prev);
+    }
+    set_thing_next(item, std::ptr::null_mut());
+    set_thing_prev(item, std::ptr::null_mut());
+}
+
+/// Drop every item in the actor `owner`'s pack list.
+pub unsafe fn free_pack(owner: *mut Thing) {
+    let mut item = thing_pack(owner);
+    while !item.is_null() {
+        let next = thing_next(item);
+        discard(item);
+        item = next;
+    }
+    set_thing_pack(owner, std::ptr::null_mut());
+}
+
+/// Unlink `item` from a doubly-linked list, patching its neighbours and
+/// clearing its own header.
+pub unsafe fn detach(list: *mut *mut Thing, item: *mut Thing) {
+    let prev = thing_prev(item);
+    let next = thing_next(item);
+
+    if *list == item {
+        *list = next;
+    }
+    if !prev.is_null() {
+        set_thing_next(prev, next);
+    }
+    if !next.is_null() {
+        set_thing_prev(next, prev);
+    }
+    set_thing_next(item, std::ptr::null_mut());
+    set_thing_prev(item, std::ptr::null_mut());
+}
+
+/// Prepend `item` to a doubly-linked list.
+pub unsafe fn attach(list: *mut *mut Thing, item: *mut Thing) {
+    set_thing_next(item, *list);
+    set_thing_prev(item, std::ptr::null_mut());
+    if !(*list).is_null() {
+        set_thing_prev(*list, item);
+    }
+    *list = item;
+}
+
+/// Drop every item in a doubly-linked list.
+pub unsafe fn free_list(list: *mut *mut Thing) {
+    while !(*list).is_null() {
+        let item = *list;
+        *list = thing_next(item);
+        discard(item);
+    }
+}
+
+/// Discard a thing: monsters are owned by the pointer-free
+/// [`crate::game::MONSTER_LIST`], objects by the item arena.
+///
+/// Safe: it only consults the two safe containers and never dereferences the
+/// handle itself.
+pub fn discard(item: *mut Thing) {
+    if let Some(id) = crate::game::MONSTER_LIST.find(item) {
+        let _ = crate::game::MONSTER_LIST.remove(id);
+        return;
+    }
+    let _ = crate::item::arena::OBJECTS.discard(item);
+}
+
 unsafe extern "C" {
     static mut after: c_uchar;
     static mut count: c_int;
@@ -890,5 +1002,125 @@ pub unsafe extern "C" fn do_move(dy: c_int, dx: c_int) {
                 move_stuff(&mut next_pos, fl);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::item::arena::{allocated_count, new_object};
+
+    /// Serialise the arena assertions; the arena and its counter are process
+    /// globals, so the tests must not interleave allocation/free from several
+    /// threads.
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Prepend/remove across head, middle, tail, and only-element cases, and
+    /// confirm neighbour links and the head pointer are patched correctly.
+    #[test]
+    fn attach_detach_preserves_order_and_links() {
+        let _guard = serial();
+        let a = new_object();
+        let b = new_object();
+        let c = new_object();
+
+        let mut head: *mut Thing = std::ptr::null_mut();
+        unsafe {
+            attach(&mut head, a);
+            attach(&mut head, b);
+            attach(&mut head, c);
+        }
+
+        // Head is the most recently attached; links read c, b, a.
+        assert_eq!(head, c);
+        unsafe {
+            assert_eq!(thing_next(c), b);
+            assert_eq!(thing_next(b), a);
+            assert!(thing_next(a).is_null());
+            assert!(thing_prev(c).is_null());
+            assert_eq!(thing_prev(b), c);
+            assert_eq!(thing_prev(a), b);
+        }
+
+        // Remove the middle element.
+        unsafe {
+            detach(&mut head, b);
+        }
+        assert_eq!(head, c);
+        unsafe {
+            assert_eq!(thing_next(c), a);
+            assert_eq!(thing_prev(a), c);
+            // The removed node's own header is cleared.
+            assert!(thing_next(b).is_null());
+            assert!(thing_prev(b).is_null());
+        }
+
+        // Remove the head element.
+        unsafe {
+            detach(&mut head, c);
+        }
+        assert_eq!(head, a);
+        unsafe {
+            assert!(thing_prev(a).is_null());
+        }
+
+        // Remove the only remaining element.
+        unsafe {
+            detach(&mut head, a);
+        }
+        assert!(head.is_null());
+
+        discard(a);
+        discard(b);
+        discard(c);
+    }
+
+    /// Draining a list while traversing must capture each node's successor
+    /// before the node is freed, and leave the list empty.
+    #[test]
+    fn removal_during_traversal_drains_list() {
+        let _guard = serial();
+        let a = new_object();
+        let b = new_object();
+        let c = new_object();
+
+        let mut head: *mut Thing = std::ptr::null_mut();
+        unsafe {
+            attach(&mut head, a);
+            attach(&mut head, b);
+            attach(&mut head, c);
+        }
+
+        let before = allocated_count();
+        let mut node = head;
+        let mut visited = 0;
+        unsafe {
+            while !node.is_null() {
+                // Capture the successor before the node is freed.
+                let next = thing_next(node);
+                visited += 1;
+                discard(node);
+                node = next;
+            }
+        }
+        assert_eq!(visited, 3);
+        // All three arena entries were released during the traversal.
+        assert_eq!(allocated_count(), before - 3);
+    }
+
+    /// Allocating and discarding objects keeps the tracked count balanced.
+    #[test]
+    fn allocation_count_is_balanced() {
+        let _guard = serial();
+        let before = allocated_count();
+        let a = new_object();
+        let b = new_object();
+        assert_eq!(allocated_count(), before + 2);
+        discard(a);
+        discard(b);
+        assert_eq!(allocated_count(), before);
     }
 }

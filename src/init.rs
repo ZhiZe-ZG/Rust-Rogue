@@ -19,7 +19,7 @@ use std::os::raw::{c_char, c_int, c_uchar};
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::item::pack::add_pack;
-use crate::item::thing_list::new_item;
+use crate::item::arena::new_item;
 use crate::item::weapons::init_weapon;
 
 // ─── Constants ───────────────────────────────────────────────────────────────

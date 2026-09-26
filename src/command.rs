@@ -25,7 +25,7 @@ use crate::item::potions::{quaff, raise_level, turn_see};
 use crate::item::rings::{ring_off, ring_on, RingType};
 use crate::item::scrolls::read_scroll;
 use crate::item::sticks::do_zap;
-use crate::item::thing_list::new_item;
+use crate::item::arena::new_item;
 use crate::item::things::{discovered, drop, inv_name};
 use crate::item::weapons::{init_weapon, missile, wield};
 use crate::level::new_level;

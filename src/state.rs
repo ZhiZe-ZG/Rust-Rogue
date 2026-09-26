@@ -42,7 +42,8 @@ use crate::globals::{
     arm_info, monsters, pot_info, ring_info, scr_info, things, weap_info, ws_info, CMonster,
     CObjInfo,
 };
-use crate::item::thing_list::{allocated_count, new_actor, new_item};
+use crate::game::new_actor;
+use crate::item::arena::{allocated_count, new_item};
 use crate::level::PassageLinks;
 use crate::structure::Room;
 

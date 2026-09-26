@@ -4,16 +4,16 @@
 //! small owned handle stored on [`crate::level::Level`].
 
 use crate::entity::player::Thing;
-use crate::item::thing_list::{attach, detach, free_list};
+use crate::entity::player::{attach, detach, free_list};
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 /// Intrusive linked list of the floor items (objects) for the current level.
 ///
 /// Holds the head of the `l_next`/`l_prev` chain of [`Thing`] objects resting
 /// on the level floor. The allocations themselves are owned by
-/// [`crate::item::thing_list`]; this type is only a handle to the head pointer,
-/// so cloning shares the same list and `Debug`/`Eq` compare the head address,
-/// matching `Level`'s derives.
+/// [`crate::item::arena::OBJECTS`]; this type is only a handle to the head
+/// pointer, so cloning shares the same list and `Debug`/`Eq` compare the head
+/// address, matching `Level`'s derives.
 ///
 /// The head is stored in an [`AtomicPtr`] rather than a bare `*mut Thing`. The
 /// game is single-threaded, but `Level` (which owns this list) is reachable

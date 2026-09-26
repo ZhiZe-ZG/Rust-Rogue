@@ -16,7 +16,7 @@ use crate::globals::{
 };
 use crate::item::rings::RingType;
 use crate::item::sticks::fix_stick;
-use crate::item::thing_list::new_item;
+use crate::item::arena::new_item;
 use crate::item::weapons::init_weapon;
 
 const MAXSTR: usize = 1024;

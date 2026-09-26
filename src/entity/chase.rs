@@ -18,7 +18,7 @@ use crate::game::MONSTER_LIST;
 use crate::globals::monsters;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
-use crate::item::thing_list::attach_pack;
+use crate::entity::player::attach_pack;
 use crate::misc::sign;
 use crate::rnd::rnd;
 use crate::ui::output;

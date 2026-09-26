@@ -17,7 +17,7 @@ use crate::game::PLAYER;
 use crate::globals::{pot_info, CObjInfo};
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
-use crate::item::thing_list::discard;
+use crate::entity::player::discard;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
 use crate::startup::roll;
 use crate::ui::output::{self, msg_str, show_win, status};

@@ -18,7 +18,7 @@
 //! Objects are boxed, so an address produced by [`ThingArena::ptr`] stays valid
 //! until the object is removed from the arena.
 
-use crate::entity::player::Thing;
+use crate::entity::player::{Thing, ThingObject};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
@@ -228,12 +228,59 @@ impl ThingArena {
         let id = self.id_for_ptr(ptr)?;
         self.remove(id)
     }
+
+    /// Store a fresh default object and return its stable raw handle.
+    ///
+    /// The handle is the boxed object's address, valid until it is removed.
+    /// Producing it uses only safe casts (no `unsafe` block).
+    pub fn new_object(&self) -> *mut Thing {
+        let id = self.insert(Thing::object(ThingObject::default()));
+        self.ptr(id)
+    }
+
+    /// Store a fresh default object; the historical item-allocation entry point.
+    pub fn new_item(&self) -> *mut Thing {
+        self.new_object()
+    }
+
+    /// Remove and drop the object at raw handle `ptr`, reporting whether it was
+    /// present. A no-op for a null or already-freed handle.
+    pub fn discard(&self, ptr: *mut Thing) -> bool {
+        self.remove_by_ptr(ptr).is_some()
+    }
+
+    /// Number of live objects (the historical allocation counter).
+    pub fn allocated_count(&self) -> i32 {
+        self.len() as i32
+    }
 }
 
 impl Default for ThingArena {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Generational owner of every live object (item) thing.
+///
+/// Callers that have migrated keep a [`ThingId`]; this global is reached through
+/// the safe allocation/discard helpers below, which return the stable address of
+/// the boxed object for the pointer-based engine boundary.
+pub static OBJECTS: ThingArena = ThingArena::new();
+
+/// Allocate an object (item) thing in the arena and return its stable handle.
+pub fn new_object() -> *mut Thing {
+    OBJECTS.new_object()
+}
+
+/// Allocate an object thing; the historical item-allocation entry point.
+pub fn new_item() -> *mut Thing {
+    OBJECTS.new_item()
+}
+
+/// Number of live objects tracked by the global arena.
+pub fn allocated_count() -> i32 {
+    OBJECTS.allocated_count()
 }
 
 #[cfg(test)]

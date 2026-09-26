@@ -16,7 +16,7 @@ use std::os::raw::{c_char, c_int, c_uchar};
 use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::ffi::snprintf;
 use crate::globals::weap_info;
-use crate::item::thing_list::discard;
+use crate::entity::player::discard;
 use crate::item::things::{dropcheck, inv_name};
 
 const NO_WEAPON: c_int = -1;

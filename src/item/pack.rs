@@ -7,7 +7,8 @@ use std::os::raw::{c_char, c_int, c_uchar};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game::MONSTER_LIST;
 use crate::item::scrolls::ScrollType;
-use crate::item::thing_list::{detach, discard, new_item};
+use crate::entity::player::{detach, discard};
+use crate::item::arena::new_item;
 use crate::item::things::{add_line, inv_name};
 use crate::misc::{find_obj, show_floor};
 use crate::ui::input::readchar;
@@ -308,7 +309,7 @@ pub unsafe extern "C" fn leave_pack(obj: *mut Thing, newobj: c_uchar, all: c_uch
     } else {
         last_pick = std::ptr::null_mut();
         pack_used[(*thing_o(obj)).o_packch as usize - 'a' as usize] = false as c_uchar;
-        crate::item::thing_list::detach_pack_from_player(obj);
+        crate::entity::player::detach_pack_from_player(obj);
     }
     nobj
 }
