@@ -303,14 +303,15 @@ pub unsafe extern "C" fn fire_bolt(start: *mut IVec2, dir: *mut IVec2, name: *mu
 /// Return an appropriate string for a wand charge display.
 unsafe fn charge_str(obj: *mut Thing) -> *mut c_char {
     static mut BUF: [u8; 20] = [0; 20];
+    let buf = std::slice::from_raw_parts_mut(std::ptr::addr_of_mut!(BUF).cast::<u8>(), BUF.len());
     if !(*thing_o(obj)).o_flags.contains(ObjectFlags::KNOW) {
-        BUF[0] = 0;
+        buf[0] = 0;
     } else if terse != 0 {
         let text = format!(" [{}]", (*thing_o(obj)).o_arm);
-        set_c_string(&mut BUF, &text);
+        set_c_string(buf, &text);
     } else {
         let text = format!(" [{} charges]", (*thing_o(obj)).o_arm);
-        set_c_string(&mut BUF, &text);
+        set_c_string(buf, &text);
     }
-    BUF.as_mut_ptr() as *mut c_char
+    std::ptr::addr_of_mut!(BUF).cast::<c_char>()
 }

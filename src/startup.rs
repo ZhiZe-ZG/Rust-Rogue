@@ -269,7 +269,10 @@ pub unsafe extern "C" fn quit(sig: c_int) {
 pub unsafe extern "C" fn leave(sig: c_int) {
     let _ = sig;
 
-    setbuf(c_stdout(), LEAVE_BUF.as_mut_ptr()); /* throw away pending output */
+    setbuf(
+        c_stdout(),
+        std::ptr::addr_of_mut!(LEAVE_BUF).cast::<c_char>(),
+    ); /* throw away pending output */
 
     if !runtime::is_shutdown() {
         runtime::move_physical_cursor(
@@ -355,13 +358,23 @@ pub unsafe extern "C" fn rogue_main(
         .to_bytes_with_nul()
         .len()
         .min(MAXSTR);
-    std::ptr::copy_nonoverlapping(home_dir, home.as_mut_ptr(), home_len);
-    std::ptr::copy_nonoverlapping(home_dir, file_name.as_mut_ptr(), home_len);
+    std::ptr::copy_nonoverlapping(
+        home_dir,
+        std::ptr::addr_of_mut!(home).cast::<c_char>(),
+        home_len,
+    );
+    std::ptr::copy_nonoverlapping(
+        home_dir,
+        std::ptr::addr_of_mut!(file_name).cast::<c_char>(),
+        home_len,
+    );
     let save_name = b"rogue.save\0";
     let name_start = home_len.saturating_sub(1);
     std::ptr::copy_nonoverlapping(
         save_name.as_ptr() as *const c_char,
-        file_name.as_mut_ptr().add(name_start),
+        std::ptr::addr_of_mut!(file_name)
+            .cast::<c_char>()
+            .add(name_start),
         save_name.len(),
     );
 
@@ -373,7 +386,7 @@ pub unsafe extern "C" fn rogue_main(
     if options.is_none() || whoami[0] == 0 {
         let username = md_getusername();
         strucpy(
-            whoami.as_mut_ptr(),
+            std::ptr::addr_of_mut!(whoami).cast::<c_char>(),
             username,
             CStr::from_ptr(username).to_bytes().len() as c_int,
         );
@@ -423,13 +436,13 @@ pub unsafe extern "C" fn rogue_main(
     if master_mode_enabled != 0 && wizard != 0 {
         print!(
             "Hello {}, welcome to dungeon #{}",
-            CStr::from_ptr(whoami.as_ptr()).to_string_lossy(),
+            CStr::from_ptr(std::ptr::addr_of!(whoami).cast::<c_char>()).to_string_lossy(),
             dnum
         );
     } else {
         print!(
             "Hello {}, just a moment while I dig the dungeon...",
-            CStr::from_ptr(whoami.as_ptr()).to_string_lossy()
+            CStr::from_ptr(std::ptr::addr_of!(whoami).cast::<c_char>()).to_string_lossy()
         );
     }
     std::io::stdout()

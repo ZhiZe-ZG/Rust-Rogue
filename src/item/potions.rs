@@ -14,7 +14,7 @@ use crate::entity::chase::see_monst;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::game::MONSTER_LIST;
 use crate::game::PLAYER;
-use crate::globals::pot_info;
+use crate::globals::{pot_info, CObjInfo};
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
 use crate::item::thing_list::discard;
@@ -121,6 +121,17 @@ unsafe extern "C" {
     static mut e_levels: [c_int; 21];
 }
 
+/// A mutable reference to the static `pot_info` entry at `index`.
+///
+/// Uses `addr_of_mut!` so no reference to the whole `static mut` array is
+/// created, matching the sound Rust-2024 access pattern.
+#[inline]
+unsafe fn pot_info_at(index: usize) -> &'static mut CObjInfo {
+    &mut *std::ptr::addr_of_mut!(pot_info)
+        .cast::<CObjInfo>()
+        .add(index)
+}
+
 /// Cast a generic thing pointer to the monster portion of the union.
 #[inline]
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
@@ -218,7 +229,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
         }
     };
 
-    (*pot_info.as_mut_ptr().add(potion.index())).oi_know = knowit;
+    pot_info_at(potion.index()).oi_know = knowit;
 
     let Some(daemon) = daemon else {
         return;
@@ -271,7 +282,7 @@ pub unsafe extern "C" fn quaff() {
     match potion {
         PotionType::Confuse => do_pot_impl(PotionType::Confuse, if trip { false } else { true }),
         PotionType::Poison => {
-            (*pot_info.as_mut_ptr().add(PotionType::Poison.index())).oi_know = true;
+            pot_info_at(PotionType::Poison.index()).oi_know = true;
             if ring_is(PLAYER.left_ring(), RingType::SustainStrength)
                 || ring_is(PLAYER.right_ring(), RingType::SustainStrength)
             {
@@ -283,7 +294,7 @@ pub unsafe extern "C" fn quaff() {
             }
         }
         PotionType::Healing => {
-            (*pot_info.as_mut_ptr().add(PotionType::Healing.index())).oi_know = true;
+            pot_info_at(PotionType::Healing.index()).oi_know = true;
             crate::game::PLAYER.with_stats_mut(|stats| {
                 stats.hit_points += roll(stats.level, 4);
                 if stats.hit_points > stats.max_hit_points {
@@ -295,7 +306,7 @@ pub unsafe extern "C" fn quaff() {
             msg_str("you begin to feel better");
         }
         PotionType::Strength => {
-            (*pot_info.as_mut_ptr().add(PotionType::Strength.index())).oi_know = true;
+            pot_info_at(PotionType::Strength.index()).oi_know = true;
             chg_str(1);
             msg_str("you feel stronger, now.  What bulging muscles!");
         }
@@ -329,7 +340,7 @@ pub unsafe extern "C" fn quaff() {
                             IVec2::new((*thing_o(tp)).o_pos.x, (*thing_o(tp)).o_pos.y),
                         );
                         output::write_window_glyph(window, (MAGIC as u8) as char);
-                        (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know = true;
+                        pot_info_at(PotionType::TrapFind.index()).oi_know = true;
                     }
                     tp = next_thing(tp);
                 }
@@ -351,7 +362,7 @@ pub unsafe extern "C" fn quaff() {
                 }
             }
             if show {
-                (*pot_info.as_mut_ptr().add(PotionType::TrapFind.index())).oi_know = true;
+                pot_info_at(PotionType::TrapFind.index()).oi_know = true;
                 show_win("You sense the presence of magic on this level.--More--");
             } else {
                 msg_str(&format!(
@@ -373,10 +384,10 @@ pub unsafe extern "C" fn quaff() {
         }
         PotionType::SeeInvisible => {
             let _ = snprintf(
-                (&raw mut prbuf) as *mut [c_char; 2048] as *mut c_char,
-                prbuf.len(),
+                std::ptr::addr_of_mut!(prbuf).cast::<c_char>(),
+                2048,
                 c"this potion tastes like %s juice".as_ptr(),
-                fruit.as_ptr(),
+                std::ptr::addr_of!(fruit).cast::<c_char>(),
             );
             show = player_has(MonsterFlags::CANSEE);
             do_pot_impl(PotionType::SeeInvisible, false);
@@ -386,12 +397,12 @@ pub unsafe extern "C" fn quaff() {
             sight();
         }
         PotionType::Raise => {
-            (*pot_info.as_mut_ptr().add(PotionType::Raise.index())).oi_know = true;
+            pot_info_at(PotionType::Raise.index()).oi_know = true;
             msg_str("you suddenly feel much more skillful");
             raise_level();
         }
         PotionType::ExtraHealing => {
-            (*pot_info.as_mut_ptr().add(PotionType::ExtraHealing.index())).oi_know = true;
+            pot_info_at(PotionType::ExtraHealing.index()).oi_know = true;
             crate::game::PLAYER.with_stats_mut(|stats| {
                 stats.hit_points += roll(stats.level, 8);
                 if stats.hit_points > stats.max_hit_points {
@@ -407,7 +418,7 @@ pub unsafe extern "C" fn quaff() {
             msg_str("you begin to feel much better");
         }
         PotionType::Haste => {
-            (*pot_info.as_mut_ptr().add(PotionType::Haste.index())).oi_know = true;
+            pot_info_at(PotionType::Haste.index()).oi_know = true;
             after = false as c_uchar;
             if add_haste(true) {
                 msg_str("you feel yourself moving much faster");
@@ -452,7 +463,7 @@ pub unsafe extern "C" fn quaff() {
     }
 
     status();
-    call_it(&mut pot_info[(*thing_o(obj)).o_which as usize]);
+    call_it(pot_info_at((*thing_o(obj)).o_which as usize));
     if discardit {
         discard(obj);
     }

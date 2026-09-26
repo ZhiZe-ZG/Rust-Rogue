@@ -474,13 +474,16 @@ pub unsafe extern "C" fn sumprobs(info: *mut CObjInfo, bound: c_int) {
 /// Initialize cumulative probabilities for all item types.
 #[no_mangle]
 pub unsafe extern "C" fn init_probs() {
-    sumprobs(things.as_mut_ptr(), NUMTHINGS as c_int);
-    sumprobs(pot_info.as_mut_ptr(), MAXPOTIONS as c_int);
-    sumprobs(scr_info.as_mut_ptr(), MAXSCROLLS as c_int);
-    sumprobs(ring_info.as_mut_ptr(), MAXRINGS as c_int);
-    sumprobs(ws_info.as_mut_ptr(), MAXSTICKS as c_int);
-    sumprobs(weap_info.as_mut_ptr(), MAXWEAPONS as c_int);
-    sumprobs(arm_info.as_mut_ptr(), MAXARMORS as c_int);
+    sumprobs(std::ptr::addr_of_mut!(things).cast(), NUMTHINGS as c_int);
+    sumprobs(std::ptr::addr_of_mut!(pot_info).cast(), MAXPOTIONS as c_int);
+    sumprobs(std::ptr::addr_of_mut!(scr_info).cast(), MAXSCROLLS as c_int);
+    sumprobs(std::ptr::addr_of_mut!(ring_info).cast(), MAXRINGS as c_int);
+    sumprobs(std::ptr::addr_of_mut!(ws_info).cast(), MAXSTICKS as c_int);
+    sumprobs(
+        std::ptr::addr_of_mut!(weap_info).cast(),
+        MAXWEAPONS as c_int,
+    );
+    sumprobs(std::ptr::addr_of_mut!(arm_info).cast(), MAXARMORS as c_int);
 }
 
 /// Return a random colour if the player is hallucinating, otherwise

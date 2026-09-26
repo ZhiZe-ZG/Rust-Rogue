@@ -1307,7 +1307,11 @@ pub fn set_huh_string(text: &str) {
     unsafe {
         let bytes = text.as_bytes();
         let copy_len = bytes.len().min(MAXSTR - 1);
-        std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), huh.as_mut_ptr(), copy_len);
+        std::ptr::copy_nonoverlapping(
+            bytes.as_ptr().cast::<c_char>(),
+            std::ptr::addr_of_mut!(huh).cast::<c_char>(),
+            copy_len,
+        );
         huh[copy_len] = 0;
     }
 }

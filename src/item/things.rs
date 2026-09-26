@@ -85,11 +85,11 @@ unsafe fn copy_to_prbuf(text: &str) -> *mut c_char {
     let copy_len = bytes.len().min(MAXSTR - 1);
     std::ptr::copy_nonoverlapping(
         bytes.as_ptr().cast::<c_char>(),
-        prbuf.as_mut_ptr(),
+        std::ptr::addr_of_mut!(prbuf).cast::<c_char>(),
         copy_len,
     );
     prbuf[copy_len] = 0;
-    prbuf.as_mut_ptr()
+    std::ptr::addr_of_mut!(prbuf).cast::<c_char>()
 }
 
 fn adjust_inventory_case(name: &mut String, drop: c_uchar) {
@@ -124,7 +124,7 @@ unsafe fn pick_one(info: *mut CObjInfo, nitems: c_int) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn inv_name(obj: *mut Thing, drop: c_uchar) -> *mut c_char {
     if obj.is_null() {
-        return prbuf.as_mut_ptr();
+        return std::ptr::addr_of_mut!(prbuf).cast::<c_char>();
     }
 
     let which = (*thing_o(obj)).o_which;
@@ -272,18 +272,25 @@ pub unsafe extern "C" fn new_thing() -> *mut Thing {
     let choice = if no_food > 3 {
         2
     } else {
-        pick_one(things.as_ptr() as *mut CObjInfo, NUMTHINGS as c_int) as c_int
+        pick_one(
+            std::ptr::addr_of!(things).cast::<CObjInfo>().cast_mut(),
+            NUMTHINGS as c_int,
+        ) as c_int
     };
     match choice {
         0 => {
             (*thing_o(cur)).o_type = POTION;
-            (*thing_o(cur)).o_which =
-                pick_one(pot_info.as_ptr() as *mut CObjInfo, MAXPOTIONS as c_int);
+            (*thing_o(cur)).o_which = pick_one(
+                std::ptr::addr_of!(pot_info).cast::<CObjInfo>().cast_mut(),
+                MAXPOTIONS as c_int,
+            );
         }
         1 => {
             (*thing_o(cur)).o_type = SCROLL;
-            (*thing_o(cur)).o_which =
-                pick_one(scr_info.as_ptr() as *mut CObjInfo, MAXSCROLLS as c_int);
+            (*thing_o(cur)).o_which = pick_one(
+                std::ptr::addr_of!(scr_info).cast::<CObjInfo>().cast_mut(),
+                MAXSCROLLS as c_int,
+            );
         }
         2 => {
             (*thing_o(cur)).o_type = FOOD;
@@ -298,7 +305,10 @@ pub unsafe extern "C" fn new_thing() -> *mut Thing {
             (*thing_o(cur)).o_type = WEAPON;
             init_weapon(
                 cur,
-                pick_one(weap_info.as_ptr() as *mut CObjInfo, MAXWEAPONS as c_int),
+                pick_one(
+                    std::ptr::addr_of!(weap_info).cast::<CObjInfo>().cast_mut(),
+                    MAXWEAPONS as c_int,
+                ),
             );
             let r = rnd(100);
             if r < 10 {
@@ -310,8 +320,10 @@ pub unsafe extern "C" fn new_thing() -> *mut Thing {
         }
         4 => {
             (*thing_o(cur)).o_type = ARMOR;
-            (*thing_o(cur)).o_which =
-                pick_one(arm_info.as_ptr() as *mut CObjInfo, MAXARMORS as c_int);
+            (*thing_o(cur)).o_which = pick_one(
+                std::ptr::addr_of!(arm_info).cast::<CObjInfo>().cast_mut(),
+                MAXARMORS as c_int,
+            );
             (*thing_o(cur)).o_arm = a_class[(*thing_o(cur)).o_which as usize];
             let r = rnd(100);
             if r < 20 {
@@ -324,7 +336,7 @@ pub unsafe extern "C" fn new_thing() -> *mut Thing {
         5 => {
             (*thing_o(cur)).o_type = RING;
             let ring_type = RingType::from_raw(pick_one(
-                ring_info.as_ptr() as *mut CObjInfo,
+                std::ptr::addr_of!(ring_info).cast::<CObjInfo>().cast_mut(),
                 MAXRINGS as c_int,
             ))
             .expect("ring metadata produced an invalid ring type");
@@ -349,8 +361,10 @@ pub unsafe extern "C" fn new_thing() -> *mut Thing {
         }
         6 => {
             (*thing_o(cur)).o_type = STICK;
-            (*thing_o(cur)).o_which =
-                pick_one(ws_info.as_ptr() as *mut CObjInfo, MAXSTICKS as c_int);
+            (*thing_o(cur)).o_which = pick_one(
+                std::ptr::addr_of!(ws_info).cast::<CObjInfo>().cast_mut(),
+                MAXSTICKS as c_int,
+            );
             fix_stick(cur);
         }
         _ => {}

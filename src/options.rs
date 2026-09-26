@@ -20,6 +20,8 @@ const MAXINP: usize = 50;
 const INV_OVER: c_int = 0;
 const INV_SLOW: c_int = 1;
 const INV_CLEAR: c_int = 2;
+/// Number of `inv_t_name` entries (the inventory display styles).
+const INV_T_NAME_LEN: usize = 3;
 
 /// One configurable option: its prompt, the global it edits, and the
 /// callbacks that render and read it on the option screen.
@@ -206,7 +208,7 @@ unsafe fn put_str(vp: *mut c_void) {
 unsafe fn put_inv_t(vp: *mut c_void) {
     let ip = vp as *mut c_int;
     let idx = *ip as usize;
-    if idx < unsafe { inv_t_name.len() } {
+    if idx < INV_T_NAME_LEN {
         output::write_window_text(
             Window::Stdscr,
             &CStr::from_ptr(inv_t_name[idx]).to_string_lossy(),
@@ -342,7 +344,7 @@ unsafe fn get_inv_t(vp: *mut c_void, win: Window) -> c_int {
     let mut bad = true;
 
     let origin = output::window_cursor(win);
-    if *ip >= 0 && *ip < inv_t_name.len() as c_int {
+    if *ip >= 0 && *ip < INV_T_NAME_LEN as c_int {
         output::write_window_text(
             win,
             &CStr::from_ptr(inv_t_name[*ip as usize]).to_string_lossy(),
@@ -375,7 +377,7 @@ unsafe fn get_inv_t(vp: *mut c_void, win: Window) -> c_int {
             }
         }
     }
-    if *ip >= 0 && *ip < inv_t_name.len() as c_int {
+    if *ip >= 0 && *ip < INV_T_NAME_LEN as c_int {
         let name = CStr::from_ptr(inv_t_name[*ip as usize]).to_string_lossy();
         let out = format!("{}\n", name);
         output::move_window_cursor(win, origin);
@@ -414,8 +416,9 @@ pub unsafe extern "C" fn parse_opts(str: *mut c_char) {
                         value = value.add(1);
                     }
                     let start_ptr = if !value.is_null() && *value == '~' as c_char {
-                        strcpy(op.o_opt as *mut c_char, home.as_ptr());
-                        (op.o_opt as *mut c_char).add(strlen(home.as_ptr()))
+                        let home_ptr = std::ptr::addr_of!(home).cast::<c_char>();
+                        strcpy(op.o_opt as *mut c_char, home_ptr);
+                        (op.o_opt as *mut c_char).add(strlen(home_ptr))
                     } else {
                         op.o_opt as *mut c_char
                     };
@@ -432,7 +435,7 @@ pub unsafe extern "C" fn parse_opts(str: *mut c_char) {
                         {
                             *tmp = toupper(*tmp as c_int) as c_char;
                         }
-                        for i in 0..inv_t_name.len() {
+                        for i in 0..INV_T_NAME_LEN {
                             if !value.is_null()
                                 && !end.is_null()
                                 && strncmp(value, inv_t_name[i], (end as usize - value as usize))

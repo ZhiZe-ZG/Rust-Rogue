@@ -315,7 +315,9 @@ pub unsafe extern "C" fn leave_pack(obj: *mut Thing, newobj: c_uchar, all: c_uch
 
 #[no_mangle]
 pub unsafe extern "C" fn pack_char() -> c_char {
-    for i in 0..pack_used.len() {
+    // `pack_used` is a 26-entry array (one slot per letter); index it directly so
+    // no shared reference to the mutable static is created.
+    for i in 0..26 {
         if pack_used[i] == 0 {
             pack_used[i] = true as c_uchar;
             return (b'a' + i as u8) as c_char;

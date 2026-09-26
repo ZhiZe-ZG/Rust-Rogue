@@ -137,11 +137,11 @@ pub unsafe extern "C" fn whatis(insist: c_uchar, item_type: c_int) {
     }
 
     match (*thing_o(obj)).o_type {
-        SCROLL => set_know(obj, scr_info.as_mut_ptr()),
-        POTION => set_know(obj, pot_info.as_mut_ptr()),
-        STICK => set_know(obj, ws_info.as_mut_ptr()),
+        SCROLL => set_know(obj, std::ptr::addr_of_mut!(scr_info).cast()),
+        POTION => set_know(obj, std::ptr::addr_of_mut!(pot_info).cast()),
+        STICK => set_know(obj, std::ptr::addr_of_mut!(ws_info).cast()),
         WEAPON | ARMOR => (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW),
-        RING => set_know(obj, ring_info.as_mut_ptr()),
+        RING => set_know(obj, std::ptr::addr_of_mut!(ring_info).cast()),
         _ => {}
     }
 

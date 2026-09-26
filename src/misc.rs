@@ -162,7 +162,7 @@ pub unsafe extern "C" fn eat() {
     if (*thing_o(obj)).o_which == 1 {
         msg_str(&format!(
             "my, that was a yummy {}",
-            CStr::from_ptr(fruit.as_ptr()).to_string_lossy()
+            CStr::from_ptr(std::ptr::addr_of!(fruit).cast()).to_string_lossy()
         ));
     } else if rnd(100) > 70 {
         PLAYER.with_stats_mut(|stats| stats.experience += 1);
@@ -395,8 +395,12 @@ pub unsafe extern "C" fn call_it(info: &mut CObjInfo) {
         } else {
             msg_str("what do you want to call it? ");
         }
-        if get_str(prbuf.as_mut_ptr().cast(), crate::ui::Window::Stdscr) == NORM {
-            let text = CStr::from_ptr(prbuf.as_ptr())
+        if get_str(
+            std::ptr::addr_of_mut!(prbuf).cast(),
+            crate::ui::Window::Stdscr,
+        ) == NORM
+        {
+            let text = CStr::from_ptr(std::ptr::addr_of!(prbuf).cast())
                 .to_string_lossy()
                 .into_owned();
             info.oi_guess = Some(text);

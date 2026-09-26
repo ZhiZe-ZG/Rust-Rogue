@@ -702,14 +702,14 @@ unsafe fn roll_em_inner(
 pub unsafe extern "C" fn prname(mname: *const c_char, upper: c_uchar) -> *mut c_char {
     PRNAME_BUF[0] = 0;
     if mname.is_null() {
-        strcpy(PRNAME_BUF.as_mut_ptr(), c"you".as_ptr());
+        strcpy(std::ptr::addr_of_mut!(PRNAME_BUF).cast(), c"you".as_ptr());
     } else {
-        strcpy(PRNAME_BUF.as_mut_ptr(), mname);
+        strcpy(std::ptr::addr_of_mut!(PRNAME_BUF).cast(), mname);
     }
     if upper != 0 && PRNAME_BUF[0] != 0 {
         PRNAME_BUF[0] = toupper(PRNAME_BUF[0] as c_uchar as c_int) as c_char;
     }
-    PRNAME_BUF.as_mut_ptr()
+    std::ptr::addr_of_mut!(PRNAME_BUF).cast()
 }
 
 /// thunk:

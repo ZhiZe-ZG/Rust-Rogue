@@ -644,7 +644,7 @@ pub unsafe extern "C" fn command() {
                                 turn_see(false as c_uchar);
                                 msg_str(&format!(
                                     "you are suddenly as smart as Ken Arnold in dungeon #{}",
-                                    dnum
+                                    std::ptr::addr_of!(dnum).read()
                                 ));
                             }
                         }
@@ -707,7 +707,10 @@ pub unsafe extern "C" fn command() {
                                 }
                                 b'C' => create_obj(),
                                 b'$' => {
-                                    msg_str(&format!("inpack = {}", inpack));
+                                    msg_str(&format!(
+                                        "inpack = {}",
+                                        std::ptr::addr_of!(inpack).read()
+                                    ));
                                 }
                                 CTRL_G => {
                                     let _ = inventory(
@@ -731,7 +734,10 @@ pub unsafe extern "C" fn command() {
                                 CTRL_F => show_map(),
                                 CTRL_T => teleport(),
                                 CTRL_E => {
-                                    msg_str(&format!("food left: {}", food_left));
+                                    msg_str(&format!(
+                                        "food left: {}",
+                                        std::ptr::addr_of!(food_left).read()
+                                    ));
                                 }
                                 CTRL_C => add_pass(),
                                 CTRL_X => {

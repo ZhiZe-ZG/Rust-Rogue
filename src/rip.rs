@@ -5,7 +5,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_ushort};
 
 use crate::ffi::printf;
-use crate::globals::{allscore, monsters, numscores, Numname};
+use crate::globals::{allscore, monsters, numscores, CMonster, Numname};
 use crate::item::things::inv_name;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
 use crate::mdport::md_getuid;
@@ -115,7 +115,7 @@ pub unsafe extern "C" fn killname(monst: c_char, doart: bool) -> *mut c_char {
     let mut name = String::from("Wally the Wonder Badger");
     if (monst as u8).is_ascii_uppercase() {
         let idx = (monst as u8 - b'A') as usize;
-        let monster = unsafe { &*monsters.get_unchecked(idx) };
+        let monster = unsafe { &*std::ptr::addr_of!(monsters).cast::<CMonster>().add(idx) };
         name = monster.m_name.to_string();
         article = true;
     } else {
@@ -143,12 +143,16 @@ pub unsafe extern "C" fn killname(monst: c_char, doart: bool) -> *mut c_char {
     }
 
     let bytes = name.as_bytes();
-    KILLNAME_BUFFER.fill(0);
+    let buffer = std::slice::from_raw_parts_mut(
+        std::ptr::addr_of_mut!(KILLNAME_BUFFER).cast::<c_char>(),
+        MAXSTR,
+    );
+    buffer.fill(0);
     for (idx, byte) in bytes.iter().enumerate() {
-        KILLNAME_BUFFER[idx] = *byte as c_char;
+        buffer[idx] = *byte as c_char;
     }
-    KILLNAME_BUFFER[bytes.len()] = 0;
-    KILLNAME_BUFFER.as_mut_ptr()
+    buffer[bytes.len()] = 0;
+    std::ptr::addr_of_mut!(KILLNAME_BUFFER).cast::<c_char>()
 }
 
 #[no_mangle]
@@ -258,7 +262,7 @@ pub unsafe extern "C" fn score(amount: c_int, flags: c_int, monst: c_char) {
                 slot -= 1;
             }
 
-            let mut name = CStr::from_ptr(whoami.as_ptr())
+            let mut name = CStr::from_ptr(std::ptr::addr_of!(whoami).cast::<c_char>())
                 .to_string_lossy()
                 .to_string();
             if name.len() >= MAXSTR {
@@ -358,10 +362,15 @@ pub unsafe extern "C" fn death(monst: c_char) {
             } else {
                 "a "
             };
-            let line = format!("{}{} with {} gold", article, killer, purse);
+            let line = format!(
+                "{}{} with {} gold",
+                article,
+                killer,
+                std::ptr::addr_of!(purse).read()
+            );
             output::write_text(&line);
         } else {
-            let line = format!("{} with {} gold", killer, purse);
+            let line = format!("{} with {} gold", killer, std::ptr::addr_of!(purse).read());
             output::write_text(&line);
         }
     } else {
@@ -402,12 +411,13 @@ pub unsafe extern "C" fn death(monst: c_char) {
                 output::write_text_at(IVec2::new(33, 16), &phrase);
             }
         }
-        let hero_name = CStr::from_ptr(whoami.as_ptr()).to_string_lossy();
+        let hero_name =
+            CStr::from_ptr(std::ptr::addr_of!(whoami).cast::<c_char>()).to_string_lossy();
         output::write_text_at(
             IVec2::new(center_string(hero_name.as_ref()) as c_int, 14),
             hero_name.as_ref(),
         );
-        let score_text = format!("{} Au", purse);
+        let score_text = format!("{} Au", std::ptr::addr_of!(purse).read());
         output::move_cursor(IVec2::new(center_string(&score_text) as c_int, 15));
         output::write_text(&score_text);
         let year = 1900 + 0;

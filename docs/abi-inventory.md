@@ -95,22 +95,35 @@ by replacing shared/mutable references to `static mut` with
 `std::ptr::addr_of!` / `std::ptr::addr_of_mut!` at access sites, which is the
 sound, behavior-preserving fix (and the Rust-2024-recommended form).
 
-| Command | Before Stage 3 | After Stage 3 (command.rs slice) |
+| Command | Before Stage 3 | After Stage 3 (widespread slice) |
 | --- | --- | --- |
-| `cargo check --all-targets` warnings | 411 | **400** |
-| `cargo test --all-targets` | 41 passed | **41 passed** |
+| `cargo check --all-targets` warnings | 411 | **334** |
+| `cargo test --all-targets` | 41 passed | **45 passed** |
 | `cargo clippy --all-targets` errors | 0 | **0** |
 
-- **`command.rs`**: the `call()` path that reads/writes the `prbuf`, `huh`,
-  and `ring_info`/`pot_info`/`scr_info`/`ws_info` statics now uses
-  `addr_of!`/`addr_of_mut!` instead of `.as_ptr()`/`.as_mut_ptr()`.
+Converted so far (via `addr_of!`/`addr_of_mut!`, `addr_of!(x).read()` for scalar
+reads, and `addr_of_mut!(x).cast()` for buffer pointers/`strcpy`):
+
+- **`command.rs`**: `call()` `prbuf`/`huh`/item-info pointers; wizard `dnum`,
+  `inpack`, `food_left` reads.
+- **`misc.rs`**: `fruit`/`prbuf` in `eat` and `call_it`.
+- **`globals.rs`**: the `huh` copy in `set_huh_string`.
+- **`entity/fight.rs`**: `PRNAME_BUF` in `prname`.
+- **`item/sticks.rs`**: the `BUF` scratch buffer in `charge_str` (bounded slice
+  from `addr_of_mut!`).
+- **`item/pack.rs`**: `pack_char` indexes the fixed 26-entry `pack_used` array.
+- **`options.rs`**: `home` in `parse_opts`; `inv_t_name` length uses the named
+  `INV_T_NAME_LEN`.
+- **`wizard.rs`**: `scr_info`/`pot_info`/`ws_info`/`ring_info` in `whatis`.
+- **`init.rs`**: `init_probs` passes `addr_of_mut!` tables to `sumprobs`.
+- **`item/potions.rs`**: `pot_info_at` helper replaces `pot_info.as_mut_ptr()`;
+  `prbuf`/`fruit` in the `SeeInvisible` `snprintf`.
+- **`item/things.rs`**: `prbuf` in `copy_to_prbuf`/`inv_name`, and every
+  `pick_one(<table>.as_ptr() as *mut CObjInfo)` now uses `addr_of!(..).cast()`.
+- **`rip.rs`**: `monsters` lookup, `KILLNAME_BUFFER`, and `whoami`/`purse` reads.
 
 Remaining `static_mut_refs` sites by module (to convert the same way):
-`state.rs` (60), `item/potions.rs` (11), `item/things.rs` (10),
-`startup.rs` (9), `rip.rs` (8), `init.rs` (7), `options.rs` (6),
-`wizard.rs` (4), `mdport.rs` (4), `misc.rs` (3), `machdep.rs` (3),
-`item/sticks.rs` (3), `entity/fight.rs` (3), `command.rs` (3),
-`item/pack.rs` (1), `globals.rs` (1).
+`state.rs` (60), `startup.rs` (9), `mdport.rs` (4), `machdep.rs` (3).
 
 ### `cargo check` warning categories (top groups)
 
