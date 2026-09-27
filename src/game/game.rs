@@ -68,6 +68,33 @@ impl CurrentLevel {
     }
 }
 
+/// The [`MonsterId`] occupying `(y, x)`, or `None`.
+///
+/// This is the pointer-free accessor preferred by new code; the per-cell map
+/// already stores a [`MonsterId`] and never a raw pointer.
+#[inline]
+pub fn monster_id_at(y: i32, x: i32) -> Option<crate::game::MonsterId> {
+    MONSTER_MAP.at(y as usize, x as usize)
+}
+
+/// Whether a live monster stands at `(y, x)`.
+#[inline]
+pub fn monster_here(y: i32, x: i32) -> bool {
+    MONSTER_MAP.at(y as usize, x as usize).is_some()
+}
+
+/// Place the monster `id` (or clear the cell with `None`) at `(y, x)`.
+#[inline]
+pub fn set_monster_id(y: i32, x: i32, id: Option<crate::game::MonsterId>) {
+    MONSTER_MAP.set(y as usize, x as usize, id);
+}
+
+/// Clear the monster occupancy at `(y, x)`.
+#[inline]
+pub fn clear_monster(y: i32, x: i32) {
+    MONSTER_MAP.set(y as usize, x as usize, None);
+}
+
 /// Read the monster at `(y, x)` as a raw handle, or null.
 ///
 /// The per-cell map stores a pointer-free [`MonsterId`]; this resolves it to the
@@ -109,7 +136,7 @@ pub unsafe fn clear_level() {
 /// Whether the cell at `(y, x)` can be entered: no monster stands there and the
 /// terrain tile is walkable.
 pub unsafe fn cell_is_walkable(y: i32, x: i32) -> bool {
-    if !monster_at(y, x).is_null() {
+    if monster_here(y, x) {
         return false;
     }
     with_current_level(|level| level.tile_at(y as usize, x as usize).is_walkable())

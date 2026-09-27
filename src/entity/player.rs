@@ -839,7 +839,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
         STAIRS => {
             seenstairs = true as u8;
             running = false as u8;
-            if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
+            if is_upper(ch) || game::monster_here(next_pos.y, next_pos.x) {
                 fight(next_pos, game::PLAYER.weapon(), false as u8);
             } else {
                 take = ch;
@@ -848,7 +848,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
         }
         _ => {
             running = false as u8;
-            if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
+            if is_upper(ch) || game::monster_here(next_pos.y, next_pos.x) {
                 fight(next_pos, game::PLAYER.weapon(), false as u8);
             } else {
                 if ch != STAIRS {
