@@ -85,13 +85,12 @@ fn adjust_inventory_case(name: &mut String, drop: u8) {
 }
 
 #[inline]
-unsafe fn pick_one(info: *mut CObjInfo, nitems: i32) -> i32 {
-    let mut idx = rnd(100);
-    let mut i = 0;
+fn pick_one(info: &[CObjInfo], nitems: usize) -> i32 {
+    let idx = rnd(100);
+    let mut i = 0usize;
     while i < nitems {
-        let prob = (*info.add(i as usize)).oi_prob;
-        if idx < prob {
-            return i;
+        if idx < info[i].oi_prob {
+            return i as i32;
         }
         i += 1;
     }
@@ -246,25 +245,16 @@ pub unsafe fn new_thing() -> *mut Thing {
     let choice = if no_food > 3 {
         2
     } else {
-        pick_one(
-            std::ptr::addr_of!(things).cast::<CObjInfo>().cast_mut(),
-            NUMTHINGS as i32,
-        ) as i32
+        pick_one(&things[..], NUMTHINGS)
     };
     match choice {
         0 => {
-            let which = pick_one(
-                std::ptr::addr_of!(pot_info).cast::<CObjInfo>().cast_mut(),
-                MAXPOTIONS as i32,
-            );
+            let which = pick_one(&pot_info[..], MAXPOTIONS);
             (*thing_o(cur)).o_which = which;
             (*thing_o(cur)).o_type = ItemType::potion(which);
         }
         1 => {
-            let which = pick_one(
-                std::ptr::addr_of!(scr_info).cast::<CObjInfo>().cast_mut(),
-                MAXSCROLLS as i32,
-            );
+            let which = pick_one(&scr_info[..], MAXSCROLLS);
             (*thing_o(cur)).o_which = which;
             (*thing_o(cur)).o_type = ItemType::scroll(which);
         }
@@ -278,13 +268,7 @@ pub unsafe fn new_thing() -> *mut Thing {
             }
         }
         3 => {
-            init_weapon(
-                cur,
-                pick_one(
-                    std::ptr::addr_of!(weap_info).cast::<CObjInfo>().cast_mut(),
-                    MAXWEAPONS as i32,
-                ),
-            );
+            init_weapon(cur, pick_one(&weap_info[..], MAXWEAPONS));
             let r = rnd(100);
             if r < 10 {
                 (*thing_o(cur)).o_flags.insert(ObjectFlags::CURSED);
@@ -294,10 +278,7 @@ pub unsafe fn new_thing() -> *mut Thing {
             }
         }
         4 => {
-            let which = pick_one(
-                std::ptr::addr_of!(arm_info).cast::<CObjInfo>().cast_mut(),
-                MAXARMORS as i32,
-            );
+            let which = pick_one(&arm_info[..], MAXARMORS);
             (*thing_o(cur)).o_which = which;
             (*thing_o(cur)).o_type = ItemType::Armor(which);
             (*thing_o(cur)).o_arm = a_class[(*thing_o(cur)).o_which as usize];
@@ -310,11 +291,8 @@ pub unsafe fn new_thing() -> *mut Thing {
             }
         }
         5 => {
-            let ring_type = RingType::from_raw(pick_one(
-                std::ptr::addr_of!(ring_info).cast::<CObjInfo>().cast_mut(),
-                MAXRINGS as i32,
-            ))
-            .expect("ring metadata produced an invalid ring type");
+            let ring_type = RingType::from_raw(pick_one(&ring_info[..], MAXRINGS))
+                .expect("ring metadata produced an invalid ring type");
             (*thing_o(cur)).o_which = ring_type as i32;
             (*thing_o(cur)).o_type = ItemType::Ring(ring_type);
             match ring_type {
@@ -336,10 +314,7 @@ pub unsafe fn new_thing() -> *mut Thing {
             }
         }
         6 => {
-            let which = pick_one(
-                std::ptr::addr_of!(ws_info).cast::<CObjInfo>().cast_mut(),
-                MAXSTICKS as i32,
-            );
+            let which = pick_one(&ws_info[..], MAXSTICKS);
             (*thing_o(cur)).o_which = which;
             (*thing_o(cur)).o_type = ItemType::stick(which);
             fix_stick(cur);
@@ -391,10 +366,10 @@ pub unsafe fn nameit(
     obj: *mut Thing,
     typ: &str,
     which: &str,
-    op: *mut CObjInfo,
+    op: &CObjInfo,
     prfunc: unsafe fn(*mut Thing) -> String,
 ) {
-    if op.is_null() || obj.is_null() {
+    if obj.is_null() {
         return;
     }
     let typ = typ;
@@ -402,15 +377,15 @@ pub unsafe fn nameit(
     let pr_text = prfunc(obj);
     let count = (*thing_o(obj)).o_count;
 
-    let text = if (*op).oi_know || (*op).oi_guess.is_some() {
+    let text = if op.oi_know || op.oi_guess.is_some() {
         let prefix = if count == 1 {
             format!("A {typ} ")
         } else {
             format!("{count} {typ}s ")
         };
-        if (*op).oi_know {
-            format!("{prefix}of {}{}({which})", (*op).oi_name, pr_text)
-        } else if let Some(guess) = &(*op).oi_guess {
+        if op.oi_know {
+            format!("{prefix}of {}{}({which})", op.oi_name, pr_text)
+        } else if let Some(guess) = &op.oi_guess {
             format!("{prefix}called {guess}{pr_text}({which})")
         } else {
             prefix
@@ -428,18 +403,19 @@ unsafe fn nullstr(_: *mut Thing) -> String {
     String::new()
 }
 
-unsafe fn pick_one_ex(info: *mut CObjInfo, nitems: i32) -> i32 {
+#[allow(dead_code)]
+fn pick_one_ex(info: &[CObjInfo], nitems: usize) -> i32 {
     pick_one(info, nitems)
 }
 
-unsafe fn set_order(order: *mut i32, numthings: i32) {
+#[allow(dead_code)]
+fn set_order(order: &mut [i32]) {
+    let numthings = order.len() as i32;
     for i in 0..numthings {
-        *order.add(i as usize) = i;
+        order[i as usize] = i;
     }
     for i in (1..=numthings).rev() {
         let r = rnd(i);
-        let t = *order.add((i - 1) as usize);
-        *order.add((i - 1) as usize) = *order.add(r as usize);
-        *order.add(r as usize) = t;
+        order.swap((i - 1) as usize, r as usize);
     }
 }

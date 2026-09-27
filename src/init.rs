@@ -343,27 +343,23 @@ pub unsafe fn init_materials() {
 /// Accumulate cumulative probabilities for one item-info table.
 ///
 /// Mirrors the C `sumprobs(struct obj_info *info, int bound)`.
-pub unsafe fn sumprobs(info: *mut CObjInfo, bound: i32) {
-    let endp = info.add(bound as usize);
-    let mut p = info.add(1);
-    while p < endp {
-        (*p).oi_prob += (*p.sub(1)).oi_prob;
-        p = p.add(1);
+pub unsafe fn sumprobs(info: &mut [CObjInfo], bound: usize) {
+    let mut i = 1usize;
+    while i < bound {
+        info[i].oi_prob += info[i - 1].oi_prob;
+        i += 1;
     }
 }
 
 /// Initialize cumulative probabilities for all item types.
 pub unsafe fn init_probs() {
-    sumprobs(std::ptr::addr_of_mut!(things).cast(), NUMTHINGS as i32);
-    sumprobs(std::ptr::addr_of_mut!(pot_info).cast(), MAXPOTIONS as i32);
-    sumprobs(std::ptr::addr_of_mut!(scr_info).cast(), MAXSCROLLS as i32);
-    sumprobs(std::ptr::addr_of_mut!(ring_info).cast(), MAXRINGS as i32);
-    sumprobs(std::ptr::addr_of_mut!(ws_info).cast(), MAXSTICKS as i32);
-    sumprobs(
-        std::ptr::addr_of_mut!(weap_info).cast(),
-        MAXWEAPONS as i32,
-    );
-    sumprobs(std::ptr::addr_of_mut!(arm_info).cast(), MAXARMORS as i32);
+    sumprobs(&mut things[..], NUMTHINGS);
+    sumprobs(&mut pot_info[..], MAXPOTIONS);
+    sumprobs(&mut scr_info[..], MAXSCROLLS);
+    sumprobs(&mut ring_info[..], MAXRINGS);
+    sumprobs(&mut ws_info[..], MAXSTICKS);
+    sumprobs(&mut weap_info[..], MAXWEAPONS);
+    sumprobs(&mut arm_info[..], MAXARMORS);
 }
 
 /// Return a random colour if the player is hallucinating, otherwise

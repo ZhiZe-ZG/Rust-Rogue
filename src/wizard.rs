@@ -112,29 +112,30 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
     }
 
     match (*thing_o(obj)).o_type {
-        ItemType::Scroll(_) => set_know(obj, std::ptr::addr_of_mut!(scr_info).cast()),
-        ItemType::Potion(_) => set_know(obj, std::ptr::addr_of_mut!(pot_info).cast()),
-        ItemType::Stick(_) => set_know(obj, std::ptr::addr_of_mut!(ws_info).cast()),
+        ItemType::Scroll(_) => set_know(obj, &mut scr_info[..]),
+        ItemType::Potion(_) => set_know(obj, &mut pot_info[..]),
+        ItemType::Stick(_) => set_know(obj, &mut ws_info[..]),
         ItemType::Weapon(_) | ItemType::Armor(_) => {
             (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW)
         }
-        ItemType::Ring(_) => set_know(obj, std::ptr::addr_of_mut!(ring_info).cast()),
+        ItemType::Ring(_) => set_know(obj, &mut ring_info[..]),
         _ => {}
     }
 
     msg_str(&inv_name(obj, false as u8));
 }
 
-pub unsafe fn set_know(obj: *mut Thing, info: *mut CObjInfo) {
-    if obj.is_null() || info.is_null() {
+pub unsafe fn set_know(obj: *mut Thing, info: &mut [CObjInfo]) {
+    if obj.is_null() {
         return;
     }
 
     let idx = (*thing_o(obj)).o_which as usize;
-    let item = &mut *info.add(idx);
-    item.oi_know = true;
+    if let Some(item) = info.get_mut(idx) {
+        item.oi_know = true;
+        item.oi_guess = None;
+    }
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    item.oi_guess = None;
 }
 
 pub fn type_name(filter: ItemFilter) -> &'static str {
@@ -334,7 +335,7 @@ mod tests {
                 oi_know: false,
             }];
 
-            set_know(&mut obj, info.as_mut_ptr());
+            set_know(&mut obj, &mut info[..]);
             assert_eq!(info[0].oi_know, true);
             assert!((*thing_o(&mut obj)).o_flags.contains(ObjectFlags::KNOW));
         }

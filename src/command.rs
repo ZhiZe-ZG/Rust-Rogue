@@ -960,18 +960,10 @@ pub unsafe fn call() {
 
     // Magic items keep their call-name in the obj-info table entry.
     let op = match otype {
-        ItemType::Ring(_) => std::ptr::addr_of_mut!(ring_info)
-            .cast::<CObjInfo>()
-            .add((*thing_o(obj)).o_which as usize),
-        ItemType::Potion(_) => std::ptr::addr_of_mut!(pot_info)
-            .cast::<CObjInfo>()
-            .add((*thing_o(obj)).o_which as usize),
-        ItemType::Scroll(_) => std::ptr::addr_of_mut!(scr_info)
-            .cast::<CObjInfo>()
-            .add((*thing_o(obj)).o_which as usize),
-        _ => std::ptr::addr_of_mut!(ws_info)
-            .cast::<CObjInfo>()
-            .add((*thing_o(obj)).o_which as usize),
+        ItemType::Ring(_) => &mut ring_info[..],
+        ItemType::Potion(_) => &mut pot_info[..],
+        ItemType::Scroll(_) => &mut scr_info[..],
+        _ => &mut ws_info[..],
     };
 
     let which = (*thing_o(obj)).o_which as usize;
@@ -982,16 +974,16 @@ pub unsafe fn call() {
         _ => cstr_at(ws_made[which]),
     };
 
-    if let Some(guess) = &(*op).oi_guess {
+    if let Some(guess) = &op[which].oi_guess {
         elsewise = guess.clone();
     }
 
-    if (*op).oi_know {
+    if op[which].oi_know {
         msg_str("that has already been identified");
         return;
     }
 
-    if (*op).oi_guess.is_some() {
+    if op[which].oi_guess.is_some() {
         if terse == 0 {
             addmsg_str("Was ");
         }
@@ -1005,7 +997,7 @@ pub unsafe fn call() {
     }
 
     if let Some(text) = read_line(&elsewise, Window::Stdscr) {
-        (*op).oi_guess = Some(text);
+        op[which].oi_guess = Some(text);
     }
 }
 

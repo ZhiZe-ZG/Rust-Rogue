@@ -118,9 +118,7 @@ use crate::game::globals::{after, e_levels, max_stats, seenstairs, terse};
 /// created, matching the sound Rust-2024 access pattern.
 #[inline]
 unsafe fn pot_info_at(index: usize) -> &'static mut CObjInfo {
-    &mut *std::ptr::addr_of_mut!(pot_info)
-        .cast::<CObjInfo>()
-        .add(index)
+    &mut pot_info[index]
 }
 
 /// Cast a generic thing pointer to the monster portion of the union.

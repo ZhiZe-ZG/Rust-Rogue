@@ -45,11 +45,6 @@ unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
-#[inline]
-unsafe fn arg_at(argv: *mut *mut u8, index: usize) -> *mut u8 {
-    *argv.add(index)
-}
-
 // ── Game control functions ported from src/c/main.c ─────────────────────────
 
 /// endit:
