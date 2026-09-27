@@ -120,11 +120,6 @@ unsafe fn chat(y: i32, x: i32) -> i32 {
 }
 
 #[inline]
-unsafe fn moat(y: i32, x: i32) -> *mut Thing {
-    crate::game::monster_at(y, x)
-}
-
-#[inline]
 unsafe fn copy_c_bytes(dst: &mut [u8], src: &[u8]) {
     let mut i = 0usize;
     while i + 1 < dst.len() && i < src.len() {
@@ -202,14 +197,15 @@ pub unsafe fn fall(obj: *mut Thing, pr: u8) {
         (*thing_o(obj)).o_pos = pos;
 
         if cansee(pos.y, pos.x) != 0 {
-            let m = moat(pos.y, pos.x);
-            if !m.is_null() {
-                (*thing_t(m)).t_oldch = crate::draw::item_glyph((*thing_o(obj)).o_type) as u8;
+            let glyph = crate::draw::item_glyph((*thing_o(obj)).o_type);
+            if let Some(mid) = crate::game::monster_id_at(pos.y, pos.x) {
+                crate::game::MONSTER_LIST.with_mut(mid, |t| {
+                    if let Thing::Monster { data } = t {
+                        data.t_oldch = glyph as u8;
+                    }
+                });
             } else {
-                output::write_glyph_at(
-                    IVec2::new(pos.x, pos.y),
-                    crate::draw::item_glyph((*thing_o(obj)).o_type),
-                );
+                output::write_glyph_at(IVec2::new(pos.x, pos.y), glyph);
             }
         }
 
