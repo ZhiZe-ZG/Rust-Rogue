@@ -151,7 +151,7 @@ pub unsafe fn missile(ydelta: i32, xdelta: i32) {
     do_motion(obj, ydelta, xdelta);
 
     let o = thing_o(obj);
-    if moat((*o).o_pos.y, (*o).o_pos.x).is_null()
+    if !crate::game::monster_here((*o).o_pos.y, (*o).o_pos.x)
         || hit_monster((*o).o_pos.y, (*o).o_pos.x, obj) == 0
     {
         fall(obj, true as u8);
