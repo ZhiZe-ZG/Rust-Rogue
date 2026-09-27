@@ -10,6 +10,7 @@ const SCORELINE_LEN: usize = 100;
 
 /// On-disk scoreboard entry layout (legacy score-file representation).
 #[repr(C)]
+#[derive(Clone)]
 pub struct Score {
     pub sc_uid: u32,
     pub sc_score: i32,
@@ -34,13 +35,9 @@ fn parse_scoreline(line: &[u8]) -> Option<(u32, i32, u32, u16, i32, u32)> {
     Some((uid, score, flags, monster, level, time))
 }
 
-/// Reads the on-disk scoreboard into the caller-provided score array using the legacy file format.
-pub unsafe fn rd_score(top_ten: *mut Score) {
+/// Reads the on-disk scoreboard into the caller-provided score slice using the legacy file format.
+pub unsafe fn rd_score(top_ten: &mut [Score]) {
     let mut scoreline = [0u8; SCORELINE_LEN];
-
-    if top_ten.is_null() {
-        return;
-    }
 
     let Some(file) = scoreboard.as_mut() else {
         return;
@@ -48,33 +45,25 @@ pub unsafe fn rd_score(top_ten: *mut Score) {
 
     let _ = file.seek(SeekFrom::Start(0));
 
-    for i in 0..numscores as usize {
-        let entry = top_ten.add(i);
-        let _ = file.read_exact(std::slice::from_raw_parts_mut(
-            (*entry).sc_name.as_mut_ptr(),
-            MAXSTR,
-        ));
+    for entry in top_ten.iter_mut().take(numscores as usize) {
+        let _ = file.read_exact(&mut entry.sc_name);
         let _ = file.read_exact(&mut scoreline);
         if let Some((uid, score, flags, monster, level, time)) = parse_scoreline(&scoreline) {
-            (*entry).sc_uid = uid;
-            (*entry).sc_score = score;
-            (*entry).sc_flags = flags;
-            (*entry).sc_monster = monster;
-            (*entry).sc_level = level;
-            (*entry).sc_time = time;
+            entry.sc_uid = uid;
+            entry.sc_score = score;
+            entry.sc_flags = flags;
+            entry.sc_monster = monster;
+            entry.sc_level = level;
+            entry.sc_time = time;
         }
     }
 
     let _ = file.seek(SeekFrom::Start(0));
 }
 
-/// Serializes the caller-provided score array back into the legacy scoreboard file format.
-pub unsafe fn wr_score(top_ten: *mut Score) {
+/// Serializes the caller-provided score slice back into the legacy scoreboard file format.
+pub unsafe fn wr_score(top_ten: &[Score]) {
     let mut scoreline = [0u8; SCORELINE_LEN];
-
-    if top_ten.is_null() {
-        return;
-    }
 
     let Some(file) = scoreboard.as_mut() else {
         return;
@@ -82,19 +71,18 @@ pub unsafe fn wr_score(top_ten: *mut Score) {
 
     let _ = file.seek(SeekFrom::Start(0));
 
-    for i in 0..numscores as usize {
-        let entry = top_ten.add(i);
+    for entry in top_ten.iter().take(numscores as usize) {
         scoreline.fill(0);
 
-        let _ = file.write_all(std::slice::from_raw_parts((*entry).sc_name.as_ptr(), MAXSTR));
+        let _ = file.write_all(&entry.sc_name);
         let text = format!(
             " {} {} {} {} {} {:x} \n",
-            (*entry).sc_uid,
-            (*entry).sc_score,
-            (*entry).sc_flags,
-            (*entry).sc_monster,
-            (*entry).sc_level,
-            (*entry).sc_time,
+            entry.sc_uid,
+            entry.sc_score,
+            entry.sc_flags,
+            entry.sc_monster,
+            entry.sc_level,
+            entry.sc_time,
         );
         let bytes = text.as_bytes();
         let copy_len = bytes.len().min(SCORELINE_LEN);

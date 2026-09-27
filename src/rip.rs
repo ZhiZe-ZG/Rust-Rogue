@@ -8,7 +8,7 @@ use crate::item::item_type::ItemType;
 use crate::item::things::inv_name;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
 use crate::mdport::md_getuid;
-use crate::score::{rd_score, wr_score};
+use crate::score::{rd_score, wr_score, Score};
 use crate::startup::my_exit;
 use crate::ui::input::wait_for;
 use crate::ui::output;
@@ -33,18 +33,6 @@ pub const RIP_ART: &[&str] = &[
 ];
 
 static mut KILLNAME_BUFFER: [u8; MAXSTR] = [0; MAXSTR];
-
-#[repr(C)]
-#[derive(Clone)]
-pub struct Score {
-    pub sc_uid: u32,
-    pub sc_score: i32,
-    pub sc_flags: u32,
-    pub sc_monster: u16,
-    pub sc_name: [u8; MAXSTR],
-    pub sc_level: i32,
-    pub sc_time: u32,
-}
 
 use crate::game::globals::{amulet, max_level, noscore, purse, tombstone, wizard};
 
@@ -193,7 +181,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
         output::refresh();
     }
 
-    rd_score(top_ten.as_mut_ptr().cast());
+    rd_score(top_ten.as_mut_slice());
 
     let mut sc2 = None;
     if noscore == 0 {
@@ -295,7 +283,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
     }
 
     if sc2.is_some() && lock_sc() != 0 {
-        wr_score(top_ten.as_mut_ptr().cast());
+        wr_score(top_ten.as_slice());
         unlock_sc();
     }
 }

@@ -189,7 +189,7 @@ pub unsafe fn chg_str(amt: i32) {
     }
 }
 
-pub unsafe fn add_str(sp: *mut u32, amt: i32) {
+pub fn add_str(sp: &mut u32, amt: i32) {
     let newv = (*sp).wrapping_add(amt as u32);
     if newv < 3 {
         *sp = 3;

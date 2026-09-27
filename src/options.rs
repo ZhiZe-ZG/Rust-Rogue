@@ -3,7 +3,6 @@
 //! Ported from `src/c/options.c` to Rust.
 
 use crate::draw::{erase_lamp, look};
-use crate::entity::player::{Thing, ThingMonster};
 use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::{output, Window};
 use glam::IVec2;
@@ -29,35 +28,66 @@ enum StrTarget {
     File,
 }
 
-/// Typed target for an option's backing global, replacing the former
-/// type-erased `*mut u8`. Each variant carries a raw pointer to the exact
-/// global it edits, so the option screen never has to guess the pointee type.
+/// Identifies a boolean global an option edits.
+#[derive(Clone, Copy)]
+enum BoolFlag {
+    Terse,
+    FightFlush,
+    Jump,
+    SeeFloor,
+    Passgo,
+    Tombstone,
+}
+
+impl BoolFlag {
+    /// The current value of the flag.
+    #[inline]
+    unsafe fn get(self) -> bool {
+        match self {
+            BoolFlag::Terse => terse != 0,
+            BoolFlag::FightFlush => fight_flush != 0,
+            BoolFlag::Jump => jump != 0,
+            BoolFlag::SeeFloor => see_floor != 0,
+            BoolFlag::Passgo => passgo != 0,
+            BoolFlag::Tombstone => tombstone != 0,
+        }
+    }
+
+    /// Set the flag.
+    #[inline]
+    unsafe fn set(self, on: bool) {
+        let value = on as u8;
+        match self {
+            BoolFlag::Terse => terse = value,
+            BoolFlag::FightFlush => fight_flush = value,
+            BoolFlag::Jump => jump = value,
+            BoolFlag::SeeFloor => see_floor = value,
+            BoolFlag::Passgo => passgo = value,
+            BoolFlag::Tombstone => tombstone = value,
+        }
+    }
+}
+
+/// Which backing global an option edits, replacing the former type-erased
+/// `*mut u8`/`*mut i32`. Each variant names the global, so the option screen
+/// reads and writes it through typed accessors instead of a raw pointer.
 #[derive(Clone, Copy)]
 enum OptTarget {
     /// No backing global (string options edit via [`StrTarget`]).
     None,
-    /// A boolean flag stored in a global `u8`.
-    Bool(*mut u8),
-    /// The inventory display style, stored in a global `i32`.
-    InvType(*mut i32),
+    /// A boolean flag.
+    Bool(BoolFlag),
+    /// The inventory display style (`inv_type`).
+    InvType,
 }
 
 impl OptTarget {
-    /// The backing `u8` flag, or null when this target is not boolean.
+    /// The backing boolean flag, or `None` when this target is not boolean.
     #[inline]
-    fn bool_ptr(self) -> *mut u8 {
+    fn bool_flag(self) -> Option<BoolFlag> {
         match self {
-            OptTarget::Bool(p) => p,
-            _ => std::ptr::null_mut(),
-        }
-    }
-
-    /// The backing `i32`, or null when this target is not the inventory style.
-    #[inline]
-    fn int_ptr(self) -> *mut i32 {
-        match self {
-            OptTarget::InvType(p) => p,
-            _ => std::ptr::null_mut(),
+            OptTarget::Bool(flag) => Some(flag),
+            _ => None,
         }
     }
 }
@@ -76,10 +106,6 @@ pub struct OPTION {
 use crate::game::globals::{after, fight_flush, inv_type, jump, mpos, passgo, see_floor, terse, tombstone};
 
 
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
 unsafe fn hero_pos() -> IVec2 {
     crate::game::PLAYER.pos()
 }
@@ -93,7 +119,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "terse",
             o_prompt: "Terse output",
-            o_target: OptTarget::Bool(&raw mut terse),
+            o_target: OptTarget::Bool(BoolFlag::Terse),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
@@ -101,7 +127,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "flush",
             o_prompt: "Flush typeahead during battle",
-            o_target: OptTarget::Bool(&raw mut fight_flush),
+            o_target: OptTarget::Bool(BoolFlag::FightFlush),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
@@ -109,7 +135,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "jump",
             o_prompt: "Show position only at end of run",
-            o_target: OptTarget::Bool(&raw mut jump),
+            o_target: OptTarget::Bool(BoolFlag::Jump),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
@@ -117,7 +143,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "seefloor",
             o_prompt: "Show the lamp-illuminated floor",
-            o_target: OptTarget::Bool(&raw mut see_floor),
+            o_target: OptTarget::Bool(BoolFlag::SeeFloor),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_sf,
@@ -125,7 +151,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "passgo",
             o_prompt: "Follow turnings in passageways",
-            o_target: OptTarget::Bool(&raw mut passgo),
+            o_target: OptTarget::Bool(BoolFlag::Passgo),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
@@ -133,7 +159,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "tombstone",
             o_prompt: "Print out tombstone when killed",
-            o_target: OptTarget::Bool(&raw mut tombstone),
+            o_target: OptTarget::Bool(BoolFlag::Tombstone),
             o_str: StrTarget::None,
             o_putfunc: put_bool,
             o_getfunc: get_bool,
@@ -141,7 +167,7 @@ unsafe fn option_list() -> [OPTION; 10] {
         OPTION {
             o_name: "inven",
             o_prompt: "Inventory style",
-            o_target: OptTarget::InvType(&raw mut inv_type),
+            o_target: OptTarget::InvType,
             o_str: StrTarget::None,
             o_putfunc: put_inv_t,
             o_getfunc: get_inv_t,
@@ -238,16 +264,12 @@ pub unsafe fn option() {
     after = false as u8;
 }
 
-unsafe fn pr_optname(op: *mut OPTION) {
-    if op.is_null() {
-        return;
-    }
-    pr_optname_slot(&*op);
-}
-
 unsafe fn put_bool(op: &OPTION) {
-    let bp = op.o_target.bool_ptr();
-    output::write_window_text(Window::Stdscr, if *bp != 0 { "True" } else { "False" });
+    let on = match op.o_target.bool_flag() {
+        Some(flag) => flag.get(),
+        None => false,
+    };
+    output::write_window_text(Window::Stdscr, if on { "True" } else { "False" });
 }
 
 unsafe fn put_str(op: &OPTION) {
@@ -255,30 +277,31 @@ unsafe fn put_str(op: &OPTION) {
     output::write_window_text(Window::Stdscr, &text);
 }
 
-unsafe fn put_inv_t(op: &OPTION) {
-    let ip = op.o_target.int_ptr();
-    let idx = *ip as usize;
+unsafe fn put_inv_t(_op: &OPTION) {
+    let idx = inv_type as usize;
     if idx < INV_T_NAME_LEN {
         output::write_window_text(Window::Stdscr, &crate::game::globals::inv_t_name(idx));
     }
 }
 
 unsafe fn get_bool(op: &OPTION, win: Window) -> i32 {
-    let bp = op.o_target.bool_ptr();
+    let Some(flag) = op.o_target.bool_flag() else {
+        return NORM;
+    };
     let mut bad = true;
 
     let origin = output::window_cursor(win);
-    output::write_window_text(win, if *bp != 0 { "True" } else { "False" });
+    output::write_window_text(win, if flag.get() { "True" } else { "False" });
     while bad {
         output::move_window_cursor(win, origin);
         output::refresh_window(win);
         match readchar() {
             ch if ch == 't' as i32 || ch == 'T' as i32 => {
-                *bp = true as u8;
+                flag.set(true);
                 bad = false;
             }
             ch if ch == 'f' as i32 || ch == 'F' as i32 => {
-                *bp = false as u8;
+                flag.set(false);
                 bad = false;
             }
             ch if ch == '\n' as i32 || ch == '\r' as i32 => {
@@ -293,20 +316,22 @@ unsafe fn get_bool(op: &OPTION, win: Window) -> i32 {
         }
     }
     output::move_window_cursor(win, origin);
-    output::write_window_text(win, if *bp != 0 { "True" } else { "False" });
+    output::write_window_text(win, if flag.get() { "True" } else { "False" });
     output::write_window_glyph(win, '\n');
     NORM
 }
 
 unsafe fn get_sf(op: &OPTION, win: Window) -> i32 {
-    let bp = op.o_target.bool_ptr();
-    let was_sf = *bp != 0;
+    let Some(flag) = op.o_target.bool_flag() else {
+        return NORM;
+    };
+    let was_sf = flag.get();
     let retval = get_bool(op, win);
     if retval == QUIT {
         return QUIT;
     }
-    if was_sf != (*bp != 0) {
-        if *bp == 0 {
+    if was_sf != flag.get() {
+        if !flag.get() {
             let mut hero = hero_pos();
             see_floor = true as u8;
             erase_lamp(&mut hero, proom_ptr());
@@ -381,28 +406,27 @@ pub unsafe fn get_str(op: &OPTION, win: Window) -> i32 {
     }
 }
 
-unsafe fn get_inv_t(op: &OPTION, win: Window) -> i32 {
-    let ip = op.o_target.int_ptr();
+unsafe fn get_inv_t(_op: &OPTION, win: Window) -> i32 {
     let mut bad = true;
 
     let origin = output::window_cursor(win);
-    if *ip >= 0 && *ip < INV_T_NAME_LEN as i32 {
-        output::write_window_text(win, &crate::game::globals::inv_t_name(*ip as usize));
+    if inv_type >= 0 && inv_type < INV_T_NAME_LEN as i32 {
+        output::write_window_text(win, &crate::game::globals::inv_t_name(inv_type as usize));
     }
     while bad {
         output::move_window_cursor(win, origin);
         output::refresh_window(win);
         match readchar() {
             ch if ch == 'o' as i32 || ch == 'O' as i32 => {
-                *ip = INV_OVER;
+                inv_type = INV_OVER;
                 bad = false;
             }
             ch if ch == 's' as i32 || ch == 'S' as i32 => {
-                *ip = INV_SLOW;
+                inv_type = INV_SLOW;
                 bad = false;
             }
             ch if ch == 'c' as i32 || ch == 'C' as i32 => {
-                *ip = INV_CLEAR;
+                inv_type = INV_CLEAR;
                 bad = false;
             }
             ch if ch == '\n' as i32 || ch == '\r' as i32 => {
@@ -416,8 +440,8 @@ unsafe fn get_inv_t(op: &OPTION, win: Window) -> i32 {
             }
         }
     }
-    if *ip >= 0 && *ip < INV_T_NAME_LEN as i32 {
-        let name = crate::game::globals::inv_t_name(*ip as usize);
+    if inv_type >= 0 && inv_type < INV_T_NAME_LEN as i32 {
+        let name = crate::game::globals::inv_t_name(inv_type as usize);
         let out = format!("{}\n", name);
         output::move_window_cursor(win, origin);
         paint(win, &out);
@@ -451,8 +475,9 @@ pub unsafe fn parse_opts(s: &str) {
             if op.o_name == name {
                 if op.o_str == StrTarget::None && op.o_name != "inven" {
                     // Boolean option: set it true.
-                    let bp = op.o_target.bool_ptr();
-                    *bp = true as u8;
+                    if let OptTarget::Bool(flag) = op.o_target {
+                        flag.set(true);
+                    }
                 } else if op.o_name == "inven" {
                     // Inventory style: skip '=' then a single letter.
                     while i < bytes.len() && bytes[i] == b'=' {
