@@ -61,7 +61,7 @@ unsafe fn chat(y: i32, x: i32) -> i32 {
 }
 
 #[inline]
-unsafe fn get_num(ptr: *mut i32) {
+unsafe fn get_num() -> i32 {
     let mut value = 0;
     let mut ch = readchar();
     while ch == (b' ' as i32) || ch == (b'\t' as i32) {
@@ -71,7 +71,7 @@ unsafe fn get_num(ptr: *mut i32) {
         value = value * 10 + (ch - b'0' as i32);
         ch = readchar();
     }
-    *ptr = value;
+    value
 }
 
 #[inline]
@@ -228,8 +228,7 @@ pub unsafe fn create_obj() {
         }
         ItemType::Gold => {
             msg_str("how much?");
-            let mut amount = 0;
-            get_num(&mut amount);
+            let _amount = get_num();
         }
         _ => {}
     }
