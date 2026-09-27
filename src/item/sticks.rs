@@ -183,7 +183,7 @@ pub unsafe fn do_zap() {
                 y += delta.y;
                 x += delta.x;
             }
-            if !moat_at(y, x).is_null() {
+            if crate::game::monster_here(y, x) {
                 msg_str("the spell takes effect");
             }
         }
@@ -219,7 +219,7 @@ pub unsafe fn do_zap() {
                 y += delta.y;
                 x += delta.x;
             }
-            if !moat_at(y, x).is_null() {
+            if crate::game::monster_here(y, x) {
                 msg_str("the spell takes effect");
             }
         }
