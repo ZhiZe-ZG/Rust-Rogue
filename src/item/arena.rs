@@ -161,6 +161,20 @@ impl ThingArena {
             .map(operation)
     }
 
+    /// Immutably access the object payload behind `id` (`None` when `id` names
+    /// a non-object or a stale handle).
+    pub fn with_object<R>(
+        &self,
+        id: ThingId,
+        operation: impl FnOnce(&ThingObject) -> R,
+    ) -> Option<R> {
+        self.with(id, |t| match t {
+            Thing::Object { data } => Some(operation(data)),
+            Thing::Monster { .. } => None,
+        })
+        .flatten()
+    }
+
     /// Number of live objects.
     pub fn len(&self) -> usize {
         self.live_count.load(Ordering::Relaxed).max(0) as usize
@@ -322,6 +336,13 @@ pub fn ptr_of(id: ThingId) -> *mut Thing {
 #[inline]
 pub fn contains(id: ThingId) -> bool {
     OBJECTS.contains(id)
+}
+
+/// Immutably access the object payload behind `id` (`None` for a stale handle
+/// or a non-object).
+#[inline]
+pub fn with_object<R>(id: ThingId, operation: impl FnOnce(&ThingObject) -> R) -> Option<R> {
+    OBJECTS.with_object(id, operation)
 }
 
 #[cfg(test)]

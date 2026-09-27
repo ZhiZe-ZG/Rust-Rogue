@@ -236,6 +236,23 @@ pub fn passage_exits(passage: Option<usize>) -> Vec<IVec2> {
     CURRENT_LEVEL.with(|level| level.passage_exits(passage))
 }
 
+/// Arena handles for the floor items of the live level, head first.
+///
+/// This is the pointer-free accessor preferred by new code; callers look the
+/// object up through [`crate::item::arena::OBJECTS`] when needed. The order
+/// matches [`item_ptrs`].
+#[inline]
+pub fn item_ids() -> Vec<crate::item::arena::ThingId> {
+    with_current_level(|level| {
+        level
+            .items
+            .iter()
+            .copied()
+            .filter(|&id| crate::item::arena::OBJECTS.contains(id))
+            .collect()
+    })
+}
+
 /// Stable raw handles to the floor items of the live level, head first.
 ///
 /// This is the safe bridge from the level's `Vec<ThingId>` floor-item list to
@@ -243,20 +260,10 @@ pub fn passage_exits(passage: Option<usize>) -> Vec<IVec2> {
 /// [`crate::item::arena::OBJECTS`].
 #[inline]
 pub fn item_ptrs() -> Vec<*mut Thing> {
-    with_current_level(|level| {
-        level
-            .items
-            .iter()
-            .filter_map(|&id| {
-                let ptr = crate::item::arena::ptr_of(id);
-                if ptr.is_null() {
-                    None
-                } else {
-                    Some(ptr)
-                }
-            })
-            .collect()
-    })
+    item_ids()
+        .into_iter()
+        .map(crate::item::arena::ptr_of)
+        .collect()
 }
 
 /// Convenience alias for the crate-wide level size constants.

@@ -323,13 +323,10 @@ pub unsafe fn do_chase(th: *mut Thing) -> i32 {
         if coord_eq(THIS, hero_pos()) {
             return attack(th);
         } else if coord_eq(THIS, dest_coord(th)) {
-            for obj in crate::game::item_ptrs() {
-                if thing_dest(th) == crate::item::arena::id_of(obj).map_or(DestRef::None, DestRef::Object)
-                {
-                    if let Some(id) = crate::item::arena::id_of(obj) {
-                        crate::game::with_current_level_mut(|level| level.remove_item(id));
-                    }
-                    attach_pack(th, obj);
+            for id in crate::game::item_ids() {
+                if thing_dest(th) == DestRef::Object(id) {
+                    crate::game::with_current_level_mut(|level| level.remove_item(id));
+                    attach_pack(th, crate::item::arena::ptr_of(id));
                     // Objects render from the level item list; the floor glyph
                     // under a picked-up object is then the terrain char.
                     update_dest(th);
@@ -488,12 +485,18 @@ pub unsafe fn chase(tp: *mut Thing, ee: IVec2) -> u8 {
                         // If it is a scroll, it might be a scare monster scroll
                         // so we need to look it up to see what type it is.
                         let mut found_scare = false;
-                        for obj in crate::game::item_ptrs() {
-                            if y == (*thing_o(obj)).o_pos.y && x == (*thing_o(obj)).o_pos.x {
-                                found_scare = matches!(
-                                    (*thing_o(obj)).o_type,
-                                    ItemType::Scroll(ScrollType::Scare)
-                                );
+                        for id in crate::game::item_ids() {
+                            let at_pos = crate::item::arena::with_object(id, |data| {
+                                if data.o_pos.y == y && data.o_pos.x == x {
+                                    Some(data.o_type)
+                                } else {
+                                    None
+                                }
+                            })
+                            .flatten();
+                            if let Some(otype) = at_pos {
+                                found_scare =
+                                    matches!(otype, ItemType::Scroll(ScrollType::Scare));
                                 break;
                             }
                         }
@@ -625,13 +628,16 @@ pub unsafe fn update_dest(tp: *mut Thing) {
         set_thing_dest_hero(tp);
         return;
     }
-    for obj in crate::game::item_ptrs() {
-        if matches!((*thing_o(obj)).o_type, ItemType::Scroll(ScrollType::Scare)) {
+    for obj_id in crate::game::item_ids() {
+        let info = crate::item::arena::with_object(obj_id, |data| (data.o_type, data.o_pos));
+        let Some((otype, opos)) = info else {
+            continue;
+        };
+        if matches!(otype, ItemType::Scroll(ScrollType::Scare)) {
             continue;
         }
-        if roomin((*thing_o(obj)).o_pos) == (*thing_t(tp)).t_room && rnd(100) < prob {
-            let obj_dest =
-                crate::item::arena::id_of(obj).map_or(DestRef::None, DestRef::Object);
+        if roomin(opos) == (*thing_t(tp)).t_room && rnd(100) < prob {
+            let obj_dest = DestRef::Object(obj_id);
             let mut taken = false;
             for mid in MONSTER_LIST.ids() {
                 if let Some(m) = MONSTER_LIST.handle(mid) {
