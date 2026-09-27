@@ -198,11 +198,7 @@ pub unsafe fn relocate(th: *mut Thing, new_loc: IVec2) {
         (*thing_t(th)).t_room = roomin(new_loc);
         set_oldch(th, new_loc);
         let oroom = (*thing_t(th)).t_room;
-        set_moat_at(
-            (*thing_t(th)).t_pos.y,
-            (*thing_t(th)).t_pos.x,
-            std::ptr::null_mut(),
-        );
+        crate::game::clear_monster((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x);
 
         if oroom != (*thing_t(th)).t_room {
             update_dest(th);
