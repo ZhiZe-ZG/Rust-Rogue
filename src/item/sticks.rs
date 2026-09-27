@@ -89,11 +89,6 @@ fn hero_pos() -> IVec2 {
 }
 
 #[inline]
-unsafe fn moat_at(y: i32, x: i32) -> *mut Thing {
-    crate::game::monster_at(y, x) as *mut Thing
-}
-
-#[inline]
 unsafe fn ce_coord(a: IVec2, b: IVec2) -> u8 {
     if a.x == b.x && a.y == b.y {
         1
