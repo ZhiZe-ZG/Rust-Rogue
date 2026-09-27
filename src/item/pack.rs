@@ -296,7 +296,7 @@ pub unsafe fn leave_pack(obj: *mut Thing, newobj: u8, all: u8) -> *mut Thing {
 
     inpack -= 1;
     if (*thing_o(obj)).o_count > 1 && all == 0 {
-        last_pick = obj;
+        last_pick = id_of(obj);
         (*thing_o(obj)).o_count -= 1;
         if (*thing_o(obj)).o_group != 0 {
             inpack += 1;
@@ -307,7 +307,7 @@ pub unsafe fn leave_pack(obj: *mut Thing, newobj: u8, all: u8) -> *mut Thing {
             (*thing_o(nobj)).o_count = 1;
         }
     } else {
-        last_pick = std::ptr::null_mut();
+        last_pick = None;
         pack_used[(*thing_o(obj)).o_packch as usize - 'a' as usize] = false as u8;
         if let Some(id) = id_of(obj) {
             crate::game::PLAYER.remove_from_pack(id);
@@ -408,8 +408,8 @@ pub unsafe fn get_item(purpose: &str, filter: ItemFilter) -> *mut Thing {
     }
 
     if again != 0 {
-        if !last_pick.is_null() {
-            return last_pick;
+        if let Some(id) = last_pick {
+            return ptr_of(id);
         }
         msg_str("you ran out");
         return std::ptr::null_mut();

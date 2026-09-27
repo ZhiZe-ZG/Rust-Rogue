@@ -139,8 +139,8 @@ pub static mut e_levels: [i32; 21] = [
 ];
 pub static mut delta: IVec2 = IVec2 { x: 0, y: 0 };
 pub static mut oldpos: IVec2 = IVec2 { x: 0, y: 0 };
-pub static mut l_last_pick: *mut CThing = std::ptr::null_mut();
-pub static mut last_pick: *mut CThing = std::ptr::null_mut();
+pub static mut l_last_pick: Option<crate::item::arena::ThingId> = None;
+pub static mut last_pick: Option<crate::item::arena::ThingId> = None;
 
 pub static mut max_stats: Stats = Stats {
     strength: 16,

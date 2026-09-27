@@ -255,6 +255,12 @@ fn list_index_of(pack: &[ThingId], target: *mut Thing) -> Option<usize> {
     pack.iter().position(|&id| id == target)
 }
 
+/// Index of the object handle `target` within the pack `pack`, or `None`.
+fn list_index_of_id(pack: &[ThingId], target: Option<ThingId>) -> Option<usize> {
+    let target = target?;
+    pack.iter().position(|&id| id == target)
+}
+
 /// The raw handle for the `i`-th pack entry, or null.
 fn list_nth(pack: &[ThingId], i: usize) -> *mut Thing {
     pack.get(i)
@@ -332,8 +338,8 @@ unsafe fn build_snapshot() -> GameSnapshot {
         left_ring: list_index_of(&hero_pack, PLAYER.left_ring()),
         right_ring: list_index_of(&hero_pack, PLAYER.right_ring()),
         weapon: list_index_of(&hero_pack, PLAYER.weapon()),
-        last_pick: list_index_of(&hero_pack, crate::game::globals::last_pick),
-        l_last_pick: list_index_of(&hero_pack, crate::game::globals::l_last_pick),
+        last_pick: list_index_of_id(&hero_pack, crate::game::globals::last_pick),
+        l_last_pick: list_index_of_id(&hero_pack, crate::game::globals::l_last_pick),
     };
 
     // Level snapshot.
@@ -513,6 +519,12 @@ fn resolve_index(pack: &[ThingId], index: Option<usize>) -> *mut Thing {
         Some(i) => list_nth(pack, i),
         None => std::ptr::null_mut(),
     }
+}
+
+/// Resolve an `Option<usize>` pack index against the rebuilt pack handles,
+/// returning the arena handle (or `None`).
+fn resolve_id(pack: &[ThingId], index: Option<usize>) -> Option<ThingId> {
+    pack.get(index?).copied()
 }
 
 /// Writes a `&'static str` table entry from a saved string, using `lookup` to
@@ -785,8 +797,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     PLAYER.set_left_ring(resolve_index(&player_pack, s.equipment.left_ring));
     PLAYER.set_right_ring(resolve_index(&player_pack, s.equipment.right_ring));
     PLAYER.set_weapon(resolve_index(&player_pack, s.equipment.weapon));
-    crate::game::globals::last_pick = resolve_index(&player_pack, s.equipment.last_pick);
-    crate::game::globals::l_last_pick = resolve_index(&player_pack, s.equipment.l_last_pick);
+    crate::game::globals::last_pick = resolve_id(&player_pack, s.equipment.last_pick);
+    crate::game::globals::l_last_pick = resolve_id(&player_pack, s.equipment.l_last_pick);
 
     // ── misc ────────────────────────────────────────────────────────────
     max_stats = s.max_stats;

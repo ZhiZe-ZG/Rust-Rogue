@@ -330,7 +330,7 @@ pub unsafe fn command() {
                 l_last_pick = last_pick;
                 last_comm = ch as u8;
                 last_dir = b'\0' as u8;
-                last_pick = std::ptr::null_mut();
+                last_pick = None;
             }
 
             // ── Command dispatch ────────────────────────────────────────────
