@@ -449,7 +449,7 @@ pub unsafe fn chase(tp: *mut Thing, ee: IVec2) -> u8 {
         || ((*thing_t(tp)).t_type == Some(MonsterType::Bat) && rnd(2) == 0)
     {
         // get a valid random move
-        CH_RET = rndmove(tp);
+        CH_RET = rndmove((*thing_t(tp)).t_pos);
         curdist = dist_cp(CH_RET, ee);
         // Small chance that it will become un-confused
         if rnd(20) == 0 {

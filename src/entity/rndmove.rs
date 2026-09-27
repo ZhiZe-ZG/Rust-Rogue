@@ -4,16 +4,11 @@
 use glam::IVec2;
 
 use crate::entity::chase::diag_ok;
-use crate::entity::player::{Thing, ThingObject};
+use crate::entity::player::Thing;
 use crate::item::scrolls::ScrollType;
 use crate::rnd::rnd;
 
 const SCROLL: u8 = b'?' as u8;
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
 
 /// Persistent return coordinate, mirroring C's `static coord ret`.
 static mut RET: IVec2 = IVec2 { x: 0, y: 0 };
@@ -43,9 +38,21 @@ pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
     }
 
     // Refuse to step on a scroll of scare monster
-    for obj in crate::game::item_ptrs() {
-        if chosen.y == (*thing_o(obj)).o_pos.y && chosen.x == (*thing_o(obj)).o_pos.x {
-            if (*thing_o(obj)).o_which == ScrollType::Scare as i32 {
+    for id in crate::item::arena::OBJECTS.ids() {
+        let at_pos = crate::item::arena::OBJECTS
+            .with(id, |t| match t {
+                Thing::Object { data } => {
+                    if data.o_pos.y == chosen.y && data.o_pos.x == chosen.x {
+                        Some(data.o_which)
+                    } else {
+                        None
+                    }
+                }
+                Thing::Monster { .. } => None,
+            })
+            .flatten();
+        if let Some(which) = at_pos {
+            if which == ScrollType::Scare as i32 {
                 return pos;
             }
             break;
@@ -57,8 +64,7 @@ pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
 
 /// rndmove:
 /// Move in a random direction if the monster/person is confused.
-pub unsafe fn rndmove(who: *mut Thing) -> IVec2 {
-    let pos = (*crate::entity::player::thing_t(who)).t_pos;
+pub unsafe fn rndmove(pos: IVec2) -> IVec2 {
     RET = rndmove_from(pos);
     RET
 }
