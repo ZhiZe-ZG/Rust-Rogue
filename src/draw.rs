@@ -21,7 +21,6 @@ use crate::entity::monsters::wake_monster;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game;
 use crate::level::{door_open, with_current_level, with_current_level_mut};
-use crate::misc::find_obj;
 use crate::rnd::rnd;
 use crate::tile::Tile;
 use crate::tile::TrapType;
@@ -169,12 +168,12 @@ pub(crate) unsafe fn obj_glyph(obj: *mut Thing) -> char {
 }
 
 pub(crate) unsafe fn cell_glyph(y: i32, x: i32) -> u8 {
-    let obj = find_obj(y, x);
-    if !obj.is_null() {
-        item_glyph((*thing_o(obj)).o_type) as u8
-    } else {
-        terrain_chat_at(y, x)
+    if let Some(id) = crate::misc::find_obj_id(y, x) {
+        if let Some(otype) = crate::item::arena::with_object(id, |data| data.o_type) {
+            return item_glyph(otype) as u8;
+        }
     }
+    terrain_chat_at(y, x)
 }
 
 /// Redraw one cell from the current game model.

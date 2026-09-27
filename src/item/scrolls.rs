@@ -15,7 +15,7 @@ use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item, leave_pack};
 use crate::entity::player::discard;
 use crate::game::new_actor;
-use crate::misc::{aggravate, call_it, choose_str, find_obj};
+use crate::misc::{aggravate, call_it, choose_str};
 use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win, status};
 use crate::ui::{output, Window};
 use crate::wizard::{teleport, whatis};
@@ -240,10 +240,12 @@ pub unsafe fn read_scroll() {
                     if !crate::game::cell_is_walkable(y, x) {
                         continue;
                     }
-                    let found = find_obj(y, x);
-                    if !found.is_null()
-                        && matches!((*thing_o(found)).o_type, ItemType::Scroll(ScrollType::Scare))
-                    {
+                    let is_scare = crate::misc::find_obj_id(y, x)
+                        .and_then(|id| {
+                            crate::item::arena::with_object(id, |data| data.o_type)
+                        })
+                        .is_some_and(|t| matches!(t, ItemType::Scroll(ScrollType::Scare)));
+                    if is_scare {
                         continue;
                     }
                     i += 1;
@@ -308,14 +310,14 @@ pub unsafe fn read_scroll() {
             let mut found = false as u8;
             let window = Window::Stdscr;
             output::clear_window(window);
-            for it in crate::game::item_ptrs() {
-                if matches!((*thing_o(it)).o_type, ItemType::Food) {
-                    found = true as u8;
-                    output::move_window_cursor(
-                        window,
-                        IVec2::new((*thing_o(it)).o_pos.x, (*thing_o(it)).o_pos.y),
-                    );
-                    output::write_window_glyph(window, (FOOD as u8) as char);
+            for id in crate::game::item_ids() {
+                let info = crate::item::arena::with_object(id, |data| (data.o_type, data.o_pos));
+                if let Some((otype, opos)) = info {
+                    if matches!(otype, ItemType::Food) {
+                        found = true as u8;
+                        output::move_window_cursor(window, IVec2::new(opos.x, opos.y));
+                        output::write_window_glyph(window, (FOOD as u8) as char);
+                    }
                 }
             }
             if found != 0 {

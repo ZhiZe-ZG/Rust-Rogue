@@ -92,13 +92,22 @@ pub unsafe fn show_floor() -> bool {
     true
 }
 
-pub unsafe fn find_obj(y: i32, x: i32) -> *mut Thing {
-    for obj in crate::game::item_ptrs() {
-        if (*thing_o(obj)).o_pos.y == y && (*thing_o(obj)).o_pos.x == x {
-            return obj;
+/// The floor object at `(y, x)`, as an arena handle.
+pub fn find_obj_id(y: i32, x: i32) -> Option<crate::item::arena::ThingId> {
+    for id in crate::game::item_ids() {
+        let hit = crate::item::arena::with_object(id, |data| {
+            data.o_pos.y == y && data.o_pos.x == x
+        })
+        .unwrap_or(false);
+        if hit {
+            return Some(id);
         }
     }
-    std::ptr::null_mut()
+    None
+}
+
+pub unsafe fn find_obj(y: i32, x: i32) -> *mut Thing {
+    find_obj_id(y, x).map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
 }
 
 pub unsafe fn eat() {
