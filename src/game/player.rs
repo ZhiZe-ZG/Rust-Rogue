@@ -12,40 +12,39 @@
 //! raw hero pointer: callers read or mutate individual fields through safe
 //! methods, so the previous `player_ptr`/`Player::ptr` bridge is gone.
 //!
-//! Equipment slots are stored as [`NonNull`] handles rather than raw pointers: a
-//! slot simply holds `None` when empty, so there is no null-pointer sentinel to
-//! dereference.
+//! Equipment slots are stored as pointer-free arena [`ThingId`] handles rather
+//! than raw pointers: a slot simply holds `None` when empty, so there is no
+//! null-pointer sentinel to dereference and a freed object resolves to `None`.
 
-use std::sync::atomic::{AtomicPtr, Ordering};
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingMonster};
 use crate::item::arena::ThingId;
 use glam::IVec2;
 
-/// Interior-mutable slot holding an optional [`Thing`] handle.
+/// Interior-mutable slot holding an optional object handle.
 ///
 /// The game is single-threaded, but the slot is reachable through the
-/// process-wide [`PLAYER`] `static` (which must be `Sync`). The handle is
-/// stored in an [`AtomicPtr`], which is unconditionally `Send + Sync`, so no
-/// `unsafe impl` is required; a null pointer means "empty" and the handle is
-/// only ever dereferenced by the single-threaded gameplay loop.
+/// process-wide [`PLAYER`] `static` (which must be `Sync`). The slot stores a
+/// pointer-free [`ThingId`] handle (never a raw `*mut Thing`), so a stale or
+/// freed equipment object resolves to `None` instead of dangling; a simple
+/// `Mutex` provides the required `Sync` without any `unsafe impl`.
 #[derive(Default)]
-struct Slot(AtomicPtr<Thing>);
+struct Slot(Mutex<Option<ThingId>>);
 
 impl Slot {
     const fn new() -> Self {
-        Self(AtomicPtr::new(std::ptr::null_mut()))
+        Self(Mutex::new(None))
     }
 
     #[inline]
-    fn get(&self) -> *mut Thing {
-        self.0.load(Ordering::Relaxed)
+    fn get(&self) -> Option<ThingId> {
+        *self.0.lock().unwrap_or_else(|poison| poison.into_inner())
     }
 
     #[inline]
-    fn set(&self, ptr: *mut Thing) {
-        self.0.store(ptr, Ordering::Relaxed);
+    fn set(&self, id: Option<ThingId>) {
+        *self.0.lock().unwrap_or_else(|poison| poison.into_inner()) = id;
     }
 }
 
@@ -67,44 +66,99 @@ impl Equipment {
         weapon: Slot::new(),
     };
 
+    /// The equipped armor handle (or `None`).
     #[inline]
-    pub fn armor(&self) -> *mut Thing {
+    pub fn armor_id(&self) -> Option<ThingId> {
         self.armor.get()
     }
 
+    /// Set (or clear) the equipped armor handle.
     #[inline]
-    pub fn set_armor(&self, armor: *mut Thing) {
+    pub fn set_armor_id(&self, armor: Option<ThingId>) {
         self.armor.set(armor);
     }
 
+    /// The left-hand ring handle (or `None`).
     #[inline]
-    pub fn left_ring(&self) -> *mut Thing {
+    pub fn left_ring_id(&self) -> Option<ThingId> {
         self.rings[0].get()
     }
 
+    /// The right-hand ring handle (or `None`).
     #[inline]
-    pub fn right_ring(&self) -> *mut Thing {
+    pub fn right_ring_id(&self) -> Option<ThingId> {
         self.rings[1].get()
     }
 
     #[inline]
-    pub fn set_left_ring(&self, ring: *mut Thing) {
+    pub fn set_left_ring_id(&self, ring: Option<ThingId>) {
         self.rings[0].set(ring);
     }
 
     #[inline]
-    pub fn set_right_ring(&self, ring: *mut Thing) {
+    pub fn set_right_ring_id(&self, ring: Option<ThingId>) {
         self.rings[1].set(ring);
     }
 
+    /// The wielded weapon handle (or `None`).
     #[inline]
-    pub fn weapon(&self) -> *mut Thing {
+    pub fn weapon_id(&self) -> Option<ThingId> {
         self.weapon.get()
     }
 
     #[inline]
-    pub fn set_weapon(&self, weapon: *mut Thing) {
+    pub fn set_weapon_id(&self, weapon: Option<ThingId>) {
         self.weapon.set(weapon);
+    }
+
+    /// A stable raw handle to the equipped armor (null when empty or freed).
+    #[inline]
+    pub fn armor(&self) -> *mut Thing {
+        self.armor
+            .get()
+            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
+    }
+
+    /// Set (or clear) the equipped armor from a raw handle.
+    #[inline]
+    pub fn set_armor(&self, armor: *mut Thing) {
+        self.armor.set(crate::item::arena::id_of(armor));
+    }
+
+    #[inline]
+    pub fn left_ring(&self) -> *mut Thing {
+        self.rings[0]
+            .get()
+            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
+    }
+
+    #[inline]
+    pub fn right_ring(&self) -> *mut Thing {
+        self.rings[1]
+            .get()
+            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
+    }
+
+    #[inline]
+    pub fn set_left_ring(&self, ring: *mut Thing) {
+        self.rings[0].set(crate::item::arena::id_of(ring));
+    }
+
+    #[inline]
+    pub fn set_right_ring(&self, ring: *mut Thing) {
+        self.rings[1].set(crate::item::arena::id_of(ring));
+    }
+
+    #[inline]
+    pub fn weapon(&self) -> *mut Thing {
+        self.weapon
+            .get()
+            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
+    }
+
+    #[inline]
+    pub fn set_weapon(&self, weapon: *mut Thing) {
+        self.weapon.set(crate::item::arena::id_of(weapon));
     }
 }
 
@@ -425,20 +479,22 @@ pub fn player_remove_flag(flag: MonsterFlags) {
 #[cfg(test)]
 mod tests {
     use super::{Equipment, Player};
-    use crate::entity::player::{MonsterFlags, Thing};
-    use std::mem::MaybeUninit;
+    use crate::entity::player::MonsterFlags;
 
     #[test]
     fn ring_accessors_keep_hands_independent() {
         let equipment = Equipment::EMPTY;
-        let mut left = MaybeUninit::<Thing>::uninit();
-        let mut right = MaybeUninit::<Thing>::uninit();
+        let left = crate::item::arena::new_object_id();
+        let right = crate::item::arena::new_object_id();
 
-        equipment.set_left_ring(left.as_mut_ptr());
-        equipment.set_right_ring(right.as_mut_ptr());
+        equipment.set_left_ring_id(Some(left));
+        equipment.set_right_ring_id(Some(right));
 
-        assert_eq!(equipment.left_ring(), left.as_mut_ptr());
-        assert_eq!(equipment.right_ring(), right.as_mut_ptr());
+        assert_eq!(equipment.left_ring_id(), Some(left));
+        assert_eq!(equipment.right_ring_id(), Some(right));
+
+        let _ = crate::item::arena::OBJECTS.remove(left);
+        let _ = crate::item::arena::OBJECTS.remove(right);
     }
 
     #[test]
