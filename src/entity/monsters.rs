@@ -252,7 +252,7 @@ pub unsafe fn randmonster(wander: bool) -> MonsterType {
 }
 
 /// Initializes a freshly allocated monster thing and places it on the map.
-pub unsafe fn new_monster(tp: *mut Thing, monster_type: MonsterType, cp: *mut IVec2) {
+pub unsafe fn new_monster(tp: *mut Thing, monster_type: MonsterType, cp: IVec2) {
     let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
@@ -263,12 +263,12 @@ pub unsafe fn new_monster(tp: *mut Thing, monster_type: MonsterType, cp: *mut IV
 
     (*thing_t(tp)).t_type = Some(monster_type);
     (*thing_t(tp)).t_disguise = monster_type.glyph();
-    (*thing_t(tp)).t_pos = *cp;
+    (*thing_t(tp)).t_pos = cp;
 
-    (*thing_t(tp)).t_oldch = crate::draw::cell_glyph((*cp).y, (*cp).x) as u8;
+    (*thing_t(tp)).t_oldch = crate::draw::cell_glyph(cp.y, cp.x) as u8;
     (*thing_t(tp)).t_room = roomin(cp);
     // Record the monster in the per-cell occupancy map.
-    crate::game::set_monster((*cp).y, (*cp).x, tp);
+    crate::game::set_monster(cp.y, cp.x, tp);
 
     let mp = &monsters[monster_type.index()];
     (*thing_t(tp)).t_stats.level = mp.m_stats.level + lev_add;
@@ -316,12 +316,12 @@ pub unsafe fn wanderer() {
 
     loop {
         cp = find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
-        if roomin(&mut cp) != crate::game::PLAYER.room() {
+        if roomin(cp) != crate::game::PLAYER.room() {
             break;
         }
     }
 
-    new_monster(tp, randmonster(true), &mut cp);
+    new_monster(tp, randmonster(true), cp);
 
     if player_has(MonsterFlags::SEEMONST) {
         output::set_standout(true);
@@ -333,7 +333,7 @@ pub unsafe fn wanderer() {
         output::set_standout(false);
     }
 
-    runto(&mut (*thing_t(tp)).t_pos);
+    runto((*thing_t(tp)).t_pos);
 
     if wizard != 0 {
         msg_str(&format!(

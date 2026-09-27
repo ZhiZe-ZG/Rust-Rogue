@@ -266,7 +266,7 @@ pub unsafe fn init_weapon(weap: *mut Thing, which: i32) {
 /// Resolves thrown-weapon combat against the target tile.
 pub unsafe fn hit_monster(y: i32, x: i32, obj: *mut Thing) -> i32 {
     let mut mp = IVec2 { x, y };
-    fight(&mut mp, obj, true as u8)
+    fight(mp, obj, true as u8)
 }
 
 /// Formats signed enchantment numbers for armor and weapons.

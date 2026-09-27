@@ -332,9 +332,9 @@ unsafe fn get_sf(op: &OPTION, win: Window) -> i32 {
     }
     if was_sf != flag.get() {
         if !flag.get() {
-            let mut hero = hero_pos();
+            let hero = hero_pos();
             see_floor = true as u8;
-            erase_lamp(&mut hero, proom_ptr());
+            erase_lamp(hero, proom_ptr());
             see_floor = false as u8;
         } else {
             look(false as u8);

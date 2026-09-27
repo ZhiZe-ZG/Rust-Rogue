@@ -242,10 +242,10 @@ pub unsafe fn teleport() {
     let mut hero = hero();
 
     output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
-    if roomin(&mut c) != proom() {
-        leave_room(&mut hero);
+    if roomin(c) != proom() {
+        leave_room(hero);
         hero = c;
-        enter_room(&mut hero);
+        enter_room(hero);
     } else {
         hero = c;
         look(true as u8);

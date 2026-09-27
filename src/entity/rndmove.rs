@@ -34,8 +34,7 @@ pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
         return chosen;
     }
 
-    let mut pos_copy = pos;
-    if diag_ok(&raw mut pos_copy, &raw mut chosen) == 0 {
+    if diag_ok(pos, chosen) == 0 {
         return pos;
     }
 
@@ -58,8 +57,8 @@ pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
 
 /// rndmove:
 /// Move in a random direction if the monster/person is confused.
-pub unsafe fn rndmove(who: *mut Thing) -> *mut IVec2 {
+pub unsafe fn rndmove(who: *mut Thing) -> IVec2 {
     let pos = (*crate::entity::player::thing_t(who)).t_pos;
     RET = rndmove_from(pos);
-    &raw mut RET
+    RET
 }

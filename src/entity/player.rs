@@ -698,7 +698,7 @@ unsafe fn move_stuff(next_pos: &mut IVec2, fl: u8) {
     let hero = PLAYER.pos();
     output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
     if (fl as u8 & F_PASS as u8) != 0 && crate::game::is_door_at(oldpos.y, oldpos.x) {
-        draw_leave_room(next_pos);
+        draw_leave_room(*next_pos);
     }
     PLAYER.set_pos(*next_pos);
 }
@@ -918,8 +918,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
         break;
     }
 
-    let mut hero_copy = hero;
-    if diag_ok(&raw mut hero_copy, &mut next_pos) == 0 {
+    if diag_ok(hero, next_pos) == 0 {
         after = false as u8;
         running = false as u8;
         return;
@@ -951,7 +950,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
         DOOR => {
             running = false as u8;
             if (flat_at(hero.y, hero.x) as u8 & F_PASS as u8) != 0 {
-                draw_enter_room(&mut next_pos);
+                draw_enter_room(next_pos);
             }
             move_stuff(&mut next_pos, fl);
         }
@@ -963,8 +962,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
             move_stuff(&mut next_pos, fl);
         }
         PASSAGE => {
-            let mut hero_copy = hero;
-            PLAYER.set_room(roomin(&raw mut hero_copy));
+            PLAYER.set_room(roomin(hero));
             move_stuff(&mut next_pos, fl);
         }
         FLOOR => {
@@ -977,7 +975,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
             seenstairs = true as u8;
             running = false as u8;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, game::PLAYER.weapon(), false as u8);
+                fight(next_pos, game::PLAYER.weapon(), false as u8);
             } else {
                 take = ch;
                 move_stuff(&mut next_pos, fl);
@@ -986,7 +984,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
         _ => {
             running = false as u8;
             if is_upper(ch) || !game::monster_at(next_pos.y, next_pos.x).is_null() {
-                fight(&mut next_pos, game::PLAYER.weapon(), false as u8);
+                fight(next_pos, game::PLAYER.weapon(), false as u8);
             } else {
                 if ch != STAIRS {
                     take = ch;

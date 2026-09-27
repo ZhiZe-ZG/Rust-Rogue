@@ -173,11 +173,8 @@ pub unsafe fn move_monst(tp: *mut Thing) -> i32 {
 /// all the relevant state.
 ///
 /// Uses globals: places (via moat), player, see_monst (function).
-pub unsafe fn relocate(th: *mut Thing, new_loc: *mut IVec2) {
-    if new_loc.is_null() {
-        return;
-    }
-    if !coord_eq(*new_loc, (*thing_t(th)).t_pos) {
+pub unsafe fn relocate(th: *mut Thing, new_loc: IVec2) {
+    if !coord_eq(new_loc, (*thing_t(th)).t_pos) {
         output::write_glyph_at(
             IVec2::new((*thing_t(th)).t_pos.x, (*thing_t(th)).t_pos.y),
             ((*thing_t(th)).t_oldch as u8) as char,
@@ -194,10 +191,10 @@ pub unsafe fn relocate(th: *mut Thing, new_loc: *mut IVec2) {
         if oroom != (*thing_t(th)).t_room {
             update_dest(th);
         }
-        (*thing_t(th)).t_pos = *new_loc;
-        set_moat_at((*new_loc).y, (*new_loc).x, th);
+        (*thing_t(th)).t_pos = new_loc;
+        set_moat_at(new_loc.y, new_loc.x, th);
     }
-    output::move_cursor(IVec2::new((*new_loc).x, (*new_loc).y));
+    output::move_cursor(IVec2::new(new_loc.x, new_loc.y));
     if see_monst(th) != false as u8 {
         output::write_glyph(crate::draw::monster_glyph(th));
     } else if player_has(MonsterFlags::SEEMONST) {
@@ -226,7 +223,12 @@ pub unsafe fn do_chase(th: *mut Thing) -> i32 {
         // Find room of chasee
         crate::game::PLAYER.room()
     } else {
-        roomin(thing_dest(th))
+        let d = thing_dest(th);
+        if d.is_null() {
+            None
+        } else {
+            roomin(*d)
+        }
     };
     // We don't count doors as inside rooms for this routine
     door = crate::game::is_door_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x);
@@ -306,7 +308,7 @@ pub unsafe fn do_chase(th: *mut Thing) -> i32 {
     // This now contains what we want to run to this time
     // so we run to it.  If we hit it we either want to fight it
     // or stop running.
-    if chase(th, &raw mut THIS) == false as u8 {
+    if chase(th, THIS) == false as u8 {
         if coord_eq(THIS, hero_pos()) {
             return attack(th);
         } else if coord_eq(THIS, dest_coord(th)) {
@@ -329,7 +331,7 @@ pub unsafe fn do_chase(th: *mut Thing) -> i32 {
     } else if (*thing_t(th)).t_type == Some(MonsterType::VenusFlytrap) {
         return 0;
     }
-    relocate(th, &raw mut CH_RET);
+    relocate(th, CH_RET);
     // And stop running if need be
     if stoprun && coord_eq((*thing_t(th)).t_pos, dest_coord(th)) {
         (*thing_t(th)).t_flags.remove(MonsterFlags::RUN);
@@ -341,20 +343,20 @@ pub unsafe fn do_chase(th: *mut Thing) -> i32 {
 /// Set the oldch character for the monster
 ///
 /// Uses globals: player, hero, see_floor, places (via chat).
-pub unsafe fn set_oldch(tp: *mut Thing, cp: *mut IVec2) {
-    if coord_eq((*thing_t(tp)).t_pos, *cp) {
+pub unsafe fn set_oldch(tp: *mut Thing, cp: IVec2) {
+    if coord_eq((*thing_t(tp)).t_pos, cp) {
         return;
     }
 
     let sch = (*thing_t(tp)).t_oldch;
-    (*thing_t(tp)).t_oldch = output::glyph_at(IVec2::new((*cp).x, (*cp).y)) as u8 & 0x7f;
+    (*thing_t(tp)).t_oldch = output::glyph_at(IVec2::new(cp.x, cp.y)) as u8 & 0x7f;
     if !player_has(MonsterFlags::BLIND) {
         if (sch == FLOOR as u8 || (*thing_t(tp)).t_oldch == FLOOR as u8)
             && crate::game::room_dark((*thing_t(tp)).t_room)
         {
             (*thing_t(tp)).t_oldch = b' ';
-        } else if dist((*cp).y, (*cp).x, hero_pos().y, hero_pos().x) <= LAMPDIST && see_floor != 0 {
-            (*thing_t(tp)).t_oldch = crate::draw::cell_glyph((*cp).y, (*cp).x) as u8;
+        } else if dist(cp.y, cp.x, hero_pos().y, hero_pos().x) <= LAMPDIST && see_floor != 0 {
+            (*thing_t(tp)).t_oldch = crate::draw::cell_glyph(cp.y, cp.x) as u8;
         }
     }
 }
@@ -396,15 +398,14 @@ pub unsafe fn see_monst(mp: *mut Thing) -> u8 {
 /// Set a monster running after the hero.
 ///
 /// Uses globals: places (via moat).
-pub unsafe fn runto(runner: *mut IVec2) {
+pub unsafe fn runto(runner: IVec2) {
     // If we couldn't find him, something is funny.
     // (C guarded this with `#ifdef MASTER`; always report in the Rust port.)
-    let tp = moat_at((*runner).y, (*runner).x);
+    let tp = moat_at(runner.y, runner.x);
     if MASTER && tp.is_null() {
         msg_str(&format!(
             "couldn't find monster in runto at ({},{})",
-            (*runner).y,
-            (*runner).x
+            runner.y, runner.x
         ));
     }
     if tp.is_null() {
@@ -422,10 +423,10 @@ pub unsafe fn runto(runner: *mut IVec2) {
 /// false as u8 if we reach the goal.
 ///
 /// Uses globals: hero, lvl_obj, places (via moat/chat/winat).
-pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> u8 {
+pub unsafe fn chase(tp: *mut Thing, ee: IVec2) -> u8 {
     let mut curdist: i32;
     let mut thisdist: i32;
-    let er = &raw mut (*thing_t(tp)).t_pos;
+    let mut er = (*thing_t(tp)).t_pos;
     let mut plcnt = 1;
 
     // If the thing is confused, let it move randomly. Invisible
@@ -436,8 +437,8 @@ pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> u8 {
         || ((*thing_t(tp)).t_type == Some(MonsterType::Bat) && rnd(2) == 0)
     {
         // get a valid random move
-        CH_RET = *rndmove(tp);
-        curdist = dist_cp(&raw mut CH_RET, ee);
+        CH_RET = rndmove(tp);
+        curdist = dist_cp(CH_RET, ee);
         // Small chance that it will become un-confused
         if rnd(20) == 0 {
             (*thing_t(tp)).t_flags.remove(MonsterFlags::HUH);
@@ -449,25 +450,25 @@ pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> u8 {
         // This will eventually hold where we move to get closer.
         // If we can't find an empty spot, we stay where we are.
         curdist = dist_cp(er, ee);
-        CH_RET = *er;
+        CH_RET = er;
 
-        let mut ey = (*er).y + 1;
+        let mut ey = er.y + 1;
         if ey >= GameConfig::SCREEN_LINES - 1 {
             ey = GameConfig::SCREEN_LINES - 2;
         }
-        let mut ex = (*er).x + 1;
+        let mut ex = er.x + 1;
         if ex >= GameConfig::SCREEN_COLS {
             ex = GameConfig::SCREEN_COLS - 1;
         }
 
-        let mut x = (*er).x - 1;
+        let mut x = er.x - 1;
         while x <= ex {
             if x >= 0 {
                 TRYP.x = x;
-                let mut y = (*er).y - 1;
+                let mut y = er.y - 1;
                 while y <= ey {
                     TRYP.y = y;
-                    if diag_ok(er, &raw mut TRYP) == false as u8 {
+                    if diag_ok(er, TRYP) == false as u8 {
                         y += 1;
                         continue;
                     }
@@ -496,7 +497,7 @@ pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> u8 {
                         }
                         // If we didn't find any scrolls at this place or it
                         // wasn't a scare scroll, then this place counts.
-                        thisdist = dist(y, x, (*ee).y, (*ee).x);
+                        thisdist = dist(y, x, ee.y, ee.x);
                         if thisdist < curdist {
                             plcnt = 1;
                             CH_RET = TRYP;
@@ -526,16 +527,13 @@ pub unsafe fn chase(tp: *mut Thing, ee: *mut IVec2) -> u8 {
 /// in any room.
 ///
 /// Uses globals: places (via flat), passages, rooms, msg.
-pub unsafe fn roomin(cp: *mut IVec2) -> Option<usize> {
-    if cp.is_null() {
-        return None;
-    }
-    let room = crate::game::with_current_level(|level| level.room_at((*cp).y, (*cp).x));
+pub unsafe fn roomin(cp: IVec2) -> Option<usize> {
+    let room = crate::game::with_current_level(|level| level.room_at(cp.y, cp.x));
     if room.is_some() {
         return room;
     }
 
-    msg_str(&format!("in some bizarre place ({}, {})", (*cp).y, (*cp).x));
+    msg_str(&format!("in some bizarre place ({}, {})", cp.y, cp.x));
     if MASTER {
         std::process::abort();
     }
@@ -546,19 +544,19 @@ pub unsafe fn roomin(cp: *mut IVec2) -> Option<usize> {
 /// Check to see if the move is legal if it is diagonal
 ///
 /// Uses globals: places (via chat).
-pub unsafe fn diag_ok(sp: *mut IVec2, ep: *mut IVec2) -> u8 {
-    if (*ep).x < 0
-        || (*ep).x >= GameConfig::SCREEN_COLS
-        || (*ep).y <= 0
-        || (*ep).y >= GameConfig::SCREEN_LINES - 1
+pub unsafe fn diag_ok(sp: IVec2, ep: IVec2) -> u8 {
+    if ep.x < 0
+        || ep.x >= GameConfig::SCREEN_COLS
+        || ep.y <= 0
+        || ep.y >= GameConfig::SCREEN_LINES - 1
     {
         return false as u8;
     }
-    if (*ep).x == (*sp).x || (*ep).y == (*sp).y {
+    if ep.x == sp.x || ep.y == sp.y {
         return true as u8;
     }
-    if crate::game::tile_at((*ep).y, (*sp).x).is_walkable()
-        && crate::game::tile_at((*sp).y, (*ep).x).is_walkable()
+    if crate::game::tile_at(ep.y, sp.x).is_walkable()
+        && crate::game::tile_at(sp.y, ep.x).is_walkable()
     {
         true as u8
     } else {
@@ -590,7 +588,7 @@ pub unsafe fn cansee(y: i32, x: i32) -> u8 {
     // the coordinate and the room is lit or if it is close.
     CANSEE_TP.y = y;
     CANSEE_TP.x = x;
-    let rer = roomin(&raw mut CANSEE_TP);
+    let rer = roomin(CANSEE_TP);
     if rer == crate::game::PLAYER.room() && !crate::game::room_dark(rer) {
         true as u8
     } else {
@@ -619,7 +617,7 @@ pub unsafe fn update_dest(tp: *mut Thing) {
         if matches!((*thing_o(obj)).o_type, ItemType::Scroll(ScrollType::Scare)) {
             continue;
         }
-        if roomin(&raw mut (*thing_o(obj)).o_pos) == (*thing_t(tp)).t_room && rnd(100) < prob {
+        if roomin((*thing_o(obj)).o_pos) == (*thing_t(tp)).t_room && rnd(100) < prob {
             let obj_pos_ptr = &raw mut (*thing_o(obj)).o_pos;
             let mut taken = false;
             for mid in MONSTER_LIST.ids() {
@@ -649,6 +647,6 @@ pub unsafe fn dist(y1: i32, x1: i32, y2: i32, x2: i32) -> i32 {
 
 /// dist_cp:
 /// Call dist() with appropriate arguments for coord pointers
-pub unsafe fn dist_cp(c1: *mut IVec2, c2: *mut IVec2) -> i32 {
-    dist((*c1).y, (*c1).x, (*c2).y, (*c2).x)
+pub unsafe fn dist_cp(c1: IVec2, c2: IVec2) -> i32 {
+    dist(c1.y, c1.x, c2.y, c2.x)
 }

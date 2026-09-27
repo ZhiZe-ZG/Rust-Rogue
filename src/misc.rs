@@ -219,7 +219,7 @@ pub unsafe fn add_haste(potion: bool) -> bool {
 pub unsafe fn aggravate() {
     for id in MONSTER_LIST.ids() {
         if let Some(mp) = MONSTER_LIST.handle(id) {
-            runto(&mut (*thing_t(mp)).t_pos);
+            runto((*thing_t(mp)).t_pos);
         }
     }
 }

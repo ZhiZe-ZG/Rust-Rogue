@@ -258,7 +258,7 @@ pub unsafe fn read_scroll() {
                 msg_str("you hear a faint cry of anguish in the distance");
             } else {
                 obj = new_actor();
-                new_monster(obj, randmonster(false), &mut mp);
+                new_monster(obj, randmonster(false), mp);
             }
         }
         ScrollType::IdentifyPotion

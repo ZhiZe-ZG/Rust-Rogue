@@ -425,10 +425,7 @@ pub unsafe fn command() {
                                 }
                                 msg_str("no monster there");
                                 after = false as u8;
-                            } else if {
-                                let mut hero_copy = hero_pos();
-                                diag_ok(&raw mut hero_copy, &raw mut delta) != 0
-                            } {
+                            } else if diag_ok(hero_pos(), delta) != 0 {
                                 to_death = true as u8;
                                 max_hit = 0;
                                 (*thing_t(mp)).t_flags.insert(MonsterFlags::TARGET);

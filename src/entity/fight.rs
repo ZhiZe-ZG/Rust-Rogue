@@ -144,8 +144,8 @@ unsafe fn set_moat(y: i32, x: i32, val: *mut Thing) {
 
 /// fight:
 /// The player attacks the monster.
-pub unsafe fn fight(mp: *mut IVec2, weap: *mut Thing, thrown: u8) -> i32 {
-    let tp = moat((*mp).y, (*mp).x);
+pub unsafe fn fight(mp: IVec2, weap: *mut Thing, thrown: u8) -> i32 {
+    let tp = moat(mp.y, mp.x);
 
     // Since we are fighting, things are not quiet — no healing.
     count = 0;
@@ -367,12 +367,7 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                 if purse < 0 {
                     purse = 0;
                 }
-                let mp_pos = (*thing_t(mp)).t_pos;
-                remove_mon(
-                    &(*thing_t(mp)).t_pos as *const IVec2 as *mut IVec2,
-                    mp,
-                    false as u8,
-                );
+                remove_mon((*thing_t(mp)).t_pos, mp, false as u8);
                 if purse != lastpurse {
                     msg_str("your purse feels lighter");
                 }
@@ -402,7 +397,7 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                 }
                 if !steal.is_null() {
                     remove_mon(
-                        &(*thing_t(mp)).t_pos as *const IVec2 as *mut IVec2,
+                        (*thing_t(mp)).t_pos,
                         moat((*thing_t(mp)).t_pos.y, (*thing_t(mp)).t_pos.x),
                         false as u8,
                     );
@@ -752,7 +747,7 @@ pub unsafe fn bounce(weap: *mut Thing, mname: Option<&str>, noend: u8) {
 
 /// remove_mon:
 /// Remove a monster from the screen.
-pub unsafe fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: u8) {
+pub unsafe fn remove_mon(mp: IVec2, tp: *mut Thing, waskill: u8) {
     let mut obj = crate::entity::player::thing_pack(tp);
     while !obj.is_null() {
         let nexti = crate::entity::player::thing_next(obj);
@@ -765,10 +760,10 @@ pub unsafe fn remove_mon(mp: *mut IVec2, tp: *mut Thing, waskill: u8) {
         }
         obj = nexti;
     }
-    set_moat((*mp).y, (*mp).x, std::ptr::null_mut());
+    set_moat(mp.y, mp.x, std::ptr::null_mut());
     // Re-draw the underlying character.
     let oldch = (*thing_t(tp)).t_oldch;
-    output::write_glyph_at(IVec2::new((*mp).x, (*mp).y), (oldch as u8) as char);
+    output::write_glyph_at(IVec2::new(mp.x, mp.y), (oldch as u8) as char);
 
     if on_p(tp, MonsterFlags::TARGET) {
         kamikaze = false as u8;
@@ -817,7 +812,7 @@ pub unsafe fn killed(tp: *mut Thing, pr: u8) {
     }
 
     let mname = set_mname(tp);
-    remove_mon(&mut (*thing_t(tp)).t_pos, tp, true as u8);
+    remove_mon((*thing_t(tp)).t_pos, tp, true as u8);
 
     if pr != 0 {
         if has_hit != 0 {

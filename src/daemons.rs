@@ -150,8 +150,8 @@ pub unsafe fn sight() {
         PLAYER.remove_flag(MonsterFlags::BLIND);
         let proom = PLAYER.room();
         if !crate::game::room_gone(proom) {
-            let mut pos = PLAYER.pos();
-            enter_room(&mut pos);
+            let pos = PLAYER.pos();
+            enter_room(pos);
         }
         msg_str(choose_str(
             "far out!  Everything is all cosmic again",

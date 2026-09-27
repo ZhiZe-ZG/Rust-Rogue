@@ -155,9 +155,9 @@ unsafe fn treas_room() {
     let depth = game::current_depth();
     game::set_current_depth(depth + 1);
     while nm > 0 {
-        if let Some(mut pos) = find_floor(Some(idx), GameConfig::MAX_PLACEMENT_ATTEMPTS, true) {
+        if let Some(pos) = find_floor(Some(idx), GameConfig::MAX_PLACEMENT_ATTEMPTS, true) {
             let tp = new_actor();
-            new_monster(tp, randmonster(false), &mut pos);
+            new_monster(tp, randmonster(false), pos);
             (*thing_t(tp)).t_flags.insert(MonsterFlags::MEAN);
             give_pack(tp);
         }
@@ -203,8 +203,8 @@ unsafe fn place_room_contents() {
         if rnd(100) < if goldval > 0 { 80 } else { 25 } {
             let tp = new_actor();
             if !tp.is_null() {
-                if let Some(mut pos) = find_floor(Some(i), 0, true) {
-                    new_monster(tp, randmonster(false), &mut pos);
+                if let Some(pos) = find_floor(Some(i), 0, true) {
+                    new_monster(tp, randmonster(false), pos);
                     give_pack(tp);
                 }
             }
@@ -313,7 +313,7 @@ pub(crate) unsafe fn link_monsters_to_rooms() {
     for id in MONSTER_LIST.ids() {
         if let Some(tp) = MONSTER_LIST.handle(id) {
             let t = thing_t(tp);
-            (*t).t_room = roomin(&raw mut (*t).t_pos);
+            (*t).t_room = roomin((*t).t_pos);
         }
     }
 }
@@ -324,8 +324,8 @@ unsafe fn place_hero() {
         crate::game::PLAYER.set_pos(pos);
     }
 
-    let mut hero_pos = crate::game::PLAYER.pos();
-    enter_room(&raw mut hero_pos);
+    let hero_pos = crate::game::PLAYER.pos();
+    enter_room(hero_pos);
     let hero_pos = crate::game::PLAYER.pos();
     output::write_glyph_at(IVec2::new(hero_pos.x, hero_pos.y), PLAYER as char);
     if crate::game::PLAYER.has_flag(MonsterFlags::SEEMONST) {

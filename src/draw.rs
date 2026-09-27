@@ -394,7 +394,7 @@ pub unsafe fn look(wakeup: u8) {
     let hero = hero_pos();
 
     if !(oldpos.x == hero.x && oldpos.y == hero.y) {
-        erase_lamp(&raw mut oldpos, oldrp);
+        erase_lamp(oldpos, oldrp);
         oldpos = hero;
         oldrp = crate::game::PLAYER.room();
     }
@@ -567,7 +567,7 @@ pub unsafe fn trip_ch(y: i32, x: i32, ch: i32) -> i32 {
 
 /// erase_lamp:
 /// Clear the highlighted floor cells when a lamp fades in a dark room.
-pub unsafe fn erase_lamp(pos: *mut IVec2, rp: Option<usize>) {
+pub unsafe fn erase_lamp(pos: IVec2, rp: Option<usize>) {
     if !((see_floor != 0)
         && rp.is_some()
         && crate::game::room_dark(rp)
@@ -577,13 +577,10 @@ pub unsafe fn erase_lamp(pos: *mut IVec2, rp: Option<usize>) {
         return;
     }
 
-    if pos.is_null() {
-        return;
-    }
-    let ey = (*pos).y + 1;
-    let ex = (*pos).x + 1;
-    let sy = (*pos).y - 1;
-    for x in (*pos).x - 1..=ex {
+    let ey = pos.y + 1;
+    let ex = pos.x + 1;
+    let sy = pos.y - 1;
+    for x in pos.x - 1..=ex {
         for y in sy..=ey {
             let hero = hero_pos();
             if y == hero.y && x == hero.x {
@@ -611,11 +608,7 @@ unsafe fn cchar_at_cursor() -> u8 {
 
 /// enter_room:
 /// Code that is executed whenever the hero appears in a room.
-pub unsafe fn enter_room(cp: *mut IVec2) {
-    if cp.is_null() {
-        return;
-    }
-
+pub unsafe fn enter_room(cp: IVec2) {
     let rp = roomin(cp);
     if rp.is_none() {
         return;
@@ -672,11 +665,7 @@ pub unsafe fn enter_room(cp: *mut IVec2) {
 
 /// leave_room:
 /// Code for when the hero exits a room.
-pub unsafe fn leave_room(cp: *mut IVec2) {
-    if cp.is_null() {
-        return;
-    }
-
+pub unsafe fn leave_room(cp: IVec2) {
     let rp = crate::game::PLAYER.room();
     if rp.is_none() {
         return;
@@ -694,7 +683,7 @@ pub unsafe fn leave_room(cp: *mut IVec2) {
         SPACE
     };
 
-    let pnum = (flat_at((*cp).y, (*cp).x) as u8 & F_PNUM as u8) as usize;
+    let pnum = (flat_at(cp.y, cp.x) as u8 & F_PNUM as u8) as usize;
     if pnum < GameConfig::MAX_PASSAGES {
         crate::game::PLAYER.set_room(None);
     }

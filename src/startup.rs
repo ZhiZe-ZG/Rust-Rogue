@@ -151,8 +151,8 @@ pub unsafe fn playit() {
     }
 
     oldpos = crate::game::PLAYER.pos();
-    let mut hero_pos = crate::game::PLAYER.pos();
-    oldrp = roomin(&raw mut hero_pos);
+    let hero_pos = crate::game::PLAYER.pos();
+    oldrp = roomin(hero_pos);
     while playing != false as u8 {
         command(); /* Command execution */
     }
