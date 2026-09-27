@@ -340,21 +340,19 @@ pub unsafe fn command() {
                 match ch {
                     b',' => {
                         let hero = hero_pos();
-                        let mut obj = crate::game::with_current_level(|level| level.items.head());
-                        let mut found = false;
-                        while !obj.is_null() {
+                        let mut found_obj: *mut Thing = std::ptr::null_mut();
+                        for obj in crate::game::item_ptrs() {
                             if (*thing_o(obj)).o_pos.y == hero.y
                                 && (*thing_o(obj)).o_pos.x == hero.x
                             {
-                                found = true;
+                                found_obj = obj;
                                 break;
                             }
-                            obj = crate::entity::player::thing_next(obj);
                         }
 
-                        if found {
+                        if !found_obj.is_null() {
                             if levit_check() == 0 {
-                                pick_up((*thing_o(obj)).o_type.code() as u8);
+                                pick_up((*thing_o(found_obj)).o_type.code() as u8);
                             }
                         } else {
                             if terse == 0 {
@@ -466,7 +464,7 @@ pub unsafe fn command() {
                     }
                     b'i' => {
                         after = false as u8;
-                        inventory(crate::game::PLAYER.pack(), ItemFilter::Any);
+                        inventory(&crate::item::pack::pack_ptrs(), ItemFilter::Any);
                     }
                     b'I' => {
                         after = false as u8;
@@ -650,10 +648,7 @@ pub unsafe fn command() {
                                     ));
                                 }
                                 CTRL_G => {
-                                    let _ = inventory(
-                                        crate::game::with_current_level(|level| level.items.head()),
-                                        ItemFilter::Any,
-                                    );
+                                    let _ = inventory(&crate::game::item_ptrs(), ItemFilter::Any);
                                 }
                                 CTRL_W => whatis(false as u8, ItemFilter::Any),
                                 CTRL_D => {
@@ -1065,13 +1060,11 @@ pub unsafe fn current(cur: *mut Thing, how: &str, where_: &str) {
 ///
 /// Uses globals: lvl_obj, mlist.
 pub unsafe fn pr_list() {
-    let mut obj = crate::game::with_current_level(|level| level.items.head());
-    while !obj.is_null() {
+    for obj in crate::game::item_ptrs() {
         msg_str(&format!(
             "{}) {}",
             crate::draw::item_glyph((*thing_o(obj)).o_type),
             inv_name(obj, false as u8)
         ));
-        obj = crate::entity::player::thing_next(obj);
     }
 }

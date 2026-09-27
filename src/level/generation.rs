@@ -37,7 +37,7 @@ unsafe fn clear_previous_level_items() {
         }
     }
     MONSTER_LIST.clear();
-    with_current_level_mut(|current| current.items.clear());
+    with_current_level_mut(|current| current.clear_items());
 }
 
 /// Wake monsters in a room when it becomes visible.

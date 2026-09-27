@@ -283,6 +283,21 @@ pub fn allocated_count() -> i32 {
     OBJECTS.allocated_count()
 }
 
+/// Map a raw object handle back to its [`ThingId`] in the global arena.
+///
+/// This is the safe bridge used when a legacy `*mut Thing` caller needs to
+/// record the object in the level's floor-item list.
+#[inline]
+pub fn id_of(ptr: *mut Thing) -> Option<ThingId> {
+    OBJECTS.id_for_ptr(ptr)
+}
+
+/// A stable raw handle to the object behind `id` (null when stale).
+#[inline]
+pub fn ptr_of(id: ThingId) -> *mut Thing {
+    OBJECTS.ptr(id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

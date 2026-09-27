@@ -44,15 +44,13 @@ pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
     }
 
     // Refuse to step on a scroll of scare monster
-    let mut obj = crate::game::with_current_level(|level| level.items.head());
-    while !obj.is_null() {
+    for obj in crate::game::item_ptrs() {
         if chosen.y == (*thing_o(obj)).o_pos.y && chosen.x == (*thing_o(obj)).o_pos.x {
+            if (*thing_o(obj)).o_which == ScrollType::Scare as i32 {
+                return pos;
+            }
             break;
         }
-        obj = crate::entity::player::thing_next(obj);
-    }
-    if !obj.is_null() && (*thing_o(obj)).o_which == ScrollType::Scare as i32 {
-        return pos;
     }
 
     chosen

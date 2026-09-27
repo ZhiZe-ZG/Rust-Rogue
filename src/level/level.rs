@@ -13,7 +13,7 @@ use super::passages::{
 };
 use super::roomgraph::RoomGraph;
 use crate::config::GameConfig;
-use crate::item::item_list::ItemList;
+use crate::item::arena::{ThingId, OBJECTS};
 use crate::structure::{Room, Structure};
 use crate::tile::{Tile, TrapType};
 
@@ -77,7 +77,11 @@ pub struct Level {
     pub passage_links: Vec<PassageLinks>,
     /// Floor items (objects) resting on the level, replacing the legacy C
     /// `lvl_obj` global.
-    pub items: ItemList,
+    ///
+    /// This is a plain `Vec` of the arena handles for the objects on the floor,
+    /// head first (index 0 is the top of the former linked list). The objects
+    /// themselves are owned by [`crate::item::arena::OBJECTS`].
+    pub items: Vec<ThingId>,
 }
 
 impl Level {
@@ -97,7 +101,32 @@ impl Level {
             ),
             flags: LevelFlags::cleared(),
             passage_links: Vec::new(),
-            items: ItemList::new(),
+            items: Vec::new(),
+        }
+    }
+
+    /// Prepend `id` to the floor-item list (the old `lvl_obj` head insertion).
+    #[inline]
+    pub fn add_item(&mut self, id: ThingId) {
+        self.items.insert(0, id);
+    }
+
+    /// Unlink `id` from the floor-item list.
+    #[inline]
+    pub fn remove_item(&mut self, id: ThingId) {
+        self.items.retain(|&other| other != id);
+    }
+
+    /// The floor-item handles, head first.
+    #[inline]
+    pub fn item_ids(&self) -> &[ThingId] {
+        &self.items
+    }
+
+    /// Drop every floor item, discarding each from the arena.
+    pub fn clear_items(&mut self) {
+        for id in self.items.drain(..) {
+            let _ = OBJECTS.remove(id);
         }
     }
 

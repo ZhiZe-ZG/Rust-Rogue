@@ -26,7 +26,7 @@ use crate::entity::player::{
     thing_t, thing_next, MonsterFlags, Stats, Thing, ThingObject,
 };
 use crate::game::{MONSTER_LIST, MONSTER_MAP, PLAYER};
-use crate::item::arena::new_item;
+use crate::item::arena::{new_item, OBJECTS};
 use crate::level::{LevelFlags, Passage, PassageLinks, RoomGraph};
 use crate::structure::{Room, Structure};
 
@@ -286,11 +286,11 @@ unsafe fn list_nth(mut head: *mut Thing, i: usize) -> *mut Thing {
 /// Snapshot a monster `Thing` into a pointer-free [`MonsterSnapshot`].
 ///
 /// `monster_index` is the position of this monster among the live monster
-/// list, and `level_items` is the live floor-item list head (used to resolve
-/// object chase targets).
+/// list, and `level_items` is the live floor-item handle list, head first (used
+/// to resolve object chase targets).
 unsafe fn snapshot_monster(
     tp: *mut Thing,
-    level_items: *mut Thing,
+    level_items: &[*mut Thing],
     room_gold: &[IVec2],
 ) -> MonsterSnapshot {
     let t = thing_t(tp);
@@ -303,7 +303,7 @@ unsafe fn snapshot_monster(
             DestRef::None
         } else if let Some(i) = monster_index_for_dest(raw) {
             DestRef::Monster(i)
-        } else if let Some(i) = list_index_of(level_items, monster_dest_owner_thing(tp)) {
+        } else if let Some(i) = object_index_for_dest(level_items, raw) {
             DestRef::Object(i)
         } else if let Some(i) = room_gold
             .iter()
@@ -342,24 +342,15 @@ unsafe fn monster_index_for_dest(raw: *mut IVec2) -> Option<usize> {
     None
 }
 
-/// Resolve a raw chase pointer to the monster/thing that owns that coordinate,
-/// for mapping object targets in [`snapshot_monster`].
-///
-/// The legacy engine stored a pointer to `t_pos` (a monster) or `o_pos` (an
-/// object). This walks the monster list and level items to find the owner.
-unsafe fn monster_dest_owner_thing(tp: *mut Thing) -> *mut Thing {
-    let raw = crate::entity::player::thing_dest(tp);
-    if raw.is_null() {
-        return std::ptr::null_mut();
-    }
-    for id in MONSTER_LIST.ids() {
-        if let Some(m) = MONSTER_LIST.handle(id) {
-            if raw == (&raw mut (*thing_t(m)).t_pos) as *mut IVec2 {
-                return m;
-            }
+/// The index in `level_items` of the floor object whose `o_pos` equals `raw`
+/// (a chase target that pointed at an object), if any.
+unsafe fn object_index_for_dest(level_items: &[*mut Thing], raw: *mut IVec2) -> Option<usize> {
+    for (i, &obj) in level_items.iter().enumerate() {
+        if raw == (&raw mut (*thing_o(obj)).o_pos) as *mut IVec2 {
+            return Some(i);
         }
     }
-    std::ptr::null_mut()
+    None
 }
 
 // ─── Save ────────────────────────────────────────────────────────────────────
@@ -371,16 +362,16 @@ unsafe fn build_snapshot() -> GameSnapshot {
     // Player actor snapshot (without its pack, which is captured separately).
     let hero_ptr = PLAYER.with_mut(|thing| thing as *mut Thing);
     let hero_pack = PLAYER.pack();
-    let level_items = crate::game::with_current_level(|level| level.items.head());
+    let level_items = crate::game::item_ptrs();
 
-    let mut player = snapshot_monster(hero_ptr, level_items, &crate::game::ROOM_GOLD);
+    let mut player = snapshot_monster(hero_ptr, &level_items, &crate::game::ROOM_GOLD);
     player.t_pack = Vec::new();
 
     let monster_snaps: Vec<MonsterSnapshot> = MONSTER_LIST
         .ids()
         .into_iter()
         .filter_map(|id| MONSTER_LIST.handle(id))
-        .map(|tp| snapshot_monster(tp, level_items, &crate::game::ROOM_GOLD))
+        .map(|tp| snapshot_monster(tp, &level_items, &crate::game::ROOM_GOLD))
         .collect();
 
     let player_pack = collect_objects(hero_pack);
@@ -415,7 +406,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
             map: lvl.map.clone(),
             flags: lvl.flags.clone(),
             passage_links: lvl.passage_links.clone(),
-            items: collect_objects(lvl.items.head()),
+            items: level_items.iter().map(|&p| (*thing_o(p)).clone()).collect(),
             monster_cells,
             room_gold: crate::game::ROOM_GOLD.to_vec(),
         }
@@ -746,7 +737,6 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     MONSTER_MAP.clear();
 
     let room_gold = s.level.room_gold.clone();
-    let mut level_items_head: *mut Thing = std::ptr::null_mut();
     crate::game::with_current_level_mut(|lvl| {
         lvl.depth = s.level.depth;
         lvl.stairs = s.level.stairs;
@@ -756,8 +746,16 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
         lvl.map = s.level.map.clone();
         lvl.flags = s.level.flags.clone();
         lvl.passage_links = s.level.passage_links.clone();
-        level_items_head = build_object_list(&s.level.items);
-        lvl.items.set_head(level_items_head);
+        lvl.items = s
+            .level
+            .items
+            .iter()
+            .map(|data| {
+                let item = new_item();
+                *thing_o(item) = data.clone();
+                OBJECTS.id_for_ptr(item).expect("fresh item has an id")
+            })
+            .collect();
     });
     crate::game::set_current_depth(s.level.depth);
 
@@ -806,8 +804,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
             DestRef::None => set_thing_dest(tp, std::ptr::null_mut()),
             DestRef::Hero => set_thing_dest_hero(tp),
             DestRef::Object(j) => {
-                let item = list_nth(level_items_head, j);
-                if !item.is_null() {
+                if let Some(&item) = crate::game::item_ptrs().get(j) {
                     set_thing_dest(tp, (&raw mut (*thing_o(item)).o_pos) as *mut IVec2);
                 }
             }

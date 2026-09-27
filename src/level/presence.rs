@@ -104,11 +104,18 @@ pub(crate) fn find_floor(room_idx: Option<usize>, limit: i32, monst: bool) -> Op
     }
 }
 
+/// Link an already-allocated floor object into the level's item list.
+unsafe fn attach_floor(obj: *mut Thing) {
+    if let Some(id) = crate::item::arena::id_of(obj) {
+        with_current_level_mut(|current| current.add_item(id));
+    }
+}
+
 /// Allocate a floor object at `pos` and link it into the level's item list.
 unsafe fn spawn_object_at(pos: IVec2) -> *mut Thing {
     let obj = new_thing();
     (*thing_o(obj)).o_pos = pos;
-    with_current_level_mut(|current| current.items.attach(obj));
+    attach_floor(obj);
     obj
 }
 
@@ -188,7 +195,7 @@ unsafe fn place_room_contents() {
                 (*og).o_flags = ObjectFlags::MANY;
                 (*og).o_group = GOLDGRP;
                 (*og).o_type = ItemType::Gold;
-                with_current_level_mut(|current| current.items.attach(gold));
+                attach_floor(gold);
             }
         }
 
@@ -243,7 +250,7 @@ unsafe fn put_things() {
             (*og).o_arm = 11;
             (*og).o_type = ItemType::Amulet;
             (*og).o_pos = pos;
-            with_current_level_mut(|current| current.items.attach(obj));
+            attach_floor(obj);
         }
     }
 }

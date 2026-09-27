@@ -308,8 +308,7 @@ pub unsafe fn read_scroll() {
             let mut found = false as u8;
             let window = Window::Stdscr;
             output::clear_window(window);
-            let mut it = crate::game::with_current_level(|level| level.items.head());
-            while !it.is_null() {
+            for it in crate::game::item_ptrs() {
                 if matches!((*thing_o(it)).o_type, ItemType::Food) {
                     found = true as u8;
                     output::move_window_cursor(
@@ -318,7 +317,6 @@ pub unsafe fn read_scroll() {
                     );
                     output::write_window_glyph(window, (FOOD as u8) as char);
                 }
-                it = crate::entity::player::thing_next(it);
             }
             if found != 0 {
                 scr_info[ScrollType::FindFood.index()].oi_know = true;

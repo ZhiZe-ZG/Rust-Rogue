@@ -59,6 +59,24 @@ unsafe fn discard_item(item: *mut Thing) {
     discard(item);
 }
 
+/// Unlink `item` from the current level's floor-item list.
+unsafe fn detach_floor(item: *mut Thing) {
+    if let Some(id) = crate::item::arena::id_of(item) {
+        crate::game::with_current_level_mut(|level| level.remove_item(id));
+    }
+}
+
+/// The player's pack as stable raw handles, head first.
+pub unsafe fn pack_ptrs() -> Vec<*mut Thing> {
+    let mut out = Vec::new();
+    let mut cur = pack_head();
+    while !cur.is_null() {
+        out.push(cur);
+        cur = next_item(cur);
+    }
+    out
+}
+
 unsafe fn alloc_item() -> *mut Thing {
     new_item()
 }
@@ -112,9 +130,9 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
         ItemType::Scroll(ScrollType::Scare)
     ) && (*thing_o(item)).o_flags.contains(ObjectFlags::FOUND)
     {
-        crate::game::with_current_level_mut(|level| level.items.detach(item));
-        // The object is removed from `lvl_obj`, so the terrain glyph shows
-        // automatically via draw.
+        detach_floor(item);
+        // The object is removed from the floor list, so the terrain glyph
+        // shows automatically via draw.
         output::write_glyph_at(
             IVec2::new(hero_coord().x, hero_coord().y),
             (floor_char_for_room() as u8) as char,
@@ -255,9 +273,9 @@ pub unsafe fn pack_room(from_floor: u8, obj: *mut Thing) -> u8 {
     }
 
     if from_floor != 0 {
-        crate::game::with_current_level_mut(|level| level.items.detach(obj));
-        // The object is removed from `lvl_obj`, so the terrain glyph shows
-        // automatically via draw.
+        detach_floor(obj);
+        // The object is removed from the floor list, so the terrain glyph
+        // shows automatically via draw.
         output::write_glyph_at(
             IVec2::new(hero_coord().x, hero_coord().y),
             (floor_char_for_room() as u8) as char,
@@ -305,14 +323,12 @@ pub unsafe fn pack_char() -> u8 {
     b'a' as u8
 }
 
-pub unsafe fn inventory(list: *mut Thing, filter: ItemFilter) -> u8 {
-    let mut cur = list;
+pub unsafe fn inventory(items: &[*mut Thing], filter: ItemFilter) -> u8 {
     n_objs = 0;
     let any = filter == ItemFilter::Any;
 
-    while !cur.is_null() {
+    for &cur in items {
         if !filter.matches((*thing_o(cur)).o_type) {
-            cur = next_item(cur);
             continue;
         }
 
@@ -325,7 +341,6 @@ pub unsafe fn inventory(list: *mut Thing, filter: ItemFilter) -> u8 {
         };
         let _ = add_line(&format, &inv_name(cur, false as u8));
         msg_esc = 0;
-        cur = next_item(cur);
     }
 
     if n_objs == 0 {
@@ -364,7 +379,7 @@ pub unsafe fn pick_up(ch: u8) {
                     return;
                 }
                 money((*thing_o(obj)).o_arm);
-                crate::game::with_current_level_mut(|level| level.items.detach(obj));
+                detach_floor(obj);
                 discard_item(obj);
                 if proom().is_some() {
                     crate::game::set_room_goldval(proom(), 0);
@@ -414,7 +429,7 @@ pub unsafe fn get_item(purpose: &str, filter: ItemFilter) -> *mut Thing {
         n_objs = 1;
         if ch == '*' as i32 {
             mpos = 0;
-            if inventory(pack_head(), filter) == 0 {
+            if inventory(&pack_ptrs(), filter) == 0 {
                 after = false as u8;
                 return std::ptr::null_mut();
             }

@@ -93,12 +93,10 @@ pub unsafe fn show_floor() -> bool {
 }
 
 pub unsafe fn find_obj(y: i32, x: i32) -> *mut Thing {
-    let mut obj = crate::game::with_current_level(|level| level.items.head());
-    while !obj.is_null() {
+    for obj in crate::game::item_ptrs() {
         if (*thing_o(obj)).o_pos.y == y && (*thing_o(obj)).o_pos.x == x {
             return obj;
         }
-        obj = crate::entity::player::thing_next(obj);
     }
     std::ptr::null_mut()
 }

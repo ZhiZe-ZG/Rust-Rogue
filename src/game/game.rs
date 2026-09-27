@@ -233,6 +233,29 @@ pub fn passage_exits(passage: Option<usize>) -> Vec<IVec2> {
     CURRENT_LEVEL.with(|level| level.passage_exits(passage))
 }
 
+/// Stable raw handles to the floor items of the live level, head first.
+///
+/// This is the safe bridge from the level's `Vec<ThingId>` floor-item list to
+/// the legacy `*mut Thing` engine boundary; the underlying objects are owned by
+/// [`crate::item::arena::OBJECTS`].
+#[inline]
+pub fn item_ptrs() -> Vec<*mut Thing> {
+    with_current_level(|level| {
+        level
+            .items
+            .iter()
+            .filter_map(|&id| {
+                let ptr = crate::item::arena::ptr_of(id);
+                if ptr.is_null() {
+                    None
+                } else {
+                    Some(ptr)
+                }
+            })
+            .collect()
+    })
+}
+
 /// Convenience alias for the crate-wide level size constants.
 pub const GAME_HEIGHT: usize = GameConfig::LEVEL_HEIGHT;
 pub const GAME_WIDTH: usize = GameConfig::LEVEL_WIDTH;

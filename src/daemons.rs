@@ -240,8 +240,7 @@ pub unsafe fn come_down() {
     }
 
     // Undo the things (objects on the level).
-    let mut tp = crate::game::with_current_level(|level| level.items.head());
-    while !tp.is_null() {
+    for tp in crate::game::item_ptrs() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
             output::write_glyph_at(
@@ -249,7 +248,6 @@ pub unsafe fn come_down() {
                 crate::draw::item_glyph((*op).o_type),
             );
         }
-        tp = crate::entity::player::thing_next(tp);
     }
 
     // Undo the monsters.
@@ -283,8 +281,7 @@ pub unsafe fn visuals() {
     }
 
     // Change the things (objects).
-    let mut tp = crate::game::with_current_level(|level| level.items.head());
-    while !tp.is_null() {
+    for tp in crate::game::item_ptrs() {
         let op = thing_o(tp);
         if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
             output::write_glyph_at(
@@ -292,7 +289,6 @@ pub unsafe fn visuals() {
                 (rnd_thing() as u8) as char,
             );
         }
-        tp = crate::entity::player::thing_next(tp);
     }
 
     // Change the stairs.

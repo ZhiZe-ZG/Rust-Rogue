@@ -333,12 +333,11 @@ pub unsafe fn quaff() {
             }
         }
         PotionType::TrapFind => {
-            let head = crate::game::with_current_level(|level| level.items.head());
-            if !head.is_null() {
+            let floor = crate::game::item_ptrs();
+            if !floor.is_empty() {
                 let window = Window::Stdscr;
                 output::clear_window(window);
-                tp = head;
-                while !tp.is_null() {
+                for tp in floor {
                     if is_magic_local(tp) {
                         show = true;
                         output::move_window_cursor(
@@ -348,7 +347,6 @@ pub unsafe fn quaff() {
                         output::write_window_glyph(window, (MAGIC as u8) as char);
                         pot_info_at(PotionType::TrapFind.index()).oi_know = true;
                     }
-                    tp = next_thing(tp);
                 }
                 for id in MONSTER_LIST.ids() {
                     if let Some(mp) = MONSTER_LIST.handle(id) {

@@ -217,7 +217,9 @@ pub unsafe fn fall(obj: *mut Thing, pr: u8) {
             }
         }
 
-        crate::game::with_current_level_mut(|level| level.items.attach(obj));
+        if let Some(id) = crate::item::arena::id_of(obj) {
+            crate::game::with_current_level_mut(|level| level.add_item(id));
+        }
         return;
     }
 
