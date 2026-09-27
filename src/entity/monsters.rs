@@ -4,6 +4,7 @@
 use crate::config::GameConfig;
 use crate::daemon::{fuse, lengthen, Daemon};
 use crate::entity::chase::{dist, roomin, runto};
+use crate::entity::player::DestRef;
 use crate::entity::fight::set_mname;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
@@ -395,8 +396,12 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
     if has_flag(tp, MonsterFlags::GREED) && !has_flag(tp, MonsterFlags::RUN) {
         (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
         let pr = crate::game::PLAYER.room();
-        if pr.is_some() && crate::game::room_goldval(pr) != 0 {
-            crate::entity::player::set_thing_dest(tp, crate::game::room_gold_ptr(pr));
+        if let Some(room) = pr {
+            if crate::game::room_goldval(pr) != 0 {
+                crate::entity::player::set_thing_dest(tp, DestRef::RoomGold(room));
+            } else {
+                crate::entity::player::set_thing_dest_hero(tp);
+            }
         } else {
             crate::entity::player::set_thing_dest_hero(tp);
         }

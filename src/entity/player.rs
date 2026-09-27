@@ -289,6 +289,35 @@ const F_REAL: u8 = 0x10u8 as u8;
 const ARROW: i32 = 3;
 const VS_POISON: i32 = 0;
 
+/// The live chase destination of an actor, replacing the legacy stored
+/// `*mut IVec2`.
+///
+/// Every variant names its target by a stable handle or index; the actual
+/// coordinate is resolved on demand. No raw pointer to a monster, item, or
+/// room-gold slot is ever stored on a [`ThingMonster`].
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum DestRef {
+    /// No chase target.
+    #[default]
+    None,
+    /// Chasing the hero (position read live from [`crate::game::PLAYER`]).
+    Hero,
+    /// Chasing the live monster with this id.
+    Monster(crate::game::MonsterId),
+    /// Chasing the floor object with this id.
+    Object(crate::item::arena::ThingId),
+    /// Heading for the gold stash of this room index.
+    RoomGold(usize),
+}
+
+impl DestRef {
+    /// Whether this destination is the hero.
+    #[inline]
+    pub const fn is_hero(self) -> bool {
+        matches!(self, DestRef::Hero)
+    }
+}
+
 /// Monster/player (actor) data for a [`CThing`], using native Rust types.
 #[derive(Copy, Clone)]
 pub struct ThingMonster {
@@ -300,14 +329,8 @@ pub struct ThingMonster {
     /// item for Xerocs and randomized under hallucination).
     pub t_disguise: u8,
     pub t_oldch: u8,
-    /// Chase destination for non-hero targets (monster, item, or room gold);
-    /// `None` when the destination is the hero (see [`Self::t_dest_hero`]) or unset.
-    pub t_dest: Option<NonNull<IVec2>>,
-    /// Whether the actor is chasing the hero rather than a stored [`Self::t_dest`].
-    ///
-    /// The hero's position is read live through [`crate::game::PLAYER`], so no
-    /// raw pointer to the hero is ever stored.
-    pub t_dest_hero: bool,
+    /// Chase destination, stored as a stable handle (see [`DestRef`]).
+    pub t_dest: DestRef,
     pub t_flags: MonsterFlags,
     pub t_stats: Stats,
     pub t_room: Option<usize>,
@@ -402,8 +425,7 @@ impl Default for ThingMonster {
             t_type: None,
             t_disguise: 0,
             t_oldch: 0,
-            t_dest: None,
-            t_dest_hero: false,
+            t_dest: DestRef::None,
             t_flags: MonsterFlags::NONE,
             t_stats: Stats::default(),
             t_room: None,
@@ -471,37 +493,28 @@ pub unsafe fn set_thing_prev(tp: *mut Thing, value: *mut Thing) {
     (*thing_link(tp)).l_prev = NonNull::new(value);
 }
 
-/// Read the actor's chase destination as a raw pointer (null when unset).
+/// Read the actor's chase destination (a stable [`DestRef`] handle).
 #[inline]
-pub unsafe fn thing_dest(tp: *mut Thing) -> *mut IVec2 {
-    (*thing_t(tp))
-        .t_dest
-        .map_or(std::ptr::null_mut(), |p| p.as_ptr())
+pub unsafe fn thing_dest(tp: *mut Thing) -> DestRef {
+    (*thing_t(tp)).t_dest
 }
 
-/// Set the actor's chase destination from a raw pointer.
-///
-/// A non-null `value` clears the "chasing the hero" marker; a null value leaves
-/// the marker untouched so callers can clear [`set_thing_dest_hero`] separately.
+/// Set the actor's chase destination.
 #[inline]
-pub unsafe fn set_thing_dest(tp: *mut Thing, value: *mut IVec2) {
-    (*thing_t(tp)).t_dest = NonNull::new(value);
-    if !value.is_null() {
-        (*thing_t(tp)).t_dest_hero = false;
-    }
+pub unsafe fn set_thing_dest(tp: *mut Thing, value: DestRef) {
+    (*thing_t(tp)).t_dest = value;
 }
 
 /// Whether the actor is chasing the hero.
 #[inline]
 pub unsafe fn is_thing_dest_hero(tp: *mut Thing) -> bool {
-    (*thing_t(tp)).t_dest_hero
+    matches!((*thing_t(tp)).t_dest, DestRef::Hero)
 }
 
-/// Make the actor chase the hero (clearing any stored coordinate).
+/// Make the actor chase the hero (clearing any stored destination).
 #[inline]
 pub unsafe fn set_thing_dest_hero(tp: *mut Thing) {
-    (*thing_t(tp)).t_dest = None;
-    (*thing_t(tp)).t_dest_hero = true;
+    (*thing_t(tp)).t_dest = DestRef::Hero;
 }
 
 /// Read the actor's pack head as a raw pointer (null when empty).

@@ -96,8 +96,6 @@ static INIT_DAM: [InitWeap; MAXWEAPONS] = [
     },
 ];
 
-static mut FALL_POS: IVec2 = IVec2 { x: 0, y: 0 };
-
 use crate::game::globals::{after, group, has_hit, terse};
 
 
@@ -199,17 +197,17 @@ pub unsafe fn do_motion(obj: *mut Thing, ydelta: i32, xdelta: i32) {
 
 /// Drops an item near its current position or discards it if no floor slot is available.
 pub unsafe fn fall(obj: *mut Thing, pr: u8) {
-    if fallpos(&mut (*thing_o(obj)).o_pos, &raw mut FALL_POS) != 0 {
+    if let Some(pos) = fallpos((*thing_o(obj)).o_pos) {
         // Objects render from the `lvl_obj` list; no glyph write needed.
-        (*thing_o(obj)).o_pos = FALL_POS;
+        (*thing_o(obj)).o_pos = pos;
 
-        if cansee(FALL_POS.y, FALL_POS.x) != 0 {
-            let m = moat(FALL_POS.y, FALL_POS.x);
+        if cansee(pos.y, pos.x) != 0 {
+            let m = moat(pos.y, pos.x);
             if !m.is_null() {
                 (*thing_t(m)).t_oldch = crate::draw::item_glyph((*thing_o(obj)).o_type) as u8;
             } else {
                 output::write_glyph_at(
-                    IVec2::new(FALL_POS.x, FALL_POS.y),
+                    IVec2::new(pos.x, pos.y),
                     crate::draw::item_glyph((*thing_o(obj)).o_type),
                 );
             }
@@ -315,11 +313,13 @@ pub unsafe fn wield() {
     ));
 }
 
-/// Chooses a nearby floor/passage location to drop an item and returns whether one was found.
-pub unsafe fn fallpos(pos: *mut IVec2, newpos: *mut IVec2) -> u8 {
+/// Chooses a nearby floor/passage cell to drop an item into, returning it (or
+/// `None` when every neighbour is occupied or blocked).
+pub unsafe fn fallpos(pos: IVec2) -> Option<IVec2> {
     let mut cnt = 0;
-    for y in ((*pos).y - 1)..=((*pos).y + 1) {
-        for x in ((*pos).x - 1)..=((*pos).x + 1) {
+    let mut newpos = None;
+    for y in (pos.y - 1)..=(pos.y + 1) {
+        for x in (pos.x - 1)..=(pos.x + 1) {
             let h = hero();
             if y == h.y && x == h.x {
                 continue;
@@ -328,15 +328,10 @@ pub unsafe fn fallpos(pos: *mut IVec2, newpos: *mut IVec2) -> u8 {
             if ch == FLOOR || ch == PASSAGE {
                 cnt += 1;
                 if rnd(cnt) == 0 {
-                    (*newpos).y = y;
-                    (*newpos).x = x;
+                    newpos = Some(IVec2 { x, y });
                 }
             }
         }
     }
-    if cnt != 0 {
-        true as u8
-    } else {
-        false as u8
-    }
+    newpos
 }

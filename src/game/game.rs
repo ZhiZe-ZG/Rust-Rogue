@@ -206,15 +206,15 @@ pub fn set_room_goldval(room: Option<usize>, value: i32) {
 /// reach it through `crate::game::…`.
 pub use crate::game::globals::ROOM_GOLD;
 
-/// A stable raw pointer to the gold-stash position of `reference` (or null).
+/// The stable gold-stash position of `reference` (or `None` when out of range).
 ///
-/// The pointed-to slot lives in the process-wide [`ROOM_GOLD`] array, so it
-/// does not borrow the level lock and is safe for chase-target storage.
+/// The slot lives in the process-wide [`ROOM_GOLD`] array, so it does not
+/// borrow the level lock.
 #[inline]
-pub unsafe fn room_gold_ptr(room: Option<usize>) -> *mut IVec2 {
+pub unsafe fn room_gold_pos(room: Option<usize>) -> Option<IVec2> {
     match room {
-        Some(i) if i < GameConfig::MAX_ROOMS => (&raw mut ROOM_GOLD[i]) as *mut IVec2,
-        _ => std::ptr::null_mut(),
+        Some(i) if i < GameConfig::MAX_ROOMS => Some(ROOM_GOLD[i]),
+        _ => None,
     }
 }
 

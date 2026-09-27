@@ -230,11 +230,12 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
 
     (*thing_o(item)).o_flags.insert(ObjectFlags::FOUND);
 
+    let item_dest = crate::item::arena::id_of(item)
+        .map_or(crate::entity::player::DestRef::None, crate::entity::player::DestRef::Object);
     for id in MONSTER_LIST.ids() {
         if let Some(op) = MONSTER_LIST.handle(id) {
-            if crate::entity::player::thing_dest(op) == &raw mut (*thing_o(item)).o_pos {
-                let mut hero_pos = crate::game::PLAYER.pos();
-                crate::entity::player::set_thing_dest(op, &raw mut hero_pos);
+            if crate::entity::player::thing_dest(op) == item_dest {
+                crate::entity::player::set_thing_dest_hero(op);
             }
         }
     }

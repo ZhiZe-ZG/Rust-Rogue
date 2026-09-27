@@ -118,8 +118,7 @@ fn default_player() -> Thing {
             t_type: None,
             t_disguise: 0,
             t_oldch: 0,
-            t_dest: None,
-            t_dest_hero: false,
+            t_dest: crate::entity::player::DestRef::None,
             t_flags: MonsterFlags::NONE,
             t_stats: Stats {
                 strength: 0,

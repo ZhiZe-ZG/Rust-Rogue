@@ -9,7 +9,7 @@
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
-use crate::entity::player::{set_thing_dest, set_thing_dest_hero, thing_dest};
+use crate::entity::player::{set_thing_dest, set_thing_dest_hero, thing_dest, DestRef};
 use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::entity::rndmove::rndmove;
@@ -74,19 +74,35 @@ fn player_has(flag: MonsterFlags) -> bool {
     crate::game::PLAYER.has_flag(flag)
 }
 
+/// Resolve a stored [`DestRef`] to the live coordinate it names.
+///
+/// Every handle is looked up in its owning container; an unresolvable handle
+/// (freed monster/item, out-of-range room) falls back to the hero's position.
+#[inline]
+unsafe fn resolve_dest(dest: DestRef) -> IVec2 {
+    match dest {
+        DestRef::None | DestRef::Hero => hero_pos(),
+        DestRef::Monster(id) => MONSTER_LIST
+            .with(id, |t| match t {
+                Thing::Monster { data, .. } => data.t_pos,
+                Thing::Object { .. } => hero_pos(),
+            })
+            .unwrap_or_else(hero_pos),
+        DestRef::Object(id) => crate::item::arena::OBJECTS
+            .with(id, |t| match t {
+                Thing::Object { data, .. } => data.o_pos,
+                Thing::Monster { .. } => hero_pos(),
+            })
+            .unwrap_or_else(hero_pos),
+        DestRef::RoomGold(r) => crate::game::room_gold_pos(Some(r)).unwrap_or_else(hero_pos),
+    }
+}
+
 /// The effective chase destination of `th`: the hero's live position when the
-/// actor is chasing the hero, otherwise its stored coordinate.
+/// actor is chasing the hero, otherwise its stored handle resolved live.
 #[inline]
 unsafe fn dest_coord(th: *mut Thing) -> IVec2 {
-    if crate::entity::player::is_thing_dest_hero(th) {
-        return hero_pos();
-    }
-    let d = thing_dest(th);
-    if d.is_null() {
-        hero_pos()
-    } else {
-        *d
-    }
+    resolve_dest(thing_dest(th))
 }
 
 #[inline]
@@ -223,12 +239,7 @@ pub unsafe fn do_chase(th: *mut Thing) -> i32 {
         // Find room of chasee
         crate::game::PLAYER.room()
     } else {
-        let d = thing_dest(th);
-        if d.is_null() {
-            None
-        } else {
-            roomin(*d)
-        }
+        roomin(resolve_dest(thing_dest(th)))
     };
     // We don't count doors as inside rooms for this routine
     door = crate::game::is_door_at((*thing_t(th)).t_pos.y, (*thing_t(th)).t_pos.x);
@@ -313,7 +324,8 @@ pub unsafe fn do_chase(th: *mut Thing) -> i32 {
             return attack(th);
         } else if coord_eq(THIS, dest_coord(th)) {
             for obj in crate::game::item_ptrs() {
-                if thing_dest(th) == &raw mut (*thing_o(obj)).o_pos {
+                if thing_dest(th) == crate::item::arena::id_of(obj).map_or(DestRef::None, DestRef::Object)
+                {
                     if let Some(id) = crate::item::arena::id_of(obj) {
                         crate::game::with_current_level_mut(|level| level.remove_item(id));
                     }
@@ -618,18 +630,19 @@ pub unsafe fn update_dest(tp: *mut Thing) {
             continue;
         }
         if roomin((*thing_o(obj)).o_pos) == (*thing_t(tp)).t_room && rnd(100) < prob {
-            let obj_pos_ptr = &raw mut (*thing_o(obj)).o_pos;
+            let obj_dest =
+                crate::item::arena::id_of(obj).map_or(DestRef::None, DestRef::Object);
             let mut taken = false;
             for mid in MONSTER_LIST.ids() {
                 if let Some(m) = MONSTER_LIST.handle(mid) {
-                    if thing_dest(m) == obj_pos_ptr {
+                    if thing_dest(m) == obj_dest {
                         taken = true;
                         break;
                     }
                 }
             }
             if !taken {
-                set_thing_dest(tp, obj_pos_ptr);
+                set_thing_dest(tp, obj_dest);
                 return;
             }
         }

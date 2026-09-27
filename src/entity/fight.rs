@@ -793,10 +793,7 @@ pub unsafe fn killed(tp: *mut Thing, pr: u8) {
         let tp_room = (*thing_t(tp)).t_room;
         let level = crate::game::current_depth();
         if tp_room.is_some()
-            && fallpos(
-                &mut (*thing_t(tp)).t_pos,
-                crate::game::room_gold_ptr(tp_room),
-            ) != 0
+            && fallpos((*thing_t(tp)).t_pos).is_some()
             && level >= max_level
         {
             let gold = new_item();
