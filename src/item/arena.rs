@@ -238,9 +238,19 @@ impl ThingArena {
         self.ptr(id)
     }
 
+    /// Store a fresh default object and return its [`ThingId`] handle.
+    pub fn new_object_id(&self) -> ThingId {
+        self.insert(Thing::object(ThingObject::default()))
+    }
+
     /// Store a fresh default object; the historical item-allocation entry point.
     pub fn new_item(&self) -> *mut Thing {
         self.new_object()
+    }
+
+    /// Store a fresh default object and return its [`ThingId`] handle.
+    pub fn new_item_id(&self) -> ThingId {
+        self.new_object_id()
     }
 
     /// Remove and drop the object at raw handle `ptr`, reporting whether it was
@@ -273,9 +283,19 @@ pub fn new_object() -> *mut Thing {
     OBJECTS.new_object()
 }
 
+/// Allocate an object (item) thing in the arena and return its [`ThingId`].
+pub fn new_object_id() -> ThingId {
+    OBJECTS.new_object_id()
+}
+
 /// Allocate an object thing; the historical item-allocation entry point.
 pub fn new_item() -> *mut Thing {
     OBJECTS.new_item()
+}
+
+/// Allocate an object thing and return its [`ThingId`] handle.
+pub fn new_item_id() -> ThingId {
+    OBJECTS.new_item_id()
 }
 
 /// Number of live objects tracked by the global arena.
@@ -296,6 +316,12 @@ pub fn id_of(ptr: *mut Thing) -> Option<ThingId> {
 #[inline]
 pub fn ptr_of(id: ThingId) -> *mut Thing {
     OBJECTS.ptr(id)
+}
+
+/// Whether `id` still refers to a live object in the global arena.
+#[inline]
+pub fn contains(id: ThingId) -> bool {
+    OBJECTS.contains(id)
 }
 
 #[cfg(test)]

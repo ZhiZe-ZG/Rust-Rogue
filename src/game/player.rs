@@ -16,11 +16,11 @@
 //! slot simply holds `None` when empty, so there is no null-pointer sentinel to
 //! dereference.
 
-use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingMonster};
+use crate::item::arena::ThingId;
 use glam::IVec2;
 
 /// Interior-mutable slot holding an optional [`Thing`] handle.
@@ -111,7 +111,6 @@ impl Equipment {
 /// The zero-valued actor [`Thing`] used to seed the global player.
 fn default_player() -> Thing {
     Thing::Monster {
-        link: crate::entity::player::ThingLink::empty(),
         data: ThingMonster {
             t_pos: IVec2 { x: 0, y: 0 },
             t_turn: false,
@@ -130,7 +129,7 @@ fn default_player() -> Thing {
                 max_hit_points: 0,
             },
             t_room: None,
-            t_pack: None,
+            t_pack: Vec::new(),
             t_reserved: 0,
         },
     }
@@ -317,16 +316,34 @@ impl Player {
         self.with_monster(|hero| hero.t_stats.level)
     }
 
-    /// The player's pack head as a raw handle (or null when empty).
+    /// The player's pack as arena handles, head first.
     #[inline]
-    pub fn pack(&self) -> *mut Thing {
-        self.with_monster(|hero| hero.t_pack.map_or(std::ptr::null_mut(), |p| p.as_ptr()))
+    pub fn pack(&self) -> Vec<ThingId> {
+        self.with_monster(|hero| hero.t_pack.clone())
     }
 
-    /// Set the player's pack head from a raw handle.
+    /// Replace the player's pack.
     #[inline]
-    pub fn set_pack(&self, pack: *mut Thing) {
-        self.with_monster_mut(|hero| hero.t_pack = NonNull::new(pack));
+    pub fn set_pack(&self, pack: Vec<ThingId>) {
+        self.with_monster_mut(|hero| hero.t_pack = pack);
+    }
+
+    /// Prepend a handle to the player's pack.
+    #[inline]
+    pub fn push_pack_front(&self, id: ThingId) {
+        self.with_monster_mut(|hero| hero.t_pack.insert(0, id));
+    }
+
+    /// Remove `id` from the player's pack.
+    #[inline]
+    pub fn remove_from_pack(&self, id: ThingId) {
+        self.with_monster_mut(|hero| hero.t_pack.retain(|&x| x != id));
+    }
+
+    /// The `i`-th handle in the player's pack, if present.
+    #[inline]
+    pub fn pack_nth(&self, i: usize) -> Option<ThingId> {
+        self.with_monster(|hero| hero.t_pack.get(i).copied())
     }
 
     /// The player's equipped objects.

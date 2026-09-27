@@ -1,13 +1,18 @@
 //! Pack and inventory management.
 //!
 //! Ported from `src/c/pack.c` to Rust.
+//!
+//! The player's pack is stored as a `Vec` of arena handles ([`ThingId`]) on the
+//! hero [`crate::entity::player::ThingMonster`]; this module threads the stable
+//! raw handles produced by the item arena through the legacy order/stack merge
+//! algorithm of the C original.
 
-use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingObject};
 use crate::game::MONSTER_LIST;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::scrolls::ScrollType;
-use crate::entity::player::{detach, discard};
-use crate::item::arena::new_item;
+use crate::entity::player::discard;
+use crate::item::arena::{id_of, new_item, ptr_of, ThingId};
 use crate::item::things::{add_line, inv_name};
 use crate::misc::{find_obj, show_floor};
 use crate::ui::input::readchar;
@@ -16,7 +21,6 @@ use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
 
 const MAXPACK: i32 = 23;
-const MAXSTR: usize = 1024;
 const PASSAGE: u8 = b'#' as u8;
 const FLOOR: u8 = b'.' as u8;
 const GOLD: u8 = b'*' as u8;
@@ -35,24 +39,8 @@ const ESCAPE: i32 = 27;
 use crate::game::globals::{after, again, amulet, inpack, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, move_on, mpos, msg_esc, n_objs, pack_used, purse, terse};
 
 
-unsafe fn thing_t(tp: *mut Thing) -> *mut crate::entity::player::ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
 unsafe fn thing_o(tp: *mut Thing) -> *mut crate::entity::player::ThingObject {
     crate::entity::player::thing_o(tp)
-}
-
-unsafe fn next_item(item: *mut Thing) -> *mut Thing {
-    crate::entity::player::thing_next(item)
-}
-
-unsafe fn detach_list(head: *mut *mut Thing, item: *mut Thing) {
-    detach(head, item);
-}
-
-unsafe fn prev_item(item: *mut Thing) -> *mut Thing {
-    crate::entity::player::thing_prev(item)
 }
 
 unsafe fn discard_item(item: *mut Thing) {
@@ -61,32 +49,18 @@ unsafe fn discard_item(item: *mut Thing) {
 
 /// Unlink `item` from the current level's floor-item list.
 unsafe fn detach_floor(item: *mut Thing) {
-    if let Some(id) = crate::item::arena::id_of(item) {
+    if let Some(id) = id_of(item) {
         crate::game::with_current_level_mut(|level| level.remove_item(id));
     }
 }
 
-/// The player's pack as stable raw handles, head first.
-pub unsafe fn pack_ptrs() -> Vec<*mut Thing> {
-    let mut out = Vec::new();
-    let mut cur = pack_head();
-    while !cur.is_null() {
-        out.push(cur);
-        cur = next_item(cur);
-    }
-    out
+/// The player's pack as arena handles, head first.
+pub unsafe fn pack_ptrs() -> Vec<ThingId> {
+    crate::game::PLAYER.pack()
 }
 
 unsafe fn alloc_item() -> *mut Thing {
     new_item()
-}
-
-unsafe fn pack_head() -> *mut Thing {
-    crate::game::PLAYER.pack()
-}
-
-unsafe fn set_pack_head(value: *mut Thing) {
-    crate::game::PLAYER.set_pack(value);
 }
 
 unsafe fn hero_coord() -> IVec2 {
@@ -114,8 +88,6 @@ unsafe fn floor_char_for_room() -> u8 {
 pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
     let mut item = obj;
     let mut from_floor = false as u8;
-    let mut op: *mut Thing;
-    let mut lp: *mut Thing;
 
     if item.is_null() {
         item = find_obj(hero_coord().y, hero_coord().x);
@@ -142,95 +114,127 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
         return;
     }
 
-    if pack_head().is_null() {
-        set_pack_head(item);
+    let item_id = match id_of(item) {
+        Some(id) => id,
+        None => return,
+    };
+    let mut pack = crate::game::PLAYER.pack();
+
+    if pack.is_empty() {
         (*thing_o(item)).o_packch = pack_char() as u8;
+        pack.push(item_id);
         inpack += 1;
     } else {
-        lp = std::ptr::null_mut();
-        op = pack_head();
-        while !op.is_null() {
-            if !(*thing_o(op)).o_type.same_category((*thing_o(item)).o_type) {
-                lp = op;
-            } else {
-                while (*thing_o(op)).o_type.same_category((*thing_o(item)).o_type)
-                    && (*thing_o(op)).o_which != (*thing_o(item)).o_which
+        let item_type = (*thing_o(item)).o_type;
+        let item_which = (*thing_o(item)).o_which;
+        let item_group = (*thing_o(item)).o_group;
+        let n = pack.len();
+
+        // Walk the pack exactly as the C list traversal did, tracking the
+        // position after which to insert (`lp`) or the stack we merge into.
+        let mut lp: Option<usize> = None;
+        let mut op = 0usize;
+        let mut merged = false;
+        'outer: while op < n {
+            let opp = ptr_of(pack[op]);
+            if !(*thing_o(opp)).o_type.same_category(item_type) {
+                lp = Some(op);
+                op += 1;
+                continue;
+            }
+            // Same category: advance while the `o_which` differs.
+            loop {
+                let opp = ptr_of(pack[op]);
+                if (*thing_o(opp)).o_type.same_category(item_type)
+                    && (*thing_o(opp)).o_which != item_which
                 {
-                    lp = op;
-                    if next_item(op).is_null() {
+                    lp = Some(op);
+                    if op + 1 >= n {
+                        op = n;
                         break;
                     }
-                    op = next_item(op);
+                    op += 1;
+                } else {
+                    break;
                 }
-                if (*thing_o(op)).o_type.same_category((*thing_o(item)).o_type)
-                    && (*thing_o(op)).o_which == (*thing_o(item)).o_which
+            }
+            if op < n {
+                let opp = ptr_of(pack[op]);
+                if (*thing_o(opp)).o_type.same_category(item_type)
+                    && (*thing_o(opp)).o_which == item_which
                 {
-                    if matches!(
-                        (*thing_o(op)).o_type,
-                        ItemType::Food | ItemType::Potion(_) | ItemType::Scroll(_)
-                    ) {
+                    if matches!(item_type, ItemType::Food | ItemType::Potion(_) | ItemType::Scroll(_))
+                    {
                         if pack_room(from_floor, item) == 0 {
                             return;
                         }
-                        (*thing_o(op)).o_count += 1;
+                        (*thing_o(opp)).o_count += 1;
                         discard_item(item);
-                        item = op;
-                        lp = std::ptr::null_mut();
-                        break;
+                        item = opp;
+                        lp = None;
+                        merged = true;
+                        break 'outer;
                     }
-                    if (*thing_o(item)).o_group != 0 {
-                        lp = op;
-                        while (*thing_o(op)).o_type.same_category((*thing_o(item)).o_type)
-                            && (*thing_o(op)).o_which == (*thing_o(item)).o_which
-                            && (*thing_o(op)).o_group != (*thing_o(item)).o_group
-                        {
-                            lp = op;
-                            if next_item(op).is_null() {
+                    if item_group != 0 {
+                        lp = Some(op);
+                        loop {
+                            let opp = ptr_of(pack[op]);
+                            if (*thing_o(opp)).o_type.same_category(item_type)
+                                && (*thing_o(opp)).o_which == item_which
+                                && (*thing_o(opp)).o_group != item_group
+                            {
+                                lp = Some(op);
+                                if op + 1 >= n {
+                                    op = n;
+                                    break;
+                                }
+                                op += 1;
+                            } else {
                                 break;
                             }
-                            op = next_item(op);
                         }
-                        if (*thing_o(op)).o_type.same_category((*thing_o(item)).o_type)
-                            && (*thing_o(op)).o_which == (*thing_o(item)).o_which
-                            && (*thing_o(op)).o_group == (*thing_o(item)).o_group
-                        {
-                            (*thing_o(op)).o_count += (*thing_o(item)).o_count;
-                            inpack -= 1;
-                            if pack_room(from_floor, item) == 0 {
-                                return;
+                        if op < n {
+                            let opp = ptr_of(pack[op]);
+                            if (*thing_o(opp)).o_type.same_category(item_type)
+                                && (*thing_o(opp)).o_which == item_which
+                                && (*thing_o(opp)).o_group == item_group
+                            {
+                                (*thing_o(opp)).o_count += (*thing_o(item)).o_count;
+                                inpack -= 1;
+                                if pack_room(from_floor, item) == 0 {
+                                    return;
+                                }
+                                (*thing_o(opp)).o_count += 1;
+                                discard_item(item);
+                                item = opp;
+                                lp = None;
+                                merged = true;
+                                break 'outer;
                             }
-                            (*thing_o(op)).o_count += 1;
-                            discard_item(item);
-                            item = op;
-                            lp = std::ptr::null_mut();
-                            break;
+                            lp = Some(op);
                         }
                     } else {
-                        lp = op;
+                        lp = Some(op);
                     }
                 }
-                break;
             }
-            op = next_item(op);
+            break;
         }
 
-        if !lp.is_null() {
-            if pack_room(from_floor, item) == 0 {
-                return;
+        if !merged {
+            if let Some(pos) = lp {
+                if pos + 1 <= pack.len() {
+                    (*thing_o(item)).o_packch = pack_char() as u8;
+                    pack.insert(pos + 1, item_id);
+                }
             }
-            (*thing_o(item)).o_packch = pack_char() as u8;
-            crate::entity::player::set_thing_next(item, next_item(lp));
-            crate::entity::player::set_thing_prev(item, lp);
-            if !next_item(lp).is_null() {
-                crate::entity::player::set_thing_prev(next_item(lp), item);
-            }
-            crate::entity::player::set_thing_next(lp, item);
         }
     }
 
     (*thing_o(item)).o_flags.insert(ObjectFlags::FOUND);
+    crate::game::PLAYER.set_pack(pack);
 
-    let item_dest = crate::item::arena::id_of(item)
+    let item_dest = id_of(item)
         .map_or(crate::entity::player::DestRef::None, crate::entity::player::DestRef::Object);
     for id in MONSTER_LIST.ids() {
         if let Some(op) = MONSTER_LIST.handle(id) {
@@ -300,14 +304,14 @@ pub unsafe fn leave_pack(obj: *mut Thing, newobj: u8, all: u8) -> *mut Thing {
         if newobj != 0 {
             nobj = alloc_item();
             *nobj = (*obj).clone();
-            crate::entity::player::set_thing_next(nobj, std::ptr::null_mut());
-            crate::entity::player::set_thing_prev(nobj, std::ptr::null_mut());
             (*thing_o(nobj)).o_count = 1;
         }
     } else {
         last_pick = std::ptr::null_mut();
         pack_used[(*thing_o(obj)).o_packch as usize - 'a' as usize] = false as u8;
-        crate::entity::player::detach_pack_from_player(obj);
+        if let Some(id) = id_of(obj) {
+            crate::game::PLAYER.remove_from_pack(id);
+        }
     }
     nobj
 }
@@ -324,12 +328,13 @@ pub unsafe fn pack_char() -> u8 {
     b'a' as u8
 }
 
-pub unsafe fn inventory(items: &[*mut Thing], filter: ItemFilter) -> u8 {
+pub unsafe fn inventory(items: &[ThingId], filter: ItemFilter) -> u8 {
     n_objs = 0;
     let any = filter == ItemFilter::Any;
 
-    for &cur in items {
-        if !filter.matches((*thing_o(cur)).o_type) {
+    for &id in items {
+        let cur = ptr_of(id);
+        if cur.is_null() || !filter.matches((*thing_o(cur)).o_type) {
             continue;
         }
 
@@ -397,7 +402,7 @@ pub unsafe fn pick_up(ch: u8) {
 pub unsafe fn get_item(purpose: &str, filter: ItemFilter) -> *mut Thing {
     let mut ch: i32;
 
-    if pack_head().is_null() {
+    if crate::game::PLAYER.pack().is_empty() {
         msg_str("you aren't carrying anything");
         return std::ptr::null_mut();
     }
@@ -436,12 +441,11 @@ pub unsafe fn get_item(purpose: &str, filter: ItemFilter) -> *mut Thing {
             }
             continue;
         }
-        let mut obj = pack_head();
-        while !obj.is_null() {
-            if (*thing_o(obj)).o_packch == ch as u8 {
+        for id in crate::game::PLAYER.pack() {
+            let obj = ptr_of(id);
+            if !obj.is_null() && (*thing_o(obj)).o_packch == ch as u8 {
                 return obj;
             }
-            obj = next_item(obj);
         }
         msg_str(&format!(
             "'{}' is not a valid item",
@@ -492,10 +496,12 @@ pub unsafe fn move_msg(obj: *mut Thing) {
 }
 
 pub unsafe fn picky_inven() {
-    if pack_head().is_null() {
+    let pack = crate::game::PLAYER.pack();
+    if pack.is_empty() {
         msg_str("you aren't carrying anything");
-    } else if next_item(pack_head()).is_null() {
-        msg_str(&format!("a) {}", inv_name(pack_head(), false as u8)));
+    } else if pack.len() == 1 {
+        let obj = ptr_of(pack[0]);
+        msg_str(&format!("a) {}", inv_name(obj, false as u8)));
     } else {
         msg_str(if terse != 0 {
             "item: "
@@ -508,9 +514,9 @@ pub unsafe fn picky_inven() {
             msg_str("");
             return;
         }
-        let mut obj = pack_head();
-        while !obj.is_null() {
-            if mch as u8 == (*thing_o(obj)).o_packch {
+        for id in &pack {
+            let obj = ptr_of(*id);
+            if !obj.is_null() && mch as u8 == (*thing_o(obj)).o_packch {
                 msg_str(&format!(
                     "{}) {}",
                     mch as u8 as char,
@@ -518,7 +524,6 @@ pub unsafe fn picky_inven() {
                 ));
                 return;
             }
-            obj = next_item(obj);
         }
         msg_str(&format!("'{}' not in pack", output::format_key(mch as u8)));
     }

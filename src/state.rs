@@ -22,11 +22,10 @@ use std::io::{Read, Write};
 use crate::daemon::CDelayedAction;
 use crate::entity::monsters::MonsterType;
 use crate::entity::player::{
-    set_thing_dest, set_thing_next, set_thing_pack, set_thing_prev, thing_o, thing_t, thing_next,
-    MonsterFlags, Stats, Thing, ThingObject,
+    set_thing_dest, set_thing_pack, thing_o, thing_t, MonsterFlags, Stats, Thing, ThingObject,
 };
 use crate::game::{MONSTER_LIST, MONSTER_MAP, PLAYER};
-use crate::item::arena::{new_item, OBJECTS};
+use crate::item::arena::{new_item, new_item_id, ThingId, OBJECTS};
 use crate::level::{LevelFlags, Passage, PassageLinks, RoomGraph};
 use crate::structure::{Room, Structure};
 
@@ -219,68 +218,48 @@ pub struct GameSnapshot {
 
 // ─── Pointer-free helpers ────────────────────────────────────────────────────
 
-/// Collect a linked list of object things into a `Vec<ThingObject>`, head first.
-unsafe fn collect_objects(mut head: *mut Thing) -> Vec<ThingObject> {
-    let mut out = Vec::new();
-    while !head.is_null() {
-        let op = thing_o(head);
-        if !op.is_null() {
-            out.push((*op).clone());
-        }
-        head = thing_next(head);
-    }
-    out
+/// Collect the objects behind a list of pack handles into `Vec<ThingObject>`,
+/// head first.
+fn collect_objects(ids: &[ThingId]) -> Vec<ThingObject> {
+    ids.iter()
+        .filter_map(|&id| {
+            OBJECTS
+                .with(id, |t| match t {
+                    Thing::Object { data, .. } => Some(data.clone()),
+                    Thing::Monster { .. } => None,
+                })
+                .flatten()
+        })
+        .collect()
 }
 
-/// Build a doubly-linked list of objects from `items` (head = index 0) and
-/// return its head pointer.
-unsafe fn build_object_list(items: &[ThingObject]) -> *mut Thing {
-    let mut head: *mut Thing = std::ptr::null_mut();
-    let mut prev: *mut Thing = std::ptr::null_mut();
-    for data in items {
-        let item = new_item();
-        let op = thing_o(item);
-        *op = data.clone();
-        set_thing_prev(item, prev);
-        set_thing_next(item, std::ptr::null_mut());
-        if prev.is_null() {
-            head = item;
-        } else {
-            set_thing_next(prev, item);
-        }
-        prev = item;
-    }
-    head
+/// Allocate objects for `items` (head = index 0) and return their handles.
+fn build_object_list(items: &[ThingObject]) -> Vec<ThingId> {
+    items
+        .iter()
+        .map(|data| {
+            let id = new_item_id();
+            let _ = OBJECTS.with_mut(id, |t| {
+                if let Thing::Object { data: slot, .. } = t {
+                    *slot = data.clone();
+                }
+            });
+            id
+        })
+        .collect()
 }
 
-/// Index of `target` within the linked list `head`, or `None`.
-unsafe fn list_index_of(head: *mut Thing, target: *mut Thing) -> Option<usize> {
-    if target.is_null() {
-        return None;
-    }
-    let mut cur = head;
-    let mut i = 0usize;
-    while !cur.is_null() {
-        if cur == target {
-            return Some(i);
-        }
-        i += 1;
-        cur = thing_next(cur);
-    }
-    None
+/// Index of the object behind `target` within the pack `pack`, or `None`.
+fn list_index_of(pack: &[ThingId], target: *mut Thing) -> Option<usize> {
+    let target = crate::item::arena::id_of(target)?;
+    pack.iter().position(|&id| id == target)
 }
 
-/// The `i`-th element of the linked list `head`, or null.
-unsafe fn list_nth(mut head: *mut Thing, i: usize) -> *mut Thing {
-    let mut n = 0usize;
-    while !head.is_null() {
-        if n == i {
-            return head;
-        }
-        n += 1;
-        head = thing_next(head);
-    }
-    std::ptr::null_mut()
+/// The raw handle for the `i`-th pack entry, or null.
+fn list_nth(pack: &[ThingId], i: usize) -> *mut Thing {
+    pack.get(i)
+        .copied()
+        .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
 }
 
 /// Snapshot a monster `Thing` into a pointer-free [`MonsterSnapshot`].
@@ -321,7 +300,7 @@ unsafe fn snapshot_monster(
         t_flags: (*t).t_flags,
         t_stats: (*t).t_stats,
         t_room: (*t).t_room,
-        t_pack: collect_objects(crate::entity::player::thing_pack(tp)),
+        t_pack: collect_objects(&crate::entity::player::thing_pack(tp)),
         t_reserved: (*t).t_reserved,
     }
 }
@@ -347,14 +326,14 @@ unsafe fn build_snapshot() -> GameSnapshot {
         .map(|tp| snapshot_monster(tp, &level_items))
         .collect();
 
-    let player_pack = collect_objects(hero_pack);
+    let player_pack = collect_objects(&hero_pack);
     let equipment = EquipmentSnapshot {
-        armor: list_index_of(hero_pack, PLAYER.armor()),
-        left_ring: list_index_of(hero_pack, PLAYER.left_ring()),
-        right_ring: list_index_of(hero_pack, PLAYER.right_ring()),
-        weapon: list_index_of(hero_pack, PLAYER.weapon()),
-        last_pick: list_index_of(hero_pack, crate::game::globals::last_pick),
-        l_last_pick: list_index_of(hero_pack, crate::game::globals::l_last_pick),
+        armor: list_index_of(&hero_pack, PLAYER.armor()),
+        left_ring: list_index_of(&hero_pack, PLAYER.left_ring()),
+        right_ring: list_index_of(&hero_pack, PLAYER.right_ring()),
+        weapon: list_index_of(&hero_pack, PLAYER.weapon()),
+        last_pick: list_index_of(&hero_pack, crate::game::globals::last_pick),
+        l_last_pick: list_index_of(&hero_pack, crate::game::globals::l_last_pick),
     };
 
     // Level snapshot.
@@ -528,10 +507,10 @@ pub fn rs_restore_file(input: &mut dyn Read) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Resolve an `Option<usize>` pack index against a rebuilt list head.
-unsafe fn resolve_index(head: *mut Thing, index: Option<usize>) -> *mut Thing {
+/// Resolve an `Option<usize>` pack index against the rebuilt pack handles.
+fn resolve_index(pack: &[ThingId], index: Option<usize>) -> *mut Thing {
     match index {
-        Some(i) => list_nth(head, i),
+        Some(i) => list_nth(pack, i),
         None => std::ptr::null_mut(),
     }
 }
@@ -799,15 +778,15 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     (*t).t_room = s.player.t_room;
     (*t).t_dest = crate::entity::player::DestRef::None;
     let player_pack = build_object_list(&s.player_pack);
-    set_thing_pack(hero_ptr, player_pack);
+    set_thing_pack(hero_ptr, player_pack.clone());
     set_thing_dest(hero_ptr, crate::entity::player::DestRef::None);
 
-    PLAYER.set_armor(resolve_index(player_pack, s.equipment.armor));
-    PLAYER.set_left_ring(resolve_index(player_pack, s.equipment.left_ring));
-    PLAYER.set_right_ring(resolve_index(player_pack, s.equipment.right_ring));
-    PLAYER.set_weapon(resolve_index(player_pack, s.equipment.weapon));
-    crate::game::globals::last_pick = resolve_index(player_pack, s.equipment.last_pick);
-    crate::game::globals::l_last_pick = resolve_index(player_pack, s.equipment.l_last_pick);
+    PLAYER.set_armor(resolve_index(&player_pack, s.equipment.armor));
+    PLAYER.set_left_ring(resolve_index(&player_pack, s.equipment.left_ring));
+    PLAYER.set_right_ring(resolve_index(&player_pack, s.equipment.right_ring));
+    PLAYER.set_weapon(resolve_index(&player_pack, s.equipment.weapon));
+    crate::game::globals::last_pick = resolve_index(&player_pack, s.equipment.last_pick);
+    crate::game::globals::l_last_pick = resolve_index(&player_pack, s.equipment.l_last_pick);
 
     // ── misc ────────────────────────────────────────────────────────────
     max_stats = s.max_stats;

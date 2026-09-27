@@ -51,15 +51,6 @@ unsafe fn thing_o(
     crate::entity::player::thing_o(tp)
 }
 
-#[inline]
-fn pack_ptr() -> *mut crate::entity::player::Thing {
-    crate::game::PLAYER.pack()
-}
-
-#[inline]
-unsafe fn next_ptr(tp: *mut crate::entity::player::Thing) -> *mut crate::entity::player::Thing {
-    crate::entity::player::thing_next(tp)
-}
 
 #[inline]
 fn vowelstr(s: &str) -> &'static str {
@@ -411,8 +402,11 @@ pub unsafe fn total_winner() {
     output::clear_screen();
     output::write_text_at(IVec2::new(0, 0), "   Worth  Item\n");
     let oldpurse = purse;
-    let mut obj = pack_ptr();
-    while !obj.is_null() {
+    for id in crate::game::PLAYER.pack() {
+        let obj = crate::item::arena::ptr_of(id);
+        if obj.is_null() {
+            continue;
+        }
         let mut worth = 0;
         let item_type = (*thing_o(obj)).o_type;
         match item_type {
@@ -427,7 +421,6 @@ pub unsafe fn total_winner() {
         let line = format!("{} ) {:5}  {}\n", packch, worth, item_name);
         output::write_text(&line);
         purse += worth;
-        obj = next_ptr(obj);
     }
     let summary = format!("   {:5}  Gold Pieces          ", oldpurse);
     output::write_text(&summary);

@@ -31,7 +31,8 @@ use crate::wizard::teleport;
 use glam::IVec2;
 use serde::{Deserialize, Serialize};
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
-use std::ptr::NonNull;
+
+use crate::item::arena::ThingId;
 
 pub use crate::entity::stats::Stats;
 
@@ -319,7 +320,7 @@ impl DestRef {
 }
 
 /// Monster/player (actor) data for a [`CThing`], using native Rust types.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct ThingMonster {
     pub t_pos: IVec2,
     pub t_turn: bool,
@@ -334,7 +335,8 @@ pub struct ThingMonster {
     pub t_flags: MonsterFlags,
     pub t_stats: Stats,
     pub t_room: Option<usize>,
-    pub t_pack: Option<NonNull<Thing>>,
+    /// Items carried in this actor's pack, as arena handles (head first).
+    pub t_pack: Vec<ThingId>,
     pub t_reserved: i32,
 }
 
@@ -363,57 +365,31 @@ pub struct ThingObject {
     pub o_label: Option<String>,
 }
 
-/// Intrusive doubly-linked list header shared by every [`CThing`], independent
-/// of whether the thing is an actor (monster/player) or an object (item). The
-/// links use Rust `NonNull` pointers with a null niche instead of raw `*mut`.
-#[derive(Copy, Clone)]
-pub struct ThingLink {
-    pub l_next: Option<NonNull<Thing>>,
-    pub l_prev: Option<NonNull<Thing>>,
-}
-
-impl ThingLink {
-    pub const fn empty() -> Self {
-        ThingLink {
-            l_next: None,
-            l_prev: None,
-        }
-    }
-}
-
-/// A game thing: either an actor (monster/player) or an object (item), carrying
-/// a shared intrusive list header. This is a pure Rust enum (`union`/C ABI has
-/// been removed). It is `Clone` but not `Copy` because object string fields are
-/// owned values.
+/// A game thing: either an actor (monster/player) or an object (item). This is
+/// a pure Rust enum (`union`/C ABI and the intrusive list header have been
+/// removed). It is `Clone` but not `Copy` because object string fields and the
+/// actor pack are owned values.
 #[derive(Clone)]
 pub enum Thing {
-    Monster { link: ThingLink, data: ThingMonster },
-    Object { link: ThingLink, data: ThingObject },
+    Monster { data: ThingMonster },
+    Object { data: ThingObject },
 }
 
-// SAFETY: the game is single-threaded. `Thing` embeds `NonNull` handles (list
-// links and pack heads) that make it neither `Send` nor `Sync` by default, but
-// the game only ever mutates things from one thread. This marker lets the safe
-// [`crate::game::MonsterList`] own monsters inside a `Mutex` without raw-pointer
-// fields of its own.
+// SAFETY: the game is single-threaded and things are only ever mutated from one
+// thread, so it is sound for the safe [`crate::game::MonsterList`] to own
+// monsters inside a `Mutex`.
 unsafe impl Send for Thing {}
 unsafe impl Sync for Thing {}
 
 impl Thing {
-    /// Build an actor thing with an empty list header.
+    /// Build an actor thing.
     pub const fn actor(data: ThingMonster) -> Self {
-        Thing::Monster {
-            link: ThingLink::empty(),
-            data,
-        }
+        Thing::Monster { data }
     }
 
-    /// Build an object thing with an empty list header.
+    /// Build an object thing.
     pub const fn object(data: ThingObject) -> Self {
-        Thing::Object {
-            link: ThingLink::empty(),
-            data,
-        }
+        Thing::Object { data }
     }
 }
 
@@ -429,7 +405,7 @@ impl Default for ThingMonster {
             t_flags: MonsterFlags::NONE,
             t_stats: Stats::default(),
             t_room: None,
-            t_pack: None,
+            t_pack: Vec::new(),
             t_reserved: 0,
         }
     }
@@ -457,42 +433,6 @@ impl Default for ThingObject {
     }
 }
 
-/// Read the next-list pointer of `tp` (null if `tp` is null).
-#[inline]
-pub unsafe fn thing_next(tp: *mut Thing) -> *mut Thing {
-    if tp.is_null() {
-        std::ptr::null_mut()
-    } else {
-        (*thing_link(tp))
-            .l_next
-            .map_or(std::ptr::null_mut(), |p| p.as_ptr())
-    }
-}
-
-/// Set the next-list pointer of `tp`.
-#[inline]
-pub unsafe fn set_thing_next(tp: *mut Thing, value: *mut Thing) {
-    (*thing_link(tp)).l_next = NonNull::new(value);
-}
-
-/// Read the prev-list pointer of `tp` (null if `tp` is null).
-#[inline]
-pub unsafe fn thing_prev(tp: *mut Thing) -> *mut Thing {
-    if tp.is_null() {
-        std::ptr::null_mut()
-    } else {
-        (*thing_link(tp))
-            .l_prev
-            .map_or(std::ptr::null_mut(), |p| p.as_ptr())
-    }
-}
-
-/// Set the prev-list pointer of `tp`.
-#[inline]
-pub unsafe fn set_thing_prev(tp: *mut Thing, value: *mut Thing) {
-    (*thing_link(tp)).l_prev = NonNull::new(value);
-}
-
 /// Read the actor's chase destination (a stable [`DestRef`] handle).
 #[inline]
 pub unsafe fn thing_dest(tp: *mut Thing) -> DestRef {
@@ -517,116 +457,37 @@ pub unsafe fn set_thing_dest_hero(tp: *mut Thing) {
     (*thing_t(tp)).t_dest = DestRef::Hero;
 }
 
-/// Read the actor's pack head as a raw pointer (null when empty).
+/// The actor's pack as arena handles, head first.
 #[inline]
-pub unsafe fn thing_pack(tp: *mut Thing) -> *mut Thing {
-    (*thing_t(tp))
-        .t_pack
-        .map_or(std::ptr::null_mut(), |p| p.as_ptr())
+pub unsafe fn thing_pack(tp: *mut Thing) -> Vec<ThingId> {
+    (*thing_t(tp)).t_pack.clone()
 }
 
-/// Set the actor's pack head from a raw pointer.
+/// Replace the actor's pack with `pack`.
 #[inline]
-pub unsafe fn set_thing_pack(tp: *mut Thing, value: *mut Thing) {
-    (*thing_t(tp)).t_pack = NonNull::new(value);
+pub unsafe fn set_thing_pack(tp: *mut Thing, pack: Vec<ThingId>) {
+    (*thing_t(tp)).t_pack = pack;
 }
 
-/// Prepend `item` to the actor `owner`'s pack list.
+/// Prepend `item` to the actor `owner`'s pack.
 pub unsafe fn attach_pack(owner: *mut Thing, item: *mut Thing) {
-    let head = thing_pack(owner);
-    set_thing_next(item, head);
-    set_thing_prev(item, std::ptr::null_mut());
-    if !head.is_null() {
-        set_thing_prev(head, item);
+    if let Some(id) = crate::item::arena::id_of(item) {
+        (*thing_t(owner)).t_pack.insert(0, id);
     }
-    set_thing_pack(owner, item);
 }
 
-/// Unlink `item` from the global player's pack list.
-///
-/// The player is not reachable as a `*mut Thing`, so this mirrors
-/// [`detach_pack`] against the safe [`crate::game::PLAYER`] pack accessors.
-pub unsafe fn detach_pack_from_player(item: *mut Thing) {
-    let prev = thing_prev(item);
-    let next = thing_next(item);
-
-    if crate::game::PLAYER.pack() == item {
-        crate::game::PLAYER.set_pack(next);
-    }
-    if !prev.is_null() {
-        set_thing_next(prev, next);
-    }
-    if !next.is_null() {
-        set_thing_prev(next, prev);
-    }
-    set_thing_next(item, std::ptr::null_mut());
-    set_thing_prev(item, std::ptr::null_mut());
-}
-
-/// Unlink `item` from the actor `owner`'s pack list.
+/// Unlink `item` (by handle) from the actor `owner`'s pack.
 pub unsafe fn detach_pack(owner: *mut Thing, item: *mut Thing) {
-    let prev = thing_prev(item);
-    let next = thing_next(item);
-
-    if thing_pack(owner) == item {
-        set_thing_pack(owner, next);
+    if let Some(id) = crate::item::arena::id_of(item) {
+        (*thing_t(owner)).t_pack.retain(|&x| x != id);
     }
-    if !prev.is_null() {
-        set_thing_next(prev, next);
-    }
-    if !next.is_null() {
-        set_thing_prev(next, prev);
-    }
-    set_thing_next(item, std::ptr::null_mut());
-    set_thing_prev(item, std::ptr::null_mut());
 }
 
-/// Drop every item in the actor `owner`'s pack list.
+/// Drop every item in the actor `owner`'s pack.
 pub unsafe fn free_pack(owner: *mut Thing) {
-    let mut item = thing_pack(owner);
-    while !item.is_null() {
-        let next = thing_next(item);
-        discard(item);
-        item = next;
-    }
-    set_thing_pack(owner, std::ptr::null_mut());
-}
-
-/// Unlink `item` from a doubly-linked list, patching its neighbours and
-/// clearing its own header.
-pub unsafe fn detach(list: *mut *mut Thing, item: *mut Thing) {
-    let prev = thing_prev(item);
-    let next = thing_next(item);
-
-    if *list == item {
-        *list = next;
-    }
-    if !prev.is_null() {
-        set_thing_next(prev, next);
-    }
-    if !next.is_null() {
-        set_thing_prev(next, prev);
-    }
-    set_thing_next(item, std::ptr::null_mut());
-    set_thing_prev(item, std::ptr::null_mut());
-}
-
-/// Prepend `item` to a doubly-linked list.
-pub unsafe fn attach(list: *mut *mut Thing, item: *mut Thing) {
-    set_thing_next(item, *list);
-    set_thing_prev(item, std::ptr::null_mut());
-    if !(*list).is_null() {
-        set_thing_prev(*list, item);
-    }
-    *list = item;
-}
-
-/// Drop every item in a doubly-linked list.
-pub unsafe fn free_list(list: *mut *mut Thing) {
-    while !(*list).is_null() {
-        let item = *list;
-        *list = thing_next(item);
-        discard(item);
+    let pack = std::mem::take(&mut (*thing_t(owner)).t_pack);
+    for id in pack {
+        let _ = crate::item::arena::OBJECTS.remove(id);
     }
 }
 
@@ -661,15 +522,6 @@ pub unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     match &mut *tp {
         Thing::Object { data, .. } => data as *mut ThingObject,
         Thing::Monster { .. } => std::ptr::null_mut(),
-    }
-}
-
-/// Borrow the shared list header of `tp`.
-#[inline]
-pub unsafe fn thing_link(tp: *mut Thing) -> *mut ThingLink {
-    match &mut *tp {
-        Thing::Monster { link, .. } => link as *mut ThingLink,
-        Thing::Object { link, .. } => link as *mut ThingLink,
     }
 }
 
@@ -1011,7 +863,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::item::arena::{allocated_count, new_object};
+    use crate::item::arena::{allocated_count, new_item_id, new_object_id};
 
     /// Serialise the arena assertions; the arena and its counter are process
     /// globals, so the tests must not interleave allocation/free from several
@@ -1021,97 +873,30 @@ mod tests {
         LOCK.lock().unwrap_or_else(|poison| poison.into_inner())
     }
 
-    /// Prepend/remove across head, middle, tail, and only-element cases, and
-    /// confirm neighbour links and the head pointer are patched correctly.
+    /// Attaching then detaching a pack handle preserves the remaining order.
     #[test]
-    fn attach_detach_preserves_order_and_links() {
+    fn attach_detach_pack_preserves_order() {
         let _guard = serial();
-        let a = new_object();
-        let b = new_object();
-        let c = new_object();
+        let mut owner = Thing::actor(ThingMonster::default());
+        let a = new_object_id();
+        let b = new_object_id();
 
-        let mut head: *mut Thing = std::ptr::null_mut();
         unsafe {
-            attach(&mut head, a);
-            attach(&mut head, b);
-            attach(&mut head, c);
+            attach_pack(&mut owner, crate::item::arena::ptr_of(a));
+            attach_pack(&mut owner, crate::item::arena::ptr_of(b));
         }
+        let pack = unsafe { thing_pack(&mut owner) };
+        assert_eq!(pack, vec![b, a]);
 
-        // Head is the most recently attached; links read c, b, a.
-        assert_eq!(head, c);
         unsafe {
-            assert_eq!(thing_next(c), b);
-            assert_eq!(thing_next(b), a);
-            assert!(thing_next(a).is_null());
-            assert!(thing_prev(c).is_null());
-            assert_eq!(thing_prev(b), c);
-            assert_eq!(thing_prev(a), b);
+            detach_pack(&mut owner, crate::item::arena::ptr_of(b));
         }
+        assert_eq!(unsafe { thing_pack(&mut owner) }, vec![a]);
 
-        // Remove the middle element.
         unsafe {
-            detach(&mut head, b);
+            free_pack(&mut owner);
         }
-        assert_eq!(head, c);
-        unsafe {
-            assert_eq!(thing_next(c), a);
-            assert_eq!(thing_prev(a), c);
-            // The removed node's own header is cleared.
-            assert!(thing_next(b).is_null());
-            assert!(thing_prev(b).is_null());
-        }
-
-        // Remove the head element.
-        unsafe {
-            detach(&mut head, c);
-        }
-        assert_eq!(head, a);
-        unsafe {
-            assert!(thing_prev(a).is_null());
-        }
-
-        // Remove the only remaining element.
-        unsafe {
-            detach(&mut head, a);
-        }
-        assert!(head.is_null());
-
-        discard(a);
-        discard(b);
-        discard(c);
-    }
-
-    /// Draining a list while traversing must capture each node's successor
-    /// before the node is freed, and leave the list empty.
-    #[test]
-    fn removal_during_traversal_drains_list() {
-        let _guard = serial();
-        let a = new_object();
-        let b = new_object();
-        let c = new_object();
-
-        let mut head: *mut Thing = std::ptr::null_mut();
-        unsafe {
-            attach(&mut head, a);
-            attach(&mut head, b);
-            attach(&mut head, c);
-        }
-
-        let before = allocated_count();
-        let mut node = head;
-        let mut visited = 0;
-        unsafe {
-            while !node.is_null() {
-                // Capture the successor before the node is freed.
-                let next = thing_next(node);
-                visited += 1;
-                discard(node);
-                node = next;
-            }
-        }
-        assert_eq!(visited, 3);
-        // All three arena entries were released during the traversal.
-        assert_eq!(allocated_count(), before - 3);
+        assert!(unsafe { thing_pack(&mut owner) }.is_empty());
     }
 
     /// Allocating and discarding objects keeps the tracked count balanced.
@@ -1119,11 +904,11 @@ mod tests {
     fn allocation_count_is_balanced() {
         let _guard = serial();
         let before = allocated_count();
-        let a = new_object();
-        let b = new_object();
+        let a = new_item_id();
+        let b = new_item_id();
         assert_eq!(allocated_count(), before + 2);
-        discard(a);
-        discard(b);
+        let _ = crate::item::arena::OBJECTS.remove(a);
+        let _ = crate::item::arena::OBJECTS.remove(b);
         assert_eq!(allocated_count(), before);
     }
 }

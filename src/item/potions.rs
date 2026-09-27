@@ -154,8 +154,8 @@ unsafe fn ring_is(ring: *mut Thing, ring_type: RingType) -> bool {
 }
 
 #[inline]
-unsafe fn next_thing(tp: *mut Thing) -> *mut Thing {
-    crate::entity::player::thing_next(tp)
+unsafe fn next_thing(_tp: *mut Thing) -> *mut Thing {
+    std::ptr::null_mut()
 }
 
 #[inline]
@@ -348,8 +348,11 @@ pub unsafe fn quaff() {
                 }
                 for id in MONSTER_LIST.ids() {
                     if let Some(mp) = MONSTER_LIST.handle(id) {
-                        tp = crate::entity::player::thing_pack(mp);
-                        while !tp.is_null() {
+                        for pack_id in crate::entity::player::thing_pack(mp) {
+                            let tp = crate::item::arena::ptr_of(pack_id);
+                            if tp.is_null() {
+                                continue;
+                            }
                             if is_magic_local(tp) {
                                 show = true;
                                 output::move_window_cursor(
@@ -358,7 +361,6 @@ pub unsafe fn quaff() {
                                 );
                                 output::write_window_glyph(window, (MAGIC as u8) as char);
                             }
-                            tp = next_thing(tp);
                         }
                     }
                 }

@@ -645,7 +645,7 @@ pub unsafe fn command() {
                                     ));
                                 }
                                 CTRL_G => {
-                                    let _ = inventory(&crate::game::item_ptrs(), ItemFilter::Any);
+                                    let _ = inventory(&crate::game::PLAYER.pack(), ItemFilter::Any);
                                 }
                                 CTRL_W => whatis(false as u8, ItemFilter::Any),
                                 CTRL_D => {

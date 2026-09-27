@@ -284,7 +284,7 @@ pub unsafe fn new_monster(tp: *mut Thing, monster_type: MonsterType, cp: IVec2) 
         (*thing_t(tp)).t_flags.insert(MonsterFlags::HASTE);
     }
     (*thing_t(tp)).t_turn = true;
-    crate::entity::player::set_thing_pack(tp, std::ptr::null_mut());
+    crate::entity::player::set_thing_pack(tp, Vec::new());
 
     if iswearing(RingType::Aggravate) {
         runto(cp);

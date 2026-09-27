@@ -84,7 +84,7 @@ use crate::game::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hi
 
 pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
     let pack = crate::game::PLAYER.pack();
-    if pack.is_null() {
+    if pack.is_empty() {
         msg_str("you don't have anything in your pack to identify");
         return;
     }
@@ -307,7 +307,6 @@ mod tests {
     fn set_know_marks_object_known() {
         unsafe {
             let mut obj = Thing::Object {
-                link: crate::entity::player::ThingLink::empty(),
                 data: ThingObject {
                     o_type: ItemType::SCROLL,
                     o_pos: IVec2 { x: 0, y: 0 },

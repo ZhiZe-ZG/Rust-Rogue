@@ -379,9 +379,11 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                 // Nymph: steals a magic item
                 let mut steal: *mut Thing = std::ptr::null_mut();
                 let mut nobj: i32 = 0;
-                let mut obj = PLAYER.pack();
-                while !obj.is_null() {
-                    let obj_next = crate::entity::player::thing_next(obj);
+                for id in PLAYER.pack() {
+                    let obj = crate::item::arena::ptr_of(id);
+                    if obj.is_null() {
+                        continue;
+                    }
                     if obj != PLAYER.armor()
                         && obj != PLAYER.weapon()
                         && obj != PLAYER.left_ring()
@@ -393,7 +395,6 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                             steal = obj;
                         }
                     }
-                    obj = obj_next;
                 }
                 if !steal.is_null() {
                     remove_mon(
@@ -748,17 +749,20 @@ pub unsafe fn bounce(weap: *mut Thing, mname: Option<&str>, noend: u8) {
 /// remove_mon:
 /// Remove a monster from the screen.
 pub unsafe fn remove_mon(mp: IVec2, tp: *mut Thing, waskill: u8) {
-    let mut obj = crate::entity::player::thing_pack(tp);
-    while !obj.is_null() {
-        let nexti = crate::entity::player::thing_next(obj);
-        (*thing_o(obj)).o_pos = (*thing_t(tp)).t_pos;
-        detach_pack(tp, obj);
+    let drop_pos = (*thing_t(tp)).t_pos;
+    let pack = crate::entity::player::thing_pack(tp);
+    crate::entity::player::set_thing_pack(tp, Vec::new());
+    for id in pack {
+        let obj = crate::item::arena::ptr_of(id);
+        if obj.is_null() {
+            continue;
+        }
+        (*thing_o(obj)).o_pos = drop_pos;
         if waskill != 0 {
             fall(obj, false as u8);
         } else {
             discard(obj);
         }
-        obj = nexti;
     }
     set_moat(mp.y, mp.x, std::ptr::null_mut());
     // Re-draw the underlying character.
