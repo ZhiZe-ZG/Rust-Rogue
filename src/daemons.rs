@@ -41,7 +41,7 @@ const STARVETIME: i32 = 850;
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
-use crate::globals::{after, amulet, count, food_left, hungry_state, jump, no_command, quiet, running, seenstairs, terse, to_death};
+use crate::game::globals::{after, amulet, count, food_left, hungry_state, jump, no_command, quiet, running, seenstairs, terse, to_death};
 
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
@@ -64,9 +64,7 @@ unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
 
 // ─── Module globals ───────────────────────────────────────────────────────────
 
-/// Counter used by rollwand() to pace wandering-monster checks.
-/// Originally defined in daemons.c as `int between = 0;`.
-pub static mut between: i32 = 0;
+use crate::game::globals::between;
 
 // ─── Daemon / fuse callbacks ──────────────────────────────────────────────────
 

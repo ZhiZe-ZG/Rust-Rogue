@@ -27,7 +27,7 @@ const ESCAPE: i32 = 27;
 /// Magic header that identifies a RON save file written by this version.
 pub const RON_MAGIC: &[u8] = b"ROGUE-RON 1\n";
 
-use crate::globals::{master_mode_enabled, mpos, wizard};
+use crate::game::globals::{master_mode_enabled, mpos, wizard};
 
 
 /// Checks the restored player state and reports whether the saved game is already dead.
@@ -38,14 +38,14 @@ unsafe fn restore_player_dead() -> bool {
 /// Implements the interactive save command flow and then delegates the actual write to save_file.
 pub unsafe fn save_game() {
     let mut c: i32;
-    let mut buf = crate::globals::file_name();
+    let mut buf = crate::game::globals::file_name();
 
     mpos = 0;
 
     'over: loop {
-        if !crate::globals::file_name().is_empty() {
+        if !crate::game::globals::file_name().is_empty() {
             loop {
-                msg_str(&format!("save file ({})? ", crate::globals::file_name()));
+                msg_str(&format!("save file ({})? ", crate::game::globals::file_name()));
                 c = readchar();
                 mpos = 0;
                 if c == ESCAPE {
@@ -62,7 +62,7 @@ pub unsafe fn save_game() {
             if c == 'y' as i32 || c == 'Y' as i32 {
                 output::write_text("Yes\n");
                 output::refresh();
-                buf = crate::globals::file_name();
+                buf = crate::game::globals::file_name();
             } else {
                 buf = String::new();
             }
@@ -105,7 +105,7 @@ pub unsafe fn save_game() {
                 md_unlink(&buf);
             }
 
-            crate::globals::set_file_name(buf.clone());
+            crate::game::globals::set_file_name(buf.clone());
             match File::create(&buf) {
                 Ok(mut savef) => save_file(&mut savef),
                 Err(err) => {
@@ -128,7 +128,7 @@ pub unsafe fn save_file(savef: &mut File) {
     let _ = std::io::stdout().write_all(b"\n");
     runtime::shutdown();
     resetltchars();
-    md_chmod(&crate::globals::file_name(), 0o400);
+    md_chmod(&crate::game::globals::file_name(), 0o400);
 
     let _ = savef.write_all(RON_MAGIC);
 
@@ -147,7 +147,7 @@ pub unsafe fn restore(file: &str) -> u8 {
     let mut file_name = file.to_string();
 
     if file_name == "-r" {
-        file_name = crate::globals::file_name();
+        file_name = crate::game::globals::file_name();
     }
 
     md_tstphold();
@@ -195,7 +195,7 @@ pub unsafe fn restore(file: &str) -> u8 {
     }
 
     md_tstpresume();
-    crate::globals::set_file_name(file_name.clone());
+    crate::game::globals::set_file_name(file_name.clone());
     output::set_clear_on_refresh(Window::Curscr, true);
     set_seed(md_getpid());
     msg_str(&format!("file name: {}", file_name));
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn auto_save(sig: i32) {
     let _ = sig;
 
     md_ignoreallsignals();
-    let file_name = crate::globals::file_name();
+    let file_name = crate::game::globals::file_name();
     if !file_name.is_empty() {
         match File::create(&file_name) {
             Ok(mut savef) => save_file(&mut savef),

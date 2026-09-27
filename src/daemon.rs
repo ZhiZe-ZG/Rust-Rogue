@@ -17,6 +17,8 @@
 //! `turn_see`).
 
 
+use crate::game::globals::D_LIST;
+
 const EMPTY: i32 = 0;
 const DAEMON: i32 = -1;
 const MAXDAEMONS: usize = 20;
@@ -121,16 +123,6 @@ pub struct CDelayedAction {
     pub d_arg: i32,
     pub d_time: i32,
 }
-
-const EMPTY_SLOT: CDelayedAction = CDelayedAction {
-    d_type: EMPTY,
-    d_func: None,
-    d_arg: 0,
-    d_time: 0,
-};
-
-/// Global daemon/fuse table.
-pub static mut D_LIST: [CDelayedAction; MAXDAEMONS] = [EMPTY_SLOT; MAXDAEMONS];
 
 /// Find an empty slot in the daemon/fuse list.
 ///

@@ -24,7 +24,7 @@ use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
 
 use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
-use crate::globals::{monsters, weap_info};
+use crate::game::globals::{monsters, weap_info};
 use crate::item::rings::RingType;
 use crate::entity::player::{attach_pack, detach_pack, discard};
 use crate::item::arena::new_item;
@@ -95,7 +95,7 @@ static mut PRNAME_BUF: [u8; MAXSTR] = [0; MAXSTR];
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
-use crate::globals::{count, e_levels, fight_flush, has_hit, kamikaze, max_hit, max_level, no_command, purse, quiet, running, terse, to_death, vf_hit};
+use crate::game::globals::{count, e_levels, fight_flush, has_hit, kamikaze, max_hit, max_level, no_command, purse, quiet, running, terse, to_death, vf_hit};
 
 
 // ─── Inline helpers ───────────────────────────────────────────────────────────

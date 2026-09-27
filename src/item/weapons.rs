@@ -13,7 +13,7 @@ use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
 
 use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
-use crate::globals::weap_info;
+use crate::game::globals::weap_info;
 use crate::entity::player::discard;
 use crate::item::things::{dropcheck, inv_name};
 
@@ -96,11 +96,9 @@ static INIT_DAM: [InitWeap; MAXWEAPONS] = [
     },
 ];
 
-pub static mut group: i32 = 2;
-
 static mut FALL_POS: IVec2 = IVec2 { x: 0, y: 0 };
 
-use crate::globals::{after, has_hit, terse};
+use crate::game::globals::{after, group, has_hit, terse};
 
 
 #[inline]

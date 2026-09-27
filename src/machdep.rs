@@ -12,7 +12,7 @@ use std::fs::{File, OpenOptions};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::globals::{got_ltc, orig_dsusp, scoreboard};
+use crate::game::globals::{got_ltc, orig_dsusp, scoreboard};
 use crate::mdport::{
     md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
 };
@@ -58,7 +58,7 @@ unsafe fn lockfile_mtime(path: &str) -> Option<i64> {
 /// The MAXLOAD / MAXUSERS features are not enabled in the standard
 /// build (config.h leaves both undefined), so this is a no-op.
 pub unsafe fn init_check() {
-    let _ = (crate::globals::whoami(), crate::globals::fruit());
+    let _ = (crate::game::globals::whoami(), crate::game::globals::fruit());
 }
 
 /// open_score:

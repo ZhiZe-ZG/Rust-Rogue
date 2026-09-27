@@ -84,7 +84,7 @@ const USES: [i32; RingType::COUNT] = [
     1,  // SustainArmor
 ];
 
-use crate::globals::{mpos, terse};
+use crate::game::globals::{mpos, terse};
 
 
 #[inline]

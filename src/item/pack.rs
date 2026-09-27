@@ -32,7 +32,7 @@ const CALLABLE: i32 = -1;
 const R_OR_S: i32 = -2;
 const ESCAPE: i32 = 27;
 
-use crate::globals::{after, again, amulet, inpack, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, move_on, mpos, msg_esc, n_objs, pack_used, purse, terse};
+use crate::game::globals::{after, again, amulet, inpack, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, move_on, mpos, msg_esc, n_objs, pack_used, purse, terse};
 
 
 unsafe fn thing_t(tp: *mut Thing) -> *mut crate::entity::player::ThingMonster {

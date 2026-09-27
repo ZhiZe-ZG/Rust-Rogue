@@ -3,7 +3,7 @@
 //! Ported from `src/c/rip.c` to Rust.
 use std::io::Write;
 
-use crate::globals::{allscore, monsters, numscores, CMonster, NUMNAME};
+use crate::game::globals::{allscore, monsters, numscores, CMonster, NUMNAME};
 use crate::item::item_type::ItemType;
 use crate::item::things::inv_name;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
@@ -46,7 +46,7 @@ pub struct Score {
     pub sc_time: u32,
 }
 
-use crate::globals::{amulet, max_level, noscore, purse, tombstone, wizard};
+use crate::game::globals::{amulet, max_level, noscore, purse, tombstone, wizard};
 
 
 #[inline]
@@ -234,7 +234,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
                 slot -= 1;
             }
 
-            let mut name = crate::globals::whoami();
+            let mut name = crate::game::globals::whoami();
             if name.len() >= MAXSTR {
                 name.truncate(MAXSTR - 1);
             }
@@ -375,7 +375,7 @@ pub unsafe fn death(monst: u8) {
                 output::write_text_at(IVec2::new(33, 16), &phrase);
             }
         }
-        let hero_name = crate::globals::whoami();
+        let hero_name = crate::game::globals::whoami();
         output::write_text_at(
             IVec2::new(center_string(&hero_name) as i32, 14),
             &hero_name,

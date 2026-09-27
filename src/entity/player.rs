@@ -630,7 +630,7 @@ pub fn discard(item: *mut Thing) {
     let _ = crate::item::arena::OBJECTS.discard(item);
 }
 
-use crate::globals::{after, count, delta, door_stop, firstmove, jump, move_on, no_command, no_move, oldpos, passgo, runch, running, seenstairs, take, to_death};
+use crate::game::globals::{after, count, delta, door_stop, firstmove, jump, move_on, no_command, no_move, oldpos, passgo, runch, running, seenstairs, take, to_death};
 
 
 /// Borrow the actor payload of `tp` (null when `tp` is an object).
@@ -857,7 +857,10 @@ unsafe fn try_passgo_turn(dy: &mut i32, dx: &mut i32) -> bool {
 }
 
 /// Global "next hero position" used by the save/load subsystem (state.c).
-pub static mut nh: IVec2 = IVec2 { x: 0, y: 0 };
+///
+/// Re-exported from [`crate::game::globals`], the single owner of process-wide
+/// game state.
+pub use crate::game::globals::nh;
 
 /// do_run:
 /// Start the hero running in the chosen direction.

@@ -37,7 +37,7 @@ fn flush_stdout() {
     let _ = std::io::stdout().flush();
 }
 
-use crate::globals::{after, count, dnum, in_shell, inv_type, jump, master_mode_enabled, mpos, noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death, wizard};
+use crate::game::globals::{after, count, dnum, in_shell, inv_type, jump, master_mode_enabled, mpos, noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death, wizard};
 
 
 #[inline]
@@ -277,18 +277,18 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     let argc = argv.len() as i32;
 
     let home_dir = md_gethomedir();
-    crate::globals::set_home(home_dir.clone());
+    crate::game::globals::set_home(home_dir.clone());
     // Default save file: "<home>rogue.save".
     let save_name = format!("{}rogue.save", home_dir);
-    crate::globals::set_file_name(save_name);
+    crate::game::globals::set_file_name(save_name);
 
     let options = std::env::var("ROGUEOPTS").ok();
     if let Some(options) = options.as_ref() {
         parse_opts(options);
     }
-    if options.is_none() || crate::globals::whoami().is_empty() {
+    if options.is_none() || crate::game::globals::whoami().is_empty() {
         let username = md_getusername();
-        crate::globals::set_whoami(crate::options::filter_printable(&username));
+        crate::game::globals::set_whoami(crate::options::filter_printable(&username));
     }
 
     let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i32).unwrap_or(0);
@@ -336,13 +336,13 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     if master_mode_enabled != 0 && wizard != 0 {
         print!(
             "Hello {}, welcome to dungeon #{}",
-            crate::globals::whoami(),
+            crate::game::globals::whoami(),
             std::ptr::addr_of!(dnum).read()
         );
     } else {
         print!(
             "Hello {}, just a moment while I dig the dungeon...",
-            crate::globals::whoami()
+            crate::game::globals::whoami()
         );
     }
     std::io::stdout()
@@ -365,8 +365,8 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
         }
     }
 
-    crate::globals::init_inv_t_names();
-    crate::globals::init_trap_names();
+    crate::game::globals::init_inv_t_names();
+    crate::game::globals::init_trap_names();
     init_probs();
     init_player();
     init_names();

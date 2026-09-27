@@ -16,7 +16,7 @@ use crate::entity::player::{
     do_move, do_run, MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject,
 };
 use crate::game::PLAYER;
-use crate::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
+use crate::game::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::help::{help, identify};
 use crate::item::armor::{take_off, wear};
@@ -116,7 +116,7 @@ static mut NEWCOUNT: u8 = false as u8;
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
-use crate::globals::{after, again, amulet, count, delta, dir_ch, dnum, door_stop, firstmove, food_left, has_hit, inpack, inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm, r_stones, runch, running, save_msg, seenstairs, stat_msg, take, terse, to_death, wizard, ws_made};
+use crate::game::globals::{after, again, amulet, count, delta, dir_ch, dnum, door_stop, firstmove, food_left, has_hit, inpack, inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm, r_stones, runch, running, save_msg, seenstairs, stat_msg, take, terse, to_death, wizard, ws_made};
 
 
 // ─── Extern C functions called from this module ───────────────────────────────
@@ -516,7 +516,7 @@ pub unsafe fn command() {
                     }
                     CTRL_P => {
                         after = false as u8;
-                        msg_str(&crate::globals::huh_string());
+                        msg_str(&crate::game::globals::huh_string());
                     }
                     CTRL_R => {
                         after = false as u8;
@@ -552,12 +552,12 @@ pub unsafe fn command() {
                             if !crate::draw::is_trap_cell(delta.y, delta.x) {
                                 msg_str("no trap there");
                             } else if player_has(MonsterFlags::HALU) {
-                                let name = crate::globals::trap_name(
+                                let name = crate::game::globals::trap_name(
                                     rnd(GameConfig::TRAP_KIND_COUNT) as usize,
                                 );
                                 msg_str(&name);
                             } else {
-                                let name = crate::globals::trap_name(
+                                let name = crate::game::globals::trap_name(
                                     crate::draw::trap_kind_at(delta.y, delta.x) as usize,
                                 );
                                 msg_str(&name);
@@ -820,12 +820,12 @@ pub unsafe fn search() {
                                 addmsg_str("you found ");
                             }
                             if player_has(MonsterFlags::HALU) {
-                                let name = crate::globals::trap_name(
+                                let name = crate::game::globals::trap_name(
                                     rnd(GameConfig::TRAP_KIND_COUNT) as usize,
                                 );
                                 msg_str(&name);
                             } else {
-                                let name = crate::globals::trap_name(
+                                let name = crate::game::globals::trap_name(
                                     crate::draw::trap_kind_at(y, x) as usize,
                                 );
                                 msg_str(&name);
@@ -981,7 +981,7 @@ pub unsafe fn call() {
     let mut elsewise: String = match otype {
         ItemType::Ring(_) => cstr_at(r_stones[which]),
         ItemType::Potion(_) => cstr_at(p_colors[which]),
-        ItemType::Scroll(_) => crate::globals::scroll_name(which),
+        ItemType::Scroll(_) => crate::game::globals::scroll_name(which),
         _ => cstr_at(ws_made[which]),
     };
 

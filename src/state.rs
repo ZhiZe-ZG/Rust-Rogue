@@ -19,7 +19,7 @@ use glam::IVec2;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
-use crate::daemon::{CDelayedAction, D_LIST};
+use crate::daemon::CDelayedAction;
 use crate::entity::monsters::MonsterType;
 use crate::entity::player::{
     set_thing_dest, set_thing_dest_hero, set_thing_next, set_thing_pack, set_thing_prev, thing_o,
@@ -357,7 +357,7 @@ unsafe fn object_index_for_dest(level_items: &[*mut Thing], raw: *mut IVec2) -> 
 
 /// Builds the full [`GameSnapshot`] from the live process-wide state.
 unsafe fn build_snapshot() -> GameSnapshot {
-    use crate::globals::*;
+    use crate::game::globals::*;
 
     // Player actor snapshot (without its pack, which is captured separately).
     let hero_ptr = PLAYER.with_mut(|thing| thing as *mut Thing);
@@ -380,8 +380,8 @@ unsafe fn build_snapshot() -> GameSnapshot {
         left_ring: list_index_of(hero_pack, PLAYER.left_ring()),
         right_ring: list_index_of(hero_pack, PLAYER.right_ring()),
         weapon: list_index_of(hero_pack, PLAYER.weapon()),
-        last_pick: list_index_of(hero_pack, crate::globals::last_pick),
-        l_last_pick: list_index_of(hero_pack, crate::globals::l_last_pick),
+        last_pick: list_index_of(hero_pack, crate::game::globals::last_pick),
+        l_last_pick: list_index_of(hero_pack, crate::game::globals::l_last_pick),
     };
 
     // Level snapshot.
@@ -414,7 +414,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
 
     // Monster table stats (mutated in place by combat/wizard code).
     let mut monster_stats = Vec::new();
-    for m in crate::globals::monsters.iter() {
+    for m in crate::game::globals::monsters.iter() {
         monster_stats.push(m.m_stats);
     }
 
@@ -464,18 +464,18 @@ unsafe fn build_snapshot() -> GameSnapshot {
         runch,
         take,
 
-        file_name: crate::globals::file_name(),
-        huh: crate::globals::huh_string(),
-        prbuf: crate::globals::prbuf(),
+        file_name: crate::game::globals::file_name(),
+        huh: crate::game::globals::huh_string(),
+        prbuf: crate::game::globals::prbuf(),
         release: crate::vers::release(),
-        whoami: crate::globals::whoami(),
-        fruit: crate::globals::fruit(),
-        home: crate::globals::get_home(),
+        whoami: crate::game::globals::whoami(),
+        fruit: crate::game::globals::fruit(),
+        home: crate::game::globals::get_home(),
         scroll_names: (0..MAXSCROLLS)
-            .map(crate::globals::scroll_name)
+            .map(crate::game::globals::scroll_name)
             .collect(),
-        inv_t_names: crate::globals::inv_t_names(),
-        trap_names: crate::globals::trap_names(),
+        inv_t_names: crate::game::globals::inv_t_names(),
+        trap_names: crate::game::globals::trap_names(),
         p_colors: p_colors.iter().map(|c| (*c).to_string()).collect(),
         r_stones: r_stones.iter().map(|c| (*c).to_string()).collect(),
         ws_type: ws_type.iter().map(|c| (*c).to_string()).collect(),
@@ -527,8 +527,8 @@ unsafe fn build_snapshot() -> GameSnapshot {
         level,
         max_stats,
         oldrp,
-        between: crate::daemons::between,
-        group: crate::item::weapons::group,
+        between,
+        group,
         nh: crate::entity::player::nh,
     }
 }
@@ -571,7 +571,7 @@ fn resolve_static_str<'a>(value: &str, table: &'a [&'a str]) -> &'a str {
 
 /// Applies a restored [`GameSnapshot`] back into the live process-wide state.
 unsafe fn apply_snapshot(s: GameSnapshot) {
-    use crate::globals::*;
+    use crate::game::globals::*;
 
     // ── boolean/char flags ──────────────────────────────────────────────
     macro_rules! set_flag {
@@ -613,21 +613,21 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     take = s.take;
 
     // ── strings / string tables ─────────────────────────────────────────
-    crate::globals::set_file_name(s.file_name);
-    crate::globals::set_huh_string(&s.huh);
-    crate::globals::set_prbuf(s.prbuf);
+    crate::game::globals::set_file_name(s.file_name);
+    crate::game::globals::set_huh_string(&s.huh);
+    crate::game::globals::set_prbuf(s.prbuf);
     crate::vers::set_release(s.release);
-    crate::globals::set_whoami(s.whoami);
-    crate::globals::set_fruit(s.fruit);
-    crate::globals::set_home(s.home);
+    crate::game::globals::set_whoami(s.whoami);
+    crate::game::globals::set_fruit(s.fruit);
+    crate::game::globals::set_home(s.home);
     for (i, name) in s.scroll_names.iter().enumerate() {
-        crate::globals::set_scroll_name(i, name.clone());
+        crate::game::globals::set_scroll_name(i, name.clone());
     }
     for (i, name) in s.inv_t_names.iter().enumerate() {
-        crate::globals::set_inv_t_name(i, name.clone());
+        crate::game::globals::set_inv_t_name(i, name.clone());
     }
     for (i, name) in s.trap_names.iter().enumerate() {
-        crate::globals::set_trap_name(i, name.clone());
+        crate::game::globals::set_trap_name(i, name.clone());
     }
     for (i, name) in s.p_colors.iter().enumerate() {
         if i < p_colors.len() {
@@ -840,14 +840,14 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     PLAYER.set_left_ring(resolve_index(player_pack, s.equipment.left_ring));
     PLAYER.set_right_ring(resolve_index(player_pack, s.equipment.right_ring));
     PLAYER.set_weapon(resolve_index(player_pack, s.equipment.weapon));
-    crate::globals::last_pick = resolve_index(player_pack, s.equipment.last_pick);
-    crate::globals::l_last_pick = resolve_index(player_pack, s.equipment.l_last_pick);
+    crate::game::globals::last_pick = resolve_index(player_pack, s.equipment.last_pick);
+    crate::game::globals::l_last_pick = resolve_index(player_pack, s.equipment.l_last_pick);
 
     // ── misc ────────────────────────────────────────────────────────────
     max_stats = s.max_stats;
     oldrp = s.oldrp;
-    crate::daemons::between = s.between;
-    crate::item::weapons::group = s.group;
+    between = s.between;
+    group = s.group;
     crate::entity::player::nh = s.nh;
 }
 

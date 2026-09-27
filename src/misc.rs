@@ -6,7 +6,7 @@ use crate::config::GameConfig;
 use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
 use crate::game::PLAYER;
-use crate::globals::CObjInfo;
+use crate::game::globals::CObjInfo;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item, leave_pack, reset_last};
 use crate::rnd::rnd;
@@ -43,7 +43,7 @@ const ESCAPE: i32 = 27;
 const NORM: i32 = 0;
 const F_SEEN: u8 = 0x40;
 
-use crate::globals::{after, again, amulet, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump, last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running, see_floor, seenstairs, terse};
+use crate::game::globals::{after, again, amulet, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump, last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running, see_floor, seenstairs, terse};
 
 
 #[inline]
@@ -127,7 +127,7 @@ pub unsafe fn eat() {
         PLAYER.set_weapon(std::ptr::null_mut());
     }
     if (*thing_o(obj)).o_which == 1 {
-        msg_str(&format!("my, that was a yummy {}", crate::globals::fruit()));
+        msg_str(&format!("my, that was a yummy {}", crate::game::globals::fruit()));
     } else if rnd(100) > 70 {
         PLAYER.with_stats_mut(|stats| stats.experience += 1);
         msg_str("bummer, this food tastes awful");

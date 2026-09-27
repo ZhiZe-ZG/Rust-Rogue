@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use crate::config::GameConfig;
 use crate::game::PLAYER;
-use crate::globals::{
+use crate::game::globals::{
     get_hungry_state, get_max_stats, get_mpos, get_purse, lower_msg_enabled, msg_esc_enabled,
     save_msg_enabled, set_huh_string, set_mpos, stat_msg_enabled,
 };

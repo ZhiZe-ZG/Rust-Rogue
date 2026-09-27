@@ -13,6 +13,7 @@
 //! public items are re-exported here so callers keep using `crate::game::…`.
 
 mod game;
+pub mod globals;
 mod monster_list;
 mod monster_map;
 mod player;

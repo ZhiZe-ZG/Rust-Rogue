@@ -9,7 +9,7 @@ use crate::entity::monsters::{new_monster, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::game;
 use crate::game::PLAYER;
-use crate::globals::{scr_info, weap_info};
+use crate::game::globals::{scr_info, weap_info};
 use crate::init::pick_color;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item, leave_pack};
@@ -103,7 +103,7 @@ impl ScrollType {
     }
 }
 
-use crate::globals::{no_command, terse};
+use crate::game::globals::{no_command, terse};
 
 
 #[inline]

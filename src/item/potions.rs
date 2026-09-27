@@ -12,7 +12,7 @@ use crate::entity::chase::see_monst;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::game::MONSTER_LIST;
 use crate::game::PLAYER;
-use crate::globals::{pot_info, CObjInfo};
+use crate::game::globals::{pot_info, CObjInfo};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
@@ -109,7 +109,7 @@ const AFTER: i32 = 2;
 
 /// External C symbols that provide game state, UI helpers, and gameplay
 /// primitives used by the potion effects.
-use crate::globals::{after, e_levels, max_stats, seenstairs, terse};
+use crate::game::globals::{after, e_levels, max_stats, seenstairs, terse};
 
 
 /// A mutable reference to the static `pot_info` entry at `index`.
@@ -191,7 +191,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
         String,
         String,
     ) = {
-        let taste = format!("this potion tastes like {} juice", crate::globals::fruit());
+        let taste = format!("this potion tastes like {} juice", crate::game::globals::fruit());
         match potion {
             PotionType::Confuse => (
                 MonsterFlags::HUH,

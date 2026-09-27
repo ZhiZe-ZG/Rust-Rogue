@@ -9,7 +9,7 @@
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
 use crate::game::PLAYER;
-use crate::globals::{
+use crate::game::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
 };
 use crate::rnd::rnd;
@@ -186,7 +186,7 @@ static mut USED: [u8; 33] = [0; 33];
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
-use crate::globals::{a_class, food_left, max_stats};
+use crate::game::globals::{a_class, food_left, max_stats};
 
 
 // ─── Private helpers ─────────────────────────────────────────────────────────
@@ -261,17 +261,17 @@ pub unsafe fn init_colors() {
             }
         };
         USED[j] = 1;
-        crate::globals::p_colors[i] = crate::colors::POTION_COLORS[j];
+        crate::game::globals::p_colors[i] = crate::colors::POTION_COLORS[j];
     }
 }
 
 /// Generate random pronounceable names for each scroll.
 ///
 /// Builds each name as an owned Rust [`String`] and stores it in
-/// [`crate::globals::SCROLL_NAMES`], preserving the syllable, word-count, and
+/// [`crate::game::globals::SCROLL_NAMES`], preserving the syllable, word-count, and
 /// `MAXNAME` length limits of the original C routine.
 pub unsafe fn init_names() {
-    crate::globals::set_scroll_names(MAXSCROLLS, |_| {
+    crate::game::globals::set_scroll_names(MAXSCROLLS, |_| {
         let mut name = String::new();
         let mut nwords = rnd(3) + 2;
         while nwords > 0 {
@@ -306,7 +306,7 @@ pub unsafe fn init_stones() {
             }
         };
         USED[j] = 1;
-        crate::globals::r_stones[i] = stones[j].st_name;
+        crate::game::globals::r_stones[i] = stones[j].st_name;
         ring_info[i].oi_worth += stones[j].st_value;
     }
 }
@@ -322,16 +322,16 @@ pub unsafe fn init_materials() {
             if rnd(2) == 0 {
                 let j = rnd(NMETAL as i32) as usize;
                 if metused[j] == 0 {
-                    crate::globals::ws_type[i] = "wand";
-                    crate::globals::ws_made[i] = metal[j];
+                    crate::game::globals::ws_type[i] = "wand";
+                    crate::game::globals::ws_made[i] = metal[j];
                     metused[j] = 1;
                     break;
                 }
             } else {
                 let j = rnd(NWOOD as i32) as usize;
                 if USED[j] == 0 {
-                    crate::globals::ws_type[i] = "staff";
-                    crate::globals::ws_made[i] = wood[j];
+                    crate::game::globals::ws_type[i] = "staff";
+                    crate::game::globals::ws_made[i] = wood[j];
                     USED[j] = 1;
                     break;
                 }

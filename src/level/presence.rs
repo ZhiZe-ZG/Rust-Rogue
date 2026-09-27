@@ -19,7 +19,7 @@ use crate::entity::monsters::{give_pack, new_monster, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::game::MONSTER_LIST;
 use crate::game::{self, with_current_level, with_current_level_mut};
-use crate::globals::{amulet, max_level, ntraps, seenstairs};
+use crate::game::globals::{amulet, max_level, ntraps, seenstairs};
 use crate::item::item_type::ItemType;
 use crate::item::potions::turn_see;
 use crate::game::new_actor;

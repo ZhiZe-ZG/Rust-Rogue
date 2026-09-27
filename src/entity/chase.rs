@@ -14,7 +14,7 @@ use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::entity::rndmove::rndmove;
 use crate::game::MONSTER_LIST;
-use crate::globals::monsters;
+use crate::game::globals::monsters;
 use crate::item::item_type::ItemType;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
@@ -51,7 +51,7 @@ static mut TRYP: IVec2 = IVec2 { x: 0, y: 0 };
 /// Temporary coord for cansee (mirrors C's `static coord tp`).
 static mut CANSEE_TP: IVec2 = IVec2 { x: 0, y: 0 };
 
-use crate::globals::{count, delta, has_hit, kamikaze, quiet, running, see_floor, to_death};
+use crate::game::globals::{count, delta, has_hit, kamikaze, quiet, running, see_floor, to_death};
 
 
 #[inline]

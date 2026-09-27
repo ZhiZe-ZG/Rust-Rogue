@@ -20,23 +20,23 @@ use crate::ui::output::{addmsg_str, msg_str};
 use crate::ui::runtime;
 use glam::IVec2;
 
-use crate::globals::monsters;
+use crate::game::globals::monsters;
 
 const LAMPDIST: i32 = 3;
 const HUHDURATION: i32 = 20;
 const AFTER: i32 = 2;
 const VS_MAGIC: i32 = 0o03;
 
-pub use crate::globals::CMonster;
+pub use crate::game::globals::CMonster;
 
 /// The identity of a monster kind — the typed replacement for the legacy
 /// `t_type` ASCII letter (`'A'`..=`'Z'`).
 ///
 /// The variant order matches the `monsters` stat table in
-/// [`crate::globals`] (`Aquator` = index 0 … `Zombie` = index 25), so
+/// [`crate::game::globals`] (`Aquator` = index 0 … `Zombie` = index 25), so
 /// [`MonsterType::index`] is a direct table index and [`MonsterType::glyph`]
 /// reproduces the original `'A'..='Z'` byte used by the save format and by
-/// [`crate::globals::monsters`].
+/// [`crate::game::globals::monsters`].
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum MonsterType {
@@ -123,7 +123,7 @@ impl MonsterType {
     #[inline]
     pub fn name(self) -> &'static str {
         // SAFETY: the `monsters` table is initialised before any monster exists.
-        unsafe { crate::globals::monsters[self.index()].m_name }
+        unsafe { crate::game::globals::monsters[self.index()].m_name }
     }
 }
 
@@ -198,7 +198,7 @@ static WAND_MONS: [Option<MonsterType>; 26] = [
     None,
 ];
 
-use crate::globals::{max_level, wizard};
+use crate::game::globals::{max_level, wizard};
 
 
 #[inline]

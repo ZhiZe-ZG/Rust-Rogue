@@ -8,7 +8,7 @@ use crate::config::GameConfig;
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
-use crate::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
+use crate::game::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{add_pack, floor_at, get_item};
 use crate::item::sticks::fix_stick;
@@ -79,7 +79,7 @@ unsafe fn master_enabled() -> bool {
     master_mode_enabled != 0
 }
 
-use crate::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hit};
+use crate::game::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hit};
 
 
 pub unsafe fn whatis(insist: u8, filter: ItemFilter) {

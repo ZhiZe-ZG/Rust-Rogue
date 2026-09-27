@@ -201,7 +201,10 @@ pub fn set_room_goldval(room: Option<usize>, value: i32) {
 /// Stable per-room gold positions, mirrored from `Level` so chase targets can
 /// hold raw pointers without borrowing the locked level. Kept in sync by level
 /// population (`presence::place_room_contents`) and save restore.
-pub static mut ROOM_GOLD: [IVec2; GameConfig::MAX_ROOMS] = [IVec2::ZERO; GameConfig::MAX_ROOMS];
+///
+/// Owned by [`crate::game::globals`] and re-exported here for callers that
+/// reach it through `crate::game::…`.
+pub use crate::game::globals::ROOM_GOLD;
 
 /// A stable raw pointer to the gold-stash position of `reference` (or null).
 ///

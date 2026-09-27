@@ -9,7 +9,7 @@ use crate::rnd::rnd;
 use crate::ui::output::msg_str;
 
 use crate::entity::player::{ObjectFlags, Thing, ThingObject};
-use crate::globals::{
+use crate::game::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
 };
 use crate::item::item_type::{ItemFilter, ItemType};
@@ -27,7 +27,7 @@ const MAXSCROLLS: usize = 18;
 const MAXWEAPONS: usize = 9;
 const MAXSTICKS: usize = 14;
 
-use crate::globals::{a_class, inv_describe, no_food};
+use crate::game::globals::{a_class, inv_describe, no_food};
 
 
 #[inline]

@@ -2,12 +2,17 @@
 //!
 //! Mirrors the process-wide storage the original C code declared in
 //! `extern.c` and `init.c`: material tables, monster state, and other globals.
+use crate::config::GameConfig;
+use crate::daemon::CDelayedAction;
 use crate::entity::player::Thing as PlayerCThing;
 use crate::entity::stats::Stats;
 use glam::IVec2;
 use std::sync::{Mutex, MutexGuard};
 
 const MAXSTR: usize = 1024;
+
+/// Number of delayed-action slots (legacy `MAXDAEMONS`).
+const MAXDAEMONS: usize = 20;
 
 const fn fill_bytes<const N: usize>(s: &[u8]) -> [u8; N] {
     let mut out = [0u8; N];
@@ -147,6 +152,38 @@ pub static mut max_stats: Stats = Stats {
     max_hit_points: 12,
 };
 pub static mut oldrp: Option<usize> = None;
+
+// ─── Cross-module game state, gathered here as the single owner ──────────────
+//
+// These were previously declared in the modules that used them most
+// (`daemon.rs`, `daemons.rs`, `item/weapons.rs`, `entity/player.rs`, and
+// `game/game.rs`). They are process-wide game state, so they now live beside
+// the rest of the globals and are referenced through this module.
+
+/// Counter that paces the `rollwand` wandering-monster check (legacy
+/// `int between` in `daemons.c`).
+pub static mut between: i32 = 0;
+
+/// Monster group counter used when initialising stacked weapons (legacy
+/// `int group` in `weapons.c`).
+pub static mut group: i32 = 2;
+
+/// Global "next hero position" used by the save/load subsystem (legacy
+/// `coord nh` in `move.c`/`state.c`).
+pub static mut nh: IVec2 = IVec2 { x: 0, y: 0 };
+
+/// Global daemon/fuse table (legacy `struct delayed_action d_list[]`).
+pub static mut D_LIST: [CDelayedAction; MAXDAEMONS] = [CDelayedAction {
+    d_type: 0,
+    d_func: None,
+    d_arg: 0,
+    d_time: 0,
+}; MAXDAEMONS];
+
+/// Stable per-room gold positions, mirrored from `Level` so chase targets can
+/// hold raw pointers without borrowing the locked level. Kept in sync by level
+/// population (`presence::place_room_contents`) and save restore.
+pub static mut ROOM_GOLD: [IVec2; GameConfig::MAX_ROOMS] = [IVec2::ZERO; GameConfig::MAX_ROOMS];
 pub static mut monsters: [CMonster; MAXMONSTERS] = [
     CMonster {
         m_name: "aquator",

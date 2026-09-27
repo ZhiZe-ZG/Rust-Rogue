@@ -12,7 +12,6 @@ pub mod draw;
 pub mod entity;
 
 pub mod game;
-pub mod globals;
 pub mod help;
 pub mod init;
 pub mod item;

@@ -12,7 +12,7 @@ use crate::misc::spread;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 
 
-use crate::globals::{after, terse, to_death};
+use crate::game::globals::{after, terse, to_death};
 
 const ARMOR: i32 = ']' as i32;
 

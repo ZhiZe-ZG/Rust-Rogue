@@ -2,7 +2,7 @@
 //!
 //! Ported from `src/c/score.c` to Rust; reads and writes the legacy on-disk
 //! top-ten score-file format.
-use crate::globals::{numscores, scoreboard};
+use crate::game::globals::{numscores, scoreboard};
 use std::io::{Read, Seek, SeekFrom, Write};
 
 const MAXSTR: usize = 1024;

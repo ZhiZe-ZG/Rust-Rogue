@@ -60,7 +60,7 @@ const LAMPDIST: i32 = 3;
 
 // ─── Legacy C ABI surface ─────────────────────────────────────────────────────
 
-use crate::globals::{after, door_stop, firstmove, jump, oldpos, oldrp, runch, running, see_floor, seenstairs};
+use crate::game::globals::{after, door_stop, firstmove, jump, oldpos, oldrp, runch, running, see_floor, seenstairs};
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

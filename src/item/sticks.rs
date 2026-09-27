@@ -4,7 +4,7 @@
 use crate::entity::monsters::{save, save_throw};
 use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
-use crate::globals::ws_info;
+use crate::game::globals::ws_info;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item;
 use crate::item::weapons::{do_motion, hit_monster};
@@ -70,7 +70,7 @@ impl StickType {
 
 const MAXSTICKS: usize = StickType::COUNT;
 
-use crate::globals::{after, delta, terse};
+use crate::game::globals::{after, delta, terse};
 
 
 #[inline]

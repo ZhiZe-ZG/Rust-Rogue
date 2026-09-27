@@ -3,7 +3,7 @@
 
 
 use crate::config::GameConfig;
-use crate::globals::{lower_msg, monsters, mpos};
+use crate::game::globals::{lower_msg, monsters, mpos};
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::output::msg_str;
 use crate::ui::{output, Window};

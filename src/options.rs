@@ -73,7 +73,7 @@ pub struct OPTION {
     o_getfunc: unsafe fn(&OPTION, Window) -> i32,
 }
 
-use crate::globals::{after, fight_flush, inv_type, jump, mpos, passgo, see_floor, terse, tombstone};
+use crate::game::globals::{after, fight_flush, inv_type, jump, mpos, passgo, see_floor, terse, tombstone};
 
 
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
@@ -179,18 +179,18 @@ unsafe fn paint(win: Window, s: &str) {
 
 unsafe fn str_target_value(target: StrTarget) -> String {
     match target {
-        StrTarget::Name => crate::globals::whoami(),
-        StrTarget::Fruit => crate::globals::fruit(),
-        StrTarget::File => crate::globals::file_name(),
+        StrTarget::Name => crate::game::globals::whoami(),
+        StrTarget::Fruit => crate::game::globals::fruit(),
+        StrTarget::File => crate::game::globals::file_name(),
         StrTarget::None => String::new(),
     }
 }
 
 unsafe fn set_str_target(target: StrTarget, value: String) {
     match target {
-        StrTarget::Name => crate::globals::set_whoami(value),
-        StrTarget::Fruit => crate::globals::set_fruit(value),
-        StrTarget::File => crate::globals::set_file_name(value),
+        StrTarget::Name => crate::game::globals::set_whoami(value),
+        StrTarget::Fruit => crate::game::globals::set_fruit(value),
+        StrTarget::File => crate::game::globals::set_file_name(value),
         StrTarget::None => {}
     }
 }
@@ -259,7 +259,7 @@ unsafe fn put_inv_t(op: &OPTION) {
     let ip = op.o_target.int_ptr();
     let idx = *ip as usize;
     if idx < INV_T_NAME_LEN {
-        output::write_window_text(Window::Stdscr, &crate::globals::inv_t_name(idx));
+        output::write_window_text(Window::Stdscr, &crate::game::globals::inv_t_name(idx));
     }
 }
 
@@ -387,7 +387,7 @@ unsafe fn get_inv_t(op: &OPTION, win: Window) -> i32 {
 
     let origin = output::window_cursor(win);
     if *ip >= 0 && *ip < INV_T_NAME_LEN as i32 {
-        output::write_window_text(win, &crate::globals::inv_t_name(*ip as usize));
+        output::write_window_text(win, &crate::game::globals::inv_t_name(*ip as usize));
     }
     while bad {
         output::move_window_cursor(win, origin);
@@ -417,7 +417,7 @@ unsafe fn get_inv_t(op: &OPTION, win: Window) -> i32 {
         }
     }
     if *ip >= 0 && *ip < INV_T_NAME_LEN as i32 {
-        let name = crate::globals::inv_t_name(*ip as usize);
+        let name = crate::game::globals::inv_t_name(*ip as usize);
         let out = format!("{}\n", name);
         output::move_window_cursor(win, origin);
         paint(win, &out);
@@ -471,7 +471,7 @@ pub unsafe fn parse_opts(s: &str) {
                         let start_idx = i.saturating_sub(1);
                         let value = &s[start_idx..start_idx + 1];
                         for idx in 0..INV_T_NAME_LEN {
-                            if value == &crate::globals::inv_t_name(idx)[..1.min(crate::globals::inv_t_name(idx).len())] {
+                            if value == &crate::game::globals::inv_t_name(idx)[..1.min(crate::game::globals::inv_t_name(idx).len())] {
                                 inv_type = idx as i32;
                                 break;
                             }
@@ -487,7 +487,7 @@ pub unsafe fn parse_opts(s: &str) {
                     // `~` expands to the home directory.
                     let mut prefix = String::new();
                     if i < bytes.len() && bytes[i] == b'~' {
-                        prefix = crate::globals::get_home();
+                        prefix = crate::game::globals::get_home();
                         value_start = i + 1;
                     }
                     let mut end = value_start;
