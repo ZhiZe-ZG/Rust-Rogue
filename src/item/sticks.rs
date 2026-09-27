@@ -1,7 +1,7 @@
 //! Wands and staves (the legacy `sticks`): zapping and their bolt effects.
 //!
 //! Ported from `src/c/sticks.c` to Rust.
-use crate::entity::monsters::{save, save_throw};
+use crate::entity::monsters::{save, save_throw_id};
 use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
 use crate::game::globals::ws_info;
@@ -201,10 +201,14 @@ pub unsafe fn do_zap() {
             }
             do_motion(&mut bolt, delta.y, delta.x);
             let bolt_pos = (*thing_o(&mut bolt)).o_pos;
-            if !moat_at(bolt_pos.y, bolt_pos.x).is_null()
-                && save_throw(VS_MAGIC, moat_at(bolt_pos.y, bolt_pos.x)) == 0
-            {
-                hit_monster(bolt_pos.y, bolt_pos.x, &mut bolt);
+            if let Some(mid) = crate::game::monster_id_at(bolt_pos.y, bolt_pos.x) {
+                if save_throw_id(VS_MAGIC, mid) == 0 {
+                    hit_monster(bolt_pos.y, bolt_pos.x, &mut bolt);
+                } else if terse != 0 {
+                    msg_str("missle vanishes");
+                } else {
+                    msg_str("the missle vanishes with a puff of smoke");
+                }
             } else if terse != 0 {
                 msg_str("missle vanishes");
             } else {
@@ -281,8 +285,12 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
             msg_str("the bolt whizzes by you");
         }
     } else {
-        if !moat_at(pos.y, pos.x).is_null() && save_throw(VS_MAGIC, moat_at(pos.y, pos.x)) == 0 {
-            hit_monster(pos.y, pos.x, &mut bolt);
+        if let Some(mid) = crate::game::monster_id_at(pos.y, pos.x) {
+            if save_throw_id(VS_MAGIC, mid) == 0 {
+                hit_monster(pos.y, pos.x, &mut bolt);
+            } else {
+                msg_str("the bolt misses");
+            }
         } else {
             msg_str("the bolt misses");
         }

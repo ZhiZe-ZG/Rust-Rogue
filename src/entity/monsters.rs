@@ -424,6 +424,17 @@ pub unsafe fn save_throw(which: i32, tp: *mut Thing) -> i32 {
     save_throw_for_level(which, (*thing_t(tp)).t_stats.level)
 }
 
+/// Roll a saving throw for the monster behind `id` (pointer-free variant).
+pub fn save_throw_id(which: i32, id: crate::game::MonsterId) -> i32 {
+    let level = crate::game::MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_stats.level,
+            Thing::Object { .. } => 0,
+        })
+        .unwrap_or(0);
+    save_throw_for_level(which, level)
+}
+
 /// Roll a saving throw using an explicit caster level (used for the hero, whose
 /// `Thing` is no longer reachable as a raw pointer).
 #[inline]
