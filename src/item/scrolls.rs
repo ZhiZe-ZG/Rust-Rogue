@@ -127,16 +127,6 @@ fn proom() -> Option<usize> {
 }
 
 #[inline]
-unsafe fn moat(y: i32, x: i32) -> *mut Thing {
-    game::monster_at(y, x) as *mut Thing
-}
-
-#[inline]
-unsafe fn on_flag(tp: *mut Thing, flag: MonsterFlags) -> bool {
-    (*thing_t(tp)).t_flags.contains(flag)
-}
-
-#[inline]
 fn player_has(flag: MonsterFlags) -> bool {
     crate::game::PLAYER.has_flag(flag)
 }
@@ -198,11 +188,22 @@ pub unsafe fn read_scroll() {
                     if y < 0 || y > (GameConfig::SCREEN_LINES - 1) {
                         continue;
                     }
-                    let tp = moat(y, x);
-                    if !tp.is_null() && on_flag(tp, MonsterFlags::RUN) {
-                        (*thing_t(tp)).t_flags.remove(MonsterFlags::RUN);
-                        (*thing_t(tp)).t_flags.insert(MonsterFlags::HELD);
-                        ch += 1;
+                    if let Some(mid) = game::monster_id_at(y, x) {
+                        let running_held = game::MONSTER_LIST
+                            .with_mut(mid, |t| {
+                                if let Thing::Monster { data } = t {
+                                    if data.t_flags.contains(MonsterFlags::RUN) {
+                                        data.t_flags.remove(MonsterFlags::RUN);
+                                        data.t_flags.insert(MonsterFlags::HELD);
+                                        return true;
+                                    }
+                                }
+                                false
+                            })
+                            .unwrap_or(false);
+                        if running_held {
+                            ch += 1;
+                        }
                     }
                 }
             }
@@ -295,11 +296,15 @@ pub unsafe fn read_scroll() {
                 for x in 0..GameConfig::SCREEN_COLS {
                     let ch = map_cell_reveal(y, x);
                     if ch != SPACE {
-                        let tp = moat(y, x);
-                        if !tp.is_null() {
-                            (*thing_t(tp)).t_oldch = ch as u8;
+                        let has_monster = game::monster_id_at(y, x);
+                        if let Some(mid) = has_monster {
+                            game::MONSTER_LIST.with_mut(mid, |t| {
+                                if let Thing::Monster { data } = t {
+                                    data.t_oldch = ch as u8;
+                                }
+                            });
                         }
-                        if tp.is_null() || !player_has(MonsterFlags::SEEMONST) {
+                        if has_monster.is_none() || !player_has(MonsterFlags::SEEMONST) {
                             output::write_glyph_at(IVec2::new(x, y), (ch as u8) as char);
                         }
                     }
