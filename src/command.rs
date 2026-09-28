@@ -598,14 +598,15 @@ pub unsafe fn command() {
                         }
                     }
                     b')' => {
-                        current(PLAYER.weapon(), "wielding", "");
+                        current(PLAYER.equipment().weapon_id(), "wielding", "");
                     }
                     b']' => {
-                        current(PLAYER.armor(), "wearing", "");
+                        current(PLAYER.equipment().armor_id(), "wearing", "");
                     }
                     b'=' => {
+                        let eq = PLAYER.equipment();
                         current(
-                            PLAYER.left_ring(),
+                            eq.left_ring_id(),
                             "wearing",
                             if terse != 0 {
                                 "(L)"
@@ -614,7 +615,7 @@ pub unsafe fn command() {
                             },
                         );
                         current(
-                            PLAYER.right_ring(),
+                            eq.right_ring_id(),
                             "wearing",
                             if terse != 0 {
                                 "(R)"
@@ -1008,12 +1009,13 @@ pub unsafe fn call() {
 // ─── current() ────────────────────────────────────────────────────────────────
 
 /// current:
-/// Print the current weapon/armor.
+/// Print the currently equipped weapon/armor/ring, identified by arena handle.
 ///
 /// Uses globals: after, terse, inv_describe.
-pub unsafe fn current(cur: *mut Thing, how: &str, where_: &str) {
+pub unsafe fn current(cur: Option<crate::item::arena::ThingId>, how: &str, where_: &str) {
     after = false as u8;
-    if !cur.is_null() {
+    let obj = cur.map_or(std::ptr::null_mut(), crate::item::arena::ptr_of);
+    if !obj.is_null() {
         if terse == 0 {
             addmsg_str(&format!(
                 "you are {} (",
@@ -1023,8 +1025,8 @@ pub unsafe fn current(cur: *mut Thing, how: &str, where_: &str) {
         inv_describe = false as u8;
         addmsg_str(&format!(
             "{}) {}",
-            (*thing_o(cur)).o_packch as char,
-            inv_name(cur, true as u8)
+            (*thing_o(obj)).o_packch as char,
+            inv_name(obj, true as u8)
         ));
         inv_describe = true as u8;
         if !where_.is_empty() {
