@@ -276,8 +276,8 @@ pub unsafe fn quaff() {
         }
         return;
     }
-    if obj == PLAYER.weapon() {
-        PLAYER.set_weapon(ptr::null_mut());
+    if crate::item::arena::id_of(obj).is_some_and(|id| PLAYER.equipment().weapon_id() == Some(id)) {
+        PLAYER.set_weapon_id(None);
     }
 
     discardit = (*thing_o(obj)).o_count == 1;
@@ -288,9 +288,7 @@ pub unsafe fn quaff() {
         PotionType::Confuse => do_pot_impl(PotionType::Confuse, if trip { false } else { true }),
         PotionType::Poison => {
             pot_info_at(PotionType::Poison.index()).oi_know = true;
-            if ring_is(PLAYER.left_ring(), RingType::SustainStrength)
-                || ring_is(PLAYER.right_ring(), RingType::SustainStrength)
-            {
+            if PLAYER.wearing_ring(RingType::SustainStrength) {
                 msg_str("you feel momentarily sick");
             } else {
                 chg_str(-(rnd(3) + 1));
@@ -422,16 +420,17 @@ pub unsafe fn quaff() {
             }
         }
         PotionType::Restore => {
-            let left_bonus = if ring_is(PLAYER.left_ring(), RingType::AddStrength) {
-                (*thing_o(PLAYER.left_ring())).o_arm
-            } else {
-                0
+            // Sum the `o_arm` bonus of each ring of add-strength (pointer-free).
+            let equipment = PLAYER.equipment();
+            let ring_bonus = |hand: usize| {
+                if equipment.ring_type(hand) == Some(RingType::AddStrength) {
+                    equipment.ring_arm(hand).unwrap_or(0)
+                } else {
+                    0
+                }
             };
-            let right_bonus = if ring_is(PLAYER.right_ring(), RingType::AddStrength) {
-                (*thing_o(PLAYER.right_ring())).o_arm
-            } else {
-                0
-            };
+            let left_bonus = ring_bonus(0);
+            let right_bonus = ring_bonus(1);
             crate::game::PLAYER.with_stats_mut(|stats| {
                 if left_bonus != 0 {
                     add_str(&mut stats.strength, -left_bonus);

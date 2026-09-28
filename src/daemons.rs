@@ -81,11 +81,13 @@ pub unsafe fn doctor() {
     } else if quiet >= 3 {
         PLAYER.with_stats_mut(|stats| stats.hit_points += rnd(lv - 7) + 1);
     }
-    if isring(PLAYER.left_ring(), RingType::Regeneration) {
-        PLAYER.with_stats_mut(|stats| stats.hit_points += 1);
-    }
-    if isring(PLAYER.right_ring(), RingType::Regeneration) {
-        PLAYER.with_stats_mut(|stats| stats.hit_points += 1);
+    // A ring of regeneration adds an extra point on each hand it is worn.
+    let regenerations = [0usize, 1]
+        .into_iter()
+        .filter(|&hand| PLAYER.equipment().ring_type(hand) == Some(RingType::Regeneration))
+        .count() as i32;
+    if regenerations != 0 {
+        PLAYER.with_stats_mut(|stats| stats.hit_points += regenerations);
     }
     if ohp != PLAYER.stats().hit_points {
         let max = PLAYER.stats().max_hit_points;

@@ -191,8 +191,8 @@ pub unsafe fn do_zap() {
             (*thing_o(&mut bolt)).o_hplus = 100;
             (*thing_o(&mut bolt)).o_dplus = 1;
             (*thing_o(&mut bolt)).o_flags = ObjectFlags::MISL;
-            if !PLAYER.weapon().is_null() {
-                (*thing_o(&mut bolt)).o_launch = (*thing_o(PLAYER.weapon())).o_which;
+            if let Some(which) = PLAYER.weapon_which() {
+                (*thing_o(&mut bolt)).o_launch = which;
             }
             do_motion(&mut bolt, delta.y, delta.x);
             let bolt_pos = (*thing_o(&mut bolt)).o_pos;

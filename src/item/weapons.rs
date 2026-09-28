@@ -274,12 +274,14 @@ pub fn num(n1: i32, n2: i32, obj_type: u8) -> String {
 
 /// Equips a selected weapon after validating curses and item type constraints.
 pub unsafe fn wield() {
-    let oweapon = PLAYER.weapon();
-    if dropcheck(PLAYER.weapon()) == 0 {
-        PLAYER.set_weapon(oweapon);
+    // Track the previously wielded weapon by arena handle (pointer-free).
+    let oweapon = PLAYER.equipment().weapon_id();
+    let oweapon_ptr = oweapon.map_or(std::ptr::null_mut(), crate::item::arena::ptr_of);
+    if dropcheck(oweapon_ptr) == 0 {
+        PLAYER.set_weapon_id(oweapon);
         return;
     }
-    PLAYER.set_weapon(oweapon);
+    PLAYER.set_weapon_id(oweapon);
 
     let obj = get_item("wield", ItemFilter::Category(ItemType::WEAPON));
     if obj.is_null() {

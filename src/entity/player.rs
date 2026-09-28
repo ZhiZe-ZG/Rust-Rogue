@@ -524,11 +524,6 @@ pub unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
 }
 
 #[inline]
-unsafe fn ring_is(ring: *mut Thing, ring_type: RingType) -> bool {
-    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
-}
-
-#[inline]
 fn player_has(flag: MonsterFlags) -> bool {
     PLAYER.has_flag(flag)
 }
@@ -631,10 +626,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
                 if PLAYER.stats().hit_points <= 0 {
                     hit = TrapHit::Kill;
                 } else {
-                    if !ring_is(PLAYER.left_ring(), RingType::SustainStrength)
-                        && !ring_is(PLAYER.right_ring(), RingType::SustainStrength)
-                        && save(VS_POISON) == 0
-                    {
+                    if !PLAYER.wearing_ring(RingType::SustainStrength) && save(VS_POISON) == 0 {
                         chg_str(-1);
                     }
                     hit = TrapHit::Hit;

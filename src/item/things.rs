@@ -172,15 +172,18 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
     };
 
     if inv_describe != 0 {
-        if obj == PLAYER.armor() {
+        // Identify the object by arena handle rather than by raw pointer.
+        let id = crate::item::arena::id_of(obj);
+        let eq = PLAYER.equipment();
+        if id.is_some() && id == eq.armor_id() {
             name.push_str(" (being worn)");
         }
-        if obj == PLAYER.weapon() {
+        if id.is_some() && id == eq.weapon_id() {
             name.push_str(" (weapon in hand)");
         }
-        if obj == PLAYER.left_ring() {
+        if id.is_some() && id == eq.left_ring_id() {
             name.push_str(" (on left hand)");
-        } else if obj == PLAYER.right_ring() {
+        } else if id.is_some() && id == eq.right_ring_id() {
             name.push_str(" (on right hand)");
         }
     }
@@ -190,30 +193,33 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
 }
 
 pub unsafe fn dropcheck(obj: *mut Thing) -> u8 {
-    if obj.is_null() {
-        return true as u8;
-    }
-    if obj != PLAYER.armor()
-        && obj != PLAYER.weapon()
-        && obj != PLAYER.left_ring()
-        && obj != PLAYER.right_ring()
-    {
+    let id = match crate::item::arena::id_of(obj) {
+        Some(id) => id,
+        None => return true as u8,
+    };
+    let eq = PLAYER.equipment();
+    let is_weapon = eq.weapon_id() == Some(id);
+    let is_armor = eq.armor_id() == Some(id);
+    let is_left = eq.left_ring_id() == Some(id);
+    let is_right = eq.right_ring_id() == Some(id);
+
+    if !is_weapon && !is_armor && !is_left && !is_right {
         return true as u8;
     }
     if (*thing_o(obj)).o_flags.contains(ObjectFlags::CURSED) {
         msg_str("you can't.  It appears to be cursed");
         return false as u8;
     }
-    if obj == PLAYER.weapon() {
-        PLAYER.set_weapon(std::ptr::null_mut());
-    } else if obj == PLAYER.armor() {
+    if is_weapon {
+        PLAYER.set_weapon_id(None);
+    } else if is_armor {
         waste_time();
-        PLAYER.set_armor(std::ptr::null_mut());
+        PLAYER.set_armor_id(None);
     } else {
-        if obj == PLAYER.left_ring() {
-            PLAYER.set_left_ring(std::ptr::null_mut());
+        if is_left {
+            PLAYER.set_left_ring_id(None);
         } else {
-            PLAYER.set_right_ring(std::ptr::null_mut());
+            PLAYER.set_right_ring_id(None);
         }
         match (*thing_o(obj)).o_which {
             0 => chg_str(-(*thing_o(obj)).o_arm),

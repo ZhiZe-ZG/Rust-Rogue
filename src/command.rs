@@ -739,15 +739,19 @@ pub unsafe fn command() {
 
     do_daemons(AFTER);
     do_fuses(AFTER);
-    if isring(PLAYER.left_ring(), RingType::Searching) {
-        search();
-    } else if isring(PLAYER.left_ring(), RingType::Teleport) && rnd(50) == 0 {
-        teleport();
-    }
-    if isring(PLAYER.right_ring(), RingType::Searching) {
-        search();
-    } else if isring(PLAYER.right_ring(), RingType::Teleport) && rnd(50) == 0 {
-        teleport();
+    // Ring-of-searching / ring-of-teleportation effects, evaluated per hand
+    // through the pointer-free equipment accessor.
+    let equipment = PLAYER.equipment();
+    for hand in 0..2usize {
+        match equipment.ring_type(hand) {
+            Some(RingType::Searching) => search(),
+            Some(RingType::Teleport) => {
+                if rnd(50) == 0 {
+                    teleport();
+                }
+            }
+            _ => {}
+        }
     }
 }
 

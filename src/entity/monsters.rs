@@ -223,11 +223,8 @@ fn player_has(flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn iswearing(which: RingType) -> bool {
-    (!PLAYER.left_ring().is_null()
-        && RingType::from_raw((*thing_o(PLAYER.left_ring())).o_which) == Some(which))
-        || (!PLAYER.right_ring().is_null()
-            && RingType::from_raw((*thing_o(PLAYER.right_ring())).o_which) == Some(which))
+fn iswearing(which: RingType) -> bool {
+    PLAYER.wearing_ring(which)
 }
 
 /// Picks an appropriate monster kind for the current depth.
@@ -451,17 +448,12 @@ fn save_throw_for_level(which: i32, level: i32) -> i32 {
 pub unsafe fn save(which: i32) -> i32 {
     let mut adj = which;
     if which == VS_MAGIC {
-        if !PLAYER.left_ring().is_null()
-            && RingType::from_raw((*thing_o(PLAYER.left_ring())).o_which)
-                == Some(RingType::Protection)
-        {
-            adj -= (*thing_o(PLAYER.left_ring())).o_arm;
-        }
-        if !PLAYER.right_ring().is_null()
-            && RingType::from_raw((*thing_o(PLAYER.right_ring())).o_which)
-                == Some(RingType::Protection)
-        {
-            adj -= (*thing_o(PLAYER.right_ring())).o_arm;
+        // Ring of protection lowers the save magic number by its `o_arm`.
+        let equipment = PLAYER.equipment();
+        for hand in 0..2usize {
+            if equipment.ring_type(hand) == Some(RingType::Protection) {
+                adj -= equipment.ring_arm(hand).unwrap_or(0);
+            }
         }
     }
     save_throw_for_level(adj, PLAYER.level())

@@ -132,8 +132,9 @@ pub unsafe fn eat() {
         food_left = STOMACHSIZE;
     }
     hungry_state = 0;
-    if obj == PLAYER.weapon() {
-        PLAYER.set_weapon(std::ptr::null_mut());
+    if crate::item::arena::id_of(obj).is_some_and(|id| PLAYER.equipment().weapon_id() == Some(id))
+    {
+        PLAYER.set_weapon_id(None);
     }
     if (*thing_o(obj)).o_which == 1 {
         msg_str(&format!("my, that was a yummy {}", crate::game::globals::fruit()));
@@ -181,17 +182,12 @@ pub unsafe fn chg_str(amt: i32) {
     PLAYER.with_stats_mut(|stats| stats.strength = new_strength as u32);
     let mut comp = PLAYER.stats().strength;
 
-    if !PLAYER.left_ring().is_null() {
-        let ring = PLAYER.left_ring();
-        let bonus = (*thing_o(ring)).o_arm as i32;
-        let reduced = comp as i32 - bonus;
-        comp = if reduced < 3 { 3 } else { reduced as u32 };
-    }
-    if !PLAYER.right_ring().is_null() {
-        let ring = PLAYER.right_ring();
-        let bonus = (*thing_o(ring)).o_arm as i32;
-        let reduced = comp as i32 - bonus;
-        comp = if reduced < 3 { 3 } else { reduced as u32 };
+    // Subtract each worn ring's strength bonus (pointer-free read of `o_arm`).
+    for hand in 0..2usize {
+        if let Some(bonus) = PLAYER.equipment().ring_arm(hand) {
+            let reduced = comp as i32 - bonus;
+            comp = if reduced < 3 { 3 } else { reduced as u32 };
+        }
     }
     if comp > max_stats.strength {
         max_stats.strength = comp;
@@ -237,10 +233,14 @@ pub unsafe fn is_current(obj: *mut Thing) -> bool {
     if obj.is_null() {
         return false;
     }
-    if obj == PLAYER.armor()
-        || obj == PLAYER.weapon()
-        || obj == PLAYER.left_ring()
-        || obj == PLAYER.right_ring()
+    let Some(id) = crate::item::arena::id_of(obj) else {
+        return false;
+    };
+    let eq = PLAYER.equipment();
+    if eq.armor_id() == Some(id)
+        || eq.weapon_id() == Some(id)
+        || eq.left_ring_id() == Some(id)
+        || eq.right_ring_id() == Some(id)
     {
         if terse == 0 {
             addmsg_str("That's already ");

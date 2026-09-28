@@ -111,15 +111,18 @@ pub unsafe fn ring_on() {
         return;
     }
 
-    let left_hand = if PLAYER.left_ring().is_null() && PLAYER.right_ring().is_null() {
+    let eq = PLAYER.equipment();
+    let left_empty = eq.left_ring_id().is_none();
+    let right_empty = eq.right_ring_id().is_none();
+    let left_hand = if left_empty && right_empty {
         let hand = gethand();
         if hand < 0 {
             return;
         }
         hand as usize == LEFT
-    } else if PLAYER.left_ring().is_null() {
+    } else if left_empty {
         true
-    } else if PLAYER.right_ring().is_null() {
+    } else if right_empty {
         false
     } else {
         if terse == 0 {
@@ -155,16 +158,19 @@ pub unsafe fn ring_on() {
 
 /// Removes a worn ring from the chosen hand after passing drop constraints.
 pub unsafe fn ring_off() {
-    let left_hand = if PLAYER.left_ring().is_null() && PLAYER.right_ring().is_null() {
+    let eq = PLAYER.equipment();
+    let left_empty = eq.left_ring_id().is_none();
+    let right_empty = eq.right_ring_id().is_none();
+    let left_hand = if left_empty && right_empty {
         if terse != 0 {
             msg_str("no rings");
         } else {
             msg_str("you aren't wearing any rings");
         }
         return;
-    } else if PLAYER.left_ring().is_null() {
+    } else if left_empty {
         false
-    } else if PLAYER.right_ring().is_null() {
+    } else if right_empty {
         true
     } else {
         let hand = gethand();
@@ -231,16 +237,7 @@ pub unsafe fn ring_eat(hand: i32) -> i32 {
         return 0;
     }
 
-    let ring = match hand_idx {
-        LEFT => PLAYER.left_ring(),
-        RIGHT => PLAYER.right_ring(),
-        _ => return 0,
-    };
-    if ring.is_null() {
-        return 0;
-    }
-
-    let ring_type = match RingType::from_raw((*thing_o(ring)).o_which) {
+    let ring_type = match PLAYER.equipment().ring_type(hand_idx) {
         Some(ring_type) => ring_type,
         None => return 0,
     };

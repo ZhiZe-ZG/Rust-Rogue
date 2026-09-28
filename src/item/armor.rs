@@ -21,11 +21,6 @@ unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
     crate::entity::player::thing_o(tp)
 }
 
-#[inline]
-unsafe fn ring_is(ring: *mut Thing, ring_type: RingType) -> bool {
-    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
-}
-
 /// Equips selected armor if valid and no armor is already worn.
 pub unsafe fn wear() {
     let obj = get_item("wear", ItemFilter::Category(ItemType::ARMOR));
@@ -33,7 +28,7 @@ pub unsafe fn wear() {
         return;
     }
 
-    if !PLAYER.armor().is_null() {
+    if PLAYER.equipment().armor_id().is_some() {
         addmsg_str("you are already wearing some");
         if terse == 0 {
             addmsg_str(".  You'll have to take it off first");
@@ -108,8 +103,7 @@ pub unsafe fn rust_armor(arm: *mut Thing) {
     }
 
     if (*thing_o(arm)).o_flags.contains(ObjectFlags::PROT)
-        || ring_is(PLAYER.left_ring(), RingType::SustainArmor)
-        || ring_is(PLAYER.right_ring(), RingType::SustainArmor)
+        || PLAYER.wearing_ring(RingType::SustainArmor)
     {
         if to_death == 0 {
             msg_str("the rust vanishes instantly");

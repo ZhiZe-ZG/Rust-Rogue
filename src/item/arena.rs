@@ -175,6 +175,20 @@ impl ThingArena {
         .flatten()
     }
 
+    /// Mutably access the object payload behind `id` (`None` when `id` names a
+    /// non-object or a stale handle).
+    pub fn with_object_mut<R>(
+        &self,
+        id: ThingId,
+        operation: impl FnOnce(&mut ThingObject) -> R,
+    ) -> Option<R> {
+        self.with_mut(id, |t| match t {
+            Thing::Object { data } => Some(operation(data)),
+            Thing::Monster { .. } => None,
+        })
+        .flatten()
+    }
+
     /// Number of live objects.
     pub fn len(&self) -> usize {
         self.live_count.load(Ordering::Relaxed).max(0) as usize

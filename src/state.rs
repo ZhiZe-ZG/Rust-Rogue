@@ -249,23 +249,10 @@ fn build_object_list(items: &[ThingObject]) -> Vec<ThingId> {
         .collect()
 }
 
-/// Index of the object behind `target` within the pack `pack`, or `None`.
-fn list_index_of(pack: &[ThingId], target: *mut Thing) -> Option<usize> {
-    let target = crate::item::arena::id_of(target)?;
-    pack.iter().position(|&id| id == target)
-}
-
 /// Index of the object handle `target` within the pack `pack`, or `None`.
 fn list_index_of_id(pack: &[ThingId], target: Option<ThingId>) -> Option<usize> {
     let target = target?;
     pack.iter().position(|&id| id == target)
-}
-
-/// The raw handle for the `i`-th pack entry, or null.
-fn list_nth(pack: &[ThingId], i: usize) -> *mut Thing {
-    pack.get(i)
-        .copied()
-        .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
 }
 
 /// Snapshot a monster `Thing` into a pointer-free [`MonsterSnapshot`].
@@ -333,11 +320,12 @@ unsafe fn build_snapshot() -> GameSnapshot {
         .collect();
 
     let player_pack = collect_objects(&hero_pack);
+    let eq = PLAYER.equipment();
     let equipment = EquipmentSnapshot {
-        armor: list_index_of(&hero_pack, PLAYER.armor()),
-        left_ring: list_index_of(&hero_pack, PLAYER.left_ring()),
-        right_ring: list_index_of(&hero_pack, PLAYER.right_ring()),
-        weapon: list_index_of(&hero_pack, PLAYER.weapon()),
+        armor: list_index_of_id(&hero_pack, eq.armor_id()),
+        left_ring: list_index_of_id(&hero_pack, eq.left_ring_id()),
+        right_ring: list_index_of_id(&hero_pack, eq.right_ring_id()),
+        weapon: list_index_of_id(&hero_pack, eq.weapon_id()),
         last_pick: list_index_of_id(&hero_pack, crate::game::globals::last_pick),
         l_last_pick: list_index_of_id(&hero_pack, crate::game::globals::l_last_pick),
     };
@@ -511,14 +499,6 @@ pub fn rs_restore_file(input: &mut dyn Read) -> std::io::Result<()> {
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     unsafe { apply_snapshot(snapshot) };
     Ok(())
-}
-
-/// Resolve an `Option<usize>` pack index against the rebuilt pack handles.
-fn resolve_index(pack: &[ThingId], index: Option<usize>) -> *mut Thing {
-    match index {
-        Some(i) => list_nth(pack, i),
-        None => std::ptr::null_mut(),
-    }
 }
 
 /// Resolve an `Option<usize>` pack index against the rebuilt pack handles,
@@ -793,10 +773,10 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     set_thing_pack(hero_ptr, player_pack.clone());
     set_thing_dest(hero_ptr, crate::entity::player::DestRef::None);
 
-    PLAYER.set_armor(resolve_index(&player_pack, s.equipment.armor));
-    PLAYER.set_left_ring(resolve_index(&player_pack, s.equipment.left_ring));
-    PLAYER.set_right_ring(resolve_index(&player_pack, s.equipment.right_ring));
-    PLAYER.set_weapon(resolve_index(&player_pack, s.equipment.weapon));
+    PLAYER.set_armor_id(resolve_id(&player_pack, s.equipment.armor));
+    PLAYER.set_left_ring_id(resolve_id(&player_pack, s.equipment.left_ring));
+    PLAYER.set_right_ring_id(resolve_id(&player_pack, s.equipment.right_ring));
+    PLAYER.set_weapon_id(resolve_id(&player_pack, s.equipment.weapon));
     crate::game::globals::last_pick = resolve_id(&player_pack, s.equipment.last_pick);
     crate::game::globals::l_last_pick = resolve_id(&player_pack, s.equipment.l_last_pick);
 

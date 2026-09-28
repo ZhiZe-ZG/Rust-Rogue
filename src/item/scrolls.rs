@@ -151,8 +151,8 @@ pub unsafe fn read_scroll() {
         return;
     }
 
-    if obj == PLAYER.weapon() {
-        PLAYER.set_weapon(std::ptr::null_mut());
+    if crate::item::arena::id_of(obj).is_some_and(|id| PLAYER.equipment().weapon_id() == Some(id)) {
+        PLAYER.set_weapon_id(None);
     }
 
     let discardit = (*thing_o(obj)).o_count == 1;
@@ -166,11 +166,14 @@ pub unsafe fn read_scroll() {
             msg_str(&format!("your hands begin to glow {}", pick_color("red")));
         }
         ScrollType::Armor => {
-            if !PLAYER.armor().is_null() {
-                (*thing_o(PLAYER.armor())).o_arm -= 1;
-                (*thing_o(PLAYER.armor()))
-                    .o_flags
-                    .remove(ObjectFlags::CURSED);
+            // Enchant the worn armor (pointer-free mutation via the arena).
+            let enchanted = PLAYER
+                .with_armor_mut(|o| {
+                    o.o_arm -= 1;
+                    o.o_flags.remove(ObjectFlags::CURSED);
+                })
+                .is_some();
+            if enchanted {
                 msg_str(&format!(
                     "your armor glows {} for a moment",
                     pick_color("silver")
@@ -340,34 +343,39 @@ pub unsafe fn read_scroll() {
             }
         }
         ScrollType::Enchant => {
-            if PLAYER.weapon().is_null()
-                || !matches!((*thing_o(PLAYER.weapon())).o_type, ItemType::Weapon(_))
-            {
-                msg_str("you feel a strange sense of loss");
-            } else {
-                (*thing_o(PLAYER.weapon()))
-                    .o_flags
-                    .remove(ObjectFlags::CURSED);
-                if rnd(2) == 0 {
-                    (*thing_o(PLAYER.weapon())).o_hplus += 1;
-                } else {
-                    (*thing_o(PLAYER.weapon())).o_dplus += 1;
-                }
-                msg_str(&format!(
+            // Enchant the wielded weapon; only a real weapon qualifies.
+            let weapon_name = PLAYER
+                .with_weapon_mut(|o| {
+                    if !matches!(o.o_type, ItemType::Weapon(_)) {
+                        return None;
+                    }
+                    o.o_flags.remove(ObjectFlags::CURSED);
+                    if rnd(2) == 0 {
+                        o.o_hplus += 1;
+                    } else {
+                        o.o_dplus += 1;
+                    }
+                    Some(weap_info[o.o_which as usize].oi_name)
+                })
+                .flatten();
+            match weapon_name {
+                Some(name) => msg_str(&format!(
                     "your {} glows {} for a moment",
-                    weap_info[(*thing_o(PLAYER.weapon())).o_which as usize].oi_name,
+                    name,
                     pick_color("blue")
-                ));
-            }
+                )),
+                None => msg_str("you feel a strange sense of loss"),
+            };
         }
         ScrollType::Scare => {
             msg_str("you hear maniacal laughter in the distance");
         }
         ScrollType::RemoveCurse => {
-            uncurse(PLAYER.armor());
-            uncurse(PLAYER.weapon());
-            uncurse(PLAYER.left_ring());
-            uncurse(PLAYER.right_ring());
+            // Lift the curse from every equipped object (pointer-free).
+            PLAYER.with_armor_mut(|o| o.o_flags.remove(ObjectFlags::CURSED));
+            PLAYER.with_weapon_mut(|o| o.o_flags.remove(ObjectFlags::CURSED));
+            PLAYER.with_ring_mut(0, |o| o.o_flags.remove(ObjectFlags::CURSED));
+            PLAYER.with_ring_mut(1, |o| o.o_flags.remove(ObjectFlags::CURSED));
             msg_str(choose_str(
                 "you feel in touch with the Universal Onenes",
                 "you feel as if somebody is watching over you",
@@ -378,8 +386,11 @@ pub unsafe fn read_scroll() {
             msg_str("you hear a high pitched humming noise");
         }
         ScrollType::Protect => {
-            if !PLAYER.armor().is_null() {
-                (*thing_o(PLAYER.armor())).o_flags.insert(ObjectFlags::PROT);
+            // Mark the worn armor as protected (pointer-free).
+            let protected = PLAYER
+                .with_armor_mut(|o| o.o_flags.insert(ObjectFlags::PROT))
+                .is_some();
+            if protected {
                 msg_str(&format!(
                     "your armor is covered by a shimmering {} shield",
                     pick_color("gold")

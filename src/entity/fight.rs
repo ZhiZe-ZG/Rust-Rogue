@@ -126,8 +126,9 @@ unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
 }
 
 #[inline]
-unsafe fn iswearing(ring_type: RingType) -> bool {
-    isring(PLAYER.left_ring(), ring_type) || isring(PLAYER.right_ring(), ring_type)
+fn iswearing(ring_type: RingType) -> bool {
+    let equipment = PLAYER.equipment();
+    equipment.ring_type(0) == Some(ring_type) || equipment.ring_type(1) == Some(ring_type)
 }
 
 #[inline]
@@ -379,17 +380,20 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
                 // Nymph: steals a magic item
                 let mut steal: *mut Thing = std::ptr::null_mut();
                 let mut nobj: i32 = 0;
+                let eq = PLAYER.equipment();
                 for id in PLAYER.pack() {
+                    let equipped = eq.armor_id() == Some(id)
+                        || eq.weapon_id() == Some(id)
+                        || eq.left_ring_id() == Some(id)
+                        || eq.right_ring_id() == Some(id);
+                    if equipped {
+                        continue;
+                    }
                     let obj = crate::item::arena::ptr_of(id);
                     if obj.is_null() {
                         continue;
                     }
-                    if obj != PLAYER.armor()
-                        && obj != PLAYER.weapon()
-                        && obj != PLAYER.left_ring()
-                        && obj != PLAYER.right_ring()
-                        && is_magic_item(obj) != 0
-                    {
+                    if is_magic_item(obj) != 0 {
                         nobj += 1;
                         if rnd(nobj) == 0 {
                             steal = obj;
@@ -524,29 +528,31 @@ unsafe fn roll_em_impl(
         let mut hp = (*thing_o(weap)).o_hplus;
         let mut dp = (*thing_o(weap)).o_dplus;
         if weap == PLAYER.weapon() {
-            if isring(PLAYER.left_ring(), RingType::AddDamage) {
-                dp += (*thing_o(PLAYER.left_ring())).o_arm;
-            } else if isring(PLAYER.left_ring(), RingType::AddHit) {
-                hp += (*thing_o(PLAYER.left_ring())).o_arm;
-            }
-            if isring(PLAYER.right_ring(), RingType::AddDamage) {
-                dp += (*thing_o(PLAYER.right_ring())).o_arm;
-            } else if isring(PLAYER.right_ring(), RingType::AddHit) {
-                hp += (*thing_o(PLAYER.right_ring())).o_arm;
+            // Ring bonuses, read through pointer-free equipment accessors.
+            let equipment = PLAYER.equipment();
+            for hand in 0..2usize {
+                let arm = equipment.ring_arm(hand).unwrap_or(0);
+                match equipment.ring_type(hand) {
+                    Some(RingType::AddDamage) => dp += arm,
+                    Some(RingType::AddHit) => hp += arm,
+                    _ => {}
+                }
             }
         }
         if hurl != 0 {
             if (*thing_o(weap)).o_flags.contains(ObjectFlags::MISL)
-                && !PLAYER.weapon().is_null()
-                && (*thing_o(PLAYER.weapon())).o_which == (*thing_o(weap)).o_launch
+                && PLAYER
+                    .weapon_which()
+                    .is_some_and(|which| which == (*thing_o(weap)).o_launch)
             {
+                let (whp, wdp) = PLAYER.weapon_hdplus().unwrap_or((0, 0));
                 return roll_em_inner(
                     att_stats,
                     thdef,
                     def_is_hero,
                     &(*thing_o(weap)).o_hurldmg,
-                    hp + (*thing_o(PLAYER.weapon())).o_hplus,
-                    dp + (*thing_o(PLAYER.weapon())).o_dplus,
+                    hp + whp,
+                    dp + wdp,
                 );
             } else if (*thing_o(weap)).o_launch < 0 {
                 return roll_em_inner(att_stats, thdef, def_is_hero, &(*thing_o(weap)).o_hurldmg, hp, dp);
@@ -604,14 +610,14 @@ unsafe fn roll_em_inner(
         (*thing_t(thdef)).t_stats.armor
     };
     if def_is_hero {
-        if !PLAYER.armor().is_null() {
-            def_arm = (*thing_o(PLAYER.armor())).o_arm;
+        let equipment = PLAYER.equipment();
+        if let Some(arm) = equipment.armor_arm() {
+            def_arm = arm;
         }
-        if isring(PLAYER.left_ring(), RingType::Protection) {
-            def_arm -= (*thing_o(PLAYER.left_ring())).o_arm;
-        }
-        if isring(PLAYER.right_ring(), RingType::Protection) {
-            def_arm -= (*thing_o(PLAYER.right_ring())).o_arm;
+        for hand in 0..2usize {
+            if equipment.ring_type(hand) == Some(RingType::Protection) {
+                def_arm -= equipment.ring_arm(hand).unwrap_or(0);
+            }
         }
     }
 
