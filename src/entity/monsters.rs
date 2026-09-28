@@ -28,7 +28,7 @@ const HUHDURATION: i32 = 20;
 const AFTER: i32 = 2;
 const VS_MAGIC: i32 = 0o03;
 
-pub use crate::game::globals::CMonster;
+pub use crate::game::globals::MonsterInfo;
 
 /// The identity of a monster kind — the typed replacement for the legacy
 /// `t_type` ASCII letter (`'A'`..=`'Z'`).

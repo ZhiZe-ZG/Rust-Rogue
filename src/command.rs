@@ -16,7 +16,7 @@ use crate::entity::player::{
     do_move, do_run, MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject,
 };
 use crate::game::PLAYER;
-use crate::game::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
+use crate::game::globals::{pot_info, ring_info, scr_info, ws_info, ObjInfo};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::help::{help, identify};
 use crate::item::armor::{take_off, wear};

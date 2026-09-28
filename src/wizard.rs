@@ -8,7 +8,7 @@ use crate::config::GameConfig;
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
-use crate::game::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
+use crate::game::globals::{monsters, pot_info, ring_info, scr_info, ws_info, ObjInfo};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{add_pack, floor_at, get_item};
 use crate::item::sticks::fix_stick;
@@ -125,7 +125,7 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
     msg_str(&inv_name(obj, false as u8));
 }
 
-pub unsafe fn set_know(obj: *mut Thing, info: &mut [CObjInfo]) {
+pub unsafe fn set_know(obj: *mut Thing, info: &mut [ObjInfo]) {
     if obj.is_null() {
         return;
     }
@@ -326,7 +326,7 @@ mod tests {
                 },
             };
 
-            let mut info = [CObjInfo {
+            let mut info = [ObjInfo {
                 oi_name: "",
                 oi_prob: 0,
                 oi_worth: 0,

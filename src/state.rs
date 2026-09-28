@@ -376,7 +376,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         monster_stats.push(m.m_stats);
     }
 
-    let obj_states = |table: &[CObjInfo]| -> Vec<ObjInfoState> {
+    let obj_states = |table: &[ObjInfo]| -> Vec<ObjInfoState> {
         table
             .iter()
             .map(|info| ObjInfoState {
@@ -673,7 +673,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
             monsters[i].m_stats = *stats;
         }
     }
-    let apply_obj = |table: &mut [CObjInfo], states: &[ObjInfoState]| {
+    let apply_obj = |table: &mut [ObjInfo], states: &[ObjInfoState]| {
         for (i, st) in states.iter().enumerate() {
             if i < table.len() {
                 table[i].oi_guess = st.guess.clone();

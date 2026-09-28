@@ -10,7 +10,7 @@
 
 use crate::game::PLAYER;
 use crate::game::globals::{
-    arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
+    arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, ObjInfo,
 };
 use crate::rnd::rnd;
 
@@ -43,16 +43,11 @@ const MACE: i32 = 0;
 const BOW: i32 = 2;
 const ARROW: i32 = 3;
 
-/// Matches the C `STONE` typedef used for ring stone names and values.
-#[repr(C)]
-pub struct CStone {
+/// Ring stone names and values (legacy `STONE` table).
+pub struct Stone {
     pub st_name: &'static str,
     pub st_value: i32,
 }
-
-// Safety: CStone only carries `&'static str` references (string literals) that
-// are never mutated, so cross-thread sharing is fine.
-unsafe impl Sync for CStone {}
 
 // ─── Exported global data arrays ─────────────────────────────────────────────
 
@@ -61,33 +56,33 @@ const NWOOD: usize = 33;
 const NMETAL: usize = 22;
 
 /// Ring-stone table.  Exported as `STONE stones[]` for legacy consumers.
-pub static stones: [CStone; NSTONES] = [
-    CStone { st_name: "agate", st_value: 25 },
-    CStone { st_name: "alexandrite", st_value: 40 },
-    CStone { st_name: "amethyst", st_value: 50 },
-    CStone { st_name: "carnelian", st_value: 40 },
-    CStone { st_name: "diamond", st_value: 300 },
-    CStone { st_name: "emerald", st_value: 300 },
-    CStone { st_name: "germanium", st_value: 225 },
-    CStone { st_name: "granite", st_value: 5 },
-    CStone { st_name: "garnet", st_value: 50 },
-    CStone { st_name: "jade", st_value: 150 },
-    CStone { st_name: "kryptonite", st_value: 300 },
-    CStone { st_name: "lapis lazuli", st_value: 50 },
-    CStone { st_name: "moonstone", st_value: 50 },
-    CStone { st_name: "obsidian", st_value: 15 },
-    CStone { st_name: "onyx", st_value: 60 },
-    CStone { st_name: "opal", st_value: 200 },
-    CStone { st_name: "pearl", st_value: 220 },
-    CStone { st_name: "peridot", st_value: 63 },
-    CStone { st_name: "ruby", st_value: 350 },
-    CStone { st_name: "sapphire", st_value: 285 },
-    CStone { st_name: "stibotantalite", st_value: 200 },
-    CStone { st_name: "tiger eye", st_value: 50 },
-    CStone { st_name: "topaz", st_value: 60 },
-    CStone { st_name: "turquoise", st_value: 70 },
-    CStone { st_name: "taaffeite", st_value: 300 },
-    CStone { st_name: "zircon", st_value: 80 },
+pub static stones: [Stone; NSTONES] = [
+    Stone { st_name: "agate", st_value: 25 },
+    Stone { st_name: "alexandrite", st_value: 40 },
+    Stone { st_name: "amethyst", st_value: 50 },
+    Stone { st_name: "carnelian", st_value: 40 },
+    Stone { st_name: "diamond", st_value: 300 },
+    Stone { st_name: "emerald", st_value: 300 },
+    Stone { st_name: "germanium", st_value: 225 },
+    Stone { st_name: "granite", st_value: 5 },
+    Stone { st_name: "garnet", st_value: 50 },
+    Stone { st_name: "jade", st_value: 150 },
+    Stone { st_name: "kryptonite", st_value: 300 },
+    Stone { st_name: "lapis lazuli", st_value: 50 },
+    Stone { st_name: "moonstone", st_value: 50 },
+    Stone { st_name: "obsidian", st_value: 15 },
+    Stone { st_name: "onyx", st_value: 60 },
+    Stone { st_name: "opal", st_value: 200 },
+    Stone { st_name: "pearl", st_value: 220 },
+    Stone { st_name: "peridot", st_value: 63 },
+    Stone { st_name: "ruby", st_value: 350 },
+    Stone { st_name: "sapphire", st_value: 285 },
+    Stone { st_name: "stibotantalite", st_value: 200 },
+    Stone { st_name: "tiger eye", st_value: 50 },
+    Stone { st_name: "topaz", st_value: 60 },
+    Stone { st_name: "turquoise", st_value: 70 },
+    Stone { st_name: "taaffeite", st_value: 300 },
+    Stone { st_name: "zircon", st_value: 80 },
 ];
 
 /// Count of entries in `stones`.  Exported as `int cNSTONES` for C.
@@ -343,7 +338,7 @@ pub unsafe fn init_materials() {
 /// Accumulate cumulative probabilities for one item-info table.
 ///
 /// Mirrors the C `sumprobs(struct obj_info *info, int bound)`.
-pub unsafe fn sumprobs(info: &mut [CObjInfo], bound: usize) {
+pub unsafe fn sumprobs(info: &mut [ObjInfo], bound: usize) {
     let mut i = 1usize;
     while i < bound {
         info[i].oi_prob += info[i - 1].oi_prob;

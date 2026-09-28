@@ -1,6 +1,6 @@
 //! Character statistics shared by the hero and monsters.
 //!
-//! Successor to the legacy C `struct stats` (formerly `CStats`). The `#[repr(C)]`
+//! Successor to the legacy C `struct stats` (formerly `CStats`). The old C
 //! layout, the `s_` field prefixes, and the `std::os::raw` integer types are
 //! gone now that the port no longer links C code. Save/restore maps each field
 //! explicitly, so the on-disk format is unchanged.

@@ -12,7 +12,7 @@ use crate::entity::chase::see_monst;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::game::MONSTER_LIST;
 use crate::game::PLAYER;
-use crate::game::globals::{pot_info, CObjInfo};
+use crate::game::globals::{pot_info, ObjInfo};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item, leave_pack};
 use crate::item::rings::RingType;
@@ -117,7 +117,7 @@ use crate::game::globals::{after, e_levels, max_stats, seenstairs, terse};
 /// Uses `addr_of_mut!` so no reference to the whole `static mut` array is
 /// created, matching the sound Rust-2024 access pattern.
 #[inline]
-unsafe fn pot_info_at(index: usize) -> &'static mut CObjInfo {
+unsafe fn pot_info_at(index: usize) -> &'static mut ObjInfo {
     &mut pot_info[index]
 }
 

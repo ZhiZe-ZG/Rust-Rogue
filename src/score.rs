@@ -8,8 +8,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 const MAXSTR: usize = 1024;
 const SCORELINE_LEN: usize = 100;
 
-/// On-disk scoreboard entry layout (legacy score-file representation).
-#[repr(C)]
+/// A single scoreboard entry.
 #[derive(Clone)]
 pub struct Score {
     pub sc_uid: u32,

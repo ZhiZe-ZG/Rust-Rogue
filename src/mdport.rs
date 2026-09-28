@@ -9,8 +9,9 @@
 //! mdport.c was written by Nicholas J. Kisseberth (C) 2005.
 //!
 //! This module provides the `md_*` machine-dependent functions formerly
-//! implemented in `src/c/mdport.c`.  The port targets POSIX (Linux/macOS)
-//! and retains the same C ABI so existing Rust callers keep working.
+//! implemented in `src/c/mdport.c`. The port targets POSIX (Linux/macOS).
+//! The only remaining FFI is genuine OS interop (`libc` signal/termios/passwd
+//! calls); all hands own their data with Rust types.
 
 
 use crate::save::auto_save;
@@ -704,11 +705,6 @@ fn ctrl_upcase(c: i32) -> i32 {
 // Load average and checkout timer
 // -------------------------------------------------------------------------
 
-unsafe extern "C" {
-    fn getloadavg(loadavg: *mut f64, nelem: i32) -> i32;
-}
-
-
 /// md_loadav:
 /// Fill `avg` (3 doubles) with the 1/5/15 minute load averages.
 unsafe fn md_loadav(avg: *mut f64) {
@@ -716,7 +712,7 @@ unsafe fn md_loadav(avg: *mut f64) {
         return;
     }
     let mut a = [0.0f64; 3];
-    if getloadavg(a.as_mut_ptr(), 3) < 0 {
+    if libc::getloadavg(a.as_mut_ptr(), 3) < 0 {
         a = [0.0; 3];
     }
     for i in 0..3 {

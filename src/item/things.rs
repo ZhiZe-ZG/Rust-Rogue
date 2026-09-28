@@ -10,7 +10,7 @@ use crate::ui::output::msg_str;
 
 use crate::entity::player::{ObjectFlags, Thing, ThingObject};
 use crate::game::globals::{
-    arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
+    arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, ObjInfo,
 };
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::rings::RingType;
@@ -85,7 +85,7 @@ fn adjust_inventory_case(name: &mut String, drop: u8) {
 }
 
 #[inline]
-fn pick_one(info: &[CObjInfo], nitems: usize) -> i32 {
+fn pick_one(info: &[ObjInfo], nitems: usize) -> i32 {
     let idx = rnd(100);
     let mut i = 0usize;
     while i < nitems {
@@ -366,7 +366,7 @@ pub unsafe fn nameit(
     obj: *mut Thing,
     typ: &str,
     which: &str,
-    op: &CObjInfo,
+    op: &ObjInfo,
     prfunc: unsafe fn(*mut Thing) -> String,
 ) {
     if obj.is_null() {
@@ -404,7 +404,7 @@ unsafe fn nullstr(_: *mut Thing) -> String {
 }
 
 #[allow(dead_code)]
-fn pick_one_ex(info: &[CObjInfo], nitems: usize) -> i32 {
+fn pick_one_ex(info: &[ObjInfo], nitems: usize) -> i32 {
     pick_one(info, nitems)
 }
 

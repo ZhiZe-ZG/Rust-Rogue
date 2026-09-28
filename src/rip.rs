@@ -3,7 +3,7 @@
 //! Ported from `src/c/rip.c` to Rust.
 use std::io::Write;
 
-use crate::game::globals::{allscore, monsters, numscores, CMonster, NUMNAME};
+use crate::game::globals::{allscore, monsters, numscores, MonsterInfo, NUMNAME};
 use crate::item::item_type::ItemType;
 use crate::item::things::inv_name;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
@@ -79,7 +79,7 @@ pub unsafe fn killname(monst: u8, doart: bool) -> String {
     let mut name = String::from("Wally the Wonder Badger");
     if (monst as u8).is_ascii_uppercase() {
         let idx = (monst as u8 - b'A') as usize;
-        let monster = unsafe { &*std::ptr::addr_of!(monsters).cast::<CMonster>().add(idx) };
+        let monster = unsafe { &*std::ptr::addr_of!(monsters).cast::<MonsterInfo>().add(idx) };
         name = monster.m_name.to_string();
         article = true;
     } else {

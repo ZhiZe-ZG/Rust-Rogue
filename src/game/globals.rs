@@ -4,7 +4,6 @@
 //! `extern.c` and `init.c`: material tables, monster state, and other globals.
 use crate::config::GameConfig;
 use crate::daemon::CDelayedAction;
-use crate::entity::player::Thing as PlayerCThing;
 use crate::entity::stats::Stats;
 use glam::IVec2;
 use std::sync::{Mutex, MutexGuard};
@@ -39,7 +38,7 @@ const MAXMONSTERS: usize = 26;
 
 /// Stat-table entry for a monster kind, using native Rust types (no C ABI).
 #[derive(Copy, Clone)]
-pub struct CMonster {
+pub struct MonsterInfo {
     pub m_name: &'static str,
     pub m_carry: i32,
     pub m_flags: i16,
@@ -48,17 +47,13 @@ pub struct CMonster {
 
 /// Item information table entry, using native Rust types (no C ABI).
 #[derive(Clone)]
-pub struct CObjInfo {
+pub struct ObjInfo {
     pub oi_name: &'static str,
     pub oi_prob: i32,
     pub oi_worth: i32,
     pub oi_guess: Option<String>,
     pub oi_know: bool,
 }
-
-pub type CThing = PlayerCThing;
-pub type CThingMonster = crate::entity::player::ThingMonster;
-pub type CThingObject = crate::entity::player::ThingObject;
 
 pub static mut allscore: u8 = 1; // ALLSCORES is enabled in the standard build
 pub static mut after: u8 = 0;
@@ -184,8 +179,8 @@ pub static mut D_LIST: [CDelayedAction; MAXDAEMONS] = [CDelayedAction {
 /// hold raw pointers without borrowing the locked level. Kept in sync by level
 /// population (`presence::place_room_contents`) and save restore.
 pub static mut ROOM_GOLD: [IVec2; GameConfig::MAX_ROOMS] = [IVec2::ZERO; GameConfig::MAX_ROOMS];
-pub static mut monsters: [CMonster; MAXMONSTERS] = [
-    CMonster {
+pub static mut monsters: [MonsterInfo; MAXMONSTERS] = [
+    MonsterInfo {
         m_name: "aquator",
         m_carry: 0,
         m_flags: 0o004000,
@@ -199,7 +194,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "bat",
         m_carry: 0,
         m_flags: 0o000200,
@@ -213,7 +208,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "centaur",
         m_carry: 15,
         m_flags: 0,
@@ -227,7 +222,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "dragon",
         m_carry: 100,
         m_flags: 0o004000,
@@ -241,7 +236,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "emu",
         m_carry: 0,
         m_flags: 0o004000,
@@ -255,7 +250,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "venus flytrap",
         m_carry: 0,
         m_flags: 0o004000,
@@ -269,7 +264,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "griffin",
         m_carry: 20,
         m_flags: 0o004000 | 0o000200 | 0o000100,
@@ -283,7 +278,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "hobgoblin",
         m_carry: 0,
         m_flags: 0o004000,
@@ -297,7 +292,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "ice monster",
         m_carry: 0,
         m_flags: 0,
@@ -311,7 +306,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "jabberwock",
         m_carry: 70,
         m_flags: 0,
@@ -325,7 +320,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "kestrel",
         m_carry: 0,
         m_flags: 0o004000 | 0o000200,
@@ -339,7 +334,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "leprechaun",
         m_carry: 0,
         m_flags: 0,
@@ -353,7 +348,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "medusa",
         m_carry: 40,
         m_flags: 0o004000,
@@ -367,7 +362,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "nymph",
         m_carry: 100,
         m_flags: 0,
@@ -381,7 +376,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "orc",
         m_carry: 15,
         m_flags: 0o000040,
@@ -395,7 +390,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "phantom",
         m_carry: 0,
         m_flags: 0o000200,
@@ -409,7 +404,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "quagga",
         m_carry: 0,
         m_flags: 0o004000,
@@ -423,7 +418,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "rattlesnake",
         m_carry: 0,
         m_flags: 0o004000,
@@ -437,7 +432,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "snake",
         m_carry: 0,
         m_flags: 0o004000,
@@ -451,7 +446,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "troll",
         m_carry: 50,
         m_flags: 0o000100 | 0o004000,
@@ -465,7 +460,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "black unicorn",
         m_carry: 0,
         m_flags: 0o004000,
@@ -479,7 +474,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "vampire",
         m_carry: 20,
         m_flags: 0o000100 | 0o004000,
@@ -493,7 +488,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "wraith",
         m_carry: 0,
         m_flags: 0,
@@ -507,7 +502,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "xeroc",
         m_carry: 30,
         m_flags: 0,
@@ -521,7 +516,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "yeti",
         m_carry: 30,
         m_flags: 0,
@@ -535,7 +530,7 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
             max_hit_points: 0,
         },
     },
-    CMonster {
+    MonsterInfo {
         m_name: "zombie",
         m_carry: 0,
         m_flags: 0o004000,
@@ -551,50 +546,50 @@ pub static mut monsters: [CMonster; MAXMONSTERS] = [
     },
 ];
 
-pub static mut things: [CObjInfo; NUMTHINGS] = [
-    CObjInfo {
+pub static mut things: [ObjInfo; NUMTHINGS] = [
+    ObjInfo {
         oi_name: "potion",
         oi_prob: 0,
         oi_worth: 26,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "scroll",
         oi_prob: 0,
         oi_worth: 36,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "food",
         oi_prob: 0,
         oi_worth: 16,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "weapon",
         oi_prob: 0,
         oi_worth: 7,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "armor",
         oi_prob: 0,
         oi_worth: 7,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "ring",
         oi_prob: 0,
         oi_worth: 4,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "stick",
         oi_prob: 0,
         oi_worth: 4,
@@ -603,57 +598,57 @@ pub static mut things: [CObjInfo; NUMTHINGS] = [
     },
 ];
 
-pub static mut arm_info: [CObjInfo; MAXARMORS] = [
-    CObjInfo {
+pub static mut arm_info: [ObjInfo; MAXARMORS] = [
+    ObjInfo {
         oi_name: "leather armor",
         oi_prob: 20,
         oi_worth: 20,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "ring mail",
         oi_prob: 15,
         oi_worth: 25,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "studded leather armor",
         oi_prob: 15,
         oi_worth: 20,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "scale mail",
         oi_prob: 13,
         oi_worth: 30,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "chain mail",
         oi_prob: 12,
         oi_worth: 75,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "splint mail",
         oi_prob: 10,
         oi_worth: 80,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "banded mail",
         oi_prob: 10,
         oi_worth: 90,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "plate mail",
         oi_prob: 5,
         oi_worth: 150,
@@ -662,99 +657,99 @@ pub static mut arm_info: [CObjInfo; MAXARMORS] = [
     },
 ];
 
-pub static mut pot_info: [CObjInfo; MAXPOTIONS] = [
-    CObjInfo {
+pub static mut pot_info: [ObjInfo; MAXPOTIONS] = [
+    ObjInfo {
         oi_name: "confusion",
         oi_prob: 7,
         oi_worth: 5,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "hallucination",
         oi_prob: 8,
         oi_worth: 5,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "poison",
         oi_prob: 8,
         oi_worth: 5,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "gain strength",
         oi_prob: 13,
         oi_worth: 150,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "see invisible",
         oi_prob: 3,
         oi_worth: 100,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "healing",
         oi_prob: 13,
         oi_worth: 130,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "monster detection",
         oi_prob: 6,
         oi_worth: 130,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "magic detection",
         oi_prob: 6,
         oi_worth: 105,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "raise level",
         oi_prob: 2,
         oi_worth: 250,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "extra healing",
         oi_prob: 5,
         oi_worth: 200,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "haste self",
         oi_prob: 5,
         oi_worth: 190,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "restore strength",
         oi_prob: 13,
         oi_worth: 130,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "blindness",
         oi_prob: 5,
         oi_worth: 5,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "levitation",
         oi_prob: 6,
         oi_worth: 75,
@@ -763,99 +758,99 @@ pub static mut pot_info: [CObjInfo; MAXPOTIONS] = [
     },
 ];
 
-pub static mut ring_info: [CObjInfo; MAXRINGS] = [
-    CObjInfo {
+pub static mut ring_info: [ObjInfo; MAXRINGS] = [
+    ObjInfo {
         oi_name: "protection",
         oi_prob: 9,
         oi_worth: 400,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "add strength",
         oi_prob: 9,
         oi_worth: 400,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "sustain strength",
         oi_prob: 5,
         oi_worth: 280,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "searching",
         oi_prob: 10,
         oi_worth: 420,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "see invisible",
         oi_prob: 10,
         oi_worth: 310,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "adornment",
         oi_prob: 1,
         oi_worth: 10,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "aggravate monster",
         oi_prob: 10,
         oi_worth: 10,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "dexterity",
         oi_prob: 8,
         oi_worth: 440,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "increase damage",
         oi_prob: 8,
         oi_worth: 400,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "regeneration",
         oi_prob: 4,
         oi_worth: 460,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "slow digestion",
         oi_prob: 9,
         oi_worth: 240,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "teleportation",
         oi_prob: 5,
         oi_worth: 30,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "stealth",
         oi_prob: 7,
         oi_worth: 470,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "maintain armor",
         oi_prob: 5,
         oi_worth: 380,
@@ -864,127 +859,127 @@ pub static mut ring_info: [CObjInfo; MAXRINGS] = [
     },
 ];
 
-pub static mut scr_info: [CObjInfo; MAXSCROLLS] = [
-    CObjInfo {
+pub static mut scr_info: [ObjInfo; MAXSCROLLS] = [
+    ObjInfo {
         oi_name: "monster confusion",
         oi_prob: 7,
         oi_worth: 140,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "magic mapping",
         oi_prob: 4,
         oi_worth: 150,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "hold monster",
         oi_prob: 2,
         oi_worth: 180,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "sleep",
         oi_prob: 3,
         oi_worth: 5,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "enchant armor",
         oi_prob: 7,
         oi_worth: 160,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "identify potion",
         oi_prob: 10,
         oi_worth: 80,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "identify scroll",
         oi_prob: 10,
         oi_worth: 80,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "identify weapon",
         oi_prob: 6,
         oi_worth: 80,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "identify armor",
         oi_prob: 7,
         oi_worth: 100,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "identify ring, wand or staff",
         oi_prob: 10,
         oi_worth: 115,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "scare monster",
         oi_prob: 3,
         oi_worth: 200,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "food detection",
         oi_prob: 2,
         oi_worth: 60,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "teleportation",
         oi_prob: 5,
         oi_worth: 165,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "enchant weapon",
         oi_prob: 8,
         oi_worth: 150,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "create monster",
         oi_prob: 4,
         oi_worth: 75,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "remove curse",
         oi_prob: 7,
         oi_worth: 105,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "aggravate monsters",
         oi_prob: 3,
         oi_worth: 20,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "protect armor",
         oi_prob: 2,
         oi_worth: 250,
@@ -993,71 +988,71 @@ pub static mut scr_info: [CObjInfo; MAXSCROLLS] = [
     },
 ];
 
-pub static mut weap_info: [CObjInfo; MAXWEAPONS + 1] = [
-    CObjInfo {
+pub static mut weap_info: [ObjInfo; MAXWEAPONS + 1] = [
+    ObjInfo {
         oi_name: "mace",
         oi_prob: 11,
         oi_worth: 8,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "long sword",
         oi_prob: 11,
         oi_worth: 15,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "short bow",
         oi_prob: 12,
         oi_worth: 15,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "arrow",
         oi_prob: 12,
         oi_worth: 1,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "dagger",
         oi_prob: 8,
         oi_worth: 3,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "two handed sword",
         oi_prob: 10,
         oi_worth: 75,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "dart",
         oi_prob: 12,
         oi_worth: 2,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "shuriken",
         oi_prob: 12,
         oi_worth: 5,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "spear",
         oi_prob: 12,
         oi_worth: 5,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "",
         oi_prob: 0,
         oi_worth: 0,
@@ -1066,99 +1061,99 @@ pub static mut weap_info: [CObjInfo; MAXWEAPONS + 1] = [
     },
 ];
 
-pub static mut ws_info: [CObjInfo; MAXSTICKS] = [
-    CObjInfo {
+pub static mut ws_info: [ObjInfo; MAXSTICKS] = [
+    ObjInfo {
         oi_name: "light",
         oi_prob: 12,
         oi_worth: 250,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "invisibility",
         oi_prob: 6,
         oi_worth: 5,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "lightning",
         oi_prob: 3,
         oi_worth: 330,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "fire",
         oi_prob: 3,
         oi_worth: 330,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "cold",
         oi_prob: 3,
         oi_worth: 330,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "polymorph",
         oi_prob: 15,
         oi_worth: 310,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "magic missile",
         oi_prob: 10,
         oi_worth: 170,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "haste monster",
         oi_prob: 10,
         oi_worth: 5,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "slow monster",
         oi_prob: 11,
         oi_worth: 350,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "drain life",
         oi_prob: 9,
         oi_worth: 300,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "nothing",
         oi_prob: 1,
         oi_worth: 5,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "teleport away",
         oi_prob: 6,
         oi_worth: 340,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "teleport to",
         oi_prob: 6,
         oi_worth: 50,
         oi_guess: None,
         oi_know: false,
     },
-    CObjInfo {
+    ObjInfo {
         oi_name: "cancellation",
         oi_prob: 5,
         oi_worth: 280,

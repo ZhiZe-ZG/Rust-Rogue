@@ -6,7 +6,7 @@ use crate::config::GameConfig;
 use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
 use crate::game::PLAYER;
-use crate::game::globals::CObjInfo;
+use crate::game::globals::ObjInfo;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item, leave_pack, reset_last};
 use crate::rnd::rnd;
@@ -349,7 +349,7 @@ pub unsafe fn spread(nm: i32) -> i32 {
     nm - nm / 20 + rnd(nm / 10)
 }
 
-pub unsafe fn call_it(info: &mut CObjInfo) {
+pub unsafe fn call_it(info: &mut ObjInfo) {
     if info.oi_know {
         info.oi_guess = None;
     } else if info.oi_guess.is_none() {

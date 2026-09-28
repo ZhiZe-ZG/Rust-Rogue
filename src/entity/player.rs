@@ -37,7 +37,7 @@ use crate::item::arena::ThingId;
 pub use crate::entity::stats::Stats;
 
 /// Actor (monster/player) status flags — the typed replacement for the legacy
-/// `t_flags` bit field of [`CThingMonster`].
+/// `t_flags` bit field of [`ThingMonster`].
 ///
 /// The original 16-bit pattern is preserved exactly so save files stay
 /// byte-compatible; callers use the named constants and bit operations below
@@ -165,7 +165,7 @@ impl From<MonsterFlags> for i16 {
 }
 
 /// Object (item) flags — the typed replacement for the legacy `o_flags` bit
-/// field of [`CThingObject`]. The 32-bit pattern is preserved exactly so save
+/// field of [`ThingObject`]. The 32-bit pattern is preserved exactly so save
 /// files stay byte-compatible.
 #[derive(Copy, Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -319,7 +319,7 @@ impl DestRef {
     }
 }
 
-/// Monster/player (actor) data for a [`CThing`], using native Rust types.
+/// Monster/player (actor) data for a [`Thing`], using native Rust types.
 #[derive(Clone)]
 pub struct ThingMonster {
     pub t_pos: IVec2,
@@ -340,7 +340,7 @@ pub struct ThingMonster {
     pub t_reserved: i32,
 }
 
-/// Object (item) data for a [`CThing`], using native Rust types. The `o_text`
+/// Object (item) data for a [`Thing`], using native Rust types. The `o_text`
 /// and `o_label` string fields are owned Rust `String`s rather than C pointers.
 ///
 /// This is a pure value type (no pointers), so it derives `Serialize` /
@@ -375,12 +375,10 @@ pub enum Thing {
     Object { data: ThingObject },
 }
 
-// SAFETY: the game is single-threaded and things are only ever mutated from one
-// thread, so it is sound for the safe [`crate::game::MonsterList`] to own
-// monsters inside a `Mutex`.
-unsafe impl Send for Thing {}
-unsafe impl Sync for Thing {}
-
+// `Thing` is automatically `Send + Sync` because every field it holds
+// (`ThingMonster`/`ThingObject` and their owned `String`/`Vec` members) is
+// itself `Send + Sync`. It is stored inside `Mutex`/`RwLock`, which require
+// those bounds, so no manual `unsafe impl` is needed.
 impl Thing {
     /// Build an actor thing.
     pub const fn actor(data: ThingMonster) -> Self {
