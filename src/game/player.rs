@@ -490,6 +490,12 @@ impl Player {
         self.equipment.weapon_which()
     }
 
+    /// The wielded weapon's arena handle, if any (pointer-free).
+    #[inline]
+    pub fn weapon_id(&self) -> Option<ThingId> {
+        self.equipment.weapon_id()
+    }
+
     /// Whether the player wears `ring_type` on either hand (pointer-free).
     #[inline]
     pub fn wearing_ring(&self, ring_type: crate::item::rings::RingType) -> bool {

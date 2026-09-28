@@ -19,7 +19,7 @@ use crate::rnd::rnd;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::item::item_type::ItemType;
 use crate::item::pack::add_pack;
-use crate::item::arena::new_item;
+use crate::item::arena::{new_item, new_item_id, ptr_of};
 use crate::item::weapons::init_weapon;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -220,24 +220,27 @@ pub unsafe fn init_player() {
     add_pack(obj, true as u8);
 
     // A +1 mace
-    let obj = new_item();
-    init_weapon(obj, MACE);
+    let mace_id = new_item_id();
+    init_weapon(mace_id, MACE);
+    let obj = ptr_of(mace_id);
     (*thing_o(obj)).o_hplus = 1;
     (*thing_o(obj)).o_dplus = 1;
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     add_pack(obj, true as u8);
-    PLAYER.set_weapon(obj);
+    PLAYER.set_weapon_id(Some(mace_id));
 
     // A +1 bow
-    let obj = new_item();
-    init_weapon(obj, BOW);
+    let bow_id = new_item_id();
+    init_weapon(bow_id, BOW);
+    let obj = ptr_of(bow_id);
     (*thing_o(obj)).o_hplus = 1;
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     add_pack(obj, true as u8);
 
     // Arrows
-    let obj = new_item();
-    init_weapon(obj, ARROW);
+    let arrow_id = new_item_id();
+    init_weapon(arrow_id, ARROW);
+    let obj = ptr_of(arrow_id);
     (*thing_o(obj)).o_count = rnd(15) + 25;
     (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
     add_pack(obj, true as u8);

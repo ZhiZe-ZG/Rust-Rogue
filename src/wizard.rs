@@ -189,7 +189,8 @@ pub unsafe fn create_obj() {
                 (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
             }
             if matches!((*thing_o(obj)).o_type, ItemType::Weapon(_)) {
-                init_weapon(obj, (*thing_o(obj)).o_which);
+                let id = crate::item::arena::id_of(obj).expect("object came from the arena");
+                init_weapon(id, (*thing_o(obj)).o_which);
                 if bless == ('-' as u8) {
                     (*thing_o(obj)).o_hplus -= rnd(3) + 1;
                 }

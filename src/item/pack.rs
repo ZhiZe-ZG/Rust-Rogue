@@ -12,7 +12,7 @@ use crate::game::MONSTER_LIST;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::scrolls::ScrollType;
 use crate::entity::player::discard;
-use crate::item::arena::{id_of, new_item, ptr_of, ThingId};
+use crate::item::arena::{id_of, ptr_of, ThingId};
 use crate::item::things::{add_line, inv_name};
 use crate::misc::{find_obj, show_floor};
 use crate::ui::input::readchar;
@@ -57,10 +57,6 @@ unsafe fn detach_floor(item: *mut Thing) {
 /// The player's pack as arena handles, head first.
 pub unsafe fn pack_ptrs() -> Vec<ThingId> {
     crate::game::PLAYER.pack()
-}
-
-unsafe fn alloc_item() -> *mut Thing {
-    new_item()
 }
 
 unsafe fn hero_coord() -> IVec2 {
@@ -291,29 +287,48 @@ pub unsafe fn pack_room(from_floor: u8, obj: *mut Thing) -> u8 {
     true as u8
 }
 
-pub unsafe fn leave_pack(obj: *mut Thing, newobj: u8, all: u8) -> *mut Thing {
-    let mut nobj = obj;
+/// Pointer-free version of [`leave_pack`]: works on an arena [`ThingId`].
+///
+/// Splits `id` out of the player's pack (or one item off its stack) and returns
+/// the handle to use for the departed object: the original `id` when the whole
+/// stack leaves the pack, or a freshly allocated copy carrying one item when a
+/// stack of more than one is being split (`newobj`).
+pub unsafe fn leave_pack_id(id: ThingId, newobj: bool, all: bool) -> Option<ThingId> {
+    let (count, group, packch) =
+        crate::item::arena::with_object(id, |o| (o.o_count, o.o_group, o.o_packch))?;
 
     inpack -= 1;
-    if (*thing_o(obj)).o_count > 1 && all == 0 {
-        last_pick = id_of(obj);
-        (*thing_o(obj)).o_count -= 1;
-        if (*thing_o(obj)).o_group != 0 {
+    if count > 1 && !all {
+        last_pick = Some(id);
+        crate::item::arena::OBJECTS.with_object_mut(id, |o| o.o_count -= 1);
+        if group != 0 {
             inpack += 1;
         }
-        if newobj != 0 {
-            nobj = alloc_item();
-            *nobj = (*obj).clone();
-            (*thing_o(nobj)).o_count = 1;
+        if newobj {
+            let cloned = crate::item::arena::OBJECTS.with(id, |thing| thing.clone())?;
+            let copy = crate::item::arena::OBJECTS.insert(cloned);
+            crate::item::arena::OBJECTS.with_object_mut(copy, |o| o.o_count = 1);
+            Some(copy)
+        } else {
+            Some(id)
         }
     } else {
         last_pick = None;
-        pack_used[(*thing_o(obj)).o_packch as usize - 'a' as usize] = false as u8;
-        if let Some(id) = id_of(obj) {
-            crate::game::PLAYER.remove_from_pack(id);
+        if (packch as usize) >= b'a' as usize {
+            pack_used[packch as usize - 'a' as usize] = false as u8;
         }
+        crate::game::PLAYER.remove_from_pack(id);
+        Some(id)
     }
-    nobj
+}
+
+/// Legacy pointer wrapper around [`leave_pack_id`].
+pub unsafe fn leave_pack(obj: *mut Thing, newobj: u8, all: u8) -> *mut Thing {
+    match id_of(obj) {
+        Some(id) => leave_pack_id(id, newobj != 0, all != 0)
+            .map_or(obj, crate::item::arena::ptr_of),
+        None => obj,
+    }
 }
 
 pub unsafe fn pack_char() -> u8 {
@@ -399,20 +414,22 @@ pub unsafe fn pick_up(ch: u8) {
     }
 }
 
-pub unsafe fn get_item(purpose: &str, filter: ItemFilter) -> *mut Thing {
+/// Pointer-free version of [`get_item`]: resolves the player's selection to an
+/// arena [`ThingId`] (or `None` when the player cancels / carries nothing).
+pub unsafe fn get_item_id(purpose: &str, filter: ItemFilter) -> Option<ThingId> {
     let mut ch: i32;
 
     if crate::game::PLAYER.pack().is_empty() {
         msg_str("you aren't carrying anything");
-        return std::ptr::null_mut();
+        return None;
     }
 
     if again != 0 {
         if let Some(id) = last_pick {
-            return ptr_of(id);
+            return Some(id);
         }
         msg_str("you ran out");
-        return std::ptr::null_mut();
+        return None;
     }
 
     loop {
@@ -430,21 +447,20 @@ pub unsafe fn get_item(purpose: &str, filter: ItemFilter) -> *mut Thing {
             reset_last();
             after = false as u8;
             msg_str("");
-            return std::ptr::null_mut();
+            return None;
         }
         n_objs = 1;
         if ch == '*' as i32 {
             mpos = 0;
             if inventory(&pack_ptrs(), filter) == 0 {
                 after = false as u8;
-                return std::ptr::null_mut();
+                return None;
             }
             continue;
         }
         for id in crate::game::PLAYER.pack() {
-            let obj = ptr_of(id);
-            if !obj.is_null() && (*thing_o(obj)).o_packch == ch as u8 {
-                return obj;
+            if crate::item::arena::with_object(id, |o| o.o_packch) == Some(ch as u8) {
+                return Some(id);
             }
         }
         msg_str(&format!(
@@ -452,6 +468,11 @@ pub unsafe fn get_item(purpose: &str, filter: ItemFilter) -> *mut Thing {
             output::format_key(ch as u8)
         ));
     }
+}
+
+/// Legacy pointer wrapper around [`get_item_id`].
+pub unsafe fn get_item(purpose: &str, filter: ItemFilter) -> *mut Thing {
+    get_item_id(purpose, filter).map_or(std::ptr::null_mut(), ptr_of)
 }
 
 pub unsafe fn money(value: i32) {

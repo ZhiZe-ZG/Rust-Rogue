@@ -16,7 +16,7 @@ use crate::game::PLAYER;
 use crate::item::armor::rust_armor;
 use crate::item::pack::floor_at;
 use crate::item::rings::RingType;
-use crate::item::arena::new_item;
+use crate::item::arena::new_item_id;
 use crate::item::weapons::{fall, init_weapon};
 use crate::level::new_level;
 use crate::machdep::flush_type;
@@ -190,6 +190,13 @@ impl ObjectFlags {
     #[inline]
     pub const fn bits(self) -> i32 {
         self.0
+    }
+
+    /// Bitwise union of two flag sets as a `const` (the `BitOr` impl is not
+    /// `const`, so `static` initialisers compose flags with this instead).
+    #[inline]
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
     }
 
     #[inline]
@@ -606,11 +613,13 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
                     TrapHit::Hit
                 };
             } else {
-                let arrow = new_item();
+                let arrow = new_item_id();
                 init_weapon(arrow, ARROW);
-                (*thing_o(arrow)).o_count = 1;
-                (*thing_o(arrow)).o_pos = PLAYER.pos();
-                fall(arrow, false as u8);
+                crate::item::arena::OBJECTS.with_object_mut(arrow, |o| {
+                    o.o_count = 1;
+                    o.o_pos = PLAYER.pos();
+                });
+                fall(arrow, false);
                 hit = TrapHit::Miss;
             }
         }
@@ -830,7 +839,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
             seenstairs = true as u8;
             running = false as u8;
             if is_upper(ch) || game::monster_here(next_pos.y, next_pos.x) {
-                fight(next_pos, game::PLAYER.weapon(), false as u8);
+                fight(next_pos, game::PLAYER.weapon_id(), false as u8);
             } else {
                 take = ch;
                 move_stuff(&mut next_pos, fl);
@@ -839,7 +848,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
         _ => {
             running = false as u8;
             if is_upper(ch) || game::monster_here(next_pos.y, next_pos.x) {
-                fight(next_pos, game::PLAYER.weapon(), false as u8);
+                fight(next_pos, game::PLAYER.weapon_id(), false as u8);
             } else {
                 if ch != STAIRS {
                     take = ch;

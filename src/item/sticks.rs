@@ -184,21 +184,25 @@ pub unsafe fn do_zap() {
         }
         Some(StickType::Missile) => {
             ws_info[StickType::Missile.index()].oi_know = true;
-            let mut bolt = Thing::object(ThingObject::default());
-            (*thing_o(&mut bolt)).o_type = ItemType::Weapon(FLAME);
-            (*thing_o(&mut bolt)).o_which = FLAME;
-            set_c_string(&mut (*thing_o(&mut bolt)).o_hurldmg, "1x4");
-            (*thing_o(&mut bolt)).o_hplus = 100;
-            (*thing_o(&mut bolt)).o_dplus = 1;
-            (*thing_o(&mut bolt)).o_flags = ObjectFlags::MISL;
-            if let Some(which) = PLAYER.weapon_which() {
-                (*thing_o(&mut bolt)).o_launch = which;
-            }
-            do_motion(&mut bolt, delta.y, delta.x);
-            let bolt_pos = (*thing_o(&mut bolt)).o_pos;
+            let bolt = crate::item::arena::new_item_id();
+            let launch = PLAYER.weapon_which();
+            crate::item::arena::OBJECTS.with_object_mut(bolt, |o| {
+                o.o_type = ItemType::Weapon(FLAME);
+                o.o_which = FLAME;
+                set_c_string(&mut o.o_hurldmg, "1x4");
+                o.o_hplus = 100;
+                o.o_dplus = 1;
+                o.o_flags = ObjectFlags::MISL;
+                if let Some(which) = launch {
+                    o.o_launch = which;
+                }
+            });
+            do_motion(bolt, delta.y, delta.x);
+            let bolt_pos =
+                crate::item::arena::with_object(bolt, |o| o.o_pos).unwrap_or(IVec2::ZERO);
             if let Some(mid) = crate::game::monster_id_at(bolt_pos.y, bolt_pos.x) {
                 if save_throw_id(VS_MAGIC, mid) == 0 {
-                    hit_monster(bolt_pos.y, bolt_pos.x, &mut bolt);
+                    hit_monster(bolt_pos.y, bolt_pos.x, bolt);
                 } else if terse != 0 {
                     msg_str("missle vanishes");
                 } else {
@@ -209,6 +213,7 @@ pub unsafe fn do_zap() {
             } else {
                 msg_str("the missle vanishes with a puff of smoke");
             }
+            let _ = crate::item::arena::OBJECTS.remove(bolt);
         }
         Some(StickType::HasteM) | Some(StickType::SlowM) => {
             let hero = hero_pos();
@@ -260,13 +265,15 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
     let mut pos = start;
     let hero = hero_pos();
     let hit_hero = start != hero;
-    let mut bolt = Thing::object(ThingObject::default());
+    let bolt = crate::item::arena::new_item_id();
 
-    (*thing_o(&mut bolt)).o_type = ItemType::Weapon(FLAME);
-    (*thing_o(&mut bolt)).o_which = FLAME;
-    set_c_string(&mut (*thing_o(&mut bolt)).o_hurldmg, "6x6");
-    (*thing_o(&mut bolt)).o_hplus = 100;
-    (*thing_o(&mut bolt)).o_dplus = 0;
+    crate::item::arena::OBJECTS.with_object_mut(bolt, |o| {
+        o.o_type = ItemType::Weapon(FLAME);
+        o.o_which = FLAME;
+        set_c_string(&mut o.o_hurldmg, "6x6");
+        o.o_hplus = 100;
+        o.o_dplus = 0;
+    });
 
     pos.y += dir.y;
     pos.x += dir.x;
@@ -282,7 +289,7 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
     } else {
         if let Some(mid) = crate::game::monster_id_at(pos.y, pos.x) {
             if save_throw_id(VS_MAGIC, mid) == 0 {
-                hit_monster(pos.y, pos.x, &mut bolt);
+                hit_monster(pos.y, pos.x, bolt);
             } else {
                 msg_str("the bolt misses");
             }
@@ -291,6 +298,7 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
         }
     }
 
+    let _ = crate::item::arena::OBJECTS.remove(bolt);
     output::write_glyph_at(IVec2::new(pos.x, pos.y), '/');
     output::refresh();
 }

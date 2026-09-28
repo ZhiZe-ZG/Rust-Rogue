@@ -15,7 +15,7 @@ use crate::game::globals::{
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::rings::RingType;
 use crate::item::sticks::fix_stick;
-use crate::item::arena::new_item;
+use crate::item::arena::{new_item_id, ptr_of};
 use crate::item::weapons::init_weapon;
 
 const MAXSTR: usize = 1024;
@@ -97,14 +97,14 @@ fn pick_one(info: &[ObjInfo], nitems: usize) -> i32 {
     0
 }
 
-pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
-    if obj.is_null() {
+/// Pointer-free version of [`inv_name`]; works on an arena [`ThingId`].
+pub unsafe fn inv_name_id(id: crate::item::arena::ThingId, drop: bool) -> String {
+    let Some((which, typ, count, label, group)) = crate::item::arena::with_object(id, |o| {
+        (o.o_which, o.o_type, o.o_count, o.o_label.clone(), o.o_group)
+    }) else {
         return String::new();
-    }
+    };
 
-    let which = (*thing_o(obj)).o_which;
-    let typ = (*thing_o(obj)).o_type;
-    let count = (*thing_o(obj)).o_count;
     let mut name = match typ {
         ItemType::Potion(_) => {
             let item = item_name(typ, which);
@@ -152,7 +152,7 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
             } else {
                 format!("{}{item}", starts_with_article(item))
             };
-            if let Some(label) = (*thing_o(obj)).o_label.as_ref() {
+            if let Some(label) = label.as_ref() {
                 text.push_str(" called ");
                 text.push_str(label);
             }
@@ -160,43 +160,46 @@ pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
         }
         ItemType::Armor(_) => {
             let mut text = item_name(typ, which).to_owned();
-            if let Some(label) = (*thing_o(obj)).o_label.as_ref() {
+            if let Some(label) = label.as_ref() {
                 text.push_str(" called ");
                 text.push_str(label);
             }
             text
         }
         ItemType::Amulet => "The Amulet of Yendor".to_owned(),
-        ItemType::Gold => format!("{} Gold pieces", (*thing_o(obj)).o_group),
+        ItemType::Gold => format!("{group} Gold pieces"),
         _ => "something".to_owned(),
     };
 
     if inv_describe != 0 {
-        // Identify the object by arena handle rather than by raw pointer.
-        let id = crate::item::arena::id_of(obj);
         let eq = PLAYER.equipment();
-        if id.is_some() && id == eq.armor_id() {
+        if Some(id) == eq.armor_id() {
             name.push_str(" (being worn)");
         }
-        if id.is_some() && id == eq.weapon_id() {
+        if Some(id) == eq.weapon_id() {
             name.push_str(" (weapon in hand)");
         }
-        if id.is_some() && id == eq.left_ring_id() {
+        if Some(id) == eq.left_ring_id() {
             name.push_str(" (on left hand)");
-        } else if id.is_some() && id == eq.right_ring_id() {
+        } else if Some(id) == eq.right_ring_id() {
             name.push_str(" (on right hand)");
         }
     }
 
-    adjust_inventory_case(&mut name, drop);
+    adjust_inventory_case(&mut name, drop as u8);
     copy_to_prbuf(&name)
 }
 
-pub unsafe fn dropcheck(obj: *mut Thing) -> u8 {
-    let id = match crate::item::arena::id_of(obj) {
-        Some(id) => id,
-        None => return true as u8,
-    };
+/// Legacy pointer wrapper around [`inv_name_id`].
+pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
+    match crate::item::arena::id_of(obj) {
+        Some(id) => inv_name_id(id, drop != 0),
+        None => String::new(),
+    }
+}
+
+/// Pointer-free version of [`dropcheck`]: works on an arena [`ThingId`].
+pub unsafe fn dropcheck_id(id: crate::item::arena::ThingId) -> bool {
     let eq = PLAYER.equipment();
     let is_weapon = eq.weapon_id() == Some(id);
     let is_armor = eq.armor_id() == Some(id);
@@ -204,11 +207,13 @@ pub unsafe fn dropcheck(obj: *mut Thing) -> u8 {
     let is_right = eq.right_ring_id() == Some(id);
 
     if !is_weapon && !is_armor && !is_left && !is_right {
-        return true as u8;
+        return true;
     }
-    if (*thing_o(obj)).o_flags.contains(ObjectFlags::CURSED) {
+    let cursed = crate::item::arena::with_object(id, |o| o.o_flags.contains(ObjectFlags::CURSED))
+        .unwrap_or(false);
+    if cursed {
         msg_str("you can't.  It appears to be cursed");
-        return false as u8;
+        return false;
     }
     if is_weapon {
         PLAYER.set_weapon_id(None);
@@ -221,16 +226,26 @@ pub unsafe fn dropcheck(obj: *mut Thing) -> u8 {
         } else {
             PLAYER.set_right_ring_id(None);
         }
-        match (*thing_o(obj)).o_which {
-            0 => chg_str(-(*thing_o(obj)).o_arm),
-            _ => {}
+        let which = crate::item::arena::with_object(id, |o| o.o_which).unwrap_or(0);
+        if which == 0 {
+            let arm = crate::item::arena::with_object(id, |o| o.o_arm).unwrap_or(0);
+            chg_str(-arm);
         }
     }
-    true as u8
+    true
+}
+
+/// Legacy pointer wrapper around [`dropcheck_id`].
+pub unsafe fn dropcheck(obj: *mut Thing) -> u8 {
+    match crate::item::arena::id_of(obj) {
+        Some(id) => dropcheck_id(id) as u8,
+        None => true as u8,
+    }
 }
 
 pub unsafe fn new_thing() -> *mut Thing {
-    let cur = new_item();
+    let cur_id = new_item_id();
+    let cur = ptr_of(cur_id);
     (*thing_o(cur)).o_hplus = 0;
     (*thing_o(cur)).o_dplus = 0;
     std::ptr::copy_nonoverlapping(
@@ -274,7 +289,7 @@ pub unsafe fn new_thing() -> *mut Thing {
             }
         }
         3 => {
-            init_weapon(cur, pick_one(&weap_info[..], MAXWEAPONS));
+            init_weapon(cur_id, pick_one(&weap_info[..], MAXWEAPONS));
             let r = rnd(100);
             if r < 10 {
                 (*thing_o(cur)).o_flags.insert(ObjectFlags::CURSED);

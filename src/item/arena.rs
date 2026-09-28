@@ -359,6 +359,16 @@ pub fn with_object<R>(id: ThingId, operation: impl FnOnce(&ThingObject) -> R) ->
     OBJECTS.with_object(id, operation)
 }
 
+/// Mutably access the object payload behind `id` (`None` for a stale handle or
+/// a non-object).
+#[inline]
+pub fn with_object_mut<R>(
+    id: ThingId,
+    operation: impl FnOnce(&mut ThingObject) -> R,
+) -> Option<R> {
+    OBJECTS.with_object_mut(id, operation)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

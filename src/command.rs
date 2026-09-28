@@ -694,7 +694,11 @@ pub unsafe fn command() {
                                      * Give him a sword (+1,+1)
                                      */
                                     obj = new_item();
-                                    init_weapon(obj, TWOSWORD);
+                                    init_weapon(
+                                        crate::item::arena::id_of(obj)
+                                            .expect("object came from the arena"),
+                                        TWOSWORD,
+                                    );
                                     (*thing_o(obj)).o_hplus = 1;
                                     (*thing_o(obj)).o_dplus = 1;
                                     add_pack(obj, true as u8);

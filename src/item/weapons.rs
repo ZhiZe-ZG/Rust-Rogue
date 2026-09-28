@@ -1,21 +1,26 @@
 //! Weapons: wielding, throwing, and weapon initialization.
 //!
 //! Ported from `src/c/weapons.c` to Rust.
+//!
+//! This module is pointer-free: weapons (and the transient bolts/flames fired
+//! by wands) are addressed through the item arena's [`ThingId`] handles and
+//! mutated through scoped `with_object`/`with_object_mut` access rather than
+//! raw `*mut Thing` dereferences.
 use crate::entity::chase::cansee;
 use crate::entity::fight::fight;
 use crate::game::PLAYER;
 use crate::item::item_type::{ItemFilter, ItemType};
-use crate::item::pack::{get_item, leave_pack};
-use crate::misc::{is_current, show_floor};
+use crate::item::pack::{get_item_id, leave_pack_id};
+use crate::misc::{is_current_id, show_floor};
 use crate::rnd::rnd;
 use crate::ui::output;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
 
-use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::entity::player::ObjectFlags;
 use crate::game::globals::weap_info;
-use crate::entity::player::discard;
-use crate::item::things::{dropcheck, inv_name};
+use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::things::{dropcheck_id, inv_name_id};
 
 const NO_WEAPON: i32 = -1;
 
@@ -28,15 +33,14 @@ const BOW: i32 = 2;
 const DAGGER: i32 = 4;
 const MAXWEAPONS: usize = 9;
 
-const ISMISL: i32 = 0o000004;
-const ISMANY: i32 = 0o000010;
-
+/// A weapon's initialisation template entry.
 #[derive(Copy, Clone)]
 struct InitWeap {
     iw_dam: &'static [u8],
     iw_hrl: &'static [u8],
     iw_launch: i32,
-    iw_flags: i32,
+    /// The object flags applied to a freshly initialised weapon of this kind.
+    iw_flags: ObjectFlags,
 }
 
 static INIT_DAM: [InitWeap; MAXWEAPONS] = [
@@ -44,70 +48,60 @@ static INIT_DAM: [InitWeap; MAXWEAPONS] = [
         iw_dam: b"2x4\0",
         iw_hrl: b"1x3\0",
         iw_launch: NO_WEAPON,
-        iw_flags: 0,
+        iw_flags: ObjectFlags::NONE,
     },
     InitWeap {
         iw_dam: b"3x4\0",
         iw_hrl: b"1x2\0",
         iw_launch: NO_WEAPON,
-        iw_flags: 0,
+        iw_flags: ObjectFlags::NONE,
     },
     InitWeap {
         iw_dam: b"1x1\0",
         iw_hrl: b"1x1\0",
         iw_launch: NO_WEAPON,
-        iw_flags: 0,
+        iw_flags: ObjectFlags::NONE,
     },
     InitWeap {
         iw_dam: b"1x1\0",
         iw_hrl: b"2x3\0",
         iw_launch: BOW,
-        iw_flags: ISMANY | ISMISL,
+        iw_flags: ObjectFlags::MANY.union(ObjectFlags::MISL),
     },
     InitWeap {
         iw_dam: b"1x6\0",
         iw_hrl: b"1x4\0",
         iw_launch: NO_WEAPON,
-        iw_flags: ISMISL,
+        iw_flags: ObjectFlags::MISL,
     },
     InitWeap {
         iw_dam: b"4x4\0",
         iw_hrl: b"1x2\0",
         iw_launch: NO_WEAPON,
-        iw_flags: 0,
+        iw_flags: ObjectFlags::NONE,
     },
     InitWeap {
         iw_dam: b"1x1\0",
         iw_hrl: b"1x3\0",
         iw_launch: NO_WEAPON,
-        iw_flags: ISMANY | ISMISL,
+        iw_flags: ObjectFlags::MANY.union(ObjectFlags::MISL),
     },
     InitWeap {
         iw_dam: b"1x2\0",
         iw_hrl: b"2x4\0",
         iw_launch: NO_WEAPON,
-        iw_flags: ISMANY | ISMISL,
+        iw_flags: ObjectFlags::MANY.union(ObjectFlags::MISL),
     },
     InitWeap {
         iw_dam: b"2x3\0",
         iw_hrl: b"1x6\0",
         iw_launch: NO_WEAPON,
-        iw_flags: ISMISL,
+        iw_flags: ObjectFlags::MISL,
     },
 ];
 
 use crate::game::globals::{after, group, has_hit, terse};
 
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
 
 #[inline]
 fn hero() -> IVec2 {
@@ -119,148 +113,146 @@ unsafe fn chat(y: i32, x: i32) -> i32 {
     crate::draw::cell_glyph(y, x) as u8 as i32
 }
 
+/// Copy a legacy NUL-terminated damage spec into a fixed buffer, zero-filling.
 #[inline]
-unsafe fn copy_c_bytes(dst: &mut [u8], src: &[u8]) {
-    let mut i = 0usize;
-    while i + 1 < dst.len() && i < src.len() {
-        dst[i] = src[i];
-        if src[i] == 0 {
-            return;
-        }
-        i += 1;
-    }
-    dst[dst.len() - 1] = 0;
+fn set_damage(dst: &mut [u8; 8], src: &[u8]) {
+    dst.fill(0);
+    let n = src.len().min(dst.len());
+    dst[..n].copy_from_slice(&src[..n]);
 }
 
 /// Throws a selected weapon in the provided direction and resolves impact/fall behavior.
 pub unsafe fn missile(ydelta: i32, xdelta: i32) {
-    let mut obj = get_item("throw", ItemFilter::Category(ItemType::WEAPON));
-    if obj.is_null() {
+    let Some(id) = get_item_id("throw", ItemFilter::Category(ItemType::WEAPON)) else {
         return;
-    }
-    if dropcheck(obj) == 0 || is_current(obj) {
+    };
+    if !dropcheck_id(id) || is_current_id(id) {
         return;
     }
 
-    obj = leave_pack(obj, true as u8, false as u8);
+    let Some(obj) = leave_pack_id(id, true, false) else {
+        return;
+    };
     do_motion(obj, ydelta, xdelta);
 
-    let o = thing_o(obj);
-    if !crate::game::monster_here((*o).o_pos.y, (*o).o_pos.x)
-        || hit_monster((*o).o_pos.y, (*o).o_pos.x, obj) == 0
-    {
-        fall(obj, true as u8);
+    let pos = OBJECTS.with_object(obj, |o| o.o_pos).unwrap_or(IVec2::ZERO);
+    if !crate::game::monster_here(pos.y, pos.x) || hit_monster(pos.y, pos.x, obj) == 0 {
+        fall(obj, true);
     }
 }
 
 /// Animates projectile movement until it hits blocking terrain or a door.
-pub unsafe fn do_motion(obj: *mut Thing, ydelta: i32, xdelta: i32) {
-    let o = thing_o(obj);
-    (*o).o_pos = hero();
+pub unsafe fn do_motion(id: ThingId, ydelta: i32, xdelta: i32) -> IVec2 {
+    let mut pos = hero();
+    let o_type = OBJECTS.with_object(id, |o| o.o_type).unwrap_or(ItemType::None);
 
     loop {
         let h = hero();
-        if ((*o).o_pos.x != h.x || (*o).o_pos.y != h.y)
-            && cansee((*o).o_pos.y, (*o).o_pos.x) != 0
-            && terse == 0
-        {
-            let mut ch = chat((*o).o_pos.y, (*o).o_pos.x);
+        if (pos.x != h.x || pos.y != h.y) && cansee(pos.y, pos.x) != 0 && terse == 0 {
+            let mut ch = chat(pos.y, pos.x);
             if ch == FLOOR && !show_floor() {
                 ch = ' ' as i32;
             }
-            output::write_glyph_at(IVec2::new((*o).o_pos.x, (*o).o_pos.y), (ch as u8) as char);
+            output::write_glyph_at(IVec2::new(pos.x, pos.y), (ch as u8) as char);
         }
 
-        (*o).o_pos.y += ydelta;
-        (*o).o_pos.x += xdelta;
+        pos.y += ydelta;
+        pos.x += xdelta;
 
-        if crate::game::cell_is_walkable((*o).o_pos.y, (*o).o_pos.x)
-            && !crate::game::is_door_at((*o).o_pos.y, (*o).o_pos.x)
-        {
-            if cansee((*o).o_pos.y, (*o).o_pos.x) != 0 && terse == 0 {
-                output::write_glyph_at(
-                    IVec2::new((*o).o_pos.x, (*o).o_pos.y),
-                    crate::draw::item_glyph((*o).o_type),
-                );
+        if crate::game::cell_is_walkable(pos.y, pos.x) && !crate::game::is_door_at(pos.y, pos.x) {
+            if cansee(pos.y, pos.x) != 0 && terse == 0 {
+                output::write_glyph_at(IVec2::new(pos.x, pos.y), crate::draw::item_glyph(o_type));
                 output::refresh();
             }
             continue;
         }
         break;
     }
+
+    OBJECTS.with_object_mut(id, |o| o.o_pos = pos);
+    pos
 }
 
 /// Drops an item near its current position or discards it if no floor slot is available.
-pub unsafe fn fall(obj: *mut Thing, pr: u8) {
-    if let Some(pos) = fallpos((*thing_o(obj)).o_pos) {
-        // Objects render from the `lvl_obj` list; no glyph write needed.
-        (*thing_o(obj)).o_pos = pos;
+pub unsafe fn fall(id: ThingId, pr: bool) {
+    let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) else {
+        return;
+    };
 
-        if cansee(pos.y, pos.x) != 0 {
-            let glyph = crate::draw::item_glyph((*thing_o(obj)).o_type);
-            if let Some(mid) = crate::game::monster_id_at(pos.y, pos.x) {
+    if let Some(newpos) = fallpos(pos) {
+        // Objects render from the `lvl_obj` list; no glyph write needed.
+        OBJECTS.with_object_mut(id, |o| o.o_pos = newpos);
+
+        if cansee(newpos.y, newpos.x) != 0 {
+            let glyph = OBJECTS
+                .with_object(id, |o| crate::draw::item_glyph(o.o_type))
+                .unwrap_or(')');
+            if let Some(mid) = crate::game::monster_id_at(newpos.y, newpos.x) {
                 crate::game::MONSTER_LIST.with_mut(mid, |t| {
-                    if let Thing::Monster { data } = t {
+                    if let crate::entity::player::Thing::Monster { data } = t {
                         data.t_oldch = glyph as u8;
                     }
                 });
             } else {
-                output::write_glyph_at(IVec2::new(pos.x, pos.y), glyph);
+                output::write_glyph_at(IVec2::new(newpos.x, newpos.y), glyph);
             }
         }
 
-        if let Some(id) = crate::item::arena::id_of(obj) {
-            crate::game::with_current_level_mut(|level| level.add_item(id));
-        }
+        crate::game::with_current_level_mut(|level| level.add_item(id));
         return;
     }
 
-    if pr != 0 {
+    if pr {
         if has_hit != 0 {
             endmsg();
             has_hit = 0;
         }
+        let which = OBJECTS.with_object(id, |o| o.o_which).unwrap_or(0);
         msg_str(&format!(
             "the {} vanishes as it hits the ground",
-            weap_info[(*thing_o(obj)).o_which as usize].oi_name
+            weap_info[which as usize].oi_name
         ));
     }
 
-    discard(obj);
+    let _ = OBJECTS.remove(id);
 }
 
 /// Initializes a weapon object with baseline damage, flags, and stack counts.
-pub unsafe fn init_weapon(weap: *mut Thing, which: i32) {
-    let o = thing_o(weap);
-    (*o).o_type = ItemType::Weapon(which);
-    (*o).o_which = which;
+pub unsafe fn init_weapon(id: ThingId, which: i32) {
+    let Some(iwp) = INIT_DAM.get(which as usize).copied() else {
+        return;
+    };
 
-    let iwp = INIT_DAM[which as usize];
-    copy_c_bytes(&mut (*o).o_damage, iwp.iw_dam);
-    copy_c_bytes(&mut (*o).o_hurldmg, iwp.iw_hrl);
-    (*o).o_launch = iwp.iw_launch;
-    (*o).o_flags = ObjectFlags::from_bits(iwp.iw_flags);
-    (*o).o_hplus = 0;
-    (*o).o_dplus = 0;
-
-    if which == DAGGER {
-        (*o).o_count = rnd(4) + 2;
-        (*o).o_group = group;
-        group += 1;
-    } else if (*o).o_flags.contains(ObjectFlags::MANY) {
-        (*o).o_count = rnd(8) + 8;
-        (*o).o_group = group;
-        group += 1;
+    let many = iwp.iw_flags.contains(ObjectFlags::MANY);
+    let (count, grp) = if which == DAGGER {
+        (rnd(4) + 2, group)
+    } else if many {
+        (rnd(8) + 8, group)
     } else {
-        (*o).o_count = 1;
-        (*o).o_group = 0;
+        (1, 0)
+    };
+    if which == DAGGER || many {
+        group += 1;
     }
+
+    OBJECTS.with_object_mut(id, |o| {
+        o.o_type = ItemType::Weapon(which);
+        o.o_which = which;
+        set_damage(&mut o.o_damage, iwp.iw_dam);
+        set_damage(&mut o.o_hurldmg, iwp.iw_hrl);
+        o.o_launch = iwp.iw_launch;
+        o.o_flags = iwp.iw_flags;
+        o.o_hplus = 0;
+        o.o_dplus = 0;
+        o.o_count = count;
+        o.o_group = grp;
+    });
 }
 
 /// Resolves thrown-weapon combat against the target tile.
-pub unsafe fn hit_monster(y: i32, x: i32, obj: *mut Thing) -> i32 {
-    let mut mp = IVec2 { x, y };
-    fight(mp, obj, true as u8)
+pub unsafe fn hit_monster(y: i32, x: i32, id: ThingId) -> i32 {
+    let mp = IVec2 { x, y };
+    fight(mp, Some(id), true as u8)
 }
 
 /// Formats signed enchantment numbers for armor and weapons.
@@ -276,39 +268,39 @@ pub fn num(n1: i32, n2: i32, obj_type: u8) -> String {
 pub unsafe fn wield() {
     // Track the previously wielded weapon by arena handle (pointer-free).
     let oweapon = PLAYER.equipment().weapon_id();
-    let oweapon_ptr = oweapon.map_or(std::ptr::null_mut(), crate::item::arena::ptr_of);
-    if dropcheck(oweapon_ptr) == 0 {
-        PLAYER.set_weapon_id(oweapon);
-        return;
+    if let Some(id) = oweapon {
+        if !dropcheck_id(id) {
+            PLAYER.set_weapon_id(oweapon);
+            return;
+        }
     }
     PLAYER.set_weapon_id(oweapon);
 
-    let obj = get_item("wield", ItemFilter::Category(ItemType::WEAPON));
-    if obj.is_null() {
+    let Some(obj) = get_item_id("wield", ItemFilter::Category(ItemType::WEAPON)) else {
         after = 0;
         return;
-    }
+    };
 
-    if matches!((*thing_o(obj)).o_type, ItemType::Armor(_)) {
+    let is_armor = OBJECTS
+        .with_object(obj, |o| matches!(o.o_type, ItemType::Armor(_)))
+        .unwrap_or(false);
+    if is_armor {
         msg_str("you can't wield armor");
         after = 0;
         return;
     }
-    if is_current(obj) {
+    if is_current_id(obj) {
         after = 0;
         return;
     }
 
-    let sp = inv_name(obj, true as u8);
-    PLAYER.set_weapon(obj);
+    let sp = inv_name_id(obj, true);
+    PLAYER.set_weapon_id(Some(obj));
     if terse == 0 {
         addmsg_str("you are now ");
     }
-    msg_str(&format!(
-        "wielding {} ({})",
-        sp,
-        (*thing_o(obj)).o_packch as char,
-    ));
+    let packch = OBJECTS.with_object(obj, |o| o.o_packch).unwrap_or(0);
+    msg_str(&format!("wielding {} ({})", sp, packch as char));
 }
 
 /// Chooses a nearby floor/passage cell to drop an item into, returning it (or

@@ -26,8 +26,8 @@ use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::game::globals::{monsters, weap_info};
 use crate::item::rings::RingType;
-use crate::entity::player::{attach_pack, detach_pack, discard};
-use crate::item::arena::new_item;
+use crate::entity::player::{attach_pack, discard};
+use crate::item::arena::{new_item, ThingId};
 use crate::item::things::inv_name;
 use crate::item::weapons::{fall, fallpos};
 use crate::machdep::flush_type;
@@ -145,7 +145,7 @@ unsafe fn set_moat(y: i32, x: i32, val: *mut Thing) {
 
 /// fight:
 /// The player attacks the monster.
-pub unsafe fn fight(mp: IVec2, weap: *mut Thing, thrown: u8) -> i32 {
+pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
     let tp = moat(mp.y, mp.x);
 
     // Since we are fighting, things are not quiet — no healing.
@@ -242,7 +242,7 @@ pub unsafe fn attack(mp: *mut Thing) -> i32 {
     let mname = set_mname(mp);
     let oldhp = PLAYER.stats().hit_points;
 
-    if roll_em_to_hero(mp, std::ptr::null_mut(), false as u8) != 0 {
+    if roll_em_to_hero(mp, None, false as u8) != 0 {
         if (*thing_t(mp)).t_type != Some(MonsterType::IceMonster) {
             if has_hit != 0 {
                 addmsg_str(".  ");
@@ -485,7 +485,7 @@ pub unsafe fn swing(at_lvl: i32, op_arm: i32, wplus: i32) -> i32 {
 pub unsafe fn roll_em(
     thatt: *mut Thing,
     thdef: *mut Thing,
-    weap: *mut Thing,
+    weap: Option<ThingId>,
     hurl: u8,
 ) -> i32 {
     let att_stats = (*thing_t(thatt)).t_stats;
@@ -493,15 +493,25 @@ pub unsafe fn roll_em(
 }
 
 /// The hero attacks monster `thdef`.
-unsafe fn roll_em_hero_to(thdef: *mut Thing, weap: *mut Thing, hurl: u8) -> i32 {
+unsafe fn roll_em_hero_to(thdef: *mut Thing, weap: Option<ThingId>, hurl: u8) -> i32 {
     let att_stats = PLAYER.stats();
     roll_em_impl(&att_stats, thdef, false, weap, hurl)
 }
 
 /// Monster `thatt` attacks the hero.
-unsafe fn roll_em_to_hero(thatt: *mut Thing, weap: *mut Thing, hurl: u8) -> i32 {
+unsafe fn roll_em_to_hero(thatt: *mut Thing, weap: Option<ThingId>, hurl: u8) -> i32 {
     let att_stats = (*thing_t(thatt)).t_stats;
     roll_em_impl(&att_stats, std::ptr::null_mut(), true, weap, hurl)
+}
+
+/// The weapon fields needed by the damage roll, read in one arena access.
+struct WeaponRoll {
+    hplus: i32,
+    dplus: i32,
+    damage: [u8; 8],
+    hurldmg: [u8; 8],
+    launch: i32,
+    misl: bool,
 }
 
 /// Shared roll_em implementation. `def_is_hero` selects the hero's armor class.
@@ -509,59 +519,66 @@ unsafe fn roll_em_impl(
     att_stats: &crate::entity::player::Stats,
     thdef: *mut Thing,
     def_is_hero: bool,
-    weap: *mut Thing,
+    weap: Option<ThingId>,
     hurl: u8,
 ) -> i32 {
     let damage: [u8; 8];
     let hplus: i32;
     let dplus: i32;
 
-    if weap.is_null() {
+    let Some(wr) = weap.and_then(|id| {
+        crate::item::arena::with_object(id, |o| WeaponRoll {
+            hplus: o.o_hplus,
+            dplus: o.o_dplus,
+            damage: o.o_damage,
+            hurldmg: o.o_hurldmg,
+            launch: o.o_launch,
+            misl: o.o_flags.contains(ObjectFlags::MISL),
+        })
+    }) else {
         let src = &att_stats.damage;
         let mut buf = [0u8; 8];
         let n = src.len().min(8);
         buf[..n].copy_from_slice(&src[..n]);
-        damage = buf;
-        dplus = 0;
-        hplus = 0;
-    } else {
-        let mut hp = (*thing_o(weap)).o_hplus;
-        let mut dp = (*thing_o(weap)).o_dplus;
-        if weap == PLAYER.weapon() {
-            // Ring bonuses, read through pointer-free equipment accessors.
-            let equipment = PLAYER.equipment();
-            for hand in 0..2usize {
-                let arm = equipment.ring_arm(hand).unwrap_or(0);
-                match equipment.ring_type(hand) {
-                    Some(RingType::AddDamage) => dp += arm,
-                    Some(RingType::AddHit) => hp += arm,
-                    _ => {}
-                }
+        return roll_em_inner(att_stats, thdef, def_is_hero, &buf, 0, 0);
+    };
+
+    let mut hp = wr.hplus;
+    let mut dp = wr.dplus;
+    if weap == PLAYER.weapon_id() {
+        // Ring bonuses, read through pointer-free equipment accessors.
+        let equipment = PLAYER.equipment();
+        for hand in 0..2usize {
+            let arm = equipment.ring_arm(hand).unwrap_or(0);
+            match equipment.ring_type(hand) {
+                Some(RingType::AddDamage) => dp += arm,
+                Some(RingType::AddHit) => hp += arm,
+                _ => {}
             }
         }
-        if hurl != 0 {
-            if (*thing_o(weap)).o_flags.contains(ObjectFlags::MISL)
-                && PLAYER
-                    .weapon_which()
-                    .is_some_and(|which| which == (*thing_o(weap)).o_launch)
-            {
-                let (whp, wdp) = PLAYER.weapon_hdplus().unwrap_or((0, 0));
-                return roll_em_inner(
-                    att_stats,
-                    thdef,
-                    def_is_hero,
-                    &(*thing_o(weap)).o_hurldmg,
-                    hp + whp,
-                    dp + wdp,
-                );
-            } else if (*thing_o(weap)).o_launch < 0 {
-                return roll_em_inner(att_stats, thdef, def_is_hero, &(*thing_o(weap)).o_hurldmg, hp, dp);
-            }
-        }
-        damage = (*thing_o(weap)).o_damage;
-        hplus = hp;
-        dplus = dp;
     }
+    if hurl != 0 {
+        if wr.misl
+            && PLAYER
+                .weapon_which()
+                .is_some_and(|which| which == wr.launch)
+        {
+            let (whp, wdp) = PLAYER.weapon_hdplus().unwrap_or((0, 0));
+            return roll_em_inner(
+                att_stats,
+                thdef,
+                def_is_hero,
+                &wr.hurldmg,
+                hp + whp,
+                dp + wdp,
+            );
+        } else if wr.launch < 0 {
+            return roll_em_inner(att_stats, thdef, def_is_hero, &wr.hurldmg, hp, dp);
+        }
+    }
+    damage = wr.damage;
+    hplus = hp;
+    dplus = dp;
 
     roll_em_inner(att_stats, thdef, def_is_hero, &damage, hplus, dplus)
 }
@@ -659,15 +676,19 @@ pub unsafe fn prname(mname: Option<&str>, upper: u8) -> String {
 
 /// thunk:
 /// A missile hits a monster.
-pub unsafe fn thunk(weap: *mut Thing, mname: Option<&str>, noend: u8) {
+pub unsafe fn thunk(weap: Option<ThingId>, mname: Option<&str>, noend: u8) {
     if to_death != 0 {
         return;
     }
-    if matches!((*thing_o(weap)).o_type, ItemType::Weapon(_)) {
-        addmsg_str(&format!(
-            "the {} hits ",
-            weap_info[(*thing_o(weap)).o_which as usize].oi_name
-        ));
+    let weapon_name = weap.and_then(|id| {
+        crate::item::arena::with_object(id, |o| {
+            (matches!(o.o_type, ItemType::Weapon(_)), o.o_which)
+        })
+        .filter(|(is_weapon, _)| *is_weapon)
+        .map(|(_, which)| weap_info[which as usize].oi_name)
+    });
+    if let Some(name) = weapon_name {
+        addmsg_str(&format!("the {} hits ", name));
     } else {
         addmsg_str("you hit ");
     }
@@ -734,15 +755,19 @@ pub unsafe fn miss(er: Option<&str>, ee: Option<&str>, noend: u8) {
 
 /// bounce:
 /// A missile misses a monster.
-pub unsafe fn bounce(weap: *mut Thing, mname: Option<&str>, noend: u8) {
+pub unsafe fn bounce(weap: Option<ThingId>, mname: Option<&str>, noend: u8) {
     if to_death != 0 {
         return;
     }
-    if matches!((*thing_o(weap)).o_type, ItemType::Weapon(_)) {
-        addmsg_str(&format!(
-            "the {} misses ",
-            weap_info[(*thing_o(weap)).o_which as usize].oi_name
-        ));
+    let weapon_name = weap.and_then(|id| {
+        crate::item::arena::with_object(id, |o| {
+            (matches!(o.o_type, ItemType::Weapon(_)), o.o_which)
+        })
+        .filter(|(is_weapon, _)| *is_weapon)
+        .map(|(_, which)| weap_info[which as usize].oi_name)
+    });
+    if let Some(name) = weapon_name {
+        addmsg_str(&format!("the {} misses ", name));
     } else {
         addmsg_str("you missed ");
     }
@@ -759,15 +784,13 @@ pub unsafe fn remove_mon(mp: IVec2, tp: *mut Thing, waskill: u8) {
     let pack = crate::entity::player::thing_pack(tp);
     crate::entity::player::set_thing_pack(tp, Vec::new());
     for id in pack {
-        let obj = crate::item::arena::ptr_of(id);
-        if obj.is_null() {
+        if crate::item::arena::with_object_mut(id, |o| o.o_pos = drop_pos).is_none() {
             continue;
         }
-        (*thing_o(obj)).o_pos = drop_pos;
         if waskill != 0 {
-            fall(obj, false as u8);
+            fall(id, false);
         } else {
-            discard(obj);
+            let _ = crate::item::arena::OBJECTS.remove(id);
         }
     }
     set_moat(mp.y, mp.x, std::ptr::null_mut());
