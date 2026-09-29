@@ -173,7 +173,9 @@ impl Level {
     /// The tile at `(y, x)`, defaulting to [`Tile::Empty`] outside the map.
     #[inline]
     pub fn tile_at(&self, y: usize, x: usize) -> Tile {
-        self.map.get(y, x).unwrap_or(Tile::Empty)
+        self.map
+            .get(IVec2::new(x as i32, y as i32))
+            .unwrap_or(Tile::Empty)
     }
 
     /// Whether `(y, x)` is a door: an ordinary door, or a hidden door that has
@@ -554,7 +556,7 @@ mod tests {
         assert_eq!(room.entry_points[0], IVec2::new(5, 1));
         assert_eq!(room.entry_point_count, 1);
         // Open doors are stamped into the tile map.
-        assert_eq!(level.map.get(11, 15), Some(Tile::Door));
+        assert_eq!(level.map.get(IVec2::new(15, 11)), Some(Tile::Door));
     }
 
     /// `grid_top_left` maps room slot indexes to the top-left corner of their
@@ -585,13 +587,16 @@ mod tests {
         for room in generated.iter().filter(|r| !r.is_gone()) {
             for local_y in 0..room.size.y as usize {
                 for local_x in 0..room.size.x as usize {
-                    let expected = room.structure.get(local_y, local_x).unwrap();
+                    let expected = room
+                        .structure
+                        .get(IVec2::new(local_x as i32, local_y as i32))
+                        .unwrap();
                     let actual = level
                         .map
-                        .get(
-                            room.position.y as usize + local_y,
-                            room.position.x as usize + local_x,
-                        )
+                        .get(IVec2::new(
+                            room.position.x + local_x as i32,
+                            room.position.y + local_y as i32,
+                        ))
                         .unwrap();
                     assert_eq!(
                         actual, expected,
@@ -609,7 +614,7 @@ mod tests {
         let mut level = Level::new();
         stamp_passage(&mut level.map, &mut level.flags, IVec2::new(5, 7));
 
-        assert_eq!(level.map.get(7, 5), Some(Tile::Passage));
+        assert_eq!(level.map.get(IVec2::new(5, 7)), Some(Tile::Passage));
         assert!(level.flags.passage[7 * GameConfig::LEVEL_WIDTH + 5]);
         // Passage placement clears no real-wall flag.
         assert!(level.flags.real[7 * GameConfig::LEVEL_WIDTH + 5]);
@@ -621,10 +626,10 @@ mod tests {
         let mut level = Level::new();
 
         stamp_passage(&mut level.map, &mut level.flags, IVec2::new(-1, 7));
-        assert_eq!(level.map.get(7, 0), Some(Tile::Empty));
+        assert_eq!(level.map.get(IVec2::new(0, 7)), Some(Tile::Empty));
 
         stamp_passage(&mut level.map, &mut level.flags, IVec2::new(5, -3));
-        assert_eq!(level.map.get(0, 5), Some(Tile::Empty));
+        assert_eq!(level.map.get(IVec2::new(5, 0)), Some(Tile::Empty));
     }
 
     /// `build_passage` wraps generated tiles into a [`Passage`] with
@@ -681,7 +686,7 @@ mod tests {
         let passage = &level.passages[0];
         for rel in &passage.tiles {
             let abs = *rel + passage.position;
-            let stamped = level.map.get(abs.y as usize, abs.x as usize);
+            let stamped = level.map.get(abs);
             let is_entry = passage
                 .entry_points
                 .iter()
@@ -742,7 +747,7 @@ mod tests {
         assert_eq!(links.exits.len(), passage.entry_points.len());
         for exit in &links.exits {
             assert!(matches!(
-                level.map.get(exit.y as usize, exit.x as usize),
+                level.map.get(*exit),
                 Some(Tile::Door | Tile::HiddenDoor)
             ));
         }
@@ -786,12 +791,13 @@ mod tests {
         let mut count = 0;
         for y in 0..GameConfig::LEVEL_HEIGHT {
             for x in 0..GameConfig::LEVEL_WIDTH {
-                if matches!(level.map.get(y, x), Some(Tile::Passage)) {
+                let pos = IVec2::new(x as i32, y as i32);
+                if matches!(level.map.get(pos), Some(Tile::Passage)) {
                     count += 1;
                 }
                 if level.flags.passage[y * GameConfig::LEVEL_WIDTH + x] {
                     assert_eq!(
-                        level.map.get(y, x),
+                        level.map.get(pos),
                         Some(Tile::Passage),
                         "passage flag set on non-passage cell ({y},{x})"
                     );

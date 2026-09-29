@@ -97,8 +97,12 @@ fn is_wall(tile: Option<Tile>) -> bool {
 /// doorway or passage) renders as a horizontal bar (`-`).
 #[inline]
 fn wall_glyph(lvl: &crate::level::Level, y: usize, x: usize) -> u8 {
-    let up = if y == 0 { None } else { lvl.map.get(y - 1, x) };
-    let down = lvl.map.get(y + 1, x);
+    let up = if y == 0 {
+        None
+    } else {
+        lvl.map.get(IVec2::new(x as i32, y as i32 - 1))
+    };
+    let down = lvl.map.get(IVec2::new(x as i32, y as i32 + 1));
     if is_wall(up) && is_wall(down) {
         V_WALL
     } else {
@@ -114,7 +118,7 @@ fn wall_glyph(lvl: &crate::level::Level, y: usize, x: usize) -> u8 {
 pub(crate) unsafe fn terrain_chat_at(y: i32, x: i32) -> u8 {
     with_current_level(|lvl| {
         let (yu, xu) = (y as usize, x as usize);
-        let tile = lvl.map.get(yu, xu).unwrap_or(Tile::Empty);
+        let tile = lvl.map.get(IVec2::new(x, y)).unwrap_or(Tile::Empty);
         let idx = cell_index(yu, xu);
         match tile {
             Tile::Empty => SPACE,
@@ -236,7 +240,7 @@ pub(crate) unsafe fn flat_at(y: i32, x: i32) -> u8 {
         }
         f |= (lvl
             .map
-            .get(y as usize, x as usize)
+            .get(IVec2::new(x, y))
             .unwrap_or(Tile::Empty)
             .trap() as u8)
             & (F_TMASK as u8);
@@ -248,7 +252,7 @@ pub(crate) unsafe fn flat_at(y: i32, x: i32) -> u8 {
 pub(crate) unsafe fn trap_kind_at(y: i32, x: i32) -> TrapType {
     with_current_level(|lvl| {
         lvl.map
-            .get(y as usize, x as usize)
+            .get(IVec2::new(x, y))
             .unwrap_or(Tile::Empty)
             .trap()
     })
@@ -256,7 +260,7 @@ pub(crate) unsafe fn trap_kind_at(y: i32, x: i32) -> TrapType {
 
 /// Whether the tile at `(y, x)` is a hidden trap.
 pub(crate) unsafe fn is_trap_cell(y: i32, x: i32) -> bool {
-    with_current_level(|lvl| matches!(lvl.map.get(y as usize, x as usize), Some(Tile::Trap(_))))
+    with_current_level(|lvl| matches!(lvl.map.get(IVec2::new(x, y)), Some(Tile::Trap(_))))
 }
 
 /// Mark `(y, x)` seen (drawn/identified).
@@ -773,7 +777,7 @@ mod tests {
         // Directly test that the legacy flat byte layout is preserved by
         // exercising the low-level bit assembly through a synthetic level.
         let mut level = crate::level::Level::new();
-        level.map.set(1, 1, Tile::Door);
+        level.map.set(IVec2::new(1, 1), Tile::Door);
         let _ = &mut level;
     }
 }

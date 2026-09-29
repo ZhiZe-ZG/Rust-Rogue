@@ -89,7 +89,7 @@ impl Room {
                 } else {
                     Tile::Floor
                 };
-                let _ = structure.set(y, x, tile);
+                let _ = structure.set(IVec2::new(x as i32, y as i32), tile);
             }
         }
 
@@ -105,7 +105,7 @@ impl Room {
         }
 
         fn is_passage(structure: &Structure, y: i32, x: i32) -> bool {
-            match structure.get(y as usize, x as usize) {
+            match structure.get(IVec2::new(x, y)) {
                 Some(Tile::Passage) => true,
                 _ => false,
             }
@@ -142,13 +142,13 @@ impl Room {
 
                 if next_y == y {
                     let mid_x = (x + next_x) / 2;
-                    let _ = structure.set(y as usize, mid_x as usize, Tile::Passage);
+                    let _ = structure.set(IVec2::new(mid_x, y), Tile::Passage);
                 } else {
                     let mid_y = (y + next_y) / 2;
-                    let _ = structure.set(mid_y as usize, x as usize, Tile::Passage);
+                    let _ = structure.set(IVec2::new(x, mid_y), Tile::Passage);
                 }
 
-                let _ = structure.set(next_y as usize, next_x as usize, Tile::Passage);
+                let _ = structure.set(IVec2::new(next_x, next_y), Tile::Passage);
                 dig_local(structure, next_y, next_x, max_y, max_x);
             }
         }
@@ -166,7 +166,7 @@ impl Room {
             0
         };
 
-        let _ = structure.set(start_y as usize, start_x as usize, Tile::Passage);
+        let _ = structure.set(IVec2::new(start_x, start_y), Tile::Passage);
         dig_local(&mut structure, start_y, start_x, max_y, max_x);
         structure
     }
@@ -238,7 +238,7 @@ impl Room {
         if !secret {
             let _ = self
                 .structure
-                .set(local_y as usize, local_x as usize, Tile::Door);
+                .set(local, Tile::Door);
         }
         self.add_entry_point(local);
         true
@@ -279,10 +279,10 @@ mod tests {
         assert_eq!(room.entry_points, expected.to_vec());
 
         // Open doors replace the wall cell; secret doors keep the wall cell.
-        assert_eq!(room.structure.get(0, 1), Some(Tile::Door));
-        assert_eq!(room.structure.get(1, 5), Some(Tile::Wall));
-        assert_eq!(room.structure.get(3, 2), Some(Tile::Door));
-        assert_eq!(room.structure.get(2, 0), Some(Tile::Door));
+        assert_eq!(room.structure.get(IVec2::new(1, 0)), Some(Tile::Door));
+        assert_eq!(room.structure.get(IVec2::new(5, 1)), Some(Tile::Wall));
+        assert_eq!(room.structure.get(IVec2::new(2, 3)), Some(Tile::Door));
+        assert_eq!(room.structure.get(IVec2::new(0, 2)), Some(Tile::Door));
     }
 
     #[test]
@@ -302,6 +302,6 @@ mod tests {
 
         assert!(room.entry_points.is_empty());
         assert!(room.entry_point_count == 0);
-        assert_eq!(room.structure.get(2, 2), Some(Tile::Floor));
+        assert_eq!(room.structure.get(IVec2::new(2, 2)), Some(Tile::Floor));
     }
 }

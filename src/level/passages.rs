@@ -105,7 +105,7 @@ pub(crate) fn entry_point(
                     room.position.x
                 };
             }
-            if !room.is_maze() || matches!(map.get(p.y as usize, p.x as usize), Some(Tile::Passage))
+            if !room.is_maze() || matches!(map.get(p), Some(Tile::Passage))
             {
                 break;
             }
@@ -282,7 +282,9 @@ pub(crate) fn stamp_passage(map: &mut Structure, flags: &mut LevelFlags, pos: IV
     let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) else {
         return;
     };
-    if y < GameConfig::LEVEL_HEIGHT && x < GameConfig::LEVEL_WIDTH && map.set(y, x, Tile::Passage)
+    if y < GameConfig::LEVEL_HEIGHT
+        && x < GameConfig::LEVEL_WIDTH
+        && map.set(pos, Tile::Passage)
     {
         let idx = y * GameConfig::LEVEL_WIDTH + x;
         if let Some(passage) = flags.passage.get_mut(idx) {
@@ -327,13 +329,13 @@ pub(crate) fn stamp_door(
                 // A secret door stays disguised as a wall in the tile map
                 // (rendered `-`/`|` like the wall it replaces) and is marked
                 // non-real so the C side can reveal it as `+`.
-                if map.set(y, x, Tile::HiddenDoor) {
+                if map.set(pos, Tile::HiddenDoor) {
                     if let Some(real) = flags.real.get_mut(idx) {
                         *real = false;
                     }
                 }
             } else {
-                map.set(y, x, Tile::Door);
+                map.set(pos, Tile::Door);
             }
         }
     }
@@ -388,7 +390,7 @@ pub(crate) fn apply_passage(
 pub(crate) fn mark_passages(map: &Structure, flags: &mut LevelFlags, depth: i32) {
     for y in 0..map.height() {
         for x in 0..map.width() {
-            if !matches!(map.get(y, x), Some(Tile::Passage)) {
+            if !matches!(map.get(IVec2::new(x as i32, y as i32)), Some(Tile::Passage)) {
                 continue;
             }
             let idx = y * GameConfig::LEVEL_WIDTH + x;
@@ -482,7 +484,7 @@ fn number_passage(
         }
     }
 
-    let tile = map.get(y as usize, x as usize);
+    let tile = map.get(IVec2::new(x, y));
     let is_door = tile == Some(Tile::Door) || tile == Some(Tile::HiddenDoor);
     if is_door {
         if let Some(links) = links.get_mut(scan.num - 1) {

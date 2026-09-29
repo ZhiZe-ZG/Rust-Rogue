@@ -275,7 +275,7 @@ unsafe fn place_traps() {
             let trap = TrapType::from_raw(rnd(GameConfig::TRAP_KIND_COUNT) as u8);
             current
                 .map
-                .set(stairs.y as usize, stairs.x as usize, Tile::Trap(trap));
+                .set(stairs, Tile::Trap(trap));
             current.flags.real[idx] = false;
         });
         i -= 1;
@@ -290,7 +290,7 @@ unsafe fn place_stairs() {
         current.stairs = stairs;
         current
             .map
-            .set(stairs.y as usize, stairs.x as usize, Tile::Stairs);
+            .set(stairs, Tile::Stairs);
     });
     seenstairs = false as u8;
 }

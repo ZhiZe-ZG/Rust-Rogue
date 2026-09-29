@@ -11,7 +11,7 @@ fn passages_are_valid_locations_without_a_room() {
     with_current_level_mut(|level| {
         *level = Level::new();
         level.rooms = vec![Room::new(IVec2::new(2, 2), IVec2::new(5, 5))];
-        assert!(level.map.set(14, 18, Tile::Passage));
+        assert!(level.map.set(IVec2::new(18, 14), Tile::Passage));
     });
     set_huh_string("previous message");
     set_mpos(0);
