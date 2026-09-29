@@ -534,13 +534,18 @@ pub unsafe fn chase(tp: *mut Thing, ee: IVec2) -> u8 {
 }
 
 /// roomin:
-/// Find what room some coordinates are in. NULL means they aren't
-/// in any room.
+/// Find what room some coordinates are in. Passages outside rooms return
+/// `None` without reporting an invalid location.
 ///
 /// Uses globals: places (via flat), passages, rooms, msg.
 pub unsafe fn roomin(cp: IVec2) -> Option<usize> {
-    let room = crate::game::with_current_level(|level| level.room_at(cp.y, cp.x));
-    if room.is_some() {
+    let (room, is_passage) = crate::game::with_current_level(|level| {
+        (
+            level.room_at(cp.y, cp.x),
+            level.tile_at(cp.y as usize, cp.x as usize) == crate::tile::Tile::Passage,
+        )
+    });
+    if room.is_some() || is_passage {
         return room;
     }
 
