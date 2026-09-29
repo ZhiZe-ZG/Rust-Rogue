@@ -19,7 +19,6 @@ use crate::item::rings::RingType;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
 use crate::startup::roll;
 use crate::ui::output::{self, msg_str, show_win, status};
-use crate::ui::Window;
 use glam::IVec2;
 
 /// Potion and status-effect handling.
@@ -297,14 +296,13 @@ pub unsafe fn quaff() {
         PotionType::TrapFind => {
             let floor = crate::game::item_ids();
             if !floor.is_empty() {
-                let window = Window::Stdscr;
-                output::clear_window(window);
+                output::clear_window();
                 for id in floor {
                     if is_magic_id(id) {
                         show = true;
                         if let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) {
-                            output::move_window_cursor(window, IVec2::new(pos.x, pos.y));
-                            output::write_window_glyph(window, (MAGIC as u8) as char);
+                            output::move_window_cursor(IVec2::new(pos.x, pos.y));
+                            output::write_window_glyph((MAGIC as u8) as char);
                         }
                         pot_info_at(PotionType::TrapFind.index()).oi_know = true;
                     }
@@ -322,8 +320,8 @@ pub unsafe fn quaff() {
                     for pack_id in pack {
                         if is_magic_id(pack_id) {
                             show = true;
-                            output::move_window_cursor(window, IVec2::new(mp_pos.x, mp_pos.y));
-                            output::write_window_glyph(window, (MAGIC as u8) as char);
+                            output::move_window_cursor(IVec2::new(mp_pos.x, mp_pos.y));
+                            output::write_window_glyph((MAGIC as u8) as char);
                         }
                     }
                 }

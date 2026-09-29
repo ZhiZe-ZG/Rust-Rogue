@@ -1,11 +1,10 @@
 //! Terminal initialization, suspension, and shutdown.
 
-use crate::ui::{terminal, Window};
+use crate::ui::terminal;
 use glam::IVec2;
 
-pub(crate) fn initialize() -> Window {
+pub(crate) fn initialize() {
     terminal::init();
-    Window::Stdscr
 }
 
 pub(crate) fn shutdown() {

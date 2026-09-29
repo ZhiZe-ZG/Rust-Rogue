@@ -4,7 +4,7 @@
 
 use crate::draw::{erase_lamp, look};
 use crate::ui::input::{self, readchar, wait_for};
-use crate::ui::{output, Window};
+use crate::ui::output;
 use glam::IVec2;
 
 const ESCAPE: i32 = 27;
@@ -100,7 +100,7 @@ pub struct OPTION {
     o_target: OptTarget,
     o_str: StrTarget,
     o_putfunc: unsafe fn(&OPTION),
-    o_getfunc: unsafe fn(&OPTION, Window) -> i32,
+    o_getfunc: unsafe fn(&OPTION) -> i32,
 }
 
 use crate::game::globals::{after, fight_flush, inv_type, jump, mpos, passgo, see_floor, terse, tombstone};
@@ -199,8 +199,8 @@ unsafe fn option_list() -> [OPTION; 10] {
     ]
 }
 
-unsafe fn paint(win: Window, s: &str) {
-    output::write_window_text(win, s);
+unsafe fn paint(s: &str) {
+    output::write_window_text(s);
 }
 
 unsafe fn str_target_value(target: StrTarget) -> String {
@@ -223,31 +223,30 @@ unsafe fn set_str_target(target: StrTarget, value: String) {
 
 unsafe fn pr_optname_slot(op: &OPTION) {
     let out = format!("{} (\"{}\"): ", op.o_prompt, op.o_name);
-    paint(Window::Stdscr, &out);
+    paint(&out);
 }
 
 pub unsafe fn option() {
     let mut optlist = option_list();
     let mut retval: i32;
 
-    let options_window = Window::Stdscr;
-    output::clear_window(options_window);
+    output::clear_window();
     for item in optlist.iter() {
         pr_optname_slot(item);
         (item.o_putfunc)(item);
-        output::write_window_glyph(options_window, '\n');
+        output::write_window_glyph('\n');
     }
 
-    output::move_window_cursor(options_window, IVec2::new(0, 0));
+    output::move_window_cursor(IVec2::new(0, 0));
     for index in 0..optlist.len() {
         let item = &optlist[index];
         pr_optname_slot(item);
-        retval = (item.o_getfunc)(item, Window::Stdscr);
+        retval = (item.o_getfunc)(item);
         if retval == QUIT {
             break;
         }
         if retval == MINUS && index > 0 {
-            output::move_window_cursor(options_window, IVec2::new(0, (index as i32) - 1));
+            output::move_window_cursor(IVec2::new(0, (index as i32) - 1));
             let prev = index as isize - 2;
             if prev >= 0 {
                 let _ = prev;
@@ -255,12 +254,12 @@ pub unsafe fn option() {
         }
     }
 
-    output::move_window_cursor(options_window, IVec2::new(0, 23));
-    paint(Window::Stdscr, "--Press space to continue--");
-    output::refresh_window(options_window);
+    output::move_window_cursor(IVec2::new(0, 23));
+    paint("--Press space to continue--");
+    output::refresh_window();
     wait_for(' ');
-    output::set_clear_on_refresh(Window::Stdscr, true);
-    output::touch_window(Window::Stdscr);
+    output::set_clear_on_refresh(true);
+    output::touch_window();
     after = false as u8;
 }
 
@@ -269,32 +268,32 @@ unsafe fn put_bool(op: &OPTION) {
         Some(flag) => flag.get(),
         None => false,
     };
-    output::write_window_text(Window::Stdscr, if on { "True" } else { "False" });
+    output::write_window_text(if on { "True" } else { "False" });
 }
 
 unsafe fn put_str(op: &OPTION) {
     let text = str_target_value(op.o_str);
-    output::write_window_text(Window::Stdscr, &text);
+    output::write_window_text(&text);
 }
 
 unsafe fn put_inv_t(_op: &OPTION) {
     let idx = inv_type as usize;
     if idx < INV_T_NAME_LEN {
-        output::write_window_text(Window::Stdscr, &crate::game::globals::inv_t_name(idx));
+        output::write_window_text(&crate::game::globals::inv_t_name(idx));
     }
 }
 
-unsafe fn get_bool(op: &OPTION, win: Window) -> i32 {
+unsafe fn get_bool(op: &OPTION) -> i32 {
     let Some(flag) = op.o_target.bool_flag() else {
         return NORM;
     };
     let mut bad = true;
 
-    let origin = output::window_cursor(win);
-    output::write_window_text(win, if flag.get() { "True" } else { "False" });
+    let origin = output::window_cursor();
+    output::write_window_text(if flag.get() { "True" } else { "False" });
     while bad {
-        output::move_window_cursor(win, origin);
-        output::refresh_window(win);
+        output::move_window_cursor(origin);
+        output::refresh_window();
         match readchar() {
             ch if ch == 't' as i32 || ch == 'T' as i32 => {
                 flag.set(true);
@@ -310,23 +309,23 @@ unsafe fn get_bool(op: &OPTION, win: Window) -> i32 {
             ESCAPE => return QUIT,
             ch if ch == '-' as i32 => return MINUS,
             _ => {
-                output::move_window_cursor(win, IVec2::new(origin.x + 10, origin.y));
-                output::write_window_text(win, "(T or F)");
+                output::move_window_cursor(IVec2::new(origin.x + 10, origin.y));
+                output::write_window_text("(T or F)");
             }
         }
     }
-    output::move_window_cursor(win, origin);
-    output::write_window_text(win, if flag.get() { "True" } else { "False" });
-    output::write_window_glyph(win, '\n');
+    output::move_window_cursor(origin);
+    output::write_window_text(if flag.get() { "True" } else { "False" });
+    output::write_window_glyph('\n');
     NORM
 }
 
-unsafe fn get_sf(op: &OPTION, win: Window) -> i32 {
+unsafe fn get_sf(op: &OPTION) -> i32 {
     let Some(flag) = op.o_target.bool_flag() else {
         return NORM;
     };
     let was_sf = flag.get();
-    let retval = get_bool(op, win);
+    let retval = get_bool(op);
     if retval == QUIT {
         return QUIT;
     }
@@ -343,13 +342,13 @@ unsafe fn get_sf(op: &OPTION, win: Window) -> i32 {
     NORM
 }
 
-/// Reads a line of text into `win`, starting from `initial`. Returns the
+/// Reads a line of text starting from `initial`. Returns the
 /// edited text on success, or `None` if the user pressed ESCAPE.
-pub unsafe fn read_line(initial: &str, win: Window) -> Option<String> {
+pub unsafe fn read_line(initial: &str) -> Option<String> {
     let mut buf: Vec<u8> = initial.as_bytes().to_vec();
 
-    let origin = output::window_cursor(win);
-    output::refresh_window(win);
+    let origin = output::window_cursor();
+    output::refresh_window();
     let mut c: i32;
     loop {
         c = readchar();
@@ -365,7 +364,7 @@ pub unsafe fn read_line(initial: &str, win: Window) -> Option<String> {
         }
         if c == input::kill_key() as i32 {
             buf.clear();
-            output::move_window_cursor(win, origin);
+            output::move_window_cursor(origin);
             continue;
         }
         let printable = c as u8;
@@ -373,18 +372,16 @@ pub unsafe fn read_line(initial: &str, win: Window) -> Option<String> {
             continue;
         }
         buf.push(printable);
-        output::write_window_text(win, &output::format_key(printable));
+        output::write_window_text(&output::format_key(printable));
     }
 
     let text = String::from_utf8_lossy(&buf).into_owned();
 
     let out = format!("{}\n", text);
-    output::move_window_cursor(win, origin);
-    paint(win, &out);
-    output::refresh_window(win);
-    if win == Window::Stdscr {
-        mpos += buf.len() as i32;
-    }
+    output::move_window_cursor(origin);
+    paint(&out);
+    output::refresh_window();
+    mpos += buf.len() as i32;
 
     if c == ESCAPE {
         None
@@ -393,11 +390,11 @@ pub unsafe fn read_line(initial: &str, win: Window) -> Option<String> {
     }
 }
 
-/// Read a line of text, editing within `win`, and store it in the option's
+/// Read a line of text and store it in the option's
 /// target. Returns the legacy `get_str` status code.
-pub unsafe fn get_str(op: &OPTION, win: Window) -> i32 {
+pub unsafe fn get_str(op: &OPTION) -> i32 {
     let initial = str_target_value(op.o_str);
-    match read_line(&initial, win) {
+    match read_line(&initial) {
         None => QUIT,
         Some(text) => {
             set_str_target(op.o_str, text);
@@ -406,16 +403,16 @@ pub unsafe fn get_str(op: &OPTION, win: Window) -> i32 {
     }
 }
 
-unsafe fn get_inv_t(_op: &OPTION, win: Window) -> i32 {
+unsafe fn get_inv_t(_op: &OPTION) -> i32 {
     let mut bad = true;
 
-    let origin = output::window_cursor(win);
+    let origin = output::window_cursor();
     if inv_type >= 0 && inv_type < INV_T_NAME_LEN as i32 {
-        output::write_window_text(win, &crate::game::globals::inv_t_name(inv_type as usize));
+        output::write_window_text(&crate::game::globals::inv_t_name(inv_type as usize));
     }
     while bad {
-        output::move_window_cursor(win, origin);
-        output::refresh_window(win);
+        output::move_window_cursor(origin);
+        output::refresh_window();
         match readchar() {
             ch if ch == 'o' as i32 || ch == 'O' as i32 => {
                 inv_type = INV_OVER;
@@ -435,16 +432,16 @@ unsafe fn get_inv_t(_op: &OPTION, win: Window) -> i32 {
             ESCAPE => return QUIT,
             ch if ch == '-' as i32 => return MINUS,
             _ => {
-                output::move_window_cursor(win, IVec2::new(origin.x + 15, origin.y));
-                output::write_window_text(win, "(O, S, or C)");
+                output::move_window_cursor(IVec2::new(origin.x + 15, origin.y));
+                output::write_window_text("(O, S, or C)");
             }
         }
     }
     if inv_type >= 0 && inv_type < INV_T_NAME_LEN as i32 {
         let name = crate::game::globals::inv_t_name(inv_type as usize);
         let out = format!("{}\n", name);
-        output::move_window_cursor(win, origin);
-        paint(win, &out);
+        output::move_window_cursor(origin);
+            paint(&out);
     }
     NORM
 }

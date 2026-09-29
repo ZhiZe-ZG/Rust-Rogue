@@ -17,7 +17,6 @@ use crate::mdport::{
     md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
 };
 use crate::ui::input;
-use crate::ui::Window;
 
 // Build-time feature flags mirroring config.h for the standard build.
 const SCOREFILE_ENABLED: bool = true; // config.h: #define SCOREFILE "rogue.scr"
@@ -121,7 +120,7 @@ pub unsafe fn setup() {
 
     input::set_raw_mode(true);
     input::set_echo(false);
-    input::set_keypad(Window::Stdscr, true);
+    input::set_keypad(true);
     getltchars(); /* get the local tty chars */
 }
 

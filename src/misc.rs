@@ -343,7 +343,7 @@ pub unsafe fn call_it(info: &mut ObjInfo) {
         } else {
             msg_str("what do you want to call it? ");
         }
-        if let Some(text) = crate::options::read_line("", crate::ui::Window::Stdscr) {
+        if let Some(text) = crate::options::read_line("") {
             info.oi_guess = Some(text);
         }
     }

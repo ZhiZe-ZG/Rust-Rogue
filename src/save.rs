@@ -14,7 +14,6 @@ use crate::state::{rs_restore_file, rs_save_file};
 use crate::ui::input::{self, readchar};
 use crate::ui::output::{self, msg_str};
 use crate::ui::runtime;
-use crate::ui::Window;
 use glam::IVec2;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -74,7 +73,7 @@ pub unsafe fn save_game() {
             if buf.is_empty() {
                 mpos = 0;
                 msg_str("file name: ");
-                match read_line("", Window::Stdscr) {
+                match read_line("") {
                     None => {
                         msg_str("");
                         return;
@@ -169,7 +168,7 @@ pub unsafe fn restore(file: &str) -> u8 {
     if runtime::is_shutdown() {
         runtime::initialize();
     }
-    input::set_keypad(Window::Stdscr, true);
+    input::set_keypad(true);
 
     setup();
     if let Err(err) = rs_restore_file(&mut inf) {
@@ -184,7 +183,7 @@ pub unsafe fn restore(file: &str) -> u8 {
     }
 
     mpos = 0;
-    output::set_clear_on_refresh(Window::Stdscr, true);
+    output::set_clear_on_refresh(true);
 
     if restore_player_dead() {
         runtime::shutdown();
@@ -194,7 +193,7 @@ pub unsafe fn restore(file: &str) -> u8 {
 
     md_tstpresume();
     crate::game::globals::set_file_name(file_name.clone());
-    output::set_clear_on_refresh(Window::Curscr, true);
+    output::set_clear_on_refresh(true);
     set_seed(md_getpid());
     msg_str(&format!("file name: {}", file_name));
     playit();

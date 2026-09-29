@@ -22,7 +22,6 @@ use crate::save::restore;
 use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::output::{self, msg_str, status};
 use crate::ui::runtime;
-use crate::ui::Window;
 use glam::IVec2;
 
 const MAXSTR: usize = 1024;
@@ -87,7 +86,7 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
     /*
      * leave nicely
      */
-    let old_cursor = output::window_cursor(Window::Curscr);
+    let old_cursor = output::window_cursor();
     runtime::move_physical_cursor(
         IVec2::new(GameConfig::SCREEN_COLS - 1, 0),
         IVec2::new(0, GameConfig::SCREEN_LINES - 1),
@@ -103,11 +102,11 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
     md_tstpresume();
     input::set_raw_mode(true);
     input::set_echo(false);
-    input::set_keypad(Window::Stdscr, true);
+    input::set_keypad(true);
     playltchars();
-    output::set_clear_on_refresh(Window::Curscr, true);
-    output::refresh_window(Window::Curscr);
-    runtime::move_physical_cursor(output::window_cursor(Window::Curscr), old_cursor);
+    output::set_clear_on_refresh(true);
+    output::refresh_window();
+    runtime::move_physical_cursor(output::window_cursor(), old_cursor);
     output::move_cursor(old_cursor);
     flush_stdout();
 }
@@ -164,7 +163,7 @@ pub unsafe extern "C" fn quit(sig: i32) {
     if q_comm == false as u8 {
         mpos = 0;
     }
-    let old_cursor = output::window_cursor(Window::Curscr);
+    let old_cursor = output::window_cursor();
     msg_str("really quit?");
     if readchar() == b'y' as i32 {
         libc::signal(libc::SIGINT, leave as libc::sighandler_t);
@@ -229,11 +228,11 @@ pub unsafe fn shell() {
     let _ = std::io::stdout().flush();
     input::set_echo(false);
     input::set_raw_mode(true);
-    input::set_keypad(Window::Stdscr, true);
+    input::set_keypad(true);
     playltchars();
     in_shell = false as u8;
     wait_for('\n');
-    output::set_clear_on_refresh(Window::Stdscr, true);
+    output::set_clear_on_refresh(true);
 }
 
 /// my_exit:
@@ -363,7 +362,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     init_stones();
     init_materials();
     setup();
-    output::set_line_optimization(Window::Stdscr, true);
+    output::set_line_optimization(true);
     if master_mode_enabled != 0 {
         noscore = wizard;
     }

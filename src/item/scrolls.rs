@@ -17,7 +17,7 @@ use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::game::MONSTER_LIST;
 use crate::misc::{aggravate, call_it, choose_str};
 use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win, status};
-use crate::ui::{output, Window};
+use crate::ui::output;
 use crate::wizard::{teleport, whatis};
 use glam::IVec2;
 
@@ -308,15 +308,14 @@ pub unsafe fn read_scroll() {
         }
         ScrollType::FindFood => {
             let mut found = false as u8;
-            let window = Window::Stdscr;
-            output::clear_window(window);
+            output::clear_window();
             for id in crate::game::item_ids() {
                 let info = crate::item::arena::with_object(id, |data| (data.o_type, data.o_pos));
                 if let Some((otype, opos)) = info {
                     if matches!(otype, ItemType::Food) {
                         found = true as u8;
-                        output::move_window_cursor(window, IVec2::new(opos.x, opos.y));
-                        output::write_window_glyph(window, (FOOD as u8) as char);
+                        output::move_window_cursor(IVec2::new(opos.x, opos.y));
+                        output::write_window_glyph((FOOD as u8) as char);
                     }
                 }
             }

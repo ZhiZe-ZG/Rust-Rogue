@@ -26,7 +26,7 @@ use crate::level::{door_open, with_current_level, with_current_level_mut};
 use crate::rnd::rnd;
 use crate::tile::Tile;
 use crate::tile::TrapType;
-use crate::ui::{output, Window};
+use crate::ui::output;
 use glam::IVec2;
 
 // ─── Glyphs ───────────────────────────────────────────────────────────────────
@@ -760,9 +760,9 @@ pub unsafe fn turnref() {
     let hero = hero_pos();
     if (flat_at(hero.y, hero.x) as u8 & F_SEEN as u8) == 0 {
         if jump != 0 {
-            output::set_leave_cursor(Window::Stdscr, true);
+            output::set_leave_cursor(true);
             output::refresh();
-            output::set_leave_cursor(Window::Stdscr, false);
+            output::set_leave_cursor(false);
         }
         set_seen_at(hero.y, hero.x);
     }

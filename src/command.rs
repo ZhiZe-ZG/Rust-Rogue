@@ -35,7 +35,6 @@ use crate::save::save_game;
 use crate::startup::{quit, shell};
 use crate::ui::input::readchar;
 use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
-use crate::ui::Window;
 use crate::wizard::{create_obj, show_map, teleport, whatis};
 use glam::IVec2;
 
@@ -169,6 +168,9 @@ pub unsafe fn command() {
     while ntimes > 0 {
         ntimes -= 1;
         again = false as u8;
+        // Level transitions can retry this command before the AFTER daemon
+        // phase, so let the UI repaint a changed level before look/input.
+        crate::daemon::Daemon::UiRender.run(0);
         if has_hit != 0 {
             look(false as u8);
             endmsg();
@@ -509,8 +511,8 @@ pub unsafe fn command() {
                     }
                     CTRL_R => {
                         after = false as u8;
-                        output::set_clear_on_refresh(Window::Curscr, true);
-                        output::refresh_window(Window::Curscr);
+                        output::set_clear_on_refresh(true);
+                        output::refresh_window();
                     }
                     b'v' => {
                         after = false as u8;
@@ -953,7 +955,7 @@ pub unsafe fn call() {
         }
 
         let initial = label.clone().unwrap_or_default();
-        if let Some(text) = read_line(&initial, Window::Stdscr) {
+        if let Some(text) = read_line(&initial) {
             OBJECTS.with_object_mut(obj, |o| o.o_label = Some(text));
         }
         return;
@@ -997,7 +999,7 @@ pub unsafe fn call() {
         msg_str("what do you want to call it? ");
     }
 
-    if let Some(text) = read_line(&elsewise, Window::Stdscr) {
+    if let Some(text) = read_line(&elsewise) {
         op[which].oi_guess = Some(text);
     }
 }

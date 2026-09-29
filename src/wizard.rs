@@ -18,7 +18,7 @@ use crate::level::find_floor;
 use crate::machdep::flush_type;
 use crate::ui::input::readchar;
 use crate::ui::output::{msg_str, show_win};
-use crate::ui::{output, Window};
+use crate::ui::output;
 use glam::IVec2;
 
 const FOOD: i32 = b':' as i32;
@@ -263,18 +263,17 @@ pub unsafe fn show_map() {
         return;
     }
 
-    let window = Window::Stdscr;
-    output::clear_window(window);
+    output::clear_window();
     for y in 1..(GameConfig::SCREEN_LINES - 1) {
         for x in 0..GameConfig::SCREEN_COLS {
             let real = flat(y, x);
             if ((real as u8) & (F_REAL as u8)) == 0 {
-                output::set_window_standout(window, true);
+                output::set_window_standout(true);
             }
-            output::move_window_cursor(window, IVec2::new(x, y));
-            output::write_window_glyph(window, (chat(y, x) as u8) as char);
+            output::move_window_cursor(IVec2::new(x, y));
+            output::write_window_glyph((chat(y, x) as u8) as char);
             if real == 0 {
-                output::set_window_standout(window, false);
+                output::set_window_standout(false);
             }
         }
     }

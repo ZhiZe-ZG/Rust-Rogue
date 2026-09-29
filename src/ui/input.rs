@@ -7,7 +7,6 @@
 //! turning an interrupt into a quit request.
 
 use crate::ui::terminal;
-use crate::ui::Window;
 
 const ESCAPE: i32 = 27;
 const ERR: i32 = -1;
@@ -311,7 +310,7 @@ pub(crate) fn set_echo(enabled: bool) {
 /// The terminal backend has no keypad mode, so this is a no-op retained only
 /// to keep call sites explicit.
 #[allow(clippy::unused_self)]
-pub(crate) fn set_keypad(_window: Window, _enabled: bool) {}
+pub(crate) fn set_keypad(_enabled: bool) {}
 
 pub(crate) fn set_input_timeout(tenths: i32) {
     terminal::halfdelay(tenths);

@@ -11,7 +11,6 @@ use crate::game::globals::{
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::terminal as cur;
 use crate::ui::state::UI;
-use crate::ui::Window;
 use glam::IVec2;
 
 const ESCAPE: i32 = 27;
@@ -114,49 +113,49 @@ pub(crate) fn write_text_at(position: IVec2, text: &str) {
 ///
 /// The backend always leaves the cursor where it was; retained only for call
 /// sites that mirrored the legacy `leaveok`.
-pub(crate) fn set_leave_cursor(_window: Window, _enabled: bool) {}
+pub(crate) fn set_leave_cursor(_enabled: bool) {}
 
 /// Return the current cursor position.
-pub(crate) fn window_cursor(_window: Window) -> IVec2 {
+pub(crate) fn window_cursor() -> IVec2 {
     cur::cursor_pos()
 }
 
 /// Clear the screen for the given (aliased) window.
-pub(crate) fn clear_window(_window: Window) {
+pub(crate) fn clear_window() {
     clear_screen();
 }
 
 /// Move the (aliased) window cursor.
-pub(crate) fn move_window_cursor(_window: Window, position: IVec2) {
+pub(crate) fn move_window_cursor(position: IVec2) {
     move_cursor(position);
 }
 
 /// Write one glyph to a window.
-pub(crate) fn write_window_glyph(_window: Window, glyph: char) {
+pub(crate) fn write_window_glyph(glyph: char) {
     write_glyph(glyph);
 }
 
 /// Write text to a window.
-pub(crate) fn write_window_text(_window: Window, text: &str) {
+pub(crate) fn write_window_text(text: &str) {
     write_text(text);
 }
 
 /// Flush pending changes for a window.
-pub(crate) fn refresh_window(_window: Window) {
+pub(crate) fn refresh_window() {
     refresh();
 }
 
 /// Mark a window for repaint during its next refresh (no-op; single grid).
-pub(crate) fn touch_window(_window: Window) {}
+pub(crate) fn touch_window() {}
 
 /// Request a full repaint of a window on its next refresh (no-op).
-pub(crate) fn set_clear_on_refresh(_window: Window, _enabled: bool) {}
+pub(crate) fn set_clear_on_refresh(_enabled: bool) {}
 
 /// Enable or disable line optimization for a window (no-op).
-pub(crate) fn set_line_optimization(_window: Window, _enabled: bool) {}
+pub(crate) fn set_line_optimization(_enabled: bool) {}
 
 /// Enable or disable standout output for a window.
-pub(crate) fn set_window_standout(_window: Window, enabled: bool) {
+pub(crate) fn set_window_standout(enabled: bool) {
     set_standout(enabled);
 }
 
@@ -334,7 +333,7 @@ pub(crate) fn status() {
     }
 
     UI.status_armor.store(temp, Ordering::Relaxed);
-    let old_cursor = window_cursor(Window::Stdscr);
+    let old_cursor = window_cursor();
     if UI.status_hp.load(Ordering::Relaxed) != max_hp {
         let mut temp_hp = max_hp;
         UI.status_hp.store(max_hp, Ordering::Relaxed);
@@ -403,17 +402,15 @@ pub(crate) fn status() {
 
 #[cfg(not(test))]
 pub(crate) fn show_win(message: &str) {
-    let window = Window::Stdscr;
-    move_window_cursor(window, IVec2::new(0, 0));
-    write_window_text(window, message);
-    touch_window(window);
+    move_window_cursor(IVec2::new(0, 0));
+    write_window_text(message);
+    touch_window();
     let hero = PLAYER.pos();
-    move_window_cursor(window, IVec2::new(hero.x, hero.y));
-    refresh_window(window);
+    move_window_cursor(IVec2::new(hero.x, hero.y));
+    refresh_window();
     wait_for(' ');
-    let standard_screen = Window::Stdscr;
-    set_clear_on_refresh(standard_screen, true);
-    touch_window(standard_screen);
+    set_clear_on_refresh(true);
+    touch_window();
 }
 
 #[cfg(test)]
