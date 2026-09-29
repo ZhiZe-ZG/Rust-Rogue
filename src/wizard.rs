@@ -2,7 +2,6 @@
 //!
 //! Ported from `src/c/wizard.c` to Rust.
 use crate::rnd::rnd;
-use std::ptr;
 
 use crate::config::GameConfig;
 use crate::draw::{self, enter_room, leave_room, look};

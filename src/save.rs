@@ -178,9 +178,7 @@ pub unsafe fn restore(file: &str) -> u8 {
         return 0;
     }
 
-    if (master_mode_enabled == 0 || wizard == 0)
-        && md_unlink_open_file(&file_name, std::ptr::null_mut()) < 0
-    {
+    if (master_mode_enabled == 0 || wizard == 0) && md_unlink_open_file(&file_name) < 0 {
         msg_str("Cannot unlink file\n");
         return 0;
     }
@@ -213,7 +211,7 @@ pub unsafe extern "C" fn auto_save(sig: i32) {
         match File::create(&file_name) {
             Ok(mut savef) => save_file(&mut savef),
             Err(_) => {
-                if md_unlink_open_file(&file_name, std::ptr::null_mut()) >= 0 {
+                if md_unlink_open_file(&file_name) >= 0 {
                     if let Ok(mut savef) = File::create(&file_name) {
                         save_file(&mut savef);
                     }

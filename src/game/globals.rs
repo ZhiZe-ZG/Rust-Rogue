@@ -175,9 +175,10 @@ pub static mut D_LIST: [CDelayedAction; MAXDAEMONS] = [CDelayedAction {
     d_time: 0,
 }; MAXDAEMONS];
 
-/// Stable per-room gold positions, mirrored from `Level` so chase targets can
-/// hold raw pointers without borrowing the locked level. Kept in sync by level
-/// population (`presence::place_room_contents`) and save restore.
+/// Stable per-room gold positions, mirrored out of `Level` so a room-gold
+/// chase target can name a room without borrowing the locked level. Kept in
+/// sync by level population (`presence::place_room_contents`) and save
+/// restore.
 pub static mut ROOM_GOLD: [IVec2; GameConfig::MAX_ROOMS] = [IVec2::ZERO; GameConfig::MAX_ROOMS];
 pub static mut monsters: [MonsterInfo; MAXMONSTERS] = [
     MonsterInfo {
@@ -1223,6 +1224,40 @@ pub fn stat_msg_enabled() -> bool {
 #[inline]
 pub fn get_max_stats() -> Stats {
     unsafe { max_stats }
+}
+
+/// The current dungeon number (`dnum`), read without touching `static mut`
+/// directly.
+#[inline]
+pub fn get_dnum() -> i32 {
+    unsafe { dnum }
+}
+
+/// The number of items currently carried (`inpack`).
+#[inline]
+pub fn get_inpack() -> i32 {
+    unsafe { inpack }
+}
+
+/// The hero's remaining food counter (`food_left`).
+#[inline]
+pub fn get_food_left() -> i32 {
+    unsafe { food_left }
+}
+
+/// A by-value snapshot of the daemon/fuse table (`D_LIST`).
+///
+/// [`CDelayedAction`] is `Copy`, so this returns a plain array the caller may
+/// iterate or `.to_vec()` without holding any lock or raw pointer.
+#[inline]
+pub fn daemon_table() -> [CDelayedAction; MAXDAEMONS] {
+    unsafe { D_LIST }
+}
+
+/// The monster stat-table entry at `index`, by value (`MonsterInfo` is `Copy`).
+#[inline]
+pub fn monster_info(index: usize) -> MonsterInfo {
+    unsafe { monsters[index] }
 }
 
 // ─── Rust-owned string globals ───────────────────────────────────────────────

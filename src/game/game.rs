@@ -192,9 +192,10 @@ pub fn set_room_goldval(room: Option<usize>, value: i32) {
     CURRENT_LEVEL.with_mut(|level| level.set_room_goldval(room, value));
 }
 
-/// Stable per-room gold positions, mirrored from `Level` so chase targets can
-/// hold raw pointers without borrowing the locked level. Kept in sync by level
-/// population (`presence::place_room_contents`) and save restore.
+/// Stable per-room gold positions, mirrored out of `Level` so a
+/// [`crate::entity::player::DestRef::RoomGold`] chase target can name a room
+/// without borrowing the locked level. Kept in sync by level population
+/// (`presence::place_room_contents`) and save restore.
 ///
 /// Owned by [`crate::game::globals`] and re-exported here for callers that
 /// reach it through `crate::game::…`.
@@ -233,8 +234,7 @@ pub fn passage_exits(passage: Option<usize>) -> Vec<IVec2> {
 /// Arena handles for the floor items of the live level, head first.
 ///
 /// This is the pointer-free accessor preferred by new code; callers look the
-/// object up through [`crate::item::arena::OBJECTS`] when needed. The order
-/// matches [`item_ptrs`].
+/// object up through [`crate::item::arena::OBJECTS`] when needed.
 #[inline]
 pub fn item_ids() -> Vec<crate::item::arena::ThingId> {
     with_current_level(|level| {
@@ -259,9 +259,9 @@ mod tests {
     fn current_level_initializes_once() {
         let current_level = CurrentLevel::EMPTY;
 
-        let first = current_level.with_mut(|level| level as *mut Level);
-        let second = current_level.with(|level| level as *const Level);
-
-        assert_eq!(first.cast_const(), second);
+        // A mutation through `with_mut` is visible to a later `with`, which
+        // confirms both scoped views observe the same lazily-created level.
+        current_level.with_mut(|level| level.depth = 7);
+        assert_eq!(current_level.with(|level| level.depth), 7);
     }
 }

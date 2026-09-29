@@ -37,7 +37,7 @@ fn flush_stdout() {
     let _ = std::io::stdout().flush();
 }
 
-use crate::game::globals::{after, count, dnum, in_shell, inv_type, jump, master_mode_enabled, mpos, noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death, wizard};
+use crate::game::globals::{after, count, dnum, get_dnum, get_purse, in_shell, inv_type, jump, master_mode_enabled, mpos, noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death, wizard};
 
 
 // ── Game control functions ported from src/c/main.c ─────────────────────────
@@ -167,10 +167,7 @@ pub unsafe extern "C" fn quit(sig: i32) {
     if readchar() == b'y' as i32 {
         libc::signal(libc::SIGINT, leave as libc::sighandler_t);
         output::clear_screen();
-        let line = format!(
-            "You quit with {} gold pieces",
-            std::ptr::addr_of!(purse).read()
-        );
+        let line = format!("You quit with {} gold pieces", get_purse());
         output::write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), &line);
         output::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
         output::refresh();
@@ -327,7 +324,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
         print!(
             "Hello {}, welcome to dungeon #{}",
             crate::game::globals::whoami(),
-            std::ptr::addr_of!(dnum).read()
+            get_dnum()
         );
     } else {
         print!(

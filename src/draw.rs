@@ -9,10 +9,10 @@
 //! [`reveal_secret_at`], [`reveal_trap_at`], [`set_seen_at`]) update the
 //! level state directly instead of scribbling into a glyph grid.
 //!
-//! The exported `#[no_mangle]` functions (`look`, `erase_lamp`, `trip_ch`,
-//! `add_pass`, `enter_room`, `leave_room`, `turnref`) are the same
-//! C ABI symbols the C engine has always called, now driven entirely by
-//! `CURRENT_LEVEL`.
+//! The Rust-native replacements for the legacy `look`, `erase_lamp`,
+//! `trip_ch`, `add_pass`, `enter_room`, `leave_room`, and `turnref` routines
+//! are plain Rust functions (`pub unsafe fn`), driven entirely by
+//! `CURRENT_LEVEL`; no C ABI symbols are exported.
 
 
 use crate::config::GameConfig;
@@ -59,7 +59,7 @@ pub const F_TMASK: u8 = 0x07u8 as u8;
 
 const LAMPDIST: i32 = 3;
 
-// ─── Legacy C ABI surface ─────────────────────────────────────────────────────
+// ─── Process-wide flags read by the draw loop ────────────────────────────────
 
 use crate::game::globals::{after, door_stop, firstmove, jump, oldpos, oldrp, runch, running, see_floor, seenstairs};
 
@@ -344,7 +344,7 @@ fn is_door_or_hidden(ch: u8, flags: u8) -> bool {
         || ((flags as u8 & F_REAL as u8) == 0 && (ch == b'|' as u8 || ch == b'-' as u8))
 }
 
-/// Draw all passage and door tiles for the current level (FFI export).
+/// Draw all passage and door tiles for the current level.
 ///
 /// Iterates the screen and redraws every cell marked as a passage or a door,
 /// marking it seen. Every glyph comes from [`cell_glyph`]/[`flat_at`] which read

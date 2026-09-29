@@ -419,7 +419,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
             .collect()
     };
 
-    let daemons: Vec<CDelayedAction> = (*std::ptr::addr_of!(D_LIST)).to_vec();
+    let daemons: Vec<CDelayedAction> = daemon_table().to_vec();
 
     GameSnapshot {
         after: after != 0,

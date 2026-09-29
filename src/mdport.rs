@@ -114,8 +114,8 @@ pub unsafe fn md_onsignal_exit() {
 /// md_onsignal_autosave:
 /// Arrange for signals to auto-save the game.
 unsafe fn md_onsignal_autosave() {
-    // The auto-save handlers (auto_save, endit, quit) are Rust `#[no_mangle]`
-    // functions; wire them up to the signals on Unix.
+    // The auto-save handlers (`auto_save`, `endit`, `quit`) are plain Rust
+    // `extern "C"` signal handlers; wire them up to the signals on Unix.
     #[cfg(unix)]
     {
         libc::signal(libc::SIGHUP, auto_save as libc::sighandler_t);
@@ -189,8 +189,8 @@ pub unsafe fn md_raw_standend() {
 
 /// md_unlink_open_file:
 /// Unlink an open file.  On POSIX there is nothing special to do beyond
-/// unlinking the path.
-pub unsafe fn md_unlink_open_file(file: &str, _inf: *mut u8) -> i32 {
+/// unlinking the path, so the legacy `FILE*` argument is gone entirely.
+pub unsafe fn md_unlink_open_file(file: &str) -> i32 {
     match std::fs::remove_file(file) {
         Ok(()) => 0,
         Err(_) => -1,

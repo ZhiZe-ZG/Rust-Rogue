@@ -22,9 +22,10 @@ use crate::ui::output::{self, msg_str, show_win, status};
 use crate::ui::Window;
 use glam::IVec2;
 
-/// Potion and status-effect handling for the Rust FFI bridge.
-/// These helpers implement the C-side potion logic so the game can call
-/// them through exported C entry points.
+/// Potion and status-effect handling.
+///
+/// These helpers implement the potion logic in Rust; the legacy C entry points
+/// are gone, so nothing here is exported across an FFI boundary.
 const POTION: i32 = '!' as i32;
 const SCROLL: i32 = '?' as i32;
 const WEAPON: i32 = ')' as i32;
@@ -106,15 +107,15 @@ const HEALTIME: i32 = 30;
 const BEFORE: i32 = 1;
 const AFTER: i32 = 2;
 
-/// External C symbols that provide game state, UI helpers, and gameplay
-/// primitives used by the potion effects.
+/// Process-wide game state and UI flags read by the potion effects.
 use crate::game::globals::{after, e_levels, max_stats, seenstairs, terse};
 
 
 /// A mutable reference to the static `pot_info` entry at `index`.
 ///
-/// Uses `addr_of_mut!` so no reference to the whole `static mut` array is
-/// created, matching the sound Rust-2024 access pattern.
+/// Confined to this module: the returned reference lets the quaff logic update
+/// the `oi_know` flag in place. (The game is single-threaded and the table is
+/// only ever touched through this accessor.)
 #[inline]
 unsafe fn pot_info_at(index: usize) -> &'static mut ObjInfo {
     &mut pot_info[index]

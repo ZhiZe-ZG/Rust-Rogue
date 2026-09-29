@@ -3,7 +3,7 @@
 //! Ported from `src/c/rip.c` to Rust.
 use std::io::Write;
 
-use crate::game::globals::{allscore, monsters, numscores, MonsterInfo, NUMNAME};
+use crate::game::globals::{allscore, get_purse, monster_info, numscores, NUMNAME};
 use crate::item::item_type::ItemType;
 use crate::item::arena::{with_object, OBJECTS};
 use crate::item::things::inv_name_id;
@@ -65,8 +65,7 @@ pub unsafe fn killname(monst: u8, doart: bool) -> String {
     let mut name = String::from("Wally the Wonder Badger");
     if (monst as u8).is_ascii_uppercase() {
         let idx = (monst as u8 - b'A') as usize;
-        let monster = unsafe { &*std::ptr::addr_of!(monsters).cast::<MonsterInfo>().add(idx) };
-        name = monster.m_name.to_string();
+        name = monster_info(idx).m_name.to_string();
         article = true;
     } else {
         let special = match monst as u8 {
@@ -295,11 +294,11 @@ pub unsafe fn death(monst: u8) {
                 "{}{} with {} gold",
                 article,
                 killer,
-                std::ptr::addr_of!(purse).read()
+                get_purse()
             );
             output::write_text(&line);
         } else {
-            let line = format!("{} with {} gold", killer, std::ptr::addr_of!(purse).read());
+            let line = format!("{} with {} gold", killer, get_purse());
             output::write_text(&line);
         }
     } else {
@@ -345,7 +344,7 @@ pub unsafe fn death(monst: u8) {
             IVec2::new(center_string(&hero_name) as i32, 14),
             &hero_name,
         );
-        let score_text = format!("{} Au", std::ptr::addr_of!(purse).read());
+        let score_text = format!("{} Au", get_purse());
         output::move_cursor(IVec2::new(center_string(&score_text) as i32, 15));
         output::write_text(&score_text);
         let year = 1900 + 0;

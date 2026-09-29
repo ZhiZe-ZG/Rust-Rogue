@@ -114,7 +114,7 @@ static mut NEWCOUNT: u8 = false as u8;
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
-use crate::game::globals::{after, again, amulet, count, delta, dir_ch, dnum, door_stop, firstmove, food_left, has_hit, inpack, inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm, r_stones, runch, running, save_msg, seenstairs, stat_msg, take, terse, to_death, wizard, ws_made};
+use crate::game::globals::{after, again, amulet, count, delta, dir_ch, door_stop, firstmove, get_dnum, get_food_left, get_inpack, has_hit, inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm, r_stones, runch, running, save_msg, seenstairs, stat_msg, take, terse, to_death, wizard, ws_made};
 
 
 // ─── Extern C functions called from this module ───────────────────────────────
@@ -568,7 +568,7 @@ pub unsafe fn command() {
                                 turn_see(false as u8);
                                 msg_str(&format!(
                                     "you are suddenly as smart as Ken Arnold in dungeon #{}",
-                                    std::ptr::addr_of!(dnum).read()
+                                    get_dnum()
                                 ));
                             }
                         }
@@ -634,7 +634,7 @@ pub unsafe fn command() {
                                 b'$' => {
                                     msg_str(&format!(
                                         "inpack = {}",
-                                        std::ptr::addr_of!(inpack).read()
+                                        get_inpack()
                                     ));
                                 }
                                 CTRL_G => {
@@ -658,7 +658,7 @@ pub unsafe fn command() {
                                 CTRL_E => {
                                     msg_str(&format!(
                                         "food left: {}",
-                                        std::ptr::addr_of!(food_left).read()
+                                        get_food_left()
                                     ));
                                 }
                                 CTRL_C => add_pass(),
