@@ -534,28 +534,28 @@ pub unsafe fn look(wakeup: u8) {
             }
 
             if door_stop != 0 && firstmove == 0 && running != 0 {
-                if runch == b'h' as u8 && x == ex {
+                if runch == crate::command::Direction::West && x == ex {
                     continue;
                 }
-                if runch == b'j' as u8 && y == sy {
+                if runch == crate::command::Direction::South && y == sy {
                     continue;
                 }
-                if runch == b'k' as u8 && y == ey {
+                if runch == crate::command::Direction::North && y == ey {
                     continue;
                 }
-                if runch == b'l' as u8 && x == sx {
+                if runch == crate::command::Direction::East && x == sx {
                     continue;
                 }
-                if runch == b'y' as u8 && (y + x) - sumhero >= 1 {
+                if runch == crate::command::Direction::NorthWest && (y + x) - sumhero >= 1 {
                     continue;
                 }
-                if runch == b'u' as u8 && (y - x) - diffhero >= 1 {
+                if runch == crate::command::Direction::NorthEast && (y - x) - diffhero >= 1 {
                     continue;
                 }
-                if runch == b'n' as u8 && (y + x) - sumhero <= -1 {
+                if runch == crate::command::Direction::SouthEast && (y + x) - sumhero <= -1 {
                     continue;
                 }
-                if runch == b'b' as u8 && (y - x) - diffhero <= -1 {
+                if runch == crate::command::Direction::SouthWest && (y - x) - diffhero <= -1 {
                     continue;
                 }
 

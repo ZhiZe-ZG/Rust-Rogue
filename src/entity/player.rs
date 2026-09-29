@@ -685,33 +685,33 @@ unsafe fn try_passgo_turn(dy: &mut i32, dx: &mut i32) -> bool {
     }
 
     let hero = PLAYER.pos();
-    if runch == b'h' as u8 || runch == b'l' as u8 {
+    if runch == crate::command::Direction::West || runch == crate::command::Direction::East {
         let b1 = hero.y != 1 && turn_ok(hero.y - 1, hero.x) != 0;
         let b2 = hero.y != GameConfig::SCREEN_LINES - 2 && turn_ok(hero.y + 1, hero.x) != 0;
         if !(b1 ^ b2) {
             return false;
         }
         if b1 {
-            runch = b'k' as u8;
+            runch = crate::command::Direction::North;
             *dy = -1;
         } else {
-            runch = b'j' as u8;
+            runch = crate::command::Direction::South;
             *dy = 1;
         }
         *dx = 0;
         draw_turnref();
         true
-    } else if runch == b'j' as u8 || runch == b'k' as u8 {
+    } else if runch == crate::command::Direction::South || runch == crate::command::Direction::North {
         let b1 = hero.x != 0 && turn_ok(hero.y, hero.x - 1) != 0;
         let b2 = hero.x != GameConfig::SCREEN_COLS - 1 && turn_ok(hero.y, hero.x + 1) != 0;
         if !(b1 ^ b2) {
             return false;
         }
         if b1 {
-            runch = b'h' as u8;
+            runch = crate::command::Direction::West;
             *dx = -1;
         } else {
-            runch = b'l' as u8;
+            runch = crate::command::Direction::East;
             *dx = 1;
         }
         *dy = 0;
@@ -730,10 +730,10 @@ pub use crate::game::globals::nh;
 
 /// do_run:
 /// Start the hero running in the chosen direction.
-pub unsafe fn do_run(ch: u8) {
+pub unsafe fn do_run(direction: crate::command::Direction) {
     running = true as u8;
     after = false as u8;
-    runch = ch;
+    runch = direction;
 }
 
 /// do_move:

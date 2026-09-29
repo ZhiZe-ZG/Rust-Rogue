@@ -5,6 +5,7 @@
 use crate::config::GameConfig;
 use crate::daemon::CDelayedAction;
 use crate::entity::stats::Stats;
+use crate::command::{Command, Direction};
 use glam::IVec2;
 use std::sync::{Mutex, MutexGuard};
 
@@ -87,22 +88,22 @@ pub static master_mode_enabled: u8 = 1;
 pub static mut wizard: i32 = 0;
 pub static mut pack_used: [u8; 26] = [0; 26];
 
-pub static mut dir_ch: u8 = 0;
+pub static mut dir_ch: Direction = Direction::None;
 /// Per-item colour names (`char *p_colors[]`), now Rust string slices.
 pub static mut p_colors: [&'static str; MAXPOTIONS] = [""; MAXPOTIONS];
 /// Per-ring stone names (`char *r_stones[]`), now Rust string slices.
 pub static mut r_stones: [&'static str; MAXRINGS] = [""; MAXRINGS];
-pub static mut runch: u8 = 0;
+pub static mut runch: Direction = Direction::None;
 pub static mut take: u8 = 0;
 /// Wand/staff material names (`char *ws_made[]`), now Rust string slices.
 pub static mut ws_made: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
 /// Wand/staff kind names (`char *ws_type[]`), now Rust string slices.
 pub static mut ws_type: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
 pub static mut orig_dsusp: i32 = 0;
-pub static mut l_last_comm: u8 = 0;
-pub static mut l_last_dir: u8 = 0;
-pub static mut last_comm: u8 = 0;
-pub static mut last_dir: u8 = 0;
+pub static mut l_last_comm: Command = Command::Unknown(0);
+pub static mut l_last_dir: Direction = Direction::None;
+pub static mut last_comm: Command = Command::Unknown(0);
+pub static mut last_dir: Direction = Direction::None;
 pub static mut numscores: u32 = 10; // NUMSCORES from config.h
 /// The number label for the scoreboard (`NUMNAME` from config.h).
 pub const NUMNAME: &str = "Ten";

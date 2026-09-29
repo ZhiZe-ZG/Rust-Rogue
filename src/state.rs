@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
 use crate::daemon::CDelayedAction;
+use crate::command::{Command, Direction};
 use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingObject};
 use crate::game::{MonsterId, MONSTER_LIST, MONSTER_MAP, PLAYER};
@@ -138,8 +139,8 @@ pub struct GameSnapshot {
     pub tombstone: bool,
     pub wizard: i32,
     pub pack_used: [u8; 26],
-    pub dir_ch: u8,
-    pub runch: u8,
+    pub dir_ch: Direction,
+    pub runch: Direction,
     pub take: u8,
 
     // ── strings / string tables ─────────────────────────────────────────
@@ -160,10 +161,10 @@ pub struct GameSnapshot {
 
     // ── numeric globals ─────────────────────────────────────────────────
     pub orig_dsusp: i32,
-    pub l_last_comm: u8,
-    pub l_last_dir: u8,
-    pub last_comm: u8,
-    pub last_dir: u8,
+    pub l_last_comm: Command,
+    pub l_last_dir: Direction,
+    pub last_comm: Command,
+    pub last_dir: Direction,
     pub n_objs: i32,
     pub ntraps: i32,
     pub hungry_state: i32,
@@ -880,8 +881,8 @@ mod tests {
             tombstone: true,
             wizard: 0,
             pack_used: [0; 26],
-            dir_ch: b'h',
-            runch: 0,
+            dir_ch: Direction::West,
+            runch: Direction::None,
             take: 0,
             file_name: "save.ron".to_owned(),
             huh: String::new(),
@@ -898,10 +899,10 @@ mod tests {
             ws_type: vec!["staff".to_owned()],
             ws_made: vec!["oaken".to_owned()],
             orig_dsusp: 0,
-            l_last_comm: 0,
-            l_last_dir: 0,
-            last_comm: 0,
-            last_dir: 0,
+            l_last_comm: Command::Unknown(0),
+            l_last_dir: Direction::None,
+            last_comm: Command::Unknown(0),
+            last_dir: Direction::None,
             n_objs: 0,
             ntraps: 0,
             hungry_state: 0,

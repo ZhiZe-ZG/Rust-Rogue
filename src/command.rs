@@ -38,6 +38,270 @@ use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
 use crate::wizard::{create_obj, show_map, teleport, whatis};
 use glam::IVec2;
 
+/// A normalized movement direction used by command and run handling.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Direction {
+    #[default]
+    None,
+    West,
+    South,
+    North,
+    East,
+    NorthWest,
+    NorthEast,
+    SouthWest,
+    SouthEast,
+}
+
+impl Direction {
+    pub const fn from_byte(key: u8) -> Option<Self> {
+        match key.to_ascii_lowercase() {
+            b'h' => Some(Self::West),
+            b'j' => Some(Self::South),
+            b'k' => Some(Self::North),
+            b'l' => Some(Self::East),
+            b'y' => Some(Self::NorthWest),
+            b'u' => Some(Self::NorthEast),
+            b'b' => Some(Self::SouthWest),
+            b'n' => Some(Self::SouthEast),
+            _ => None,
+        }
+    }
+
+    pub const fn to_byte(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::West => b'h',
+            Self::South => b'j',
+            Self::North => b'k',
+            Self::East => b'l',
+            Self::NorthWest => b'y',
+            Self::NorthEast => b'u',
+            Self::SouthWest => b'b',
+            Self::SouthEast => b'n',
+        }
+    }
+
+    pub const fn delta(self) -> IVec2 {
+        match self {
+            Self::None => IVec2::ZERO,
+            Self::West => IVec2::new(-1, 0),
+            Self::South => IVec2::new(0, 1),
+            Self::North => IVec2::new(0, -1),
+            Self::East => IVec2::new(1, 0),
+            Self::NorthWest => IVec2::new(-1, -1),
+            Self::NorthEast => IVec2::new(1, -1),
+            Self::SouthWest => IVec2::new(-1, 1),
+            Self::SouthEast => IVec2::new(1, 1),
+        }
+    }
+}
+
+/// A command key interpreted by the main dispatcher.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Command {
+    Digit(u8),
+    Pickup,
+    Shell,
+    Move(Direction),
+    Run(Direction),
+    RunPrefix(Direction),
+    Fire,
+    FireKamikaze,
+    Throw,
+    Again,
+    Quaff,
+    Quit,
+    Inventory,
+    InventorySelect,
+    Drop,
+    ReadScroll,
+    Eat,
+    Wield,
+    Wear,
+    TakeOff,
+    RingOn,
+    RingOff,
+    Options,
+    Call,
+    Descend,
+    Ascend,
+    Help,
+    Identify,
+    Search,
+    Zap,
+    Discover,
+    MessageHistory,
+    Refresh,
+    Version,
+    Save,
+    Rest,
+    FindTrap,
+    WizardToggle,
+    Escape,
+    MoveOn,
+    CurrentWeapon,
+    CurrentArmor,
+    CurrentRings,
+    Status,
+    WizardPosition,
+    WizardCreate,
+    WizardInpack,
+    WizardInventory,
+    WizardIdentify,
+    WizardDown,
+    WizardUp,
+    WizardMap,
+    WizardTeleport,
+    WizardFood,
+    WizardAddPassage,
+    WizardToggleSee,
+    WizardCharge,
+    WizardGear,
+    WizardList,
+    Space,
+    Unknown(u8),
+}
+
+impl Command {
+    pub const fn from_byte(key: u8) -> Self {
+        if key.is_ascii_digit() {
+            return Self::Digit(key - b'0');
+        }
+        match key {
+            b',' => Self::Pickup,
+            b'!' => Self::Shell,
+            b'h' => Self::Move(Direction::West),
+            b'j' => Self::Move(Direction::South),
+            b'k' => Self::Move(Direction::North),
+            b'l' => Self::Move(Direction::East),
+            b'y' => Self::Move(Direction::NorthWest),
+            b'u' => Self::Move(Direction::NorthEast),
+            b'b' => Self::Move(Direction::SouthWest),
+            b'n' => Self::Move(Direction::SouthEast),
+            b'H' => Self::Run(Direction::West),
+            b'J' => Self::Run(Direction::South),
+            b'K' => Self::Run(Direction::North),
+            b'L' => Self::Run(Direction::East),
+            b'Y' => Self::Run(Direction::NorthWest),
+            b'U' => Self::Run(Direction::NorthEast),
+            b'B' => Self::Run(Direction::SouthWest),
+            b'N' => Self::Run(Direction::SouthEast),
+            0x08 => Self::RunPrefix(Direction::West),
+            0x0a => Self::RunPrefix(Direction::South),
+            0x0b => Self::RunPrefix(Direction::North),
+            0x0c => Self::RunPrefix(Direction::East),
+            0x19 => Self::RunPrefix(Direction::NorthWest),
+            0x15 => Self::RunPrefix(Direction::NorthEast),
+            0x02 => Self::RunPrefix(Direction::SouthWest),
+            0x0e => Self::RunPrefix(Direction::SouthEast),
+            b'f' => Self::Fire,
+            b'F' => Self::FireKamikaze,
+            b't' => Self::Throw,
+            b'a' => Self::Again,
+            b'q' => Self::Quaff,
+            b'Q' => Self::Quit,
+            b'i' => Self::Inventory,
+            b'I' => Self::InventorySelect,
+            b'd' => Self::Drop,
+            b'r' => Self::ReadScroll,
+            b'e' => Self::Eat,
+            b'w' => Self::Wield,
+            b'W' => Self::Wear,
+            b'T' => Self::TakeOff,
+            b'P' => Self::RingOn,
+            b'R' => Self::RingOff,
+            b'o' => Self::Options,
+            b'c' => Self::Call,
+            b'>' => Self::Descend,
+            b'<' => Self::Ascend,
+            b'?' => Self::Help,
+            b'/' => Self::Identify,
+            b's' => Self::Search,
+            b'z' => Self::Zap,
+            b'D' => Self::Discover,
+            0x10 => Self::MessageHistory,
+            0x12 => Self::Refresh,
+            b'v' => Self::Version,
+            b'S' => Self::Save,
+            b'.' => Self::Rest,
+            b' ' => Self::Space,
+            b'^' => Self::FindTrap,
+            b'+' => Self::WizardToggle,
+            0x1b => Self::Escape,
+            b'm' => Self::MoveOn,
+            b')' => Self::CurrentWeapon,
+            b']' => Self::CurrentArmor,
+            b'=' => Self::CurrentRings,
+            b'@' => Self::Status,
+            b'|' => Self::WizardPosition,
+            b'C' => Self::WizardCreate,
+            b'$' => Self::WizardInpack,
+            0x07 => Self::WizardInventory,
+            0x17 => Self::WizardIdentify,
+            0x04 => Self::WizardDown,
+            0x01 => Self::WizardUp,
+            0x06 => Self::WizardMap,
+            0x14 => Self::WizardTeleport,
+            0x05 => Self::WizardFood,
+            0x03 => Self::WizardAddPassage,
+            0x18 => Self::WizardToggleSee,
+            0x1e => Self::WizardCharge,
+            0x09 => Self::WizardGear,
+            b'*' => Self::WizardList,
+            _ => Self::Unknown(key),
+        }
+    }
+
+    pub const fn to_byte(self) -> u8 {
+        match self {
+            Self::Digit(digit) => b'0' + digit,
+            Self::Pickup => b',', Self::Shell => b'!',
+            Self::Move(dir) => dir.to_byte(),
+            Self::Run(dir) => dir.to_byte().to_ascii_uppercase(),
+            Self::RunPrefix(dir) => match dir {
+                Direction::West => 0x08,
+                Direction::South => 0x0a,
+                Direction::North => 0x0b,
+                Direction::East => 0x0c,
+                Direction::NorthWest => 0x19,
+                Direction::NorthEast => 0x15,
+                Direction::SouthWest => 0x02,
+                Direction::SouthEast => 0x0e,
+                Direction::None => 0,
+            },
+            Self::Fire => b'f', Self::FireKamikaze => b'F', Self::Throw => b't',
+            Self::Again => b'a', Self::Quaff => b'q', Self::Quit => b'Q',
+            Self::Inventory => b'i', Self::InventorySelect => b'I', Self::Drop => b'd',
+            Self::ReadScroll => b'r', Self::Eat => b'e', Self::Wield => b'w',
+            Self::Wear => b'W', Self::TakeOff => b'T', Self::RingOn => b'P',
+            Self::RingOff => b'R', Self::Options => b'o', Self::Call => b'c',
+            Self::Descend => b'>', Self::Ascend => b'<', Self::Help => b'?',
+            Self::Identify => b'/', Self::Search => b's', Self::Zap => b'z',
+            Self::Discover => b'D', Self::MessageHistory => 0x10, Self::Refresh => 0x12,
+            Self::Version => b'v', Self::Save => b'S', Self::Rest => b'.', Self::Space => b' ',
+            Self::FindTrap => b'^', Self::WizardToggle => b'+', Self::Escape => 0x1b,
+            Self::MoveOn => b'm', Self::CurrentWeapon => b')', Self::CurrentArmor => b']',
+            Self::CurrentRings => b'=', Self::Status => b'@', Self::WizardPosition => b'|',
+            Self::WizardCreate => b'C', Self::WizardInpack => b'$', Self::WizardInventory => 0x07,
+            Self::WizardIdentify => 0x17, Self::WizardDown => 0x04, Self::WizardUp => 0x01,
+            Self::WizardMap => 0x06, Self::WizardTeleport => 0x14, Self::WizardFood => 0x05,
+            Self::WizardAddPassage => 0x03, Self::WizardToggleSee => 0x18,
+            Self::WizardCharge => 0x1e, Self::WizardGear => 0x09, Self::WizardList => b'*',
+            Self::Unknown(key) => key,
+        }
+    }
+
+    pub const fn is_repeatable(self) -> bool {
+        matches!(self,
+            Self::RunPrefix(_) | Self::Move(_) | Self::Run(_) | Self::MoveOn |
+            Self::Quaff | Self::ReadScroll | Self::Search | Self::Throw | Self::Zap |
+            Self::Rest | Self::Again | Self::InventorySelect | Self::WizardCreate |
+            Self::WizardDown | Self::WizardUp
+        )
+    }
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAXSTR: usize = 1024;
@@ -68,38 +332,6 @@ const PLATE_MAIL: i32 = 7;
 const BEFORE: i32 = 1;
 const AFTER: i32 = 2;
 
-/// CTRL(c) macro from rogue.h: `c & 037`.
-///
-/// Precomputed constants are used in `match` patterns (Rust does not allow
-/// function calls in patterns, even for `const fn`s).
-const CTRL_A: u8 = b'A' & 0x1f; // 0x01
-const CTRL_B: u8 = b'B' & 0x1f; // 0x02
-const CTRL_C: u8 = b'C' & 0x1f; // 0x03
-const CTRL_D: u8 = b'D' & 0x1f; // 0x04
-const CTRL_E: u8 = b'E' & 0x1f; // 0x05
-const CTRL_F: u8 = b'F' & 0x1f; // 0x06
-const CTRL_G: u8 = b'G' & 0x1f; // 0x07
-const CTRL_H: u8 = b'H' & 0x1f; // 0x08
-const CTRL_I: u8 = b'I' & 0x1f; // 0x09
-const CTRL_J: u8 = b'J' & 0x1f; // 0x0a
-const CTRL_K: u8 = b'K' & 0x1f; // 0x0b
-const CTRL_L: u8 = b'L' & 0x1f; // 0x0c
-const CTRL_N: u8 = b'N' & 0x1f; // 0x0e
-const CTRL_P: u8 = b'P' & 0x1f; // 0x10
-const CTRL_R: u8 = b'R' & 0x1f; // 0x12
-const CTRL_T: u8 = b'T' & 0x1f; // 0x14
-const CTRL_U: u8 = b'U' & 0x1f; // 0x15
-const CTRL_W: u8 = b'W' & 0x1f; // 0x17
-const CTRL_X: u8 = b'X' & 0x1f; // 0x18
-const CTRL_Y: u8 = b'Y' & 0x1f; // 0x19
-const CTRL_TILDE: u8 = b'~' & 0x1f; // CTRL-~ (0x1e)
-
-/// Inline evaluator for CTRL(c) used in expression position.
-#[inline]
-const fn ctrl(c: u8) -> u8 {
-    c & 0x1f
-}
-
 /// Wizard-mode: the preprocessor conditional in the C code is replaced by a
 /// runtime check on the `wizard` global.  All wizard helpers are always
 /// compiled in, matching the style used by wizard.rs, chase.rs and friends.
@@ -107,8 +339,8 @@ const MASTER: bool = true;
 
 // ─── Static locals for command() ─────────────────────────────────────────────
 
-static mut COUNTCH: u8 = 0;
-static mut DIRECTION: u8 = 0;
+static mut COUNTCH: Command = Command::Unknown(0);
+static mut DIRECTION: Command = Command::Unknown(0);
 static mut NEWCOUNT: u8 = false as u8;
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
@@ -214,9 +446,9 @@ pub unsafe fn command() {
 
         if no_command == 0 {
             if running != 0 || to_death != 0 {
-                ch = runch as u8;
+                ch = runch.to_byte();
             } else if count != 0 {
-                ch = COUNTCH as u8;
+                ch = COUNTCH.to_byte();
             } else {
                 ch = readchar() as u8;
                 move_on = false as u8;
@@ -250,53 +482,17 @@ pub unsafe fn command() {
                     }
                     ch = readchar() as u8;
                 }
-                COUNTCH = ch as u8;
+                COUNTCH = Command::from_byte(ch);
                 /*
                  * turn off count for commands which don't make sense
                  * to repeat
                  */
-                if !matches!(
-                    ch,
-                    CTRL_B
-                        | CTRL_H
-                        | CTRL_J
-                        | CTRL_K
-                        | CTRL_L
-                        | CTRL_N
-                        | CTRL_U
-                        | CTRL_Y
-                        | b'.'
-                        | b'a'
-                        | b'b'
-                        | b'h'
-                        | b'j'
-                        | b'k'
-                        | b'l'
-                        | b'm'
-                        | b'n'
-                        | b'q'
-                        | b'r'
-                        | b's'
-                        | b't'
-                        | b'u'
-                        | b'y'
-                        | b'z'
-                        | b'B'
-                        | b'C'
-                        | b'H'
-                        | b'I'
-                        | b'J'
-                        | b'K'
-                        | b'L'
-                        | b'N'
-                        | b'U'
-                        | b'Y'
-                        | CTRL_D
-                        | CTRL_A
-                ) {
+                if !COUNTCH.is_repeatable() {
                     count = 0;
                 }
             }
+
+            let mut command = Command::from_byte(ch);
 
             /*
              * execute a command
@@ -304,12 +500,16 @@ pub unsafe fn command() {
             if count != 0 && running == 0 {
                 count -= 1;
             }
-            if ch != b'a' && ch != ESCAPE as u8 && running == 0 && count == 0 && to_death == 0 {
+            if !matches!(command, Command::Again | Command::Escape)
+                && running == 0
+                && count == 0
+                && to_death == 0
+            {
                 l_last_comm = last_comm;
                 l_last_dir = last_dir;
                 l_last_pick = last_pick;
-                last_comm = ch as u8;
-                last_dir = b'\0' as u8;
+                last_comm = command;
+                last_dir = Direction::None;
                 last_pick = None;
             }
 
@@ -317,8 +517,8 @@ pub unsafe fn command() {
             // The C code uses `goto over` from a few arms; we emulate it with
             // a labelled loop: arms that re-dispatch set `ch` and `continue`.
             'dispatch: loop {
-                match ch {
-                    b',' => {
+                match command {
+                    Command::Pickup => {
                         let hero = hero_pos();
                         let mut found_obj: Option<ThingId> = None;
                         for obj in crate::game::item_ids() {
@@ -349,49 +549,28 @@ pub unsafe fn command() {
                             endmsg();
                         }
                     }
-                    b'!' => {
-                        shell();
+                    Command::Shell => shell(),
+                    Command::Move(direction) => {
+                        let movement_delta = direction.delta();
+                        do_move(movement_delta.y, movement_delta.x);
                     }
-                    b'h' => do_move(0, -1),
-                    b'j' => do_move(1, 0),
-                    b'k' => do_move(-1, 0),
-                    b'l' => do_move(0, 1),
-                    b'y' => do_move(-1, -1),
-                    b'u' => do_move(-1, 1),
-                    b'b' => do_move(1, -1),
-                    b'n' => do_move(1, 1),
-                    b'H' => do_run(b'h' as u8),
-                    b'J' => do_run(b'j' as u8),
-                    b'K' => do_run(b'k' as u8),
-                    b'L' => do_run(b'l' as u8),
-                    b'Y' => do_run(b'y' as u8),
-                    b'U' => do_run(b'u' as u8),
-                    b'B' => do_run(b'b' as u8),
-                    b'N' => do_run(b'n' as u8),
-                    v if v == ctrl(b'H')
-                        || v == ctrl(b'J')
-                        || v == ctrl(b'K')
-                        || v == ctrl(b'L')
-                        || v == ctrl(b'Y')
-                        || v == ctrl(b'U')
-                        || v == ctrl(b'B')
-                        || v == ctrl(b'N') =>
-                    {
+                    Command::Run(direction) => do_run(direction),
+                    Command::RunPrefix(direction) => {
                         if !player_has(MonsterFlags::BLIND) {
                             door_stop = true as u8;
                             firstmove = true as u8;
                         }
-                        if count != 0 && NEWCOUNT == 0 {
-                            ch = DIRECTION as u8;
+                        command = if count != 0 && NEWCOUNT == 0 {
+                            DIRECTION
                         } else {
-                            // ('A' - CTRL('A')) == 64
-                            ch = ch.wrapping_add(64);
-                            DIRECTION = ch as u8;
-                        }
+                            let run = Command::Run(direction);
+                            DIRECTION = run;
+                            run
+                        };
                         continue 'dispatch;
                     }
-                    b'f' | b'F' => {
-                        if ch == b'F' {
+                    Command::Fire | Command::FireKamikaze => {
+                        if command == Command::FireKamikaze {
                             kamikaze = true as u8;
                         }
                         if get_dir() == 0 {
@@ -424,114 +603,114 @@ pub unsafe fn command() {
                                     });
                                 }
                                 runch = dir_ch;
-                                ch = dir_ch as u8;
+                                command = Command::Move(dir_ch);
                                 continue 'dispatch;
                             }
                         }
                     }
-                    b't' => {
+                    Command::Throw => {
                         if get_dir() == 0 {
                             after = false as u8;
                         } else {
                             missile(delta.y, delta.x);
                         }
                     }
-                    b'a' => {
-                        if last_comm == 0 {
+                    Command::Again => {
+                        if last_comm == Command::Unknown(0) {
                             msg_str("you haven't typed a command yet");
                             after = false as u8;
                         } else {
-                            ch = last_comm as u8;
+                            command = last_comm;
                             again = true as u8;
                             continue 'dispatch;
                         }
                     }
-                    b'q' => quaff(),
-                    b'Q' => {
+                    Command::Quaff => quaff(),
+                    Command::Quit => {
                         after = false as u8;
                         q_comm = true as u8;
                         quit(0);
                         q_comm = false as u8;
                     }
-                    b'i' => {
+                    Command::Inventory => {
                         after = false as u8;
                         inventory(&crate::item::pack::pack_ptrs(), ItemFilter::Any);
                     }
-                    b'I' => {
+                    Command::InventorySelect => {
                         after = false as u8;
                         picky_inven();
                     }
-                    b'd' => drop(),
-                    b'r' => read_scroll(),
-                    b'e' => eat(),
-                    b'w' => wield(),
-                    b'W' => wear(),
-                    b'T' => take_off(),
-                    b'P' => ring_on(),
-                    b'R' => ring_off(),
-                    b'o' => {
+                    Command::Drop => drop(),
+                    Command::ReadScroll => read_scroll(),
+                    Command::Eat => eat(),
+                    Command::Wield => wield(),
+                    Command::Wear => wear(),
+                    Command::TakeOff => take_off(),
+                    Command::RingOn => ring_on(),
+                    Command::RingOff => ring_off(),
+                    Command::Options => {
                         option();
                         after = false as u8;
                     }
-                    b'c' => {
+                    Command::Call => {
                         call();
                         after = false as u8;
                     }
-                    b'>' => {
+                    Command::Descend => {
                         after = false as u8;
                         d_level();
                     }
-                    b'<' => {
+                    Command::Ascend => {
                         after = false as u8;
                         u_level();
                     }
-                    b'?' => {
+                    Command::Help => {
                         after = false as u8;
                         help();
                     }
-                    b'/' => {
+                    Command::Identify => {
                         after = false as u8;
                         identify();
                     }
-                    b's' => search(),
-                    b'z' => {
+                    Command::Search => search(),
+                    Command::Zap => {
                         if get_dir() != 0 {
                             do_zap();
                         } else {
                             after = false as u8;
                         }
                     }
-                    b'D' => {
+                    Command::Discover => {
                         after = false as u8;
                         discovered();
                     }
-                    CTRL_P => {
+                    Command::MessageHistory => {
                         after = false as u8;
                         msg_str(&crate::game::globals::huh_string());
                     }
-                    CTRL_R => {
+                    Command::Refresh => {
                         after = false as u8;
                         output::set_clear_on_refresh(true);
                         output::refresh_window();
                     }
-                    b'v' => {
+                    Command::Version => {
                         after = false as u8;
                         msg_str(&format!(
                             "version {}. (mctesq was here)",
                             crate::vers::release()
                         ));
                     }
-                    b'S' => {
+                    Command::Save => {
                         after = false as u8;
                         save_game();
                     }
-                    b'.' => {
+                    Command::Rest => {
                         // Rest command
                     }
-                    b' ' => {
+                    Command::Space => {
                         after = false as u8; // "Legal" illegal command
                     }
-                    b'^' => {
+                    Command::FindTrap => {
                         after = false as u8;
                         if get_dir() != 0 {
                             let hero = hero_pos();
@@ -556,7 +735,7 @@ pub unsafe fn command() {
                             }
                         }
                     }
-                    b'+' => {
+                    Command::WizardToggle => {
                         // Wizard toggle (was the `when '+'` arm under `#ifdef MASTER`)
                         after = false as u8;
                         if MASTER {
@@ -575,29 +754,29 @@ pub unsafe fn command() {
                             }
                         }
                     }
-                    v if v == ESCAPE as u8 => {
+                    Command::Escape => {
                         door_stop = false as u8;
                         count = 0;
                         after = false as u8;
                         again = false as u8;
                     }
-                    b'm' => {
+                    Command::MoveOn => {
                         move_on = true as u8;
                         if get_dir() == 0 {
                             after = false as u8;
                         } else {
-                            ch = dir_ch as u8;
-                            COUNTCH = dir_ch;
+                            command = Command::Move(dir_ch);
+                            COUNTCH = Command::Move(dir_ch);
                             continue 'dispatch;
                         }
                     }
-                    b')' => {
+                    Command::CurrentWeapon => {
                         current(PLAYER.equipment().weapon_id(), "wielding", "");
                     }
-                    b']' => {
+                    Command::CurrentArmor => {
                         current(PLAYER.equipment().armor_id(), "wearing", "");
                     }
-                    b'=' => {
+                    Command::CurrentRings => {
                         let eq = PLAYER.equipment();
                         current(
                             eq.left_ring_id(),
@@ -618,7 +797,7 @@ pub unsafe fn command() {
                             },
                         );
                     }
-                    b'@' => {
+                    Command::Status => {
                         stat_msg = true as u8;
                         status();
                         stat_msg = false as u8;
@@ -627,58 +806,58 @@ pub unsafe fn command() {
                     _ => {
                         after = false as u8;
                         if MASTER && wizard != 0 {
-                            match ch {
-                                b'|' => {
+                            match command {
+                                Command::WizardPosition => {
                                     let hero = hero_pos();
                                     msg_str(&format!("@ {},{}", hero.y, hero.x));
                                 }
-                                b'C' => create_obj(),
-                                b'$' => {
+                                Command::WizardCreate => create_obj(),
+                                Command::WizardInpack => {
                                     msg_str(&format!(
                                         "inpack = {}",
                                         get_inpack()
                                     ));
                                 }
-                                CTRL_G => {
+                                Command::WizardInventory => {
                                     let _ = inventory(&crate::game::PLAYER.pack(), ItemFilter::Any);
                                 }
-                                CTRL_W => whatis(false as u8, ItemFilter::Any),
-                                CTRL_D => {
+                                Command::WizardIdentify => whatis(false as u8, ItemFilter::Any),
+                                Command::WizardDown => {
                                     crate::game::set_current_depth(
                                         crate::game::current_depth() + 1,
                                     );
                                     new_level();
                                 }
-                                CTRL_A => {
+                                Command::WizardUp => {
                                     crate::game::set_current_depth(
                                         crate::game::current_depth() - 1,
                                     );
                                     new_level();
                                 }
-                                CTRL_F => show_map(),
-                                CTRL_T => teleport(),
-                                CTRL_E => {
+                                Command::WizardMap => show_map(),
+                                Command::WizardTeleport => teleport(),
+                                Command::WizardFood => {
                                     msg_str(&format!(
                                         "food left: {}",
                                         get_food_left()
                                     ));
                                 }
-                                CTRL_C => add_pass(),
-                                CTRL_X => {
+                                Command::WizardAddPassage => add_pass(),
+                                Command::WizardToggleSee => {
                                     turn_see(if player_has(MonsterFlags::SEEMONST) {
                                         true as u8
                                     } else {
                                         false as u8
                                     });
                                 }
-                                CTRL_TILDE => {
+                                Command::WizardCharge => {
                                     let item =
                                         get_item_id("charge", ItemFilter::Category(ItemType::STICK));
                                     if let Some(id) = item {
                                         OBJECTS.with_object_mut(id, |o| o.o_arm = 10000);
                                     }
                                 }
-                                CTRL_I => {
+                                Command::WizardGear => {
                                     for _ in 0..9 {
                                         raise_level();
                                     }
@@ -708,11 +887,11 @@ pub unsafe fn command() {
                                     PLAYER.set_armor_id(Some(armor));
                                     add_pack_id(Some(armor), true);
                                 }
-                                b'*' => pr_list(),
-                                _ => illcom(ch as i32),
+                                Command::WizardList => pr_list(),
+                                _ => illcom(command.to_byte() as i32),
                             }
                         } else {
-                            illcom(ch as i32);
+                            illcom(command.to_byte() as i32);
                         }
                     }
                 }
@@ -1056,5 +1235,61 @@ pub unsafe fn pr_list() {
             crate::draw::item_glyph(otype),
             inv_name_id(obj, false)
         ));
+    }
+}
+
+#[cfg(test)]
+mod command_type_tests {
+    use super::{Command, Direction};
+    use glam::IVec2;
+
+    #[test]
+    fn command_keys_round_trip_including_unknown_bytes() {
+        let keys = [
+            b'a', b'h', b'H', b'f', b'F', b',', b'!', b'>', b'<', b'@',
+            b'?', b'/', b'=', b']', b')', b'*', 0x01, 0x08, 0x10, 0x1e,
+            0xff,
+        ];
+
+        for key in keys {
+            assert_eq!(Command::from_byte(key).to_byte(), key);
+        }
+        assert_eq!(Command::from_byte(0xff), Command::Unknown(0xff));
+    }
+
+    #[test]
+    fn direction_accepts_uppercase_and_has_legacy_deltas() {
+        let cases = [
+            (b'h', Direction::West, IVec2::new(-1, 0)),
+            (b'J', Direction::South, IVec2::new(0, 1)),
+            (b'k', Direction::North, IVec2::new(0, -1)),
+            (b'L', Direction::East, IVec2::new(1, 0)),
+            (b'y', Direction::NorthWest, IVec2::new(-1, -1)),
+            (b'U', Direction::NorthEast, IVec2::new(1, -1)),
+            (b'b', Direction::SouthWest, IVec2::new(-1, 1)),
+            (b'N', Direction::SouthEast, IVec2::new(1, 1)),
+        ];
+
+        for (key, direction, delta) in cases {
+            assert_eq!(Direction::from_byte(key), Some(direction));
+            assert_eq!(direction.delta(), delta);
+            assert_eq!(Direction::from_byte(direction.to_byte()), Some(direction));
+        }
+        assert_eq!(Direction::from_byte(b'?'), None);
+    }
+
+    #[test]
+    fn repeatability_matches_supported_legacy_prefix_commands() {
+        for key in [
+            b'\x02', b'\x08', b'\x0a', b'\x0b', b'\x0c', b'\x0e', b'\x15',
+            b'\x19', b'.', b'a', b'b', b'h', b'j', b'k', b'l', b'm', b'n',
+            b'q', b'r', b's', b't', b'u', b'y', b'z', b'B', b'C', b'H', b'I',
+            b'J', b'K', b'L', b'N', b'U', b'Y', b'\x01', b'\x04',
+        ] {
+            assert!(Command::from_byte(key).is_repeatable(), "key {key:#x}");
+        }
+        for key in [b'Q', b'i', b'd', b'F', b'!', b'\x09'] {
+            assert!(!Command::from_byte(key).is_repeatable(), "key {key:#x}");
+        }
     }
 }
