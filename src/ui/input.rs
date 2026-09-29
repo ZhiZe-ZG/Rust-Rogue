@@ -7,6 +7,7 @@
 //! turning an interrupt into a quit request.
 
 use crate::ui::terminal;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 const ESCAPE: i32 = 27;
 const ERR: i32 = -1;
@@ -283,6 +284,22 @@ pub fn wait_for(_ch: char) {}
 pub(crate) fn read_raw_key() -> i32 {
     crate::ui::output::render_pending();
     terminal::getch()
+}
+
+/// Read a Crossterm event without flattening its key code or modifiers.
+pub(crate) fn read_key_event() -> KeyEvent {
+    crate::ui::output::render_pending();
+    let Some(event) = terminal::get_key_event() else {
+        return KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+    };
+
+    if matches!(event.code, KeyCode::Char('c' | 'C'))
+        && event.modifiers.contains(KeyModifiers::CONTROL) {
+        unsafe { crate::startup::quit(0) };
+        return KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+    }
+
+    event
 }
 
 pub(crate) fn set_escape_delay(milliseconds: i32) {

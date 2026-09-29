@@ -16,36 +16,6 @@ pub enum Direction {
 }
 
 impl Direction {
-    /// Convert a Rogue movement key to its normalized direction.
-    pub const fn from_byte(key: u8) -> Option<Self> {
-        match key.to_ascii_lowercase() {
-            b'h' => Some(Self::West),
-            b'j' => Some(Self::South),
-            b'k' => Some(Self::North),
-            b'l' => Some(Self::East),
-            b'y' => Some(Self::NorthWest),
-            b'u' => Some(Self::NorthEast),
-            b'b' => Some(Self::SouthWest),
-            b'n' => Some(Self::SouthEast),
-            _ => None,
-        }
-    }
-
-    /// The canonical lowercase Rogue movement key for this direction.
-    pub const fn to_byte(self) -> u8 {
-        match self {
-            Self::None => 0,
-            Self::West => b'h',
-            Self::South => b'j',
-            Self::North => b'k',
-            Self::East => b'l',
-            Self::NorthWest => b'y',
-            Self::NorthEast => b'u',
-            Self::SouthWest => b'b',
-            Self::SouthEast => b'n',
-        }
-    }
-
     /// Grid delta `(x, y)` for this movement direction.
     pub const fn delta(self) -> IVec2 {
         match self {

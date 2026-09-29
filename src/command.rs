@@ -34,9 +34,9 @@ use crate::rip::total_winner;
 use crate::rnd::rnd;
 use crate::save::save_game;
 use crate::startup::{quit, shell};
-use crate::ui::input::readchar;
 use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
 use crate::wizard::{create_obj, show_map, teleport, whatis};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use glam::IVec2;
 
 /// A command key interpreted by the main dispatcher.
@@ -103,134 +103,125 @@ pub enum Command {
     WizardList,
     Space,
     Unknown(u8),
+    UnknownKey,
 }
 
 impl Command {
-    pub const fn from_byte(key: u8) -> Self {
-        if key.is_ascii_digit() {
-            return Self::Digit(key - b'0');
-        }
-        match key {
-            b',' => Self::Pickup,
-            b'!' => Self::Shell,
-            b'h' => Self::Move(Direction::West),
-            b'j' => Self::Move(Direction::South),
-            b'k' => Self::Move(Direction::North),
-            b'l' => Self::Move(Direction::East),
-            b'y' => Self::Move(Direction::NorthWest),
-            b'u' => Self::Move(Direction::NorthEast),
-            b'b' => Self::Move(Direction::SouthWest),
-            b'n' => Self::Move(Direction::SouthEast),
-            b'H' => Self::Run(Direction::West),
-            b'J' => Self::Run(Direction::South),
-            b'K' => Self::Run(Direction::North),
-            b'L' => Self::Run(Direction::East),
-            b'Y' => Self::Run(Direction::NorthWest),
-            b'U' => Self::Run(Direction::NorthEast),
-            b'B' => Self::Run(Direction::SouthWest),
-            b'N' => Self::Run(Direction::SouthEast),
-            0x08 => Self::RunPrefix(Direction::West),
-            0x0a => Self::RunPrefix(Direction::South),
-            0x0b => Self::RunPrefix(Direction::North),
-            0x0c => Self::RunPrefix(Direction::East),
-            0x19 => Self::RunPrefix(Direction::NorthWest),
-            0x15 => Self::RunPrefix(Direction::NorthEast),
-            0x02 => Self::RunPrefix(Direction::SouthWest),
-            0x0e => Self::RunPrefix(Direction::SouthEast),
-            b'f' => Self::Fire,
-            b'F' => Self::FireKamikaze,
-            b't' => Self::Throw,
-            b'a' => Self::Again,
-            b'q' => Self::Quaff,
-            b'Q' => Self::Quit,
-            b'i' => Self::Inventory,
-            b'I' => Self::InventorySelect,
-            b'd' => Self::Drop,
-            b'r' => Self::ReadScroll,
-            b'e' => Self::Eat,
-            b'w' => Self::Wield,
-            b'W' => Self::Wear,
-            b'T' => Self::TakeOff,
-            b'P' => Self::RingOn,
-            b'R' => Self::RingOff,
-            b'o' => Self::Options,
-            b'c' => Self::Call,
-            b'>' => Self::Descend,
-            b'<' => Self::Ascend,
-            b'?' => Self::Help,
-            b'/' => Self::Identify,
-            b's' => Self::Search,
-            b'z' => Self::Zap,
-            b'D' => Self::Discover,
-            0x10 => Self::MessageHistory,
-            0x12 => Self::Refresh,
-            b'v' => Self::Version,
-            b'S' => Self::Save,
-            b'.' => Self::Rest,
-            b' ' => Self::Space,
-            b'^' => Self::FindTrap,
-            b'+' => Self::WizardToggle,
-            0x1b => Self::Escape,
-            b'm' => Self::MoveOn,
-            b')' => Self::CurrentWeapon,
-            b']' => Self::CurrentArmor,
-            b'=' => Self::CurrentRings,
-            b'@' => Self::Status,
-            b'|' => Self::WizardPosition,
-            b'C' => Self::WizardCreate,
-            b'$' => Self::WizardInpack,
-            0x07 => Self::WizardInventory,
-            0x17 => Self::WizardIdentify,
-            0x04 => Self::WizardDown,
-            0x01 => Self::WizardUp,
-            0x06 => Self::WizardMap,
-            0x14 => Self::WizardTeleport,
-            0x05 => Self::WizardFood,
-            0x03 => Self::WizardAddPassage,
-            0x18 => Self::WizardToggleSee,
-            0x1e => Self::WizardCharge,
-            0x09 => Self::WizardGear,
-            b'*' => Self::WizardList,
-            _ => Self::Unknown(key),
+    pub fn from_key_event(event: KeyEvent) -> Self {
+        match event.code {
+            KeyCode::Char(character) => {
+                if event.modifiers.contains(KeyModifiers::CONTROL) {
+                    return match character.to_ascii_lowercase() {
+                        'a' => Self::WizardUp,
+                        'b' => Self::RunPrefix(Direction::SouthWest),
+                        'c' => Self::Unknown(3),
+                        'd' => Self::WizardDown,
+                        'e' => Self::WizardFood,
+                        'f' => Self::WizardMap,
+                        'g' => Self::WizardInventory,
+                        'h' => Self::RunPrefix(Direction::West),
+                        'i' => Self::WizardGear,
+                        'j' => Self::RunPrefix(Direction::South),
+                        'k' => Self::RunPrefix(Direction::North),
+                        'l' => Self::RunPrefix(Direction::East),
+                        'n' => Self::RunPrefix(Direction::SouthEast),
+                        'p' => Self::MessageHistory,
+                        'r' => Self::Refresh,
+                        't' => Self::WizardTeleport,
+                        'u' => Self::RunPrefix(Direction::NorthEast),
+                        'w' => Self::WizardIdentify,
+                        'x' => Self::WizardToggleSee,
+                        'y' => Self::RunPrefix(Direction::NorthWest),
+                        '~' => Self::WizardCharge,
+                        _ => Self::UnknownKey,
+                    };
+                }
+                if event.modifiers.intersects(KeyModifiers::ALT | KeyModifiers::SUPER) {
+                    return Self::UnknownKey;
+                }
+                let shifted = event.modifiers.contains(KeyModifiers::SHIFT)
+                    || character.is_ascii_uppercase();
+                match character.to_ascii_lowercase() {
+                    '0'..='9' => Self::Digit(character as u8 - b'0'),
+                    ',' => Self::Pickup,
+                    '!' => Self::Shell,
+                    'h' => movement(Direction::West, shifted),
+                    'j' => movement(Direction::South, shifted),
+                    'k' => movement(Direction::North, shifted),
+                    'l' => movement(Direction::East, shifted),
+                    'y' => movement(Direction::NorthWest, shifted),
+                    'u' => movement(Direction::NorthEast, shifted),
+                    'b' => movement(Direction::SouthWest, shifted),
+                    'n' => movement(Direction::SouthEast, shifted),
+                    'f' => if shifted { Self::FireKamikaze } else { Self::Fire },
+                    't' => if shifted { Self::TakeOff } else { Self::Throw },
+                    'a' => Self::Again,
+                    'q' => if shifted { Self::Quit } else { Self::Quaff },
+                    'i' => if shifted { Self::InventorySelect } else { Self::Inventory },
+                    'd' => if shifted { Self::Discover } else { Self::Drop },
+                    'r' => if shifted { Self::RingOff } else { Self::ReadScroll },
+                    'e' => Self::Eat,
+                    'w' => if shifted { Self::Wear } else { Self::Wield },
+                    'p' => if shifted { Self::RingOn } else { Self::Unknown(b'p') },
+                    'o' => Self::Options,
+                    'c' => if shifted { Self::WizardCreate } else { Self::Call },
+                    '>' => Self::Descend,
+                    '<' => Self::Ascend,
+                    '?' => Self::Help,
+                    '/' => Self::Identify,
+                    's' => if shifted { Self::Save } else { Self::Search },
+                    'z' => Self::Zap,
+                    'v' => Self::Version,
+                    '.' => Self::Rest,
+                    ' ' => Self::Space,
+                    '^' => Self::FindTrap,
+                    '+' => Self::WizardToggle,
+                    'm' => Self::MoveOn,
+                    ')' => Self::CurrentWeapon,
+                    ']' => Self::CurrentArmor,
+                    '=' => Self::CurrentRings,
+                    '@' => Self::Status,
+                    '|' => Self::WizardPosition,
+                    '$' => Self::WizardInpack,
+                    '*' => Self::WizardList,
+                    _ if character.is_ascii() => Self::Unknown(character as u8),
+                    _ => Self::UnknownKey,
+                }
+            }
+            KeyCode::Left => navigation_command(Direction::West, event.modifiers),
+            KeyCode::Down => navigation_command(Direction::South, event.modifiers),
+            KeyCode::Up => navigation_command(Direction::North, event.modifiers),
+            KeyCode::Right => navigation_command(Direction::East, event.modifiers),
+            KeyCode::Home => navigation_command(Direction::NorthWest, event.modifiers),
+            KeyCode::PageUp => navigation_command(Direction::NorthEast, event.modifiers),
+            KeyCode::End => navigation_command(Direction::SouthWest, event.modifiers),
+            KeyCode::PageDown => navigation_command(Direction::SouthEast, event.modifiers),
+            KeyCode::Esc => Self::Escape,
+            KeyCode::Tab => Self::WizardGear,
+            _ => Self::UnknownKey,
         }
     }
 
-    pub const fn to_byte(self) -> u8 {
+    fn illegal_key_label(self) -> String {
         match self {
-            Self::Digit(digit) => b'0' + digit,
-            Self::Pickup => b',', Self::Shell => b'!',
-            Self::Move(dir) => dir.to_byte(),
-            Self::Run(dir) => dir.to_byte().to_ascii_uppercase(),
-            Self::RunPrefix(dir) => match dir {
-                Direction::West => 0x08,
-                Direction::South => 0x0a,
-                Direction::North => 0x0b,
-                Direction::East => 0x0c,
-                Direction::NorthWest => 0x19,
-                Direction::NorthEast => 0x15,
-                Direction::SouthWest => 0x02,
-                Direction::SouthEast => 0x0e,
-                Direction::None => 0,
-            },
-            Self::Fire => b'f', Self::FireKamikaze => b'F', Self::Throw => b't',
-            Self::Again => b'a', Self::Quaff => b'q', Self::Quit => b'Q',
-            Self::Inventory => b'i', Self::InventorySelect => b'I', Self::Drop => b'd',
-            Self::ReadScroll => b'r', Self::Eat => b'e', Self::Wield => b'w',
-            Self::Wear => b'W', Self::TakeOff => b'T', Self::RingOn => b'P',
-            Self::RingOff => b'R', Self::Options => b'o', Self::Call => b'c',
-            Self::Descend => b'>', Self::Ascend => b'<', Self::Help => b'?',
-            Self::Identify => b'/', Self::Search => b's', Self::Zap => b'z',
-            Self::Discover => b'D', Self::MessageHistory => 0x10, Self::Refresh => 0x12,
-            Self::Version => b'v', Self::Save => b'S', Self::Rest => b'.', Self::Space => b' ',
-            Self::FindTrap => b'^', Self::WizardToggle => b'+', Self::Escape => 0x1b,
-            Self::MoveOn => b'm', Self::CurrentWeapon => b')', Self::CurrentArmor => b']',
-            Self::CurrentRings => b'=', Self::Status => b'@', Self::WizardPosition => b'|',
-            Self::WizardCreate => b'C', Self::WizardInpack => b'$', Self::WizardInventory => 0x07,
-            Self::WizardIdentify => 0x17, Self::WizardDown => 0x04, Self::WizardUp => 0x01,
-            Self::WizardMap => 0x06, Self::WizardTeleport => 0x14, Self::WizardFood => 0x05,
-            Self::WizardAddPassage => 0x03, Self::WizardToggleSee => 0x18,
-            Self::WizardCharge => 0x1e, Self::WizardGear => 0x09, Self::WizardList => b'*',
-            Self::Unknown(key) => key,
+            Self::Unknown(key) => output::format_key(key),
+            Self::UnknownKey => "unknown key".to_owned(),
+            Self::WizardPosition => "|".to_owned(),
+            Self::WizardCreate => "C".to_owned(),
+            Self::WizardInpack => "$".to_owned(),
+            Self::WizardInventory => "^G".to_owned(),
+            Self::WizardIdentify => "^W".to_owned(),
+            Self::WizardDown => "^D".to_owned(),
+            Self::WizardUp => "^A".to_owned(),
+            Self::WizardMap => "^F".to_owned(),
+            Self::WizardTeleport => "^T".to_owned(),
+            Self::WizardFood => "^E".to_owned(),
+            Self::WizardAddPassage => "^C".to_owned(),
+            Self::WizardToggleSee => "^X".to_owned(),
+            Self::WizardCharge => "^~".to_owned(),
+            Self::WizardGear => "^I".to_owned(),
+            Self::WizardList => "*".to_owned(),
+            other => format!("{other:?}"),
         }
     }
 
@@ -241,6 +232,22 @@ impl Command {
             Self::Rest | Self::Again | Self::InventorySelect | Self::WizardCreate |
             Self::WizardDown | Self::WizardUp
         )
+    }
+}
+
+const fn movement(direction: Direction, run: bool) -> Command {
+    if run {
+        Command::Run(direction)
+    } else {
+        Command::Move(direction)
+    }
+}
+
+fn navigation_command(direction: Direction, modifiers: KeyModifiers) -> Command {
+    if modifiers.intersects(KeyModifiers::SHIFT | KeyModifiers::CONTROL) {
+        Command::RunPrefix(direction)
+    } else {
+        Command::Move(direction)
     }
 }
 
@@ -325,7 +332,7 @@ fn cstr_at(s: &str) -> String {
 /// dir_ch, delta, q_comm, huh, release, amulet, level, seenstairs,
 /// tr_name, stat_msg, inpack, food_left, equipment, inv_describe.
 pub unsafe fn command() {
-    let mut ch: u8;
+    let mut command: Command;
     let mut ntimes: i32 = 1; // Number of player moves
     let mut mp: Option<MonsterId>;
 
@@ -388,11 +395,11 @@ pub unsafe fn command() {
 
         if no_command == 0 {
             if running != 0 || to_death != 0 {
-                ch = runch.to_byte();
+                command = Command::Move(runch);
             } else if count != 0 {
-                ch = COUNTCH.to_byte();
+                command = COUNTCH;
             } else {
-                ch = readchar() as u8;
+                command = Command::from_key_event(crate::ui::input::read_key_event());
                 move_on = false as u8;
                 if mpos != 0 {
                     // Erase message if it's there
@@ -400,7 +407,7 @@ pub unsafe fn command() {
                 }
             }
         } else {
-            ch = b'.';
+            command = Command::Rest;
         }
 
         if no_command != 0 {
@@ -414,17 +421,21 @@ pub unsafe fn command() {
              * check for prefixes
              */
             NEWCOUNT = false as u8;
-            if ch.is_ascii_digit() {
+            if let Command::Digit(mut digit) = command {
                 count = 0;
                 NEWCOUNT = true as u8;
-                while ch.is_ascii_digit() {
-                    count = count * 10 + (ch - b'0') as i32;
+                loop {
+                    count = count * 10 + digit as i32;
                     if count > 255 {
                         count = 255;
                     }
-                    ch = readchar() as u8;
+                    command = Command::from_key_event(crate::ui::input::read_key_event());
+                    let Command::Digit(next_digit) = command else {
+                        break;
+                    };
+                    digit = next_digit;
                 }
-                COUNTCH = Command::from_byte(ch);
+                COUNTCH = command;
                 /*
                  * turn off count for commands which don't make sense
                  * to repeat
@@ -433,8 +444,6 @@ pub unsafe fn command() {
                     count = 0;
                 }
             }
-
-            let mut command = Command::from_byte(ch);
 
             /*
              * execute a command
@@ -830,10 +839,10 @@ pub unsafe fn command() {
                                     add_pack_id(Some(armor), true);
                                 }
                                 Command::WizardList => pr_list(),
-                                _ => illcom(command.to_byte() as i32),
+                                _ => illcom(command),
                             }
                         } else {
-                            illcom(command.to_byte() as i32);
+                            illcom(command);
                         }
                     }
                 }
@@ -879,12 +888,12 @@ pub unsafe fn command() {
 /// What to do with an illegal command.
 ///
 /// Uses globals: save_msg, count.
-pub unsafe fn illcom(ch: i32) {
+pub unsafe fn illcom(command: Command) {
     save_msg = false as u8;
     count = 0;
     msg_str(&format!(
         "illegal command '{}'",
-        output::format_key(ch as u8)
+        command.illegal_key_label()
     ));
     save_msg = true as u8;
 }
@@ -1184,55 +1193,92 @@ pub unsafe fn pr_list() {
 mod command_type_tests {
     use super::Command;
     use crate::direction::Direction;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use glam::IVec2;
 
     #[test]
-    fn command_keys_round_trip_including_unknown_bytes() {
-        let keys = [
-            b'a', b'h', b'H', b'f', b'F', b',', b'!', b'>', b'<', b'@',
-            b'?', b'/', b'=', b']', b')', b'*', 0x01, 0x08, 0x10, 0x1e,
-            0xff,
-        ];
+    fn key_events_map_to_commands_with_modifiers() {
+        let event = |code, modifiers| KeyEvent::new(code, modifiers);
 
-        for key in keys {
-            assert_eq!(Command::from_byte(key).to_byte(), key);
-        }
-        assert_eq!(Command::from_byte(0xff), Command::Unknown(0xff));
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Char('h'), KeyModifiers::NONE)),
+            Command::Move(Direction::West)
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Char('H'), KeyModifiers::SHIFT)),
+            Command::Run(Direction::West)
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Char('j'), KeyModifiers::CONTROL)),
+            Command::RunPrefix(Direction::South)
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Char('q'), KeyModifiers::SHIFT)),
+            Command::Quit
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Left, KeyModifiers::NONE)),
+            Command::Move(Direction::West)
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Left, KeyModifiers::SHIFT)),
+            Command::RunPrefix(Direction::West)
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::F(1), KeyModifiers::NONE)),
+            Command::UnknownKey
+        );
     }
 
     #[test]
-    fn direction_accepts_uppercase_and_has_legacy_deltas() {
+    fn direction_has_expected_movement_deltas() {
         let cases = [
-            (b'h', Direction::West, IVec2::new(-1, 0)),
-            (b'J', Direction::South, IVec2::new(0, 1)),
-            (b'k', Direction::North, IVec2::new(0, -1)),
-            (b'L', Direction::East, IVec2::new(1, 0)),
-            (b'y', Direction::NorthWest, IVec2::new(-1, -1)),
-            (b'U', Direction::NorthEast, IVec2::new(1, -1)),
-            (b'b', Direction::SouthWest, IVec2::new(-1, 1)),
-            (b'N', Direction::SouthEast, IVec2::new(1, 1)),
+            (Direction::West, IVec2::new(-1, 0)),
+            (Direction::South, IVec2::new(0, 1)),
+            (Direction::North, IVec2::new(0, -1)),
+            (Direction::East, IVec2::new(1, 0)),
+            (Direction::NorthWest, IVec2::new(-1, -1)),
+            (Direction::NorthEast, IVec2::new(1, -1)),
+            (Direction::SouthWest, IVec2::new(-1, 1)),
+            (Direction::SouthEast, IVec2::new(1, 1)),
         ];
 
-        for (key, direction, delta) in cases {
-            assert_eq!(Direction::from_byte(key), Some(direction));
+        for (direction, delta) in cases {
             assert_eq!(direction.delta(), delta);
-            assert_eq!(Direction::from_byte(direction.to_byte()), Some(direction));
         }
-        assert_eq!(Direction::from_byte(b'?'), None);
     }
 
     #[test]
     fn repeatability_matches_supported_legacy_prefix_commands() {
-        for key in [
-            b'\x02', b'\x08', b'\x0a', b'\x0b', b'\x0c', b'\x0e', b'\x15',
-            b'\x19', b'.', b'a', b'b', b'h', b'j', b'k', b'l', b'm', b'n',
-            b'q', b'r', b's', b't', b'u', b'y', b'z', b'B', b'C', b'H', b'I',
-            b'J', b'K', b'L', b'N', b'U', b'Y', b'\x01', b'\x04',
+        for command in [
+            Command::RunPrefix(Direction::West),
+            Command::RunPrefix(Direction::SouthEast),
+            Command::Move(Direction::NorthWest),
+            Command::Run(Direction::East),
+            Command::MoveOn,
+            Command::Quaff,
+            Command::ReadScroll,
+            Command::Search,
+            Command::Throw,
+            Command::Zap,
+            Command::Rest,
+            Command::Again,
+            Command::InventorySelect,
+            Command::WizardCreate,
+            Command::WizardDown,
+            Command::WizardUp,
         ] {
-            assert!(Command::from_byte(key).is_repeatable(), "key {key:#x}");
+            assert!(command.is_repeatable(), "{command:?}");
         }
-        for key in [b'Q', b'i', b'd', b'F', b'!', b'\x09'] {
-            assert!(!Command::from_byte(key).is_repeatable(), "key {key:#x}");
+        for command in [
+            Command::Quit,
+            Command::Inventory,
+            Command::Drop,
+            Command::FireKamikaze,
+            Command::Shell,
+            Command::WizardGear,
+        ] {
+            assert!(!command.is_repeatable(), "{command:?}");
         }
     }
 }

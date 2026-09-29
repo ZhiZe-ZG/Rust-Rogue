@@ -303,7 +303,7 @@ pub(crate) fn write_text_at(pos: IVec2, text: &str) {
 
 // ─── Input / terminal-mode controls ─────────────────────────────────────────
 
-pub(crate) fn getch() -> i32 {
+pub(crate) fn get_key_event() -> Option<crossterm::event::KeyEvent> {
     use crossterm::event::{self, Event};
 
     if UI.shutdown.load(Ordering::Relaxed) {
@@ -317,17 +317,23 @@ pub(crate) fn getch() -> i32 {
         Some(std::time::Duration::from_millis((timeout as u64) * 100))
     };
 
-    if let Some(duration) = wait {
-        if !event::poll(duration).unwrap_or(false) {
-            return ERR;
+    loop {
+        if let Some(duration) = wait {
+            if !event::poll(duration).unwrap_or(false) {
+                return None;
+            }
+        }
+
+        match event::read() {
+            Ok(Event::Key(key)) => return Some(key),
+            Ok(Event::Resize(_, _)) | Ok(_) => continue,
+            Err(_) => continue,
         }
     }
+}
 
-    match event::read() {
-        Ok(Event::Key(key)) => map_key(&key),
-        Ok(Event::Resize(_, _)) => ERR,
-        _ => ERR,
-    }
+pub(crate) fn getch() -> i32 {
+    get_key_event().map_or(ERR, |key| map_key(&key))
 }
 
 pub(crate) fn set_escape_delay(_milliseconds: i32) {}

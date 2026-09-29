@@ -11,10 +11,11 @@ use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::arena::OBJECTS;
 use crate::item::pack::{get_item_id, leave_pack_id, reset_last};
 use crate::rnd::rnd;
-use crate::ui::input::readchar;
+use crate::ui::input::read_key_event;
 use crate::ui::output::{addmsg_str, msg_str};
 use glam::IVec2;
 
+use crate::command::Command;
 use crate::entity::player::{MonsterFlags, Thing};
 use crate::game::MONSTER_LIST;
 use crate::startup::roll;
@@ -40,7 +41,6 @@ const MAXSTR: usize = 1024;
 const HUNGERTIME: i32 = 1300;
 const STOMACHSIZE: i32 = 2000;
 const AFTER: i32 = 2;
-const ESCAPE: i32 = 27;
 const NORM: i32 = 0;
 const F_SEEN: u8 = 0x40;
 
@@ -250,49 +250,16 @@ pub unsafe fn get_dir() -> u8 {
         }
         loop {
             gotit = true;
-            let key = readchar() as u8;
-            dir_ch = match crate::direction::Direction::from_byte(key) {
-                Some(crate::direction::Direction::West) => {
-                    delta.y = 0;
-                    delta.x = -1;
-                    crate::direction::Direction::West
+            match Command::from_key_event(read_key_event()) {
+                Command::Move(direction)
+                | Command::Run(direction)
+                | Command::RunPrefix(direction) => {
+                    dir_ch = direction;
+                    let movement = direction.delta();
+                    delta.y = movement.y;
+                    delta.x = movement.x;
                 }
-                Some(crate::direction::Direction::South) => {
-                    delta.y = 1;
-                    delta.x = 0;
-                    crate::direction::Direction::South
-                }
-                Some(crate::direction::Direction::North) => {
-                    delta.y = -1;
-                    delta.x = 0;
-                    crate::direction::Direction::North
-                }
-                Some(crate::direction::Direction::East) => {
-                    delta.y = 0;
-                    delta.x = 1;
-                    crate::direction::Direction::East
-                }
-                Some(crate::direction::Direction::NorthWest) => {
-                    delta.y = -1;
-                    delta.x = -1;
-                    crate::direction::Direction::NorthWest
-                }
-                Some(crate::direction::Direction::NorthEast) => {
-                    delta.y = -1;
-                    delta.x = 1;
-                    crate::direction::Direction::NorthEast
-                }
-                Some(crate::direction::Direction::SouthWest) => {
-                    delta.y = 1;
-                    delta.x = -1;
-                    crate::direction::Direction::SouthWest
-                }
-                Some(crate::direction::Direction::SouthEast) => {
-                    delta.y = 1;
-                    delta.x = 1;
-                    crate::direction::Direction::SouthEast
-                }
-                _ if key as i32 == ESCAPE => {
+                Command::Escape => {
                     last_dir = crate::direction::Direction::None;
                     reset_last();
                     return false as u8;
@@ -301,9 +268,8 @@ pub unsafe fn get_dir() -> u8 {
                     mpos = 0;
                     msg_str("which direction? ");
                     gotit = false;
-                    crate::direction::Direction::None
                 }
-            };
+            }
             if gotit {
                 break;
             }
