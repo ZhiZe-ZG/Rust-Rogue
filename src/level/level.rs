@@ -65,6 +65,7 @@ impl LevelFlags {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Level {
     pub depth: i32,
+    generation: u64,
     /// Position of the down staircase on this level.
     pub stairs: IVec2,
     pub rooms: Vec<Room>,
@@ -88,6 +89,7 @@ impl Level {
     pub fn new() -> Self {
         Self {
             depth: 1,
+            generation: 0,
             stairs: IVec2::ZERO,
             rooms: (0..GameConfig::MAX_ROOMS)
                 .map(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
@@ -140,6 +142,7 @@ impl Level {
     /// Clears the map, room records, connection plan, and passages, returning
     /// the level depth so callers can carry it out of the mutable borrow.
     pub fn reset_for_new_level(&mut self) -> i32 {
+        self.generation = self.generation.wrapping_add(1);
         self.map = Structure::new(
             GameConfig::SCREEN_LINES as usize,
             GameConfig::SCREEN_COLS as usize,
@@ -151,6 +154,12 @@ impl Level {
         self.passage_links.clear();
         self.reset_flags();
         self.depth
+    }
+
+    /// Monotonically changing identifier for each generated level instance.
+    #[inline]
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 
     /// Reveal the trap at `(y, x)` by making the cell real and seen.
@@ -531,6 +540,15 @@ fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room>
 mod tests {
     use super::super::passages::{stamp_door, stamp_passage};
     use super::*;
+
+    #[test]
+    fn resetting_level_advances_generation_revision() {
+        let mut level = Level::new();
+        let depth = level.reset_for_new_level();
+
+        assert_eq!(depth, 1);
+        assert_eq!(level.generation(), 1);
+    }
 
     /// A door placed through [`stamp_door`] registers an entry point on the
     /// room and stamps the tile map.

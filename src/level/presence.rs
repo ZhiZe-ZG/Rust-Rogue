@@ -13,8 +13,6 @@
 use glam::IVec2;
 
 use crate::config::GameConfig;
-use crate::daemons::visuals;
-use crate::draw::enter_room;
 use crate::entity::chase::roomin;
 use crate::entity::monsters::{give_pack_id, new_monster_id, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
@@ -22,18 +20,14 @@ use crate::game::MONSTER_LIST;
 use crate::game::{self, with_current_level, with_current_level_mut};
 use crate::game::globals::{amulet, max_level, ntraps, seenstairs};
 use crate::item::item_type::ItemType;
-use crate::item::potions::turn_see;
 use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::item::things::new_thing_id;
 use crate::rnd::rnd;
-use crate::ui::output;
 
 use super::level::LevelFlags;
 use crate::tile::{Tile, TrapType};
 
 // -- Glyphs --
-const PLAYER: u8 = b'@';
-
 const GOLDGRP: i32 = 1;
 
 /// Find a floor cell to place something, optionally avoiding monsters.
@@ -306,22 +300,12 @@ pub(crate) unsafe fn link_monsters_to_rooms() {
     }
 }
 
-/// Place the hero on an open floor cell and finalize the screen.
+/// Place the hero on an open floor cell.
 unsafe fn place_hero() {
     if let Some(pos) = find_floor(None, 0, true) {
         crate::game::PLAYER.set_pos(pos);
     }
 
-    let hero_pos = crate::game::PLAYER.pos();
-    enter_room(hero_pos);
-    let hero_pos = crate::game::PLAYER.pos();
-    output::write_glyph_at(IVec2::new(hero_pos.x, hero_pos.y), PLAYER as char);
-    if crate::game::PLAYER.has_flag(MonsterFlags::SEEMONST) {
-        turn_see(false as u8);
-    }
-    if crate::game::PLAYER.has_flag(MonsterFlags::HALU) {
-        visuals();
-    }
 }
 
 /// Run the full population pass: gold/monsters, objects, traps, stairs, and

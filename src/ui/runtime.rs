@@ -11,6 +11,7 @@ pub fn initialize() -> Window {
 
 /// Restore the host terminal after leaving the game interface.
 pub fn shutdown() {
+    crate::ui::output::flush_now();
     terminal::shutdown();
 }
 

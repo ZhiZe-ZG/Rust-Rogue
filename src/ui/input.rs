@@ -245,6 +245,7 @@ fn read_raw() -> i32 {
 /// Read one command character, handling an interrupt as a quit request.
 #[cfg(not(test))]
 pub fn readchar() -> i32 {
+    crate::ui::output::render_pending();
     let ch = read_raw();
     if ch == CTRL_C {
         // `quit` is a legacy C entry point, so isolate the call in one block.
@@ -281,6 +282,7 @@ pub fn wait_for(_ch: char) {}
 
 /// Read one raw terminal key code before game-level key translation.
 pub fn read_raw_key() -> i32 {
+    crate::ui::output::render_pending();
     terminal::getch()
 }
 

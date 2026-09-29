@@ -1,6 +1,6 @@
 //! Message, status, and overlay output policy for the terminal UI.
 
-use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering};
 use std::sync::Mutex;
 
 use crate::config::GameConfig;
@@ -35,6 +35,7 @@ static MESSAGE_STATE: Mutex<MessageState> = Mutex::new(MessageState {
     pending: String::new(),
     next_position: 0,
 });
+static RENDER_PENDING: AtomicBool = AtomicBool::new(false);
 
 fn split_message_at(text: &str, limit: usize) -> usize {
     if text.len() <= limit {
@@ -79,9 +80,26 @@ pub fn set_standout(enabled: bool) {
     cur::set_standout(enabled);
 }
 
-/// Flush pending standard-screen changes to the terminal.
+/// Request that pending standard-screen changes be rendered at the next UI
+/// daemon boundary, or before input blocks.
 pub fn refresh() {
-    cur::refresh();
+    RENDER_PENDING.store(true, Ordering::Release);
+}
+
+/// Render a pending frame, returning whether a frame was flushed.
+pub fn render_pending() -> bool {
+    if RENDER_PENDING.swap(false, Ordering::AcqRel) {
+        cur::refresh();
+        true
+    } else {
+        false
+    }
+}
+
+/// Flush pending output before suspending the terminal or waiting for input.
+pub fn flush_now() {
+    RENDER_PENDING.store(true, Ordering::Release);
+    render_pending();
 }
 
 /// Clear the standard screen.
@@ -431,7 +449,7 @@ pub fn show_win(_message: &str) {}
 
 #[cfg(test)]
 mod tests {
-    use super::format_key;
+    use super::{format_key, refresh, render_pending};
 
     #[test]
     fn formats_control_and_meta_keys() {
@@ -439,5 +457,14 @@ mod tests {
         assert_eq!(format_key(0x01), "^A");
         assert_eq!(format_key(0x7f), "^?");
         assert_eq!(format_key(0x81), "M-^A");
+    }
+
+    #[test]
+    fn refresh_requests_coalesce_until_rendered() {
+        refresh();
+        refresh();
+
+        assert!(render_pending());
+        assert!(!render_pending());
     }
 }

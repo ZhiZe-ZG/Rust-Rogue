@@ -143,6 +143,8 @@ pub unsafe fn playit() {
     oldpos = crate::game::PLAYER.pos();
     let hero_pos = crate::game::PLAYER.pos();
     oldrp = roomin(hero_pos);
+    start_daemon(Daemon::UiRender, 0, AFTER);
+    Daemon::UiRender.run(0);
     while playing != false as u8 {
         command(); /* Command execution */
     }

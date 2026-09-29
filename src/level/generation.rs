@@ -1,8 +1,9 @@
 //! Dungeon-level lifecycle orchestration.
 //!
 //! [`new_level`] resets the current level, generates its rooms and passages,
-//! populates it, and prepares the screen. [`door_open`] wakes monsters in a
-//! room when it becomes visible.
+//! and populates it. The UI render daemon observes the updated current level
+//! and redraws it. [`door_open`] wakes monsters in a room when it becomes
+//! visible.
 
 use glam::IVec2;
 
@@ -13,7 +14,6 @@ use crate::entity::player::MonsterFlags;
 use crate::game::MONSTER_LIST;
 use crate::game::{self, clear_level, with_current_level_mut};
 use crate::game::globals::{max_level, no_food};
-use crate::ui::output;
 
 use super::presence::populate_level;
 use crate::structure::Room;
@@ -27,7 +27,6 @@ unsafe fn reset_level() {
     }
 
     clear_level();
-    output::clear_screen();
 }
 
 unsafe fn clear_previous_level_items() {
