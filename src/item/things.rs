@@ -15,7 +15,7 @@ use crate::game::globals::{
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::rings::RingType;
 use crate::item::sticks::fix_stick;
-use crate::item::arena::{new_item_id, ptr_of};
+use crate::item::arena::{id_of, new_item_id, ptr_of};
 use crate::item::weapons::init_weapon;
 
 const MAXSTR: usize = 1024;
@@ -344,6 +344,11 @@ pub unsafe fn new_thing() -> *mut Thing {
     }
 
     cur
+}
+
+/// Allocate and initialize a random object, returning its arena handle.
+pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
+    id_of(new_thing()).expect("new_thing allocated an arena object")
 }
 
 pub unsafe fn drop() {

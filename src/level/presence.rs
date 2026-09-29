@@ -4,10 +4,11 @@
 //! Room selection, geometry, and candidate-cell validation go through the Rust
 //! `Level` model (`Level::rnd_room`/`Level::rnd_pos` through scoped level
 //! access) and the safe per-cell monster occupancy grid, so [`find_floor`] is
-//! entirely safe. The remaining unsafe comes only from the raw `*mut Thing`
-//! allocation handles produced by the item/monster stores, which
-//! [`super::generation::new_level`] triggers after the rooms/passages have been
-//! dug.
+//! entirely safe. Items are addressed by arena [`ThingId`] handles and monsters
+//! by [`MonsterId`] handles; the remaining `unsafe` comes only from the
+//! process-wide `static mut` game globals (`amulet`, `ntraps`, `seenstairs`) and
+//! the item/monster stores, which [`super::generation::new_level`] triggers
+//! after the rooms/passages have been dug.
 
 use glam::IVec2;
 
@@ -15,16 +16,15 @@ use crate::config::GameConfig;
 use crate::daemons::visuals;
 use crate::draw::enter_room;
 use crate::entity::chase::roomin;
-use crate::entity::monsters::{give_pack, new_monster, randmonster};
-use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::entity::monsters::{give_pack_id, new_monster_id, randmonster};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game::MONSTER_LIST;
 use crate::game::{self, with_current_level, with_current_level_mut};
 use crate::game::globals::{amulet, max_level, ntraps, seenstairs};
 use crate::item::item_type::ItemType;
 use crate::item::potions::turn_see;
-use crate::game::new_actor;
-use crate::item::arena::new_item;
-use crate::item::things::new_thing;
+use crate::item::arena::{new_item_id, ThingId, OBJECTS};
+use crate::item::things::new_thing_id;
 use crate::rnd::rnd;
 use crate::ui::output;
 
@@ -35,18 +35,6 @@ use crate::tile::{Tile, TrapType};
 const PLAYER: u8 = b'@';
 
 const GOLDGRP: i32 = 1;
-
-/// Interpret `tp` as an object (`ThingObject`).
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-/// Interpret `tp` as a monster (`ThingMonster`).
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
 
 /// Find a floor cell to place something, optionally avoiding monsters.
 ///
@@ -105,18 +93,16 @@ pub(crate) fn find_floor(room_idx: Option<usize>, limit: i32, monst: bool) -> Op
 }
 
 /// Link an already-allocated floor object into the level's item list.
-unsafe fn attach_floor(obj: *mut Thing) {
-    if let Some(id) = crate::item::arena::id_of(obj) {
-        with_current_level_mut(|current| current.add_item(id));
-    }
+unsafe fn attach_floor(id: ThingId) {
+    with_current_level_mut(|current| current.add_item(id));
 }
 
 /// Allocate a floor object at `pos` and link it into the level's item list.
-unsafe fn spawn_object_at(pos: IVec2) -> *mut Thing {
-    let obj = new_thing();
-    (*thing_o(obj)).o_pos = pos;
-    attach_floor(obj);
-    obj
+unsafe fn spawn_object_at(pos: IVec2) -> ThingId {
+    let id = new_thing_id();
+    OBJECTS.with_object_mut(id, |o| o.o_pos = pos);
+    attach_floor(id);
+    id
 }
 
 /// Fill one treasure room with `MIN..MAX` objects and monsters.
@@ -156,10 +142,14 @@ unsafe fn treas_room() {
     game::set_current_depth(depth + 1);
     while nm > 0 {
         if let Some(pos) = find_floor(Some(idx), GameConfig::MAX_PLACEMENT_ATTEMPTS, true) {
-            let tp = new_actor();
-            new_monster(tp, randmonster(false), pos);
-            (*thing_t(tp)).t_flags.insert(MonsterFlags::MEAN);
-            give_pack(tp);
+            let id = MONSTER_LIST.spawn_actor();
+            new_monster_id(id, randmonster(false), pos);
+            MONSTER_LIST.with_mut(id, |t| {
+                if let Thing::Monster { data } = t {
+                    data.t_flags.insert(MonsterFlags::MEAN);
+                }
+            });
+            give_pack_id(id);
         }
         nm -= 1;
     }
@@ -180,33 +170,29 @@ unsafe fn place_room_contents() {
         }
 
         if rnd(2) == 0 && (amulet == 0 || level >= max_level) {
-            let gold = new_item();
-
-            if !gold.is_null() {
-                let og = thing_o(gold);
-
-                (*og).o_arm = rnd(50 + 10 * level) + 2;
-                let gold_pos = find_floor(Some(i), 0, false).unwrap_or(IVec2::ZERO);
-                with_current_level_mut(|current| {
-                    current.rooms[i].gold = gold_pos;
-                    current.rooms[i].goldval = (*og).o_arm;
-                });
-                (*og).o_pos = gold_pos;
-                (*og).o_flags = ObjectFlags::MANY;
-                (*og).o_group = GOLDGRP;
-                (*og).o_type = ItemType::Gold;
-                attach_floor(gold);
-            }
+            let gold = new_item_id();
+            let goldval = rnd(50 + 10 * level) + 2;
+            let gold_pos = find_floor(Some(i), 0, false).unwrap_or(IVec2::ZERO);
+            OBJECTS.with_object_mut(gold, |og| {
+                og.o_arm = goldval;
+                og.o_pos = gold_pos;
+                og.o_flags = ObjectFlags::MANY;
+                og.o_group = GOLDGRP;
+                og.o_type = ItemType::Gold;
+            });
+            with_current_level_mut(|current| {
+                current.rooms[i].gold = gold_pos;
+                current.rooms[i].goldval = goldval;
+            });
+            attach_floor(gold);
         }
 
         let goldval = with_current_level(|current| current.rooms[i].goldval);
         if rnd(100) < if goldval > 0 { 80 } else { 25 } {
-            let tp = new_actor();
-            if !tp.is_null() {
-                if let Some(pos) = find_floor(Some(i), 0, true) {
-                    new_monster(tp, randmonster(false), pos);
-                    give_pack(tp);
-                }
+            let id = MONSTER_LIST.spawn_actor();
+            if let Some(pos) = find_floor(Some(i), 0, true) {
+                new_monster_id(id, randmonster(false), pos);
+                give_pack_id(id);
             }
         }
     }
@@ -241,15 +227,16 @@ unsafe fn put_things() {
     // yet, put it somewhere on the ground.
     if level >= GameConfig::AMULET_LEVEL && amulet == 0 {
         if let Some(pos) = find_floor(None, 0, false) {
-            let obj = new_item();
-            let og = thing_o(obj);
-            (*og).o_hplus = 0;
-            (*og).o_dplus = 0;
-            (*og).o_damage = [b'0', b'x', b'0', 0, 0, 0, 0, 0];
-            (*og).o_hurldmg = [b'0', b'x', b'0', 0, 0, 0, 0, 0];
-            (*og).o_arm = 11;
-            (*og).o_type = ItemType::Amulet;
-            (*og).o_pos = pos;
+            let obj = new_item_id();
+            OBJECTS.with_object_mut(obj, |og| {
+                og.o_hplus = 0;
+                og.o_dplus = 0;
+                og.o_damage = [b'0', b'x', b'0', 0, 0, 0, 0, 0];
+                og.o_hurldmg = [b'0', b'x', b'0', 0, 0, 0, 0, 0];
+                og.o_arm = 11;
+                og.o_type = ItemType::Amulet;
+                og.o_pos = pos;
+            });
             attach_floor(obj);
         }
     }
@@ -311,10 +298,11 @@ unsafe fn place_stairs() {
 /// Link every monster on the level to the room its position falls in.
 pub(crate) unsafe fn link_monsters_to_rooms() {
     for id in MONSTER_LIST.ids() {
-        if let Some(tp) = MONSTER_LIST.handle(id) {
-            let t = thing_t(tp);
-            (*t).t_room = roomin((*t).t_pos);
-        }
+        MONSTER_LIST.with_mut(id, |t| {
+            if let Thing::Monster { data } = t {
+                data.t_room = unsafe { roomin(data.t_pos) };
+            }
+        });
     }
 }
 

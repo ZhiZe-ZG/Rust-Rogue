@@ -9,9 +9,8 @@ use crate::entity::fight::set_mname;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
 use crate::item::rings::RingType;
-use crate::entity::player::attach_pack;
-use crate::game::new_actor;
-use crate::item::things::new_thing;
+use crate::game::{new_actor, MonsterId, MONSTER_LIST};
+use crate::item::things::new_thing_id;
 use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
 use crate::rnd::rnd;
@@ -251,57 +250,78 @@ pub unsafe fn randmonster(wander: bool) -> MonsterType {
 
 /// Initializes a freshly allocated monster thing and places it on the map.
 pub unsafe fn new_monster(tp: *mut Thing, monster_type: MonsterType, cp: IVec2) {
+    if let Some(id) = MONSTER_LIST.find(tp) {
+        new_monster_id(id, monster_type, cp);
+    }
+}
+
+/// Initializes the already-spawned monster `id` and places it on the map.
+///
+/// This is the pointer-free counterpart of [`new_monster`].
+pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2) {
     let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
         lev_add = 0;
     }
 
-    // `tp` was already allocated into `MLIST` by `new_actor`; no attach needed.
+    // `id` was already allocated into `MONSTER_LIST` by `spawn_actor`.
 
-    (*thing_t(tp)).t_type = Some(monster_type);
-    (*thing_t(tp)).t_disguise = monster_type.glyph();
-    (*thing_t(tp)).t_pos = cp;
-
-    (*thing_t(tp)).t_oldch = crate::draw::cell_glyph(cp.y, cp.x) as u8;
-    (*thing_t(tp)).t_room = roomin(cp);
+    let oldch = crate::draw::cell_glyph(cp.y, cp.x) as u8;
+    let room = roomin(cp);
     // Record the monster in the per-cell occupancy map.
-    crate::game::set_monster(cp.y, cp.x, tp);
+    crate::game::set_monster_id(cp.y, cp.x, Some(id));
 
     let mp = &monsters[monster_type.index()];
-    (*thing_t(tp)).t_stats.level = mp.m_stats.level + lev_add;
-    (*thing_t(tp)).t_stats.max_hit_points = roll((*thing_t(tp)).t_stats.level, 8);
-    (*thing_t(tp)).t_stats.hit_points = (*thing_t(tp)).t_stats.max_hit_points;
-    (*thing_t(tp)).t_stats.armor = mp.m_stats.armor - lev_add;
-    (*thing_t(tp)).t_stats.damage = mp.m_stats.damage;
-    (*thing_t(tp)).t_stats.strength = mp.m_stats.strength;
-    (*thing_t(tp)).t_stats.experience = mp.m_stats.experience + lev_add * 10 + exp_add(tp);
-    (*thing_t(tp)).t_flags = MonsterFlags::from_bits(mp.m_flags);
-    if level > 29 {
-        (*thing_t(tp)).t_flags.insert(MonsterFlags::HASTE);
-    }
-    (*thing_t(tp)).t_turn = true;
-    crate::entity::player::set_thing_pack(tp, Vec::new());
+    MONSTER_LIST.with_mut(id, |t| {
+        let Thing::Monster { data } = t else {
+            return;
+        };
+        data.t_type = Some(monster_type);
+        data.t_disguise = monster_type.glyph();
+        data.t_pos = cp;
+        data.t_oldch = oldch;
+        data.t_room = room;
+        data.t_stats.level = mp.m_stats.level + lev_add;
+        data.t_stats.max_hit_points = roll(data.t_stats.level, 8);
+        data.t_stats.hit_points = data.t_stats.max_hit_points;
+        data.t_stats.armor = mp.m_stats.armor - lev_add;
+        data.t_stats.damage = mp.m_stats.damage;
+        data.t_stats.strength = mp.m_stats.strength;
+        data.t_stats.experience = mp.m_stats.experience
+            + lev_add * 10
+            + exp_add_for(data.t_stats.level, data.t_stats.max_hit_points);
+        data.t_flags = MonsterFlags::from_bits(mp.m_flags);
+        if level > 29 {
+            data.t_flags.insert(MonsterFlags::HASTE);
+        }
+        data.t_turn = true;
+        data.t_pack = Vec::new();
+        if monster_type == MonsterType::Xeroc {
+            data.t_disguise = rnd_thing() as u8;
+        }
+    });
 
     if iswearing(RingType::Aggravate) {
         runto(cp);
-    }
-    if monster_type == MonsterType::Xeroc {
-        (*thing_t(tp)).t_disguise = rnd_thing() as u8;
     }
 }
 
 /// Computes bonus experience from a monster's level and max HP.
 pub unsafe fn exp_add(tp: *mut Thing) -> i32 {
-    let mut modu = if (*thing_t(tp)).t_stats.level == 1 {
-        (*thing_t(tp)).t_stats.max_hit_points / 8
-    } else {
-        (*thing_t(tp)).t_stats.max_hit_points / 6
-    };
+    exp_add_for(
+        (*thing_t(tp)).t_stats.level,
+        (*thing_t(tp)).t_stats.max_hit_points,
+    )
+}
 
-    if (*thing_t(tp)).t_stats.level > 9 {
+/// Bonus experience from an explicit monster `level` and `max_hp` (pointer-free).
+#[inline]
+fn exp_add_for(level: i32, max_hp: i32) -> i32 {
+    let mut modu = if level == 1 { max_hp / 8 } else { max_hp / 6 };
+    if level > 9 {
         modu *= 20;
-    } else if (*thing_t(tp)).t_stats.level > 6 {
+    } else if level > 6 {
         modu *= 4;
     }
     modu
@@ -409,10 +429,27 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
 
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
 pub unsafe fn give_pack(tp: *mut Thing) {
-    if crate::game::current_depth() >= max_level
-        && rnd(100) < monsters[(*thing_t(tp)).t_type.map_or(0, |m| m.index())].m_carry
-    {
-        attach_pack(tp, new_thing());
+    if let Some(id) = MONSTER_LIST.find(tp) {
+        give_pack_id(id);
+    }
+}
+
+/// Pointer-free counterpart of [`give_pack`]: works on a [`MonsterId`].
+pub unsafe fn give_pack_id(id: MonsterId) {
+    let kind = MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_type,
+            Thing::Object { .. } => None,
+        })
+        .flatten();
+    let carry = monsters[kind.map_or(0, |m| m.index())].m_carry;
+    if crate::game::current_depth() >= max_level && rnd(100) < carry {
+        let item = new_thing_id();
+        MONSTER_LIST.with_mut(id, |t| {
+            if let Thing::Monster { data } = t {
+                data.t_pack.insert(0, item);
+            }
+        });
     }
 }
 
