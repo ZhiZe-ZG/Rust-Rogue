@@ -117,9 +117,11 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
     let mut pack = crate::game::PLAYER.pack();
 
     if pack.is_empty() {
+        if pack_room(from_floor, item) == 0 {
+            return;
+        }
         (*thing_o(item)).o_packch = pack_char() as u8;
         pack.push(item_id);
-        inpack += 1;
     } else {
         let item_type = (*thing_o(item)).o_type;
         let item_which = (*thing_o(item)).o_which;
@@ -220,6 +222,9 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
         if !merged {
             if let Some(pos) = lp {
                 if pos + 1 <= pack.len() {
+                    if pack_room(from_floor, item) == 0 {
+                        return;
+                    }
                     (*thing_o(item)).o_packch = pack_char() as u8;
                     pack.insert(pos + 1, item_id);
                 }
@@ -253,6 +258,80 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
             inv_name(item, if terse == 0 { 0 } else { 1 }),
             (*thing_o(item)).o_packch as char,
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::{with_current_level_mut, PLAYER};
+    use crate::item::arena::OBJECTS;
+    use crate::misc::find_obj_id;
+
+    #[test]
+    fn pickup_transfers_floor_items_and_merges_only_distinct_objects() {
+        unsafe {
+            let old_pack = PLAYER.pack();
+            let old_inpack = inpack;
+            let old_pack_used = pack_used;
+            let old_items = with_current_level_mut(|level| std::mem::take(&mut level.items));
+            PLAYER.set_pack(Vec::new());
+            inpack = 0;
+            pack_used = [0; 26];
+
+            let pos = PLAYER.pos();
+            let food = OBJECTS.insert(Thing::object(ThingObject {
+                o_type: ItemType::Food,
+                o_count: 1,
+                o_pos: pos,
+                ..ThingObject::default()
+            }));
+            with_current_level_mut(|level| level.add_item(food));
+            add_pack(std::ptr::null_mut(), 1);
+            assert_eq!(PLAYER.pack(), vec![food]);
+            assert_eq!(find_obj_id(pos.y, pos.x), None);
+            assert_eq!({ inpack }, 1);
+            assert!(OBJECTS.with_object(food, |obj| obj.o_flags.contains(ObjectFlags::FOUND)).unwrap());
+
+            add_pack(std::ptr::null_mut(), 1);
+            assert_eq!(OBJECTS.with_object(food, |obj| obj.o_count), Some(1));
+            assert_eq!(PLAYER.pack(), vec![food]);
+
+            let weapon = OBJECTS.insert(Thing::object(ThingObject {
+                o_type: ItemType::Weapon(0),
+                o_count: 1,
+                o_pos: pos,
+                ..ThingObject::default()
+            }));
+            with_current_level_mut(|level| level.add_item(weapon));
+            add_pack(std::ptr::null_mut(), 1);
+            assert_eq!(PLAYER.pack(), vec![food, weapon]);
+            assert_eq!(find_obj_id(pos.y, pos.x), None);
+            assert_eq!({ inpack }, 2);
+            assert_eq!(OBJECTS.with_object(food, |obj| obj.o_packch), Some(b'a'));
+            assert_eq!(OBJECTS.with_object(weapon, |obj| obj.o_packch), Some(b'b'));
+
+            let more_food = OBJECTS.insert(Thing::object(ThingObject {
+                o_type: ItemType::Food,
+                o_count: 1,
+                o_pos: pos,
+                ..ThingObject::default()
+            }));
+            with_current_level_mut(|level| level.add_item(more_food));
+            add_pack(std::ptr::null_mut(), 1);
+            assert_eq!(PLAYER.pack(), vec![food, weapon]);
+            assert_eq!(find_obj_id(pos.y, pos.x), None);
+            assert_eq!(OBJECTS.with_object(food, |obj| obj.o_count), Some(2));
+            assert!(!OBJECTS.contains(more_food));
+            assert_eq!({ inpack }, 3);
+
+            OBJECTS.remove(food);
+            OBJECTS.remove(weapon);
+            PLAYER.set_pack(old_pack);
+            inpack = old_inpack;
+            pack_used = old_pack_used;
+            with_current_level_mut(|level| level.items = old_items);
+        }
     }
 }
 
