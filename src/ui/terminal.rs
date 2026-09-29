@@ -12,7 +12,7 @@
 //! `static mut`, so the whole module is safe.
 
 use std::io::Write;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 
 use glam::IVec2;
@@ -21,41 +21,11 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::style::{Modifier, Style};
 use ratatui::Terminal;
 
+use super::state::{ScreenCell, UI};
+
 /// Terminal size (fixed by [`crate::config::GameConfig`]).
 const NROWS: usize = crate::config::GameConfig::SCREEN_LINES as usize; // 24
 const NCOLS: usize = crate::config::GameConfig::SCREEN_COLS as usize; // 80
-
-/// A single screen cell: one ASCII glyph plus standout (reverse-video).
-#[derive(Clone, Copy)]
-struct ScreenCell {
-    ch: u8,
-    standout: bool,
-}
-
-const BLANK_CELL: ScreenCell = ScreenCell {
-    ch: b' ',
-    standout: false,
-};
-
-/// The retained screen grid, indexed `grid[y][x]`.
-static GRID: Mutex<[[ScreenCell; NCOLS]; NROWS]> = Mutex::new([[BLANK_CELL; NCOLS]; NROWS]);
-
-/// The single shared cursor position (row, column).
-static CURSOR: Mutex<IVec2> = Mutex::new(IVec2::ZERO);
-
-/// Current standout mode for subsequent writes (curses `standout`/`standend`).
-static STANDOUT: AtomicBool = AtomicBool::new(false);
-
-/// Input timeout in tenths of a second (`0`/negative means block indefinitely).
-static INPUT_TIMEOUT: AtomicI32 = AtomicI32::new(-1);
-
-/// Whether the terminal has been shut down (`endwin` called).
-static SHUTDOWN: AtomicBool = AtomicBool::new(true);
-
-/// The ratatui terminal handle. Kept alive for the process lifetime; raw mode
-/// is toggled independently so shell escapes/suspension can restore it.
-type Backend = CrosstermBackend<Box<dyn Write + Send>>;
-static TERMINAL: Mutex<Option<Terminal<Backend>>> = Mutex::new(None);
 
 /// Lock a `Mutex`, recovering from poisoning instead of panicking.
 #[inline]
@@ -102,7 +72,7 @@ fn in_bounds(y: i32, x: i32) -> bool {
 /// The alternate screen is entered exactly once (when the terminal is first
 /// created / recreated after a suspension). Raw mode toggling is idempotent.
 fn ensure_terminal() {
-    let mut guard = lock(&TERMINAL);
+    let mut guard = lock(&UI.terminal);
     if guard.is_none() {
         let stdout: Box<dyn Write + Send> = Box::new(std::io::stdout());
         let backend = CrosstermBackend::new(stdout);
@@ -114,12 +84,12 @@ fn ensure_terminal() {
         );
     }
     let _ = crossterm::terminal::enable_raw_mode();
-    SHUTDOWN.store(false, Ordering::Relaxed);
+    UI.shutdown.store(false, Ordering::Relaxed);
 }
 
 /// Drop back to the host terminal.
 fn deinit_terminal() {
-    if let Some(mut terminal) = lock(&TERMINAL).take() {
+    if let Some(mut terminal) = lock(&UI.terminal).take() {
         let _ = terminal.show_cursor();
     }
     let _ = crossterm::execute!(
@@ -131,16 +101,16 @@ fn deinit_terminal() {
         crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
     );
     let _ = crossterm::terminal::disable_raw_mode();
-    SHUTDOWN.store(true, Ordering::Relaxed);
+    UI.shutdown.store(true, Ordering::Relaxed);
 }
 
 /// Render the retained grid to the real terminal as one frame.
 fn render() {
-    if SHUTDOWN.load(Ordering::Relaxed) {
+    if UI.shutdown.load(Ordering::Relaxed) {
         return;
     }
-    let grid = lock(&GRID);
-    let mut guard = lock(&TERMINAL);
+    let grid = lock(&UI.grid);
+    let mut guard = lock(&UI.terminal);
     if let Some(terminal) = guard.as_mut() {
         let _ = terminal.draw(|frame| {
             let area = frame.area();
@@ -169,14 +139,14 @@ fn render() {
 #[inline]
 fn set_cell(y: i32, x: i32, ch: u8, standout: bool) {
     if in_bounds(y, x) {
-        lock(&GRID)[y as usize][x as usize] = ScreenCell { ch, standout };
+        lock(&UI.grid)[y as usize][x as usize] = ScreenCell { ch, standout };
     }
 }
 
 #[inline]
 fn cell_at(y: i32, x: i32) -> u8 {
     if in_bounds(y, x) {
-        lock(&GRID)[y as usize][x as usize].ch
+        lock(&UI.grid)[y as usize][x as usize].ch
     } else {
         b' '
     }
@@ -184,7 +154,7 @@ fn cell_at(y: i32, x: i32) -> u8 {
 
 #[inline]
 fn advance_cursor() {
-    let mut cursor = lock(&CURSOR);
+    let mut cursor = lock(&UI.cursor);
     cursor.x += 1;
     if cursor.x >= NCOLS as i32 {
         cursor.x = 0;
@@ -234,24 +204,24 @@ pub(crate) fn shutdown() {
 }
 
 pub(crate) fn is_shutdown() -> bool {
-    SHUTDOWN.load(Ordering::Relaxed)
+    UI.shutdown.load(Ordering::Relaxed)
 }
 
 pub(crate) fn clear() {
-    for row in lock(&GRID).iter_mut() {
+    for row in lock(&UI.grid).iter_mut() {
         for cell in row.iter_mut() {
-            *cell = BLANK_CELL;
+            *cell = ScreenCell::BLANK;
         }
     }
-    *lock(&CURSOR) = IVec2::ZERO;
+    *lock(&UI.cursor) = IVec2::ZERO;
 }
 
 pub(crate) fn clear_to_end_of_line() {
-    let cursor = *lock(&CURSOR);
+    let cursor = *lock(&UI.cursor);
     if in_bounds(cursor.y, 0) {
-        let mut grid = lock(&GRID);
+        let mut grid = lock(&UI.grid);
         for x in cursor.x.max(0) as usize..NCOLS {
-            grid[cursor.y as usize][x] = BLANK_CELL;
+            grid[cursor.y as usize][x] = ScreenCell::BLANK;
         }
     }
 }
@@ -261,24 +231,24 @@ pub(crate) fn refresh() {
 }
 
 pub(crate) fn set_standout(enabled: bool) {
-    STANDOUT.store(enabled, Ordering::Relaxed);
+    UI.standout.store(enabled, Ordering::Relaxed);
 }
 
 pub(crate) fn move_cursor(pos: IVec2) {
-    *lock(&CURSOR) = pos;
+    *lock(&UI.cursor) = pos;
 }
 
 pub(crate) fn cursor_pos() -> IVec2 {
-    *lock(&CURSOR)
+    *lock(&UI.cursor)
 }
 
 pub(crate) fn write_glyph(ch: char) {
-    let cursor = *lock(&CURSOR);
+    let cursor = *lock(&UI.cursor);
     set_cell(
         cursor.y,
         cursor.x,
         ch as u8,
-        STANDOUT.load(Ordering::Relaxed),
+        UI.standout.load(Ordering::Relaxed),
     );
     advance_cursor();
 }
@@ -289,7 +259,7 @@ pub(crate) fn write_glyph_at(pos: IVec2, ch: char) {
 }
 
 pub(crate) fn glyph_at_cursor() -> char {
-    let cursor = *lock(&CURSOR);
+    let cursor = *lock(&UI.cursor);
     cell_at(cursor.y, cursor.x) as char
 }
 
@@ -298,8 +268,8 @@ pub(crate) fn glyph_at(pos: IVec2) -> char {
 }
 
 pub(crate) fn write_text(text: &str) {
-    let standout = STANDOUT.load(Ordering::Relaxed);
-    let mut cursor = lock(&CURSOR);
+    let standout = UI.standout.load(Ordering::Relaxed);
+    let mut cursor = lock(&UI.cursor);
     for byte in text.bytes() {
         match byte {
             b'\n' => {
@@ -311,7 +281,7 @@ pub(crate) fn write_text(text: &str) {
             }
             ch => {
                 if in_bounds(cursor.y, cursor.x) {
-                    lock(&GRID)[cursor.y as usize][cursor.x as usize] = ScreenCell { ch, standout };
+                    lock(&UI.grid)[cursor.y as usize][cursor.x as usize] = ScreenCell { ch, standout };
                 }
                 cursor.x += 1;
                 if cursor.x >= NCOLS as i32 {
@@ -331,26 +301,16 @@ pub(crate) fn write_text_at(pos: IVec2, text: &str) {
     write_text(text);
 }
 
-// ─── Direct grid access for save/restore (state.rs) ─────────────────────────
-
-pub(crate) fn read_cell(y: i32, x: i32) -> u8 {
-    cell_at(y, x)
-}
-
-pub(crate) fn write_cell(y: i32, x: i32, ch: u8) {
-    set_cell(y, x, ch, false);
-}
-
 // ─── Input / terminal-mode controls ─────────────────────────────────────────
 
 pub(crate) fn getch() -> i32 {
     use crossterm::event::{self, Event};
 
-    if SHUTDOWN.load(Ordering::Relaxed) {
+    if UI.shutdown.load(Ordering::Relaxed) {
         ensure_terminal();
     }
 
-    let timeout = INPUT_TIMEOUT.load(Ordering::Relaxed);
+    let timeout = UI.input_timeout.load(Ordering::Relaxed);
     let wait = if timeout <= 0 {
         None
     } else {
@@ -373,7 +333,7 @@ pub(crate) fn getch() -> i32 {
 pub(crate) fn set_escape_delay(_milliseconds: i32) {}
 
 pub(crate) fn raw() {
-    INPUT_TIMEOUT.store(-1, Ordering::Relaxed);
+    UI.input_timeout.store(-1, Ordering::Relaxed);
     ensure_terminal();
 }
 
@@ -384,7 +344,7 @@ pub(crate) fn echo() {}
 pub(crate) fn noecho() {}
 
 pub(crate) fn halfdelay(tenths: i32) {
-    INPUT_TIMEOUT.store(tenths, Ordering::Relaxed);
+    UI.input_timeout.store(tenths, Ordering::Relaxed);
 }
 
 pub(crate) fn erasechar() -> u8 {

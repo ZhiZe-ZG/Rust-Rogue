@@ -3,26 +3,24 @@
 use crate::ui::{terminal, Window};
 use glam::IVec2;
 
-/// Initialize the terminal backend and return the standard screen handle.
-pub fn initialize() -> Window {
+pub(crate) fn initialize() -> Window {
     terminal::init();
     Window::Stdscr
 }
 
-/// Restore the host terminal after leaving the game interface.
-pub fn shutdown() {
+pub(crate) fn shutdown() {
     crate::ui::output::flush_now();
     terminal::shutdown();
 }
 
-pub fn is_shutdown() -> bool {
+pub(crate) fn is_shutdown() -> bool {
     terminal::is_shutdown()
 }
 
-pub fn baud_rate() -> i32 {
+pub(crate) fn baud_rate() -> i32 {
     terminal::baudrate()
 }
 
-pub fn move_physical_cursor(from: IVec2, to: IVec2) {
+pub(crate) fn move_physical_cursor(from: IVec2, to: IVec2) {
     terminal::move_physical_cursor(from, to);
 }

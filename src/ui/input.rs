@@ -281,16 +281,16 @@ pub fn wait_for(ch: char) {
 pub fn wait_for(_ch: char) {}
 
 /// Read one raw terminal key code before game-level key translation.
-pub fn read_raw_key() -> i32 {
+pub(crate) fn read_raw_key() -> i32 {
     crate::ui::output::render_pending();
     terminal::getch()
 }
 
-pub fn set_escape_delay(milliseconds: i32) {
+pub(crate) fn set_escape_delay(milliseconds: i32) {
     terminal::set_escape_delay(milliseconds);
 }
 
-pub fn set_raw_mode(enabled: bool) {
+pub(crate) fn set_raw_mode(enabled: bool) {
     if enabled {
         terminal::raw();
     } else {
@@ -298,7 +298,7 @@ pub fn set_raw_mode(enabled: bool) {
     }
 }
 
-pub fn set_echo(enabled: bool) {
+pub(crate) fn set_echo(enabled: bool) {
     if enabled {
         terminal::echo();
     } else {
@@ -311,20 +311,20 @@ pub fn set_echo(enabled: bool) {
 /// The terminal backend has no keypad mode, so this is a no-op retained only
 /// to keep call sites explicit.
 #[allow(clippy::unused_self)]
-pub fn set_keypad(_window: Window, _enabled: bool) {}
+pub(crate) fn set_keypad(_window: Window, _enabled: bool) {}
 
-pub fn set_input_timeout(tenths: i32) {
+pub(crate) fn set_input_timeout(tenths: i32) {
     terminal::halfdelay(tenths);
 }
 
-pub fn erase_key() -> u8 {
+pub(crate) fn erase_key() -> u8 {
     terminal::erasechar()
 }
 
-pub fn kill_key() -> u8 {
+pub(crate) fn kill_key() -> u8 {
     terminal::killchar()
 }
 
-pub fn flush_pending() {
+pub(crate) fn flush_pending() {
     terminal::flushinp();
 }
