@@ -534,28 +534,28 @@ pub unsafe fn look(wakeup: u8) {
             }
 
             if door_stop != 0 && firstmove == 0 && running != 0 {
-                if runch == crate::command::Direction::West && x == ex {
+                if runch == crate::direction::Direction::West && x == ex {
                     continue;
                 }
-                if runch == crate::command::Direction::South && y == sy {
+                if runch == crate::direction::Direction::South && y == sy {
                     continue;
                 }
-                if runch == crate::command::Direction::North && y == ey {
+                if runch == crate::direction::Direction::North && y == ey {
                     continue;
                 }
-                if runch == crate::command::Direction::East && x == sx {
+                if runch == crate::direction::Direction::East && x == sx {
                     continue;
                 }
-                if runch == crate::command::Direction::NorthWest && (y + x) - sumhero >= 1 {
+                if runch == crate::direction::Direction::NorthWest && (y + x) - sumhero >= 1 {
                     continue;
                 }
-                if runch == crate::command::Direction::NorthEast && (y - x) - diffhero >= 1 {
+                if runch == crate::direction::Direction::NorthEast && (y - x) - diffhero >= 1 {
                     continue;
                 }
-                if runch == crate::command::Direction::SouthEast && (y + x) - sumhero <= -1 {
+                if runch == crate::direction::Direction::SouthEast && (y + x) - sumhero <= -1 {
                     continue;
                 }
-                if runch == crate::command::Direction::SouthWest && (y - x) - diffhero <= -1 {
+                if runch == crate::direction::Direction::SouthWest && (y - x) - diffhero <= -1 {
                     continue;
                 }
 

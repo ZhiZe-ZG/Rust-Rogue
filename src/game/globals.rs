@@ -5,7 +5,8 @@
 use crate::config::GameConfig;
 use crate::daemon::CDelayedAction;
 use crate::entity::stats::Stats;
-use crate::command::{Command, Direction};
+use crate::command::Command;
+use crate::direction::Direction;
 use glam::IVec2;
 use std::sync::{Mutex, MutexGuard};
 

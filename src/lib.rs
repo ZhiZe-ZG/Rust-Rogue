@@ -8,6 +8,7 @@ pub mod command;
 pub mod config;
 pub mod daemon;
 pub mod daemons;
+pub mod direction;
 pub mod draw;
 pub mod entity;
 

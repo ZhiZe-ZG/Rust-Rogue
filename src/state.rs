@@ -16,11 +16,12 @@
 //! [RON]: https://github.com/ron-rs/ron
 
 use glam::IVec2;
+use crate::direction::Direction;
+use crate::command::Command;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
 use crate::daemon::CDelayedAction;
-use crate::command::{Command, Direction};
 use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingObject};
 use crate::game::{MonsterId, MONSTER_LIST, MONSTER_MAP, PLAYER};

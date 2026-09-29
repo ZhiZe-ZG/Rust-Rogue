@@ -240,7 +240,7 @@ pub unsafe fn get_dir() -> u8 {
     let mut gotit: bool;
     let mut last_delt: IVec2 = IVec2 { x: 0, y: 0 };
 
-    if again != 0 && last_dir != crate::command::Direction::None {
+    if again != 0 && last_dir != crate::direction::Direction::None {
         delta.y = last_delt.y;
         delta.x = last_delt.x;
         dir_ch = last_dir;
@@ -251,49 +251,49 @@ pub unsafe fn get_dir() -> u8 {
         loop {
             gotit = true;
             let key = readchar() as u8;
-            dir_ch = match crate::command::Direction::from_byte(key) {
-                Some(crate::command::Direction::West) => {
+            dir_ch = match crate::direction::Direction::from_byte(key) {
+                Some(crate::direction::Direction::West) => {
                     delta.y = 0;
                     delta.x = -1;
-                    crate::command::Direction::West
+                    crate::direction::Direction::West
                 }
-                Some(crate::command::Direction::South) => {
+                Some(crate::direction::Direction::South) => {
                     delta.y = 1;
                     delta.x = 0;
-                    crate::command::Direction::South
+                    crate::direction::Direction::South
                 }
-                Some(crate::command::Direction::North) => {
+                Some(crate::direction::Direction::North) => {
                     delta.y = -1;
                     delta.x = 0;
-                    crate::command::Direction::North
+                    crate::direction::Direction::North
                 }
-                Some(crate::command::Direction::East) => {
+                Some(crate::direction::Direction::East) => {
                     delta.y = 0;
                     delta.x = 1;
-                    crate::command::Direction::East
+                    crate::direction::Direction::East
                 }
-                Some(crate::command::Direction::NorthWest) => {
+                Some(crate::direction::Direction::NorthWest) => {
                     delta.y = -1;
                     delta.x = -1;
-                    crate::command::Direction::NorthWest
+                    crate::direction::Direction::NorthWest
                 }
-                Some(crate::command::Direction::NorthEast) => {
+                Some(crate::direction::Direction::NorthEast) => {
                     delta.y = -1;
                     delta.x = 1;
-                    crate::command::Direction::NorthEast
+                    crate::direction::Direction::NorthEast
                 }
-                Some(crate::command::Direction::SouthWest) => {
+                Some(crate::direction::Direction::SouthWest) => {
                     delta.y = 1;
                     delta.x = -1;
-                    crate::command::Direction::SouthWest
+                    crate::direction::Direction::SouthWest
                 }
-                Some(crate::command::Direction::SouthEast) => {
+                Some(crate::direction::Direction::SouthEast) => {
                     delta.y = 1;
                     delta.x = 1;
-                    crate::command::Direction::SouthEast
+                    crate::direction::Direction::SouthEast
                 }
                 _ if key as i32 == ESCAPE => {
-                    last_dir = crate::command::Direction::None;
+                    last_dir = crate::direction::Direction::None;
                     reset_last();
                     return false as u8;
                 }
@@ -301,7 +301,7 @@ pub unsafe fn get_dir() -> u8 {
                     mpos = 0;
                     msg_str("which direction? ");
                     gotit = false;
-                    crate::command::Direction::None
+                    crate::direction::Direction::None
                 }
             };
             if gotit {
