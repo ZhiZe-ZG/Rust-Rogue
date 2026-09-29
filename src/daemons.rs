@@ -9,7 +9,6 @@
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
 use crate::rnd::rnd;
-use crate::ui::output;
 use glam::IVec2;
 
 use crate::ui::output::{addmsg_str, msg_str};
@@ -130,7 +129,7 @@ pub unsafe fn unsee() {
     for id in MONSTER_LIST.ids() {
         if let Some((pos, _disguise, oldch, flags)) = monster_view(id) {
             if flags.contains(MonsterFlags::INVIS) && see_monst(id) != 0 {
-                output::write_glyph_at(IVec2::new(pos.x, pos.y), (oldch as u8) as char);
+                crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), oldch as char);
             }
         }
     }
@@ -236,7 +235,7 @@ pub unsafe fn come_down() {
     for id in crate::game::item_ids() {
         if let Some((pos, otype)) = OBJECTS.with_object(id, |o| (o.o_pos, o.o_type)) {
             if cansee(pos.y, pos.x) != 0 {
-                output::write_glyph_at(IVec2::new(pos.x, pos.y), crate::draw::item_glyph(otype));
+                crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), crate::draw::item_glyph(otype));
             }
         }
     }
@@ -246,15 +245,12 @@ pub unsafe fn come_down() {
     let cansee_invis = PLAYER.has_flag(MonsterFlags::CANSEE);
     for id in MONSTER_LIST.ids() {
         if let Some((pos, _disguise, _oldch, flags)) = monster_view(id) {
-            output::move_cursor(IVec2::new(pos.x, pos.y));
             if cansee(pos.y, pos.x) != 0 {
                 if !flags.contains(MonsterFlags::INVIS) || cansee_invis {
-                    output::write_glyph(crate::draw::monster_glyph(id));
+                    crate::draw::write_cell_glyph(pos, crate::draw::monster_glyph(id));
                 }
             } else if seemonst {
-                output::set_standout(true);
-                output::write_glyph(crate::draw::monster_type_glyph(id));
-                output::set_standout(false);
+                crate::draw::write_standout_cell_glyph(pos, crate::draw::monster_type_glyph(id));
             }
         }
     }
@@ -272,7 +268,7 @@ pub unsafe fn visuals() {
     for id in crate::game::item_ids() {
         if let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) {
             if cansee(pos.y, pos.x) != 0 {
-                output::write_glyph_at(IVec2::new(pos.x, pos.y), (rnd_thing() as u8) as char);
+                crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), rnd_thing() as char);
             }
         }
     }
@@ -280,7 +276,7 @@ pub unsafe fn visuals() {
     // Change the stairs.
     let stairs = crate::game::stairs();
     if seenstairs == 0 && cansee(stairs.y, stairs.x) != 0 {
-        output::write_glyph_at(IVec2::new(stairs.x, stairs.y), (rnd_thing() as u8) as char);
+        crate::draw::write_cell_glyph(stairs, rnd_thing() as char);
     }
 
     // Change the monsters.
@@ -293,17 +289,14 @@ pub unsafe fn visuals() {
                     Thing::Object { .. } => None,
                 })
                 .flatten();
-            output::move_cursor(IVec2::new(pos.x, pos.y));
             if see_monst(id) != 0 {
                 if typ == Some(MonsterType::Xeroc) && disguise != b'X' {
-                    output::write_glyph((rnd_thing() as u8) as char);
+                    crate::draw::write_cell_glyph(pos, rnd_thing() as char);
                 } else {
-                    output::write_glyph(crate::draw::hallucination_glyph());
+                    crate::draw::write_cell_glyph(pos, crate::draw::hallucination_glyph());
                 }
             } else if seemonst {
-                output::set_standout(true);
-                output::write_glyph(crate::draw::hallucination_glyph());
-                output::set_standout(false);
+                crate::draw::write_standout_cell_glyph(pos, crate::draw::hallucination_glyph());
             }
         }
     }

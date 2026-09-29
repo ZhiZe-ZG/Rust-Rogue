@@ -15,7 +15,6 @@ use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
 use crate::rnd::rnd;
 use crate::startup::roll;
-use crate::ui::output;
 use crate::ui::output::{addmsg_str, msg_str};
 use crate::ui::runtime;
 use glam::IVec2;
@@ -331,13 +330,12 @@ pub unsafe fn wanderer() {
     new_monster_id(id, randmonster(true), cp);
 
     if player_has(MonsterFlags::SEEMONST) {
-        output::set_standout(true);
-        if !player_has(MonsterFlags::HALU) {
-            output::write_glyph(crate::draw::monster_type_glyph(id));
+        let glyph = if !player_has(MonsterFlags::HALU) {
+            crate::draw::monster_type_glyph(id)
         } else {
-            output::write_glyph(crate::draw::hallucination_glyph());
-        }
-        output::set_standout(false);
+            crate::draw::hallucination_glyph()
+        };
+        crate::draw::write_standout_cell_glyph(cp, glyph);
     }
 
     let pos = MONSTER_LIST

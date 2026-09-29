@@ -153,7 +153,7 @@ pub unsafe fn do_motion(id: ThingId, ydelta: i32, xdelta: i32) -> IVec2 {
             if ch == FLOOR && !show_floor() {
                 ch = ' ' as i32;
             }
-            output::write_glyph_at(IVec2::new(pos.x, pos.y), (ch as u8) as char);
+            crate::draw::write_cell_glyph(pos, ch as u8 as char);
         }
 
         pos.y += ydelta;
@@ -161,7 +161,7 @@ pub unsafe fn do_motion(id: ThingId, ydelta: i32, xdelta: i32) -> IVec2 {
 
         if crate::game::cell_is_walkable(pos.y, pos.x) && !crate::game::is_door_at(pos.y, pos.x) {
             if cansee(pos.y, pos.x) != 0 && terse == 0 {
-                output::write_glyph_at(IVec2::new(pos.x, pos.y), crate::draw::item_glyph(o_type));
+                crate::draw::write_cell_glyph(pos, crate::draw::item_glyph(o_type));
                 output::refresh();
             }
             continue;
@@ -194,7 +194,7 @@ pub unsafe fn fall(id: ThingId, pr: bool) {
                     }
                 });
             } else {
-                output::write_glyph_at(IVec2::new(newpos.x, newpos.y), glyph);
+                crate::draw::write_cell_glyph(newpos, glyph);
             }
         }
 

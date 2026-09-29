@@ -300,7 +300,7 @@ pub unsafe fn read_scroll() {
                             });
                         }
                         if has_monster.is_none() || !player_has(MonsterFlags::SEEMONST) {
-                            output::write_glyph_at(IVec2::new(x, y), (ch as u8) as char);
+                            crate::draw::write_cell_glyph(IVec2::new(x, y), ch as u8 as char);
                         }
                     }
                 }
@@ -315,7 +315,7 @@ pub unsafe fn read_scroll() {
                     if matches!(otype, ItemType::Food) {
                         found = true as u8;
                         output::move_window_cursor(IVec2::new(opos.x, opos.y));
-                        output::write_window_glyph((FOOD as u8) as char);
+                        crate::draw::write_cell_glyph(opos, FOOD as u8 as char);
                     }
                 }
             }

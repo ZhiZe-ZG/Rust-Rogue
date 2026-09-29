@@ -18,7 +18,6 @@ use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
 use crate::misc::sign;
 use crate::rnd::rnd;
-use crate::ui::output;
 use crate::ui::output::{endmsg, msg_str};
 use glam::IVec2;
 
@@ -220,7 +219,7 @@ pub unsafe fn relocate(id: MonsterId, new_loc: IVec2) {
         return;
     };
     if !coord_eq(new_loc, m.pos) {
-        output::write_glyph_at(IVec2::new(m.pos.x, m.pos.y), (m.oldch as u8) as char);
+        crate::draw::write_cell_glyph(m.pos, m.oldch as char);
         m.room = roomin(new_loc);
         set_oldch(id, new_loc);
         m.oldch = Mon::get(id).map(|x| x.oldch).unwrap_or(m.oldch);
@@ -235,13 +234,10 @@ pub unsafe fn relocate(id: MonsterId, new_loc: IVec2) {
         m.set(id);
         crate::game::set_monster_id(new_loc.y, new_loc.x, Some(id));
     }
-    output::move_cursor(IVec2::new(new_loc.x, new_loc.y));
     if see_monst(id) != false as u8 {
-        output::write_glyph(crate::draw::monster_glyph(id));
+        crate::draw::write_cell_glyph(new_loc, crate::draw::monster_glyph(id));
     } else if player_has(MonsterFlags::SEEMONST) {
-        output::set_standout(true);
-        output::write_glyph(crate::draw::monster_type_glyph(id));
-        output::set_standout(false);
+        crate::draw::write_standout_cell_glyph(new_loc, crate::draw::monster_type_glyph(id));
     }
 }
 
@@ -389,7 +385,7 @@ pub unsafe fn set_oldch(id: MonsterId, cp: IVec2) {
     }
 
     let sch = m.oldch;
-    let mut newch = output::glyph_at(IVec2::new(cp.x, cp.y)) as u8 & 0x7f;
+    let mut newch = crate::draw::screen_glyph_at(cp) as u8 & 0x7f;
     if !player_has(MonsterFlags::BLIND) {
         if (sch == FLOOR as u8 || newch == FLOOR as u8) && crate::game::room_dark(m.room) {
             newch = b' ';

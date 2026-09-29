@@ -25,7 +25,6 @@ use crate::rip::death;
 use crate::rnd::rnd;
 use crate::startup::roll;
 use crate::tile::{TrapHit, TrapType};
-use crate::ui::output;
 use crate::ui::output::msg_str;
 use crate::wizard::teleport;
 use glam::IVec2;
@@ -564,7 +563,7 @@ pub unsafe fn turn_ok(y: i32, x: i32) -> u8 {
 #[inline]
 unsafe fn move_stuff(next_pos: &mut IVec2, fl: u8) {
     let hero = PLAYER.pos();
-    output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
+    crate::draw::write_cell_glyph(hero, floor_at() as char);
     if (fl as u8 & F_PASS as u8) != 0 && crate::game::is_door_at(oldpos.y, oldpos.x) {
         draw_leave_room(*next_pos);
     }

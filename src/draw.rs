@@ -174,7 +174,7 @@ pub(crate) unsafe fn cell_glyph(y: i32, x: i32) -> u8 {
 
 /// Redraw one cell from the current game model.
 pub(crate) unsafe fn redraw_cell(y: i32, x: i32) {
-    output::write_glyph_at(IVec2::new(x, y), (cell_glyph(y, x) as u8) as char);
+    write_cell_glyph(IVec2::new(x, y), (cell_glyph(y, x) as u8) as char);
 }
 
 /// The glyph a *visible* monster is drawn as: its disguise, or a random letter
@@ -206,6 +206,25 @@ pub(crate) fn monster_type_glyph(id: MonsterId) -> char {
 #[inline]
 pub(crate) fn hallucination_glyph() -> char {
     ((rnd(26) + b'A' as i32) as u8) as char
+}
+
+/// Write a world-cell glyph through the drawing layer.
+#[inline]
+pub(crate) fn write_cell_glyph(pos: IVec2, glyph: char) {
+    output::write_glyph_at(pos, glyph);
+}
+
+#[inline]
+pub(crate) fn screen_glyph_at(pos: IVec2) -> char {
+    output::glyph_at(pos)
+}
+
+/// Write a standout world-cell glyph through the drawing layer.
+#[inline]
+pub(crate) fn write_standout_cell_glyph(pos: IVec2, glyph: char) {
+    output::set_standout(true);
+    output::write_glyph_at(pos, glyph);
+    output::set_standout(false);
 }
 
 /// Visible glyph at `(y, x)`: a monster's disguise if one stands here,

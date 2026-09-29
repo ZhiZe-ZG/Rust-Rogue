@@ -233,7 +233,7 @@ pub unsafe fn teleport() {
     let mut c = find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
     let mut hero = hero();
 
-    output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
+    crate::draw::write_cell_glyph(hero, floor_at() as char);
     if roomin(c) != proom() {
         leave_room(hero);
         hero = c;
@@ -243,7 +243,7 @@ pub unsafe fn teleport() {
         look(true as u8);
     }
     crate::game::PLAYER.set_pos(hero);
-    output::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
+    crate::draw::write_cell_glyph(hero, '@');
 
     if crate::game::PLAYER.has_flag(MonsterFlags::HELD) {
         crate::game::PLAYER.remove_flag(MonsterFlags::HELD);
@@ -267,13 +267,11 @@ pub unsafe fn show_map() {
     for y in 1..(GameConfig::SCREEN_LINES - 1) {
         for x in 0..GameConfig::SCREEN_COLS {
             let real = flat(y, x);
+            let glyph = (chat(y, x) as u8) as char;
             if ((real as u8) & (F_REAL as u8)) == 0 {
-                output::set_window_standout(true);
-            }
-            output::move_window_cursor(IVec2::new(x, y));
-            output::write_window_glyph((chat(y, x) as u8) as char);
-            if real == 0 {
-                output::set_window_standout(false);
+                crate::draw::write_standout_cell_glyph(IVec2::new(x, y), glyph);
+            } else {
+                crate::draw::write_cell_glyph(IVec2::new(x, y), glyph);
             }
         }
     }

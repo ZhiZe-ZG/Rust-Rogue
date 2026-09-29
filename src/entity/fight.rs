@@ -28,7 +28,6 @@ use crate::machdep::flush_type;
 use crate::misc::{check_level, chg_str, choose_str};
 use crate::rip::death;
 use crate::startup::roll;
-use crate::ui::output;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
 
@@ -175,7 +174,7 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
         });
         mon.disguise = new_disguise;
         if player_has(MonsterFlags::HALU) {
-            output::write_glyph_at(IVec2::new(pos.x, pos.y), (ch as u8) as char);
+            crate::draw::write_cell_glyph(pos, ch as char);
         }
         msg_str(choose_str(
             "heavy!  That's a nasty critter!",
@@ -262,7 +261,7 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
         });
         mon.disguise = b'X';
         if player_has(MonsterFlags::HALU) {
-            output::write_glyph_at(IVec2::new(pos.x, pos.y), crate::draw::hallucination_glyph());
+            crate::draw::write_cell_glyph(pos, crate::draw::hallucination_glyph());
         }
     }
 
@@ -476,13 +475,14 @@ pub unsafe fn set_mname(tp: MonsterId) -> String {
 
     let mname: &'static str;
     if player_has(MonsterFlags::HALU) {
-        if let Some(pos) = MONSTER_LIST.with(tp, |t| match t {
+        let pos = MONSTER_LIST.with(tp, |t| match t {
             crate::entity::player::Thing::Monster { data } => Some(data.t_pos),
             crate::entity::player::Thing::Object { .. } => None,
-        }).flatten() {
-            output::move_cursor(IVec2::new(pos.x, pos.y));
-        }
-        let ch = (output::glyph_at_cursor() as u8).to_ascii_uppercase() as i32;
+        }).flatten();
+        let ch = pos
+            .map(crate::draw::screen_glyph_at)
+            .unwrap_or(' ')
+            .to_ascii_uppercase() as i32;
         let idx = if (ch as u8).is_ascii_uppercase() {
             (ch - b'A' as i32) as usize
         } else {
@@ -852,7 +852,7 @@ pub unsafe fn remove_mon(mp: IVec2, tp: MonsterId, waskill: u8) {
     }
     crate::game::set_monster_id(mp.y, mp.x, None);
     // Re-draw the underlying character.
-    output::write_glyph_at(IVec2::new(mp.x, mp.y), (mon.oldch as u8) as char);
+    crate::draw::write_cell_glyph(mp, mon.oldch as char);
 
     if on_p(tp, MonsterFlags::TARGET) {
         kamikaze = false as u8;

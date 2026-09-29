@@ -34,7 +34,7 @@ unsafe fn render_current_level() {
         if crate::game::PLAYER.has_flag(crate::entity::player::MonsterFlags::SEEMONST) {
             crate::item::potions::turn_see(false as u8);
         }
-        crate::ui::output::write_glyph_at(hero, '@');
+        crate::draw::write_cell_glyph(hero, '@');
         crate::ui::output::refresh();
     }
     crate::ui::output::status();

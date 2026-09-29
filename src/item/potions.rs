@@ -302,7 +302,7 @@ pub unsafe fn quaff() {
                         show = true;
                         if let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) {
                             output::move_window_cursor(IVec2::new(pos.x, pos.y));
-                            output::write_window_glyph((MAGIC as u8) as char);
+                            crate::draw::write_cell_glyph(pos, MAGIC as u8 as char);
                         }
                         pot_info_at(PotionType::TrapFind.index()).oi_know = true;
                     }
@@ -321,7 +321,7 @@ pub unsafe fn quaff() {
                         if is_magic_id(pack_id) {
                             show = true;
                             output::move_window_cursor(IVec2::new(mp_pos.x, mp_pos.y));
-                            output::write_window_glyph((MAGIC as u8) as char);
+                            crate::draw::write_cell_glyph(mp_pos, MAGIC as u8 as char);
                         }
                     }
                 }
@@ -468,7 +468,7 @@ pub unsafe fn invis_on() {
                 })
                 .flatten()
             {
-                output::write_glyph_at(IVec2::new(pos.x, pos.y), crate::draw::monster_glyph(id));
+                crate::draw::write_cell_glyph(pos, crate::draw::monster_glyph(id));
             }
         }
     }
@@ -487,23 +487,21 @@ pub unsafe fn turn_see(turn_off: u8) -> u8 {
             })
             .flatten()
         {
-            output::move_cursor(IVec2::new(pos.x, pos.y));
             let can_see = see_monst(id) != 0;
             if turn_off != 0 {
                 if !can_see {
-                    output::write_glyph((oldch as u8) as char);
+                    crate::draw::write_cell_glyph(pos, oldch as char);
                 }
             } else {
-                if !can_see {
-                    output::set_standout(true);
-                }
-                if !player_has(MonsterFlags::HALU) {
-                    output::write_glyph(crate::draw::monster_type_glyph(id));
+                let glyph = if !player_has(MonsterFlags::HALU) {
+                    crate::draw::monster_type_glyph(id)
                 } else {
-                    output::write_glyph(crate::draw::hallucination_glyph());
-                }
-                if !can_see {
-                    output::set_standout(false);
+                    crate::draw::hallucination_glyph()
+                };
+                if can_see {
+                    crate::draw::write_cell_glyph(pos, glyph);
+                } else {
+                    crate::draw::write_standout_cell_glyph(pos, glyph);
                     add_new += 1;
                 }
             }
@@ -528,8 +526,7 @@ pub unsafe fn turn_see(turn_off: u8) -> u8 {
 pub unsafe fn seen_stairs() -> u8 {
     let stairs = crate::game::stairs();
 
-    output::move_cursor(IVec2::new(stairs.x, stairs.y));
-    if output::glyph_at_cursor() as i32 == STAIRS {
+    if crate::draw::screen_glyph_at(stairs) as i32 == STAIRS {
         return 1;
     }
     if hero().x == stairs.x && hero().y == stairs.y {

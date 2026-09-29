@@ -290,7 +290,7 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
     }
 
     let _ = crate::item::arena::OBJECTS.remove(bolt);
-    output::write_glyph_at(IVec2::new(pos.x, pos.y), '/');
+    crate::draw::write_cell_glyph(pos, '/');
     output::refresh();
 }
 

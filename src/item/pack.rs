@@ -15,7 +15,6 @@ use crate::item::arena::{with_object, with_object_mut, ThingId, OBJECTS};
 use crate::item::things::{add_line, inv_name_id};
 use crate::misc::{find_obj_id, show_floor};
 use crate::ui::input::readchar;
-use crate::ui::output;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
 
@@ -97,10 +96,7 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
         detach_floor(item_id);
         // The object is removed from the floor list, so the terrain glyph
         // shows automatically via draw.
-        output::write_glyph_at(
-            IVec2::new(hero_coord().x, hero_coord().y),
-            (floor_char_for_room() as u8) as char,
-        );
+        crate::draw::write_cell_glyph(hero_coord(), floor_char_for_room() as char);
         discard_item(item_id);
         msg_str("the scroll turns to dust as you pick it up");
         return;
@@ -349,10 +345,7 @@ pub unsafe fn pack_room_id(from_floor: bool, id: ThingId) -> bool {
         detach_floor(id);
         // The object is removed from the floor list, so the terrain glyph
         // shows automatically via draw.
-        output::write_glyph_at(
-            IVec2::new(hero_coord().x, hero_coord().y),
-            (floor_char_for_room() as u8) as char,
-        );
+        crate::draw::write_cell_glyph(hero_coord(), floor_char_for_room() as char);
     }
 
     inpack += 1;
@@ -530,7 +523,7 @@ pub unsafe fn get_item_id(purpose: &str, filter: ItemFilter) -> Option<ThingId> 
         }
         msg_str(&format!(
             "'{}' is not a valid item",
-            output::format_key(ch as u8)
+            crate::ui::output::format_key(ch as u8)
         ));
     }
 }
@@ -538,10 +531,7 @@ pub unsafe fn get_item_id(purpose: &str, filter: ItemFilter) -> Option<ThingId> 
 pub unsafe fn money(value: i32) {
     purse += value;
     // The gold object was discarded, so the terrain glyph shows via draw.
-    output::write_glyph_at(
-        IVec2::new(hero_coord().x, hero_coord().y),
-        (floor_char_for_room() as u8) as char,
-    );
+    crate::draw::write_cell_glyph(hero_coord(), floor_char_for_room() as char);
     if value > 0 {
         if terse == 0 {
             addmsg_str("you found ");
@@ -605,7 +595,7 @@ pub unsafe fn picky_inven() {
                 return;
             }
         }
-        msg_str(&format!("'{}' not in pack", output::format_key(mch)));
+        msg_str(&format!("'{}' not in pack", crate::ui::output::format_key(mch)));
     }
 }
 
