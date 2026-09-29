@@ -51,8 +51,8 @@ const MASTER: bool = true;
 
 // ─── Static locals for command() ─────────────────────────────────────────────
 
-static mut COUNTCH: Command = Command::Unknown(0);
-static mut DIRECTION: Command = Command::Unknown(0);
+static mut COUNTCH: Command = Command::UnknownKey;
+static mut DIRECTION: Command = Command::UnknownKey;
 static mut NEWCOUNT: u8 = false as u8;
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
@@ -334,7 +334,7 @@ pub(crate) unsafe fn do_command() {
                         }
                     }
                     Command::Again => {
-                        if last_comm == Command::Unknown(0) {
+                        if last_comm == Command::UnknownKey {
                             msg_str("you haven't typed a command yet");
                             after = false as u8;
                         } else {

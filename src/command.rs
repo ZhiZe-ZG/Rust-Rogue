@@ -74,7 +74,6 @@ pub enum Command {
     WizardGear,
     WizardList,
     Space,
-    Unknown(u8),
     UnknownKey,
 }
 
@@ -86,7 +85,7 @@ impl Command {
                     return match character.to_ascii_lowercase() {
                         'a' => Self::WizardUp,
                         'b' => Self::RunPrefix(Direction::SouthWest),
-                        'c' => Self::Unknown(3),
+                        'c' => Self::UnknownKey,
                         'd' => Self::WizardDown,
                         'e' => Self::WizardFood,
                         'f' => Self::WizardMap,
@@ -183,7 +182,7 @@ impl Command {
                         if shifted {
                             Self::RingOn
                         } else {
-                            Self::Unknown(b'p')
+                            Self::UnknownKey
                         }
                     }
                     'o' => Self::Options,
@@ -219,7 +218,7 @@ impl Command {
                     '|' => Self::WizardPosition,
                     '$' => Self::WizardInpack,
                     '*' => Self::WizardList,
-                    _ if character.is_ascii() => Self::Unknown(character as u8),
+                    _ if character.is_ascii() => Self::UnknownKey,
                     _ => Self::UnknownKey,
                 }
             }

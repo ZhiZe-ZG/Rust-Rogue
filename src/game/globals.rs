@@ -101,9 +101,9 @@ pub static mut ws_made: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
 /// Wand/staff kind names (`char *ws_type[]`), now Rust string slices.
 pub static mut ws_type: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
 pub static mut orig_dsusp: i32 = 0;
-pub static mut l_last_comm: Command = Command::Unknown(0);
+pub static mut l_last_comm: Command = Command::UnknownKey;
 pub static mut l_last_dir: Direction = Direction::None;
-pub static mut last_comm: Command = Command::Unknown(0);
+pub static mut last_comm: Command = Command::UnknownKey;
 pub static mut last_dir: Direction = Direction::None;
 pub static mut numscores: u32 = 10; // NUMSCORES from config.h
 /// The number label for the scoreboard (`NUMNAME` from config.h).
