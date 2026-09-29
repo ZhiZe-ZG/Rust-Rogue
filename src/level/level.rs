@@ -9,12 +9,12 @@ use glam::IVec2;
 
 use super::passages::{
     apply_passage, build_passage, collect_corridor_end, corridor_tiles, mark_passages,
-    number_passages, plan_corridor, Passage, PassageLinks,
+    number_passages, plan_corridor, PassageLinks,
 };
 use super::roomgraph::RoomGraph;
 use crate::config::GameConfig;
 use crate::item::arena::{ThingId, OBJECTS};
-use crate::structure::{Room, Structure};
+use crate::structure::{Passage, Room, Structure};
 use crate::tile::{Tile, TrapType};
 
 /// Upper bound for the roll that removes rooms at the start of a new level.

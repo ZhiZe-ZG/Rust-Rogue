@@ -24,8 +24,8 @@ use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingObject};
 use crate::game::{MonsterId, MONSTER_LIST, MONSTER_MAP, PLAYER};
 use crate::item::arena::{new_item_id, ThingId, OBJECTS};
-use crate::level::{LevelFlags, Passage, PassageLinks, RoomGraph};
-use crate::structure::{Room, Structure};
+use crate::level::{LevelFlags, PassageLinks, RoomGraph};
+use crate::structure::{Passage, Room, Structure};
 
 /// Number of generated scroll names persisted (legacy `MAXSCROLLS`).
 const MAXSCROLLS: usize = 18;
