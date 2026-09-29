@@ -15,9 +15,9 @@
 //!
 //! [RON]: https://github.com/ron-rs/ron
 
-use glam::IVec2;
-use crate::direction::Direction;
 use crate::command::Command;
+use crate::direction::Direction;
+use glam::IVec2;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
@@ -279,9 +279,12 @@ fn snapshot_actor(
         crate::entity::player::DestRef::Monster(id) => {
             DestRef::Monster(MONSTER_LIST.position(id).unwrap_or(usize::MAX))
         }
-        crate::entity::player::DestRef::Object(id) => {
-            DestRef::Object(level_items.iter().position(|&o| o == id).unwrap_or(usize::MAX))
-        }
+        crate::entity::player::DestRef::Object(id) => DestRef::Object(
+            level_items
+                .iter()
+                .position(|&o| o == id)
+                .unwrap_or(usize::MAX),
+        ),
         crate::entity::player::DestRef::RoomGold(r) => DestRef::RoomGold(r),
     };
 
@@ -393,11 +396,12 @@ unsafe fn build_snapshot() -> GameSnapshot {
             items: level_items
                 .iter()
                 .filter_map(|&id| {
-                    OBJECTS.with(id, |t| match t {
-                        Thing::Object { data, .. } => Some(data.clone()),
-                        Thing::Monster { .. } => None,
-                    })
-                    .flatten()
+                    OBJECTS
+                        .with(id, |t| match t {
+                            Thing::Object { data, .. } => Some(data.clone()),
+                            Thing::Monster { .. } => None,
+                        })
+                        .flatten()
                 })
                 .collect(),
             monster_cells,
@@ -798,15 +802,15 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
         let live = match snap.t_dest {
             DestRef::None => crate::entity::player::DestRef::None,
             DestRef::Hero => crate::entity::player::DestRef::Hero,
-            DestRef::Object(j) => item_ids
-                .get(j)
-                .copied()
-                .map_or(crate::entity::player::DestRef::None, crate::entity::player::DestRef::Object),
+            DestRef::Object(j) => item_ids.get(j).copied().map_or(
+                crate::entity::player::DestRef::None,
+                crate::entity::player::DestRef::Object,
+            ),
             DestRef::RoomGold(j) => crate::entity::player::DestRef::RoomGold(j),
-            DestRef::Monster(j) => monster_ids
-                .get(j)
-                .copied()
-                .map_or(crate::entity::player::DestRef::None, crate::entity::player::DestRef::Monster),
+            DestRef::Monster(j) => monster_ids.get(j).copied().map_or(
+                crate::entity::player::DestRef::None,
+                crate::entity::player::DestRef::Monster,
+            ),
         };
         crate::entity::player::set_monster_dest(id, live);
     }

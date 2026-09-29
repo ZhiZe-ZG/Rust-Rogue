@@ -4,14 +4,13 @@
 use crate::daemon::{do_daemons, do_fuses};
 use crate::entity::player::ObjectFlags;
 use crate::game::PLAYER;
-use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
 use crate::item::rings::RingType;
 use crate::item::things::{dropcheck_id, inv_name_id};
 use crate::misc::spread;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
-
 
 use crate::game::globals::{after, terse, to_death};
 
@@ -33,7 +32,10 @@ pub unsafe fn wear() {
         return;
     }
 
-    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Armor(_))) {
+    if !matches!(
+        OBJECTS.with_object(obj, |o| o.o_type),
+        Some(ItemType::Armor(_))
+    ) {
         msg_str("you can't wear that");
         return;
     }
@@ -92,7 +94,12 @@ pub unsafe fn rust_armor_id(arm: Option<ThingId>) {
         return;
     };
     let Some((typ, which, o_arm, prot)) = OBJECTS.with_object(id, |o| {
-        (o.o_type, o.o_which, o.o_arm, o.o_flags.contains(ObjectFlags::PROT))
+        (
+            o.o_type,
+            o.o_which,
+            o.o_arm,
+            o.o_flags.contains(ObjectFlags::PROT),
+        )
     }) else {
         return;
     };

@@ -5,10 +5,10 @@
 use crate::config::GameConfig;
 use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
-use crate::game::PLAYER;
 use crate::game::globals::ObjInfo;
-use crate::item::item_type::{ItemFilter, ItemType};
+use crate::game::PLAYER;
 use crate::item::arena::OBJECTS;
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id, reset_last};
 use crate::rnd::rnd;
 use crate::ui::input::read_key_event;
@@ -44,8 +44,11 @@ const AFTER: i32 = 2;
 const NORM: i32 = 0;
 const F_SEEN: u8 = 0x40;
 
-use crate::game::globals::{after, again, amulet, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump, last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running, see_floor, seenstairs, terse};
-
+use crate::game::globals::{
+    after, again, amulet, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state,
+    jump, last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running,
+    see_floor, seenstairs, terse,
+};
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
@@ -81,10 +84,9 @@ pub unsafe fn show_floor() -> bool {
 /// The floor object at `(y, x)`, as an arena handle.
 pub fn find_obj_id(y: i32, x: i32) -> Option<crate::item::arena::ThingId> {
     for id in crate::game::item_ids() {
-        let hit = crate::item::arena::with_object(id, |data| {
-            data.o_pos.y == y && data.o_pos.x == x
-        })
-        .unwrap_or(false);
+        let hit =
+            crate::item::arena::with_object(id, |data| data.o_pos.y == y && data.o_pos.x == x)
+                .unwrap_or(false);
         if hit {
             return Some(id);
         }
@@ -118,7 +120,10 @@ pub unsafe fn eat() {
     }
     let which = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
     if which == 1 {
-        msg_str(&format!("my, that was a yummy {}", crate::game::globals::fruit()));
+        msg_str(&format!(
+            "my, that was a yummy {}",
+            crate::game::globals::fruit()
+        ));
     } else if rnd(100) > 70 {
         PLAYER.with_stats_mut(|stats| stats.experience += 1);
         msg_str("bummer, this food tastes awful");

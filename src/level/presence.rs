@@ -16,11 +16,11 @@ use crate::config::GameConfig;
 use crate::entity::chase::roomin;
 use crate::entity::monsters::{give_pack_id, new_monster_id, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
+use crate::game::globals::{amulet, max_level, ntraps, seenstairs};
 use crate::game::MONSTER_LIST;
 use crate::game::{self, with_current_level, with_current_level_mut};
-use crate::game::globals::{amulet, max_level, ntraps, seenstairs};
-use crate::item::item_type::ItemType;
 use crate::item::arena::{new_item_id, ThingId, OBJECTS};
+use crate::item::item_type::ItemType;
 use crate::item::things::new_thing_id;
 use crate::rnd::rnd;
 
@@ -267,9 +267,7 @@ unsafe fn place_traps() {
         with_current_level_mut(|current| {
             let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
             let trap = TrapType::from_raw(rnd(GameConfig::TRAP_KIND_COUNT) as u8);
-            current
-                .map
-                .set(stairs, Tile::Trap(trap));
+            current.map.set(stairs, Tile::Trap(trap));
             current.flags.real[idx] = false;
         });
         i -= 1;
@@ -282,9 +280,7 @@ unsafe fn place_stairs() {
     // The staircase is a tile in the level map; it renders `%` via draw.
     with_current_level_mut(|current| {
         current.stairs = stairs;
-        current
-            .map
-            .set(stairs, Tile::Stairs);
+        current.map.set(stairs, Tile::Stairs);
     });
     seenstairs = false as u8;
 }
@@ -305,7 +301,6 @@ unsafe fn place_hero() {
     if let Some(pos) = find_floor(None, 0, true) {
         crate::game::PLAYER.set_pos(pos);
     }
-
 }
 
 /// Run the full population pass: gold/monsters, objects, traps, stairs, and

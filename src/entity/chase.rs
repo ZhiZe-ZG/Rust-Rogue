@@ -8,8 +8,8 @@
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
-use crate::entity::player::{DestRef, MonsterFlags, Thing};
 use crate::entity::monsters::MonsterType;
+use crate::entity::player::{DestRef, MonsterFlags, Thing};
 use crate::entity::rndmove::rndmove;
 use crate::game::globals::monsters;
 use crate::game::{MonsterId, MONSTER_LIST};
@@ -131,7 +131,9 @@ fn resolve_dest(dest: DestRef) -> IVec2 {
                 Thing::Monster { .. } => hero_pos(),
             })
             .unwrap_or_else(hero_pos),
-        DestRef::RoomGold(r) => unsafe { crate::game::room_gold_pos(Some(r)) }.unwrap_or_else(hero_pos),
+        DestRef::RoomGold(r) => {
+            unsafe { crate::game::room_gold_pos(Some(r)) }.unwrap_or_else(hero_pos)
+        }
     }
 }
 
@@ -538,8 +540,7 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> u8 {
                             })
                             .flatten();
                             if let Some(otype) = at_pos {
-                                found_scare =
-                                    matches!(otype, ItemType::Scroll(ScrollType::Scare));
+                                found_scare = matches!(otype, ItemType::Scroll(ScrollType::Scare));
                                 break;
                             }
                         }

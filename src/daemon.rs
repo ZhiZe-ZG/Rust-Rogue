@@ -16,7 +16,6 @@
 //! dropped the argument, which was undefined behaviour for callbacks such as
 //! `turn_see`).
 
-
 use crate::game::globals::D_LIST;
 use std::sync::atomic::{AtomicU64, Ordering};
 

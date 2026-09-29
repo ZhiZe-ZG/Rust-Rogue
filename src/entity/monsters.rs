@@ -4,12 +4,12 @@
 use crate::config::GameConfig;
 use crate::daemon::{fuse, lengthen, Daemon};
 use crate::entity::chase::{dist, roomin, runto};
-use crate::entity::player::DestRef;
 use crate::entity::fight::set_mname;
+use crate::entity::player::DestRef;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
-use crate::item::rings::RingType;
 use crate::game::{MonsterId, MONSTER_LIST};
+use crate::item::rings::RingType;
 use crate::item::things::new_thing_id;
 use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
@@ -198,7 +198,6 @@ static WAND_MONS: [Option<MonsterType>; 26] = [
 ];
 
 use crate::game::globals::{max_level, wizard};
-
 
 #[inline]
 fn has_flag(id: MonsterId, flag: MonsterFlags) -> bool {

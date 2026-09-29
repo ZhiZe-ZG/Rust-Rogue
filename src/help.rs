@@ -1,12 +1,10 @@
 //! Command help and map-symbol identification.
 
-
-
 use crate::config::GameConfig;
 use crate::game::globals::{lower_msg, monsters, mpos};
 use crate::ui::input::{readchar, wait_for};
-use crate::ui::output::msg_str;
 use crate::ui::output;
+use crate::ui::output::msg_str;
 use glam::IVec2;
 
 const ESCAPE: i32 = 27;
@@ -179,11 +177,7 @@ pub(crate) unsafe fn help() {
         output::move_cursor(IVec2::new(0, 0));
         if let Some(entry) = HELP_ENTRIES.iter().find(|entry| entry.ch == helpch) {
             lower_msg = true as u8;
-            msg_str(&format!(
-                "{}{}",
-                output::format_key(entry.ch),
-                entry.desc
-            ));
+            msg_str(&format!("{}{}", output::format_key(entry.ch), entry.desc));
             lower_msg = false as u8;
         } else {
             msg_str(&format!(
@@ -209,13 +203,13 @@ pub(crate) unsafe fn help() {
     {
         let count = count as i32;
         output::move_window_cursor(IVec2::new(
-                if count >= numprint {
-                    GameConfig::SCREEN_COLS / 2
-                } else {
-                    0
-                },
-                count % numprint,
-            ));
+            if count >= numprint {
+                GameConfig::SCREEN_COLS / 2
+            } else {
+                0
+            },
+            count % numprint,
+        ));
         if entry.ch != 0 {
             output::write_window_text(&output::format_key(entry.ch));
         }

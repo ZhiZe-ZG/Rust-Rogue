@@ -3,10 +3,10 @@
 //! Ported from `src/c/sticks.c` to Rust.
 use crate::entity::monsters::{save, save_throw_id};
 use crate::entity::player::ObjectFlags;
-use crate::game::PLAYER;
 use crate::game::globals::ws_info;
-use crate::item::item_type::{ItemFilter, ItemType};
+use crate::game::PLAYER;
 use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
 use crate::item::weapons::{do_motion, hit_monster};
 use crate::rip::death;
@@ -73,7 +73,6 @@ const MAXSTICKS: usize = StickType::COUNT;
 
 use crate::game::globals::{after, delta, terse};
 
-
 #[inline]
 fn hero_pos() -> IVec2 {
     crate::game::PLAYER.pos()
@@ -102,7 +101,9 @@ unsafe fn set_c_string(dst: &mut [u8], src: &str) {
 
 #[inline]
 fn stick_type(id: ThingId) -> Option<StickType> {
-    OBJECTS.with_object(id, |o| StickType::from_raw(o.o_which)).flatten()
+    OBJECTS
+        .with_object(id, |o| StickType::from_raw(o.o_which))
+        .flatten()
 }
 
 /// Set up a new stick with the expected damage and charge values.
@@ -126,14 +127,16 @@ pub unsafe fn fix_stick_id(id: ThingId) {
     });
 }
 
-
 /// do_zap:
 /// Perform a zap with a wand or staff and apply a simplified effect.
 pub unsafe fn do_zap() {
     let Some(obj) = get_item_id("zap with", ItemFilter::Category(ItemType::STICK)) else {
         return;
     };
-    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Stick(_))) {
+    if !matches!(
+        OBJECTS.with_object(obj, |o| o.o_type),
+        Some(ItemType::Stick(_))
+    ) {
         after = false as u8;
         msg_str("you can't zap with that!");
         return;
@@ -293,4 +296,3 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
     crate::draw::write_cell_glyph(pos, '/');
     output::refresh();
 }
-

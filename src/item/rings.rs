@@ -6,8 +6,8 @@ use crate::item::potions::invis_on;
 use crate::rnd::rnd;
 
 use crate::game::PLAYER;
-use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
 use crate::item::things::{dropcheck_id, inv_name_id};
 use crate::item::weapons::num;
@@ -87,13 +87,15 @@ const USES: [i32; RingType::COUNT] = [
 
 use crate::game::globals::{mpos, terse};
 
-
 /// Prompts for a ring and equips it on an available hand, applying immediate ring effects.
 pub unsafe fn ring_on() {
     let Some(obj) = get_item_id("put on", ItemFilter::Category(ItemType::RING)) else {
         return;
     };
-    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Ring(_))) {
+    if !matches!(
+        OBJECTS.with_object(obj, |o| o.o_type),
+        Some(ItemType::Ring(_))
+    ) {
         if terse == 0 {
             msg_str("it would be difficult to wrap that around a finger");
         } else {

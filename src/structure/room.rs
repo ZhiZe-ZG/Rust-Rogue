@@ -236,9 +236,7 @@ impl Room {
         }
 
         if !secret {
-            let _ = self
-                .structure
-                .set(local, Tile::Door);
+            let _ = self.structure.set(local, Tile::Door);
         }
         self.add_entry_point(local);
         true

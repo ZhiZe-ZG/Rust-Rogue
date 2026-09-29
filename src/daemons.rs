@@ -41,8 +41,10 @@ const STARVETIME: i32 = 850;
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
-use crate::game::globals::{after, amulet, count, food_left, hungry_state, jump, no_command, quiet, running, seenstairs, terse, to_death};
-
+use crate::game::globals::{
+    after, amulet, count, food_left, hungry_state, jump, no_command, quiet, running, seenstairs,
+    terse, to_death,
+};
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
 
@@ -51,7 +53,9 @@ use crate::game::globals::{after, amulet, count, food_left, hungry_state, jump, 
 fn monster_view(id: crate::game::MonsterId) -> Option<(IVec2, u8, u8, MonsterFlags)> {
     MONSTER_LIST
         .with(id, |t| match t {
-            Thing::Monster { data } => Some((data.t_pos, data.t_disguise, data.t_oldch, data.t_flags)),
+            Thing::Monster { data } => {
+                Some((data.t_pos, data.t_disguise, data.t_oldch, data.t_flags))
+            }
             Thing::Object { .. } => None,
         })
         .flatten()
@@ -235,7 +239,10 @@ pub unsafe fn come_down() {
     for id in crate::game::item_ids() {
         if let Some((pos, otype)) = OBJECTS.with_object(id, |o| (o.o_pos, o.o_type)) {
             if cansee(pos.y, pos.x) != 0 {
-                crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), crate::draw::item_glyph(otype));
+                crate::draw::write_cell_glyph(
+                    IVec2::new(pos.x, pos.y),
+                    crate::draw::item_glyph(otype),
+                );
             }
         }
     }

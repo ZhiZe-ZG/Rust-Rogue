@@ -281,7 +281,8 @@ pub(crate) fn write_text(text: &str) {
             }
             ch => {
                 if in_bounds(cursor.y, cursor.x) {
-                    lock(&UI.grid)[cursor.y as usize][cursor.x as usize] = ScreenCell { ch, standout };
+                    lock(&UI.grid)[cursor.y as usize][cursor.x as usize] =
+                        ScreenCell { ch, standout };
                 }
                 cursor.x += 1;
                 if cursor.x >= NCOLS as i32 {

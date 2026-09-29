@@ -3,7 +3,6 @@
 //! Ported from `src/c/move.c` to Rust, together with the shared `THING`,
 //! `PLACE`, and `COORD` layouts the rest of the port relies on.
 use crate::config::GameConfig;
-use crate::entity::monsters::MonsterType;
 use crate::draw::{
     enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room, turnref as draw_turnref,
     winat,
@@ -11,12 +10,13 @@ use crate::draw::{
 use crate::entity::chase::{diag_ok, roomin};
 use crate::entity::fight::{fight, swing};
 use crate::entity::monsters::save;
+use crate::entity::monsters::MonsterType;
 use crate::game;
 use crate::game::PLAYER;
+use crate::item::arena::new_item_id;
 use crate::item::armor::rust_armor_id;
 use crate::item::pack::floor_at;
 use crate::item::rings::RingType;
-use crate::item::arena::new_item_id;
 use crate::item::weapons::{fall, init_weapon};
 use crate::level::new_level;
 use crate::machdep::flush_type;
@@ -529,8 +529,10 @@ pub fn discard_monster(id: crate::game::MonsterId) {
     let _ = crate::game::MONSTER_LIST.remove(id);
 }
 
-use crate::game::globals::{after, count, delta, door_stop, firstmove, jump, move_on, no_command, no_move, oldpos, passgo, runch, running, seenstairs, take, to_death};
-
+use crate::game::globals::{
+    after, count, delta, door_stop, firstmove, jump, move_on, no_command, no_move, oldpos, passgo,
+    runch, running, seenstairs, take, to_death,
+};
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
@@ -701,7 +703,9 @@ unsafe fn try_passgo_turn(dy: &mut i32, dx: &mut i32) -> bool {
         *dx = 0;
         draw_turnref();
         true
-    } else if runch == crate::direction::Direction::South || runch == crate::direction::Direction::North {
+    } else if runch == crate::direction::Direction::South
+        || runch == crate::direction::Direction::North
+    {
         let b1 = hero.x != 0 && turn_ok(hero.y, hero.x - 1) != 0;
         let b2 = hero.x != GameConfig::SCREEN_COLS - 1 && turn_ok(hero.y, hero.x + 1) != 0;
         if !(b1 ^ b2) {

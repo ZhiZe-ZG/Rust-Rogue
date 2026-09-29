@@ -8,17 +8,17 @@ use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game::globals::{monsters, pot_info, ring_info, scr_info, ws_info, ObjInfo};
+use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{add_pack_id, floor_at, get_item_id};
 use crate::item::sticks::fix_stick_id;
-use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::item::things::inv_name_id;
 use crate::item::weapons::init_weapon;
 use crate::level::find_floor;
 use crate::machdep::flush_type;
 use crate::ui::input::readchar;
-use crate::ui::output::{msg_str, show_win};
 use crate::ui::output;
+use crate::ui::output::{msg_str, show_win};
 use glam::IVec2;
 
 const FOOD: i32 = b':' as i32;
@@ -70,7 +70,6 @@ unsafe fn master_enabled() -> bool {
 
 use crate::game::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hit};
 
-
 pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
     let pack = crate::game::PLAYER.pack();
     if pack.is_empty() {
@@ -87,7 +86,9 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
             } else if obj.is_none() {
                 msg_str("you must identify something");
             } else if !filter.matches(
-                OBJECTS.with_object(obj.unwrap(), |o| o.o_type).unwrap_or(ItemType::None),
+                OBJECTS
+                    .with_object(obj.unwrap(), |o| o.o_type)
+                    .unwrap_or(ItemType::None),
             ) {
                 msg_str(&format!("you must identify a {}", type_name(filter)));
             } else {
@@ -102,7 +103,9 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
         return;
     };
 
-    let otype = OBJECTS.with_object(obj, |o| o.o_type).unwrap_or(ItemType::None);
+    let otype = OBJECTS
+        .with_object(obj, |o| o.o_type)
+        .unwrap_or(ItemType::None);
     match otype {
         ItemType::Scroll(_) => set_know_id(obj, &mut scr_info[..]),
         ItemType::Potion(_) => set_know_id(obj, &mut pot_info[..]),
@@ -169,7 +172,9 @@ pub unsafe fn create_obj() {
     });
     mpos = 0;
 
-    let otype = OBJECTS.with_object(obj, |o| o.o_type).unwrap_or(ItemType::None);
+    let otype = OBJECTS
+        .with_object(obj, |o| o.o_type)
+        .unwrap_or(ItemType::None);
     match otype {
         ItemType::Weapon(_) | ItemType::Armor(_) => {
             msg_str("blessing? (+,-,n)");

@@ -9,9 +9,9 @@
 
 use crate::entity::player::{MonsterFlags, ObjectFlags};
 use crate::game::MONSTER_LIST;
+use crate::item::arena::{with_object, with_object_mut, ThingId, OBJECTS};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::scrolls::ScrollType;
-use crate::item::arena::{with_object, with_object_mut, ThingId, OBJECTS};
 use crate::item::things::{add_line, inv_name_id};
 use crate::misc::{find_obj_id, show_floor};
 use crate::ui::input::readchar;
@@ -34,8 +34,10 @@ const CALLABLE: i32 = -1;
 const R_OR_S: i32 = -2;
 const ESCAPE: i32 = 27;
 
-use crate::game::globals::{after, again, amulet, inpack, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, move_on, mpos, msg_esc, n_objs, pack_used, purse, terse};
-
+use crate::game::globals::{
+    after, again, amulet, inpack, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
+    last_pick, move_on, mpos, msg_esc, n_objs, pack_used, purse, terse,
+};
 
 /// Unlink `id` from the current level's floor-item list.
 unsafe fn detach_floor(id: ThingId) {
@@ -89,7 +91,8 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
     let mut item_id = item.expect("item resolved above");
 
     let is_scare_dust = with_object(item_id, |o| {
-        matches!(o.o_type, ItemType::Scroll(ScrollType::Scare)) && o.o_flags.contains(ObjectFlags::FOUND)
+        matches!(o.o_type, ItemType::Scroll(ScrollType::Scare))
+            && o.o_flags.contains(ObjectFlags::FOUND)
     })
     .unwrap_or(false);
     if is_scare_dust {
@@ -279,7 +282,9 @@ mod tests {
             assert_eq!(PLAYER.pack(), vec![food]);
             assert_eq!(find_obj_id(pos.y, pos.x), None);
             assert_eq!({ inpack }, 1);
-            assert!(OBJECTS.with_object(food, |obj| obj.o_flags.contains(ObjectFlags::FOUND)).unwrap());
+            assert!(OBJECTS
+                .with_object(food, |obj| obj.o_flags.contains(ObjectFlags::FOUND))
+                .unwrap());
 
             add_pack_id(None, true);
             assert_eq!(OBJECTS.with_object(food, |obj| obj.o_count), Some(1));
@@ -587,15 +592,14 @@ pub unsafe fn picky_inven() {
         }
         for id in &pack {
             if with_object(*id, |o| o.o_packch) == Some(mch) {
-                msg_str(&format!(
-                    "{}) {}",
-                    mch as char,
-                    inv_name_id(*id, false)
-                ));
+                msg_str(&format!("{}) {}", mch as char, inv_name_id(*id, false)));
                 return;
             }
         }
-        msg_str(&format!("'{}' not in pack", crate::ui::output::format_key(mch)));
+        msg_str(&format!(
+            "'{}' not in pack",
+            crate::ui::output::format_key(mch)
+        ));
     }
 }
 

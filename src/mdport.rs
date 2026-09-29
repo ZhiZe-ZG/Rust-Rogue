@@ -13,7 +13,6 @@
 //! The only remaining FFI is genuine OS interop (`libc` signal/termios/passwd
 //! calls); all hands own their data with Rust types.
 
-
 use crate::save::auto_save;
 use crate::startup::{endit, quit, tstp};
 use crate::ui::input;
@@ -274,7 +273,7 @@ pub unsafe fn md_getuid() -> u32 {
 pub unsafe fn md_getpid() -> i32 {
     #[cfg(unix)]
     {
-std::process::id() as i32
+        std::process::id() as i32
     }
     #[cfg(not(unix))]
     {
@@ -617,10 +616,10 @@ pub unsafe fn md_readchar() -> i32 {
                     mode = M_TRAIL;
                 }
                 // PuTTY ESC O sequences.
-                0x44 => ch = ctrl('H'),    // 'D'
-                0x43 => ch = ctrl('L'),    // 'C'
-                0x41 => ch = ctrl('K'),    // 'A'
-                0x42 => ch = ctrl('J'),    // 'B'
+                0x44 => ch = ctrl('H'),  // 'D'
+                0x43 => ch = ctrl('L'),  // 'C'
+                0x41 => ch = ctrl('K'),  // 'A'
+                0x42 => ch = ctrl('J'),  // 'B'
                 0x74 => ch = 'h' as i32, // 't'
                 0x76 => ch = 'l' as i32, // 'v'
                 0x78 => ch = 'k' as i32, // 'x'

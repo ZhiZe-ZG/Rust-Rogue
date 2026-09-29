@@ -12,10 +12,10 @@ use crate::entity::player::ObjectFlags;
 use crate::game::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, ObjInfo,
 };
+use crate::item::arena::new_item_id;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::rings::RingType;
 use crate::item::sticks::fix_stick_id;
-use crate::item::arena::new_item_id;
 use crate::item::weapons::init_weapon;
 
 const MAXSTR: usize = 1024;
@@ -28,7 +28,6 @@ const MAXWEAPONS: usize = 9;
 const MAXSTICKS: usize = 14;
 
 use crate::game::globals::{a_class, inv_describe, no_food};
-
 
 #[inline]
 fn starts_with_article(name: &str) -> &'static str {

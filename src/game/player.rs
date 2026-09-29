@@ -175,7 +175,6 @@ impl Equipment {
         let id = self.rings.get(hand)?.get()?;
         crate::item::arena::OBJECTS.with_object_mut(id, f)
     }
-
 }
 
 /// The zero-valued actor [`Thing`] used to seed the global player.
@@ -499,7 +498,6 @@ impl Player {
     pub fn set_weapon_id(&self, weapon: Option<ThingId>) {
         self.equipment.set_weapon_id(weapon);
     }
-
 }
 
 /// Process-wide owner of the player's actor and equipment.

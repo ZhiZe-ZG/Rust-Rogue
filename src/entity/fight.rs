@@ -11,17 +11,17 @@ use crate::rnd::rnd;
 
 use crate::entity::chase::{runto, see_monst};
 use crate::entity::monsters::save;
-use crate::entity::player::MonsterFlags;
 use crate::entity::monsters::MonsterType;
-use crate::game::{MonsterId, MONSTER_LIST, PLAYER};
+use crate::entity::player::MonsterFlags;
 use crate::game::globals::{monsters, weap_info};
+use crate::game::{MonsterId, MONSTER_LIST, PLAYER};
 use crate::init::pick_color;
+use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::armor::rust_armor_id;
 use crate::item::item_type::ItemType;
 use crate::item::pack::leave_pack_id;
 use crate::item::potions::is_magic_id;
 use crate::item::rings::RingType;
-use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::things::inv_name_id;
 use crate::item::weapons::{fall, fallpos};
 use crate::machdep::flush_type;
@@ -112,8 +112,10 @@ impl Mon {
     }
 }
 
-use crate::game::globals::{count, e_levels, fight_flush, has_hit, kamikaze, max_hit, max_level, no_command, purse, quiet, running, terse, to_death, vf_hit};
-
+use crate::game::globals::{
+    count, e_levels, fight_flush, has_hit, kamikaze, max_hit, max_level, no_command, purse, quiet,
+    running, terse, to_death, vf_hit,
+};
 
 // ─── Inline helpers ───────────────────────────────────────────────────────────
 
@@ -330,7 +332,11 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                 }
             } else if mtype == Some(MonsterType::Wraith) || mtype == Some(MonsterType::Vampire) {
                 // Wraith / Vampire: drain energy or max HP
-                let threshold = if mtype == Some(MonsterType::Wraith) { 15 } else { 30 };
+                let threshold = if mtype == Some(MonsterType::Wraith) {
+                    15
+                } else {
+                    30
+                };
                 if rnd(100) < threshold {
                     let fewer;
                     if mtype == Some(MonsterType::Wraith) {
@@ -475,10 +481,12 @@ pub unsafe fn set_mname(tp: MonsterId) -> String {
 
     let mname: &'static str;
     if player_has(MonsterFlags::HALU) {
-        let pos = MONSTER_LIST.with(tp, |t| match t {
-            crate::entity::player::Thing::Monster { data } => Some(data.t_pos),
-            crate::entity::player::Thing::Object { .. } => None,
-        }).flatten();
+        let pos = MONSTER_LIST
+            .with(tp, |t| match t {
+                crate::entity::player::Thing::Monster { data } => Some(data.t_pos),
+                crate::entity::player::Thing::Object { .. } => None,
+            })
+            .flatten();
         let ch = pos
             .map(crate::draw::screen_glyph_at)
             .unwrap_or(' ')

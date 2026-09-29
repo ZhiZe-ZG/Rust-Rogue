@@ -2,11 +2,11 @@
 //!
 //! Mirrors the process-wide storage the original C code declared in
 //! `extern.c` and `init.c`: material tables, monster state, and other globals.
+use crate::command::Command;
 use crate::config::GameConfig;
 use crate::daemon::CDelayedAction;
-use crate::entity::stats::Stats;
-use crate::command::Command;
 use crate::direction::Direction;
+use crate::entity::stats::Stats;
 use glam::IVec2;
 use std::sync::{Mutex, MutexGuard};
 
@@ -1387,10 +1387,7 @@ pub fn set_scroll_name(index: usize, name: String) {
 
 /// Get the scroll name at `index` (empty string when unset).
 pub fn scroll_name(index: usize) -> String {
-    lock(&SCROLL_NAMES)
-        .get(index)
-        .cloned()
-        .unwrap_or_default()
+    lock(&SCROLL_NAMES).get(index).cloned().unwrap_or_default()
 }
 
 /// Number of scroll names currently stored.
@@ -1410,10 +1407,7 @@ pub fn init_inv_t_names() {
 
 /// The inventory display style name at `index` (empty string when out of range).
 pub fn inv_t_name(index: usize) -> String {
-    lock(&INV_T_NAMES)
-        .get(index)
-        .cloned()
-        .unwrap_or_default()
+    lock(&INV_T_NAMES).get(index).cloned().unwrap_or_default()
 }
 
 /// Set the inventory display style name at `index`.
@@ -1447,10 +1441,7 @@ pub fn init_trap_names() {
 
 /// The trap name at `index` (empty string when out of range).
 pub fn trap_name(index: usize) -> String {
-    lock(&TRAP_NAMES)
-        .get(index)
-        .cloned()
-        .unwrap_or_default()
+    lock(&TRAP_NAMES).get(index).cloned().unwrap_or_default()
 }
 
 /// Set the trap name at `index`.

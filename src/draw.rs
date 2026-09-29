@@ -14,14 +14,13 @@
 //! are plain Rust functions (`pub unsafe fn`), driven entirely by
 //! `CURRENT_LEVEL`; no C ABI symbols are exported.
 
-
 use crate::config::GameConfig;
 use crate::entity::chase::{roomin, see_monst};
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::{MonsterFlags, Thing};
+use crate::game;
 use crate::game::{MonsterId, MONSTER_LIST};
 use crate::item::arena::ThingId;
-use crate::game;
 use crate::level::{door_open, with_current_level, with_current_level_mut};
 use crate::rnd::rnd;
 use crate::tile::Tile;
@@ -61,8 +60,9 @@ const LAMPDIST: i32 = 3;
 
 // ─── Process-wide flags read by the draw loop ────────────────────────────────
 
-use crate::game::globals::{after, door_stop, firstmove, jump, oldpos, oldrp, runch, running, see_floor, seenstairs};
-
+use crate::game::globals::{
+    after, door_stop, firstmove, jump, oldpos, oldrp, runch, running, see_floor, seenstairs,
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -257,24 +257,14 @@ pub(crate) unsafe fn flat_at(y: i32, x: i32) -> u8 {
         if lvl.flags.real[idx] {
             f |= F_REAL as u8;
         }
-        f |= (lvl
-            .map
-            .get(IVec2::new(x, y))
-            .unwrap_or(Tile::Empty)
-            .trap() as u8)
-            & (F_TMASK as u8);
+        f |= (lvl.map.get(IVec2::new(x, y)).unwrap_or(Tile::Empty).trap() as u8) & (F_TMASK as u8);
         f as u8
     })
 }
 
 /// Trap kind (0-7) at `(y, x)` from the tile map.
 pub(crate) unsafe fn trap_kind_at(y: i32, x: i32) -> TrapType {
-    with_current_level(|lvl| {
-        lvl.map
-            .get(IVec2::new(x, y))
-            .unwrap_or(Tile::Empty)
-            .trap()
-    })
+    with_current_level(|lvl| lvl.map.get(IVec2::new(x, y)).unwrap_or(Tile::Empty).trap())
 }
 
 /// Whether the tile at `(y, x)` is a hidden trap.
@@ -363,8 +353,7 @@ pub(crate) unsafe fn map_cell_reveal(y: i32, x: i32) -> i32 {
 /// Whether `ch`/`flags` describe a doorway or a hidden (non-real) wall.
 #[inline]
 fn is_door_or_hidden(ch: u8, flags: u8) -> bool {
-    ch == DOOR
-        || ((flags as u8 & F_REAL as u8) == 0 && (ch == b'|' as u8 || ch == b'-' as u8))
+    ch == DOOR || ((flags as u8 & F_REAL as u8) == 0 && (ch == b'|' as u8 || ch == b'-' as u8))
 }
 
 /// Draw all passage and door tiles for the current level.

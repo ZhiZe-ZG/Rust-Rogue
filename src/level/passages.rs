@@ -105,8 +105,7 @@ pub(crate) fn entry_point(
                     room.position.x
                 };
             }
-            if !room.is_maze() || matches!(map.get(p), Some(Tile::Passage))
-            {
+            if !room.is_maze() || matches!(map.get(p), Some(Tile::Passage)) {
                 break;
             }
         }
@@ -282,10 +281,7 @@ pub(crate) fn stamp_passage(map: &mut Structure, flags: &mut LevelFlags, pos: IV
     let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) else {
         return;
     };
-    if y < GameConfig::LEVEL_HEIGHT
-        && x < GameConfig::LEVEL_WIDTH
-        && map.set(pos, Tile::Passage)
-    {
+    if y < GameConfig::LEVEL_HEIGHT && x < GameConfig::LEVEL_WIDTH && map.set(pos, Tile::Passage) {
         let idx = y * GameConfig::LEVEL_WIDTH + x;
         if let Some(passage) = flags.passage.get_mut(idx) {
             *passage = true;

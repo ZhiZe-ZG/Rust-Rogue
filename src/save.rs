@@ -20,14 +20,12 @@ use std::io::{Read, Write};
 
 use std::path::Path;
 
-
 const ESCAPE: i32 = 27;
 
 /// Magic header that identifies a RON save file written by this version.
 pub const RON_MAGIC: &[u8] = b"ROGUE-RON 1\n";
 
 use crate::game::globals::{master_mode_enabled, mpos, wizard};
-
 
 /// Checks the restored player state and reports whether the saved game is already dead.
 unsafe fn restore_player_dead() -> bool {
@@ -44,15 +42,17 @@ pub unsafe fn save_game() {
     'over: loop {
         if !crate::game::globals::file_name().is_empty() {
             loop {
-                msg_str(&format!("save file ({})? ", crate::game::globals::file_name()));
+                msg_str(&format!(
+                    "save file ({})? ",
+                    crate::game::globals::file_name()
+                ));
                 c = readchar();
                 mpos = 0;
                 if c == ESCAPE {
                     msg_str("");
                     return;
                 }
-                if c == 'n' as i32 || c == 'N' as i32 || c == 'y' as i32 || c == 'Y' as i32
-                {
+                if c == 'n' as i32 || c == 'N' as i32 || c == 'y' as i32 || c == 'Y' as i32 {
                     break;
                 }
                 msg_str("please answer Y or N");
@@ -159,7 +159,8 @@ pub unsafe fn restore(file: &str) -> u8 {
         }
     };
 
-    if inf.read_exact(&mut magic[..RON_MAGIC.len()]).is_err() || magic[..RON_MAGIC.len()] != *RON_MAGIC
+    if inf.read_exact(&mut magic[..RON_MAGIC.len()]).is_err()
+        || magic[..RON_MAGIC.len()] != *RON_MAGIC
     {
         msg_str("Sorry, saved game is out of date.\n");
         return 0;

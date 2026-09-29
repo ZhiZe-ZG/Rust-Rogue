@@ -102,7 +102,6 @@ static INIT_DAM: [InitWeap; MAXWEAPONS] = [
 
 use crate::game::globals::{after, group, has_hit, terse};
 
-
 #[inline]
 fn hero() -> IVec2 {
     crate::game::PLAYER.pos()
@@ -144,7 +143,9 @@ pub unsafe fn missile(ydelta: i32, xdelta: i32) {
 /// Animates projectile movement until it hits blocking terrain or a door.
 pub unsafe fn do_motion(id: ThingId, ydelta: i32, xdelta: i32) -> IVec2 {
     let mut pos = hero();
-    let o_type = OBJECTS.with_object(id, |o| o.o_type).unwrap_or(ItemType::None);
+    let o_type = OBJECTS
+        .with_object(id, |o| o.o_type)
+        .unwrap_or(ItemType::None);
 
     loop {
         let h = hero();

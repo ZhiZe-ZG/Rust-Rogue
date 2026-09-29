@@ -11,9 +11,9 @@ use crate::config::GameConfig;
 use crate::draw::winat;
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::MonsterFlags;
+use crate::game::globals::{max_level, no_food};
 use crate::game::MONSTER_LIST;
 use crate::game::{self, clear_level, with_current_level_mut};
-use crate::game::globals::{max_level, no_food};
 
 use super::presence::populate_level;
 use crate::structure::Room;

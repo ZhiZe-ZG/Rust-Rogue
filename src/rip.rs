@@ -4,8 +4,8 @@
 use std::io::Write;
 
 use crate::game::globals::{allscore, get_purse, monster_info, numscores, NUMNAME};
-use crate::item::item_type::ItemType;
 use crate::item::arena::{with_object, OBJECTS};
+use crate::item::item_type::ItemType;
 use crate::item::things::inv_name_id;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
 use crate::mdport::md_getuid;
@@ -36,7 +36,6 @@ pub const RIP_ART: &[&str] = &[
 static mut KILLNAME_BUFFER: [u8; MAXSTR] = [0; MAXSTR];
 
 use crate::game::globals::{amulet, max_level, noscore, purse, tombstone, wizard};
-
 
 #[inline]
 fn vowelstr(s: &str) -> &'static str {
@@ -95,39 +94,11 @@ pub unsafe fn killname(monst: u8, doart: bool) -> String {
 
 pub unsafe fn death_monst() -> u8 {
     static POSS: [u8; 33] = [
-        b'A' as u8,
-        b'B' as u8,
-        b'C' as u8,
-        b'D' as u8,
-        b'E' as u8,
-        b'F' as u8,
-        b'G' as u8,
-        b'H' as u8,
-        b'I' as u8,
-        b'J' as u8,
-        b'K' as u8,
-        b'L' as u8,
-        b'M' as u8,
-        b'N' as u8,
-        b'O' as u8,
-        b'P' as u8,
-        b'Q' as u8,
-        b'R' as u8,
-        b'S' as u8,
-        b'T' as u8,
-        b'U' as u8,
-        b'V' as u8,
-        b'W' as u8,
-        b'X' as u8,
-        b'Y' as u8,
-        b'Z' as u8,
-        b'a' as u8,
-        b'b' as u8,
-        b'h' as u8,
-        b'd' as u8,
-        b's' as u8,
-        b' ' as u8,
-        0,
+        b'A' as u8, b'B' as u8, b'C' as u8, b'D' as u8, b'E' as u8, b'F' as u8, b'G' as u8,
+        b'H' as u8, b'I' as u8, b'J' as u8, b'K' as u8, b'L' as u8, b'M' as u8, b'N' as u8,
+        b'O' as u8, b'P' as u8, b'Q' as u8, b'R' as u8, b'S' as u8, b'T' as u8, b'U' as u8,
+        b'V' as u8, b'W' as u8, b'X' as u8, b'Y' as u8, b'Z' as u8, b'a' as u8, b'b' as u8,
+        b'h' as u8, b'd' as u8, b's' as u8, b' ' as u8, 0,
     ];
 
     let idx = (crate::rnd::rnd(33) as usize) % POSS.len();
@@ -290,12 +261,7 @@ pub unsafe fn death(monst: u8) {
             } else {
                 "a "
             };
-            let line = format!(
-                "{}{} with {} gold",
-                article,
-                killer,
-                get_purse()
-            );
+            let line = format!("{}{} with {} gold", article, killer, get_purse());
             output::write_text(&line);
         } else {
             let line = format!("{} with {} gold", killer, get_purse());
@@ -340,10 +306,7 @@ pub unsafe fn death(monst: u8) {
             }
         }
         let hero_name = crate::game::globals::whoami();
-        output::write_text_at(
-            IVec2::new(center_string(&hero_name) as i32, 14),
-            &hero_name,
-        );
+        output::write_text_at(IVec2::new(center_string(&hero_name) as i32, 14), &hero_name);
         let score_text = format!("{} Au", get_purse());
         output::move_cursor(IVec2::new(center_string(&score_text) as i32, 15));
         output::write_text(&score_text);

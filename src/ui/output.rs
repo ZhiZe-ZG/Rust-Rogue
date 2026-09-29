@@ -3,14 +3,14 @@
 use std::sync::atomic::Ordering;
 
 use crate::config::GameConfig;
-use crate::game::PLAYER;
 use crate::game::globals::{
     get_hungry_state, get_max_stats, get_mpos, get_purse, lower_msg_enabled, msg_esc_enabled,
     save_msg_enabled, set_huh_string, set_mpos, stat_msg_enabled,
 };
+use crate::game::PLAYER;
 use crate::ui::input::{readchar, wait_for};
-use crate::ui::terminal as cur;
 use crate::ui::state::UI;
+use crate::ui::terminal as cur;
 use glam::IVec2;
 
 const ESCAPE: i32 = 27;
@@ -180,9 +180,7 @@ fn append_message(text: &str) {
     let mut remaining = text;
     while !remaining.is_empty() {
         let available = {
-            let state = UI.message
-                .lock()
-                .unwrap_or_else(|lock| lock.into_inner());
+            let state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
             MAXMSG.saturating_sub(state.pending.len())
         };
 
@@ -194,9 +192,7 @@ fn append_message(text: &str) {
         let split = split_message_at(remaining, available);
         let (chunk, rest) = remaining.split_at(split);
         {
-            let mut state = UI.message
-                .lock()
-                .unwrap_or_else(|lock| lock.into_inner());
+            let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
             state.pending.push_str(chunk);
             state.next_position = state.pending.len() as i32;
         }
@@ -252,9 +248,7 @@ pub(crate) fn addmsg_str(text: &str) {
 #[cfg(not(test))]
 pub(crate) fn endmsg() -> MessageResult {
     let (mut pending, next_position) = {
-        let mut state = UI.message
-            .lock()
-            .unwrap_or_else(|lock| lock.into_inner());
+        let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
         (std::mem::take(&mut state.pending), state.next_position)
     };
 
@@ -278,9 +272,7 @@ pub(crate) fn endmsg() -> MessageResult {
                 if ch == ESCAPE {
                     pending.clear();
                     set_mpos(0);
-                    let mut state = UI.message
-                        .lock()
-                        .unwrap_or_else(|lock| lock.into_inner());
+                    let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
                     state.next_position = 0;
                     return MessageResult::Escaped;
                 }
@@ -297,9 +289,7 @@ pub(crate) fn endmsg() -> MessageResult {
     write_text_at(IVec2::new(0, 0), &pending);
     clear_to_end_of_line();
     set_mpos(next_position);
-    let mut state = UI.message
-        .lock()
-        .unwrap_or_else(|lock| lock.into_inner());
+    let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
     state.next_position = 0;
     refresh();
     MessageResult::Displayed

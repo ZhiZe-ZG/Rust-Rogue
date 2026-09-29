@@ -5,6 +5,7 @@
 //! wherever the legacy engine still depends on it.
 pub mod colors;
 pub mod command;
+pub(crate) mod command_dispatch;
 pub mod config;
 pub mod daemon;
 pub mod daemons;

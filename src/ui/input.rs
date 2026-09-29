@@ -138,7 +138,10 @@ pub(crate) fn flush_pending() {
 
 #[cfg(test)]
 mod tests {
-    use super::{map_cooked_key, KEY_DOWN, KEY_END, KEY_HOME, KEY_LEFT, KEY_NPAGE, KEY_PPAGE, KEY_RIGHT, KEY_UP};
+    use super::{
+        map_cooked_key, KEY_DOWN, KEY_END, KEY_HOME, KEY_LEFT, KEY_NPAGE, KEY_PPAGE, KEY_RIGHT,
+        KEY_UP,
+    };
 
     #[test]
     fn cooked_navigation_keys_map_to_rogue_directions() {

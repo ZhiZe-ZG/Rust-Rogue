@@ -2,12 +2,11 @@
 
 use std::io::Write;
 
-use crate::command::command;
+use crate::command_dispatch::do_command;
 use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
 use crate::entity::chase::roomin;
 use crate::entity::player::MonsterFlags;
-use std::time::{SystemTime, UNIX_EPOCH};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
 use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
@@ -23,6 +22,7 @@ use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::output::{self, msg_str, status};
 use crate::ui::runtime;
 use glam::IVec2;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAXSTR: usize = 1024;
 const AFTER: i32 = 2;
@@ -36,8 +36,11 @@ fn flush_stdout() {
     let _ = std::io::stdout().flush();
 }
 
-use crate::game::globals::{after, count, dnum, get_dnum, get_purse, in_shell, inv_type, jump, master_mode_enabled, mpos, noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death, wizard};
-
+use crate::game::globals::{
+    after, count, dnum, get_dnum, get_purse, in_shell, inv_type, jump, master_mode_enabled, mpos,
+    noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death,
+    wizard,
+};
 
 // ── Game control functions ported from src/c/main.c ─────────────────────────
 
@@ -55,10 +58,7 @@ pub unsafe extern "C" fn endit(sig: i32) {
 ///
 /// No globals used directly.
 pub unsafe fn fatal(s: &str) {
-    output::write_text_at(
-        IVec2::new(0, GameConfig::SCREEN_LINES - 2),
-        s,
-    );
+    output::write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), s);
     output::refresh();
     runtime::shutdown();
     my_exit(0);
@@ -145,7 +145,7 @@ pub unsafe fn playit() {
     start_daemon(Daemon::UiRender, 0, AFTER);
     Daemon::UiRender.run(0);
     while playing != false as u8 {
-        command(); /* Command execution */
+        do_command(); /* Command execution */
     }
     endit(0);
 }
@@ -279,7 +279,10 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
         crate::game::globals::set_whoami(crate::options::filter_printable(&username));
     }
 
-    let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i32).unwrap_or(0);
+    let now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i32)
+        .unwrap_or(0);
     let clock_seed = now_secs + md_getpid();
     dnum = if master_mode_enabled != 0 && wizard != 0 {
         std::env::var("SEED")

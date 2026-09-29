@@ -103,8 +103,9 @@ pub struct OPTION {
     o_getfunc: unsafe fn(&OPTION) -> i32,
 }
 
-use crate::game::globals::{after, fight_flush, inv_type, jump, mpos, passgo, see_floor, terse, tombstone};
-
+use crate::game::globals::{
+    after, fight_flush, inv_type, jump, mpos, passgo, see_floor, terse, tombstone,
+};
 
 unsafe fn hero_pos() -> IVec2 {
     crate::game::PLAYER.pos()
@@ -441,7 +442,7 @@ unsafe fn get_inv_t(_op: &OPTION) -> i32 {
         let name = crate::game::globals::inv_t_name(inv_type as usize);
         let out = format!("{}\n", name);
         output::move_window_cursor(origin);
-            paint(&out);
+        paint(&out);
     }
     NORM
 }
@@ -493,7 +494,10 @@ pub unsafe fn parse_opts(s: &str) {
                         let start_idx = i.saturating_sub(1);
                         let value = &s[start_idx..start_idx + 1];
                         for idx in 0..INV_T_NAME_LEN {
-                            if value == &crate::game::globals::inv_t_name(idx)[..1.min(crate::game::globals::inv_t_name(idx).len())] {
+                            if value
+                                == &crate::game::globals::inv_t_name(idx)
+                                    [..1.min(crate::game::globals::inv_t_name(idx).len())]
+                            {
                                 inv_type = idx as i32;
                                 break;
                             }

@@ -8,16 +8,16 @@ use crate::draw::{look, map_cell_reveal};
 use crate::entity::monsters::{new_monster_id, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game;
-use crate::game::PLAYER;
 use crate::game::globals::{scr_info, weap_info};
-use crate::init::pick_color;
-use crate::item::item_type::{ItemFilter, ItemType};
-use crate::item::arena::{ThingId, OBJECTS};
-use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::game::MONSTER_LIST;
+use crate::game::PLAYER;
+use crate::init::pick_color;
+use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::item_type::{ItemFilter, ItemType};
+use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::misc::{aggravate, call_it, choose_str};
-use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win};
 use crate::ui::output;
+use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win};
 use crate::wizard::{teleport, whatis};
 use glam::IVec2;
 
@@ -105,7 +105,6 @@ impl ScrollType {
 
 use crate::game::globals::{no_command, terse};
 
-
 #[inline]
 fn hero() -> IVec2 {
     crate::game::PLAYER.pos()
@@ -131,7 +130,10 @@ pub unsafe fn read_scroll() {
         return;
     };
 
-    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Scroll(_))) {
+    if !matches!(
+        OBJECTS.with_object(obj, |o| o.o_type),
+        Some(ItemType::Scroll(_))
+    ) {
         if terse == 0 {
             msg_str("there is nothing on it to read");
         } else {
@@ -237,9 +239,7 @@ pub unsafe fn read_scroll() {
                         continue;
                     }
                     let is_scare = crate::misc::find_obj_id(y, x)
-                        .and_then(|id| {
-                            crate::item::arena::with_object(id, |data| data.o_type)
-                        })
+                        .and_then(|id| crate::item::arena::with_object(id, |data| data.o_type))
                         .is_some_and(|t| matches!(t, ItemType::Scroll(ScrollType::Scare)));
                     if is_scare {
                         continue;

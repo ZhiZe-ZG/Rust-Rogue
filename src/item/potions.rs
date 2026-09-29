@@ -9,11 +9,11 @@ use crate::draw::look;
 
 use crate::entity::chase::see_monst;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
-use crate::game::{MonsterId, MONSTER_LIST};
-use crate::game::PLAYER;
 use crate::game::globals::{pot_info, ObjInfo};
-use crate::item::item_type::{ItemFilter, ItemType};
+use crate::game::PLAYER;
+use crate::game::{MonsterId, MONSTER_LIST};
 use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::item::rings::RingType;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
@@ -109,7 +109,6 @@ const AFTER: i32 = 2;
 /// Process-wide game state and UI flags read by the potion effects.
 use crate::game::globals::{after, e_levels, max_stats, seenstairs, terse};
 
-
 /// A mutable reference to the static `pot_info` entry at `index`.
 ///
 /// Confined to this module: the returned reference lets the quaff logic update
@@ -155,7 +154,10 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
         String,
         String,
     ) = {
-        let taste = format!("this potion tastes like {} juice", crate::game::globals::fruit());
+        let taste = format!(
+            "this potion tastes like {} juice",
+            crate::game::globals::fruit()
+        );
         match potion {
             PotionType::Confuse => (
                 MonsterFlags::HUH,
@@ -230,7 +232,10 @@ pub unsafe fn quaff() {
     let mut show = false;
     let trip = player_has(MonsterFlags::HALU);
 
-    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Potion(_))) {
+    if !matches!(
+        OBJECTS.with_object(obj, |o| o.o_type),
+        Some(ItemType::Potion(_))
+    ) {
         if terse == 0 {
             msg_str("yuk! Why would you want to drink that?");
         } else {
@@ -280,12 +285,7 @@ pub unsafe fn quaff() {
         }
         PotionType::MonsterFind => {
             crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
-            fuse(
-                Daemon::TurnSee,
-                true as u8 as i32,
-                HUHDURATION,
-                AFTER,
-            );
+            fuse(Daemon::TurnSee, true as u8 as i32, HUHDURATION, AFTER);
             if turn_see(false as u8) == 0 {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",

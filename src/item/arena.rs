@@ -270,10 +270,7 @@ pub fn with_object<R>(id: ThingId, operation: impl FnOnce(&ThingObject) -> R) ->
 /// Mutably access the object payload behind `id` (`None` for a stale handle or
 /// a non-object).
 #[inline]
-pub fn with_object_mut<R>(
-    id: ThingId,
-    operation: impl FnOnce(&mut ThingObject) -> R,
-) -> Option<R> {
+pub fn with_object_mut<R>(id: ThingId, operation: impl FnOnce(&mut ThingObject) -> R) -> Option<R> {
     OBJECTS.with_object_mut(id, operation)
 }
 
