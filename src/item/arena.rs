@@ -11,12 +11,8 @@
 //! lets the single-threaded gameplay code add or remove objects between calls
 //! (mirroring [`crate::game::MonsterList`]).
 //!
-//! The rest of the port still threads raw `*mut Thing` handles through combat
-//! and level code. [`ThingArena::ptr`] and [`ThingArena::id_for_ptr`] are the
-//! single, explicitly documented bridge that maps between that legacy form and
-//! an owned [`ThingId`]; they exist only while the raw-pointer callers migrate.
-//! Objects are boxed, so an address produced by [`ThingArena::ptr`] stays valid
-//! until the object is removed from the arena.
+//! Objects are owned outright by the arena and reached only through [`ThingId`]
+//! handles, so no raw pointer to a stored object ever escapes this module.
 
 use crate::entity::player::{Thing, ThingObject};
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -215,76 +211,14 @@ impl ThingArena {
             .collect()
     }
 
-    /// A stable raw handle to the object behind `id` (null when stale).
-    ///
-    /// This is the one bridge to the legacy `*mut Thing` engine boundary. The
-    /// object is boxed, so the address stays valid until it is removed.
-    /// Producing the pointer uses only safe casts (no `unsafe` block).
-    pub fn ptr(&self, id: ThingId) -> *mut Thing {
-        let arena = self.lock();
-        arena
-            .slots
-            .get(id.index)
-            .filter(|slot| slot.generation == id.generation)
-            .and_then(|slot| slot.thing.as_deref())
-            .map_or(std::ptr::null_mut(), |thing| {
-                thing as *const Thing as *mut Thing
-            })
-    }
-
-    /// Map an existing raw handle back to its [`ThingId`].
-    pub fn id_for_ptr(&self, ptr: *mut Thing) -> Option<ThingId> {
-        if ptr.is_null() {
-            return None;
-        }
-        let arena = self.lock();
-        arena
-            .slots
-            .iter()
-            .enumerate()
-            .find_map(|(index, slot)| match slot.thing.as_deref() {
-                Some(thing) if thing as *const Thing == ptr as *const Thing => Some(ThingId {
-                    index,
-                    generation: slot.generation,
-                }),
-                _ => None,
-            })
-    }
-
-    /// Remove the object at raw handle `ptr`, if still present.
-    pub fn remove_by_ptr(&self, ptr: *mut Thing) -> Option<Thing> {
-        let id = self.id_for_ptr(ptr)?;
-        self.remove(id)
-    }
-
-    /// Store a fresh default object and return its stable raw handle.
-    ///
-    /// The handle is the boxed object's address, valid until it is removed.
-    /// Producing it uses only safe casts (no `unsafe` block).
-    pub fn new_object(&self) -> *mut Thing {
-        let id = self.insert(Thing::object(ThingObject::default()));
-        self.ptr(id)
-    }
-
     /// Store a fresh default object and return its [`ThingId`] handle.
     pub fn new_object_id(&self) -> ThingId {
         self.insert(Thing::object(ThingObject::default()))
     }
 
-    /// Store a fresh default object; the historical item-allocation entry point.
-    pub fn new_item(&self) -> *mut Thing {
-        self.new_object()
-    }
-
     /// Store a fresh default object and return its [`ThingId`] handle.
     pub fn new_item_id(&self) -> ThingId {
         self.new_object_id()
-    }
-
-    /// Remove and drop the object at raw handle `ptr`, reporting whether it was
-    /// present. A no-op for a null or already-freed handle.
-    pub fn discard(&self, ptr: *mut Thing) -> bool {
-        self.remove_by_ptr(ptr).is_some()
     }
 
     /// Number of live objects (the historical allocation counter).
@@ -301,24 +235,13 @@ impl Default for ThingArena {
 
 /// Generational owner of every live object (item) thing.
 ///
-/// Callers that have migrated keep a [`ThingId`]; this global is reached through
-/// the safe allocation/discard helpers below, which return the stable address of
-/// the boxed object for the pointer-based engine boundary.
+/// Callers keep a [`ThingId`]; this global is reached through the safe
+/// allocation/access helpers below.
 pub static OBJECTS: ThingArena = ThingArena::new();
-
-/// Allocate an object (item) thing in the arena and return its stable handle.
-pub fn new_object() -> *mut Thing {
-    OBJECTS.new_object()
-}
 
 /// Allocate an object (item) thing in the arena and return its [`ThingId`].
 pub fn new_object_id() -> ThingId {
     OBJECTS.new_object_id()
-}
-
-/// Allocate an object thing; the historical item-allocation entry point.
-pub fn new_item() -> *mut Thing {
-    OBJECTS.new_item()
 }
 
 /// Allocate an object thing and return its [`ThingId`] handle.
@@ -329,21 +252,6 @@ pub fn new_item_id() -> ThingId {
 /// Number of live objects tracked by the global arena.
 pub fn allocated_count() -> i32 {
     OBJECTS.allocated_count()
-}
-
-/// Map a raw object handle back to its [`ThingId`] in the global arena.
-///
-/// This is the safe bridge used when a legacy `*mut Thing` caller needs to
-/// record the object in the level's floor-item list.
-#[inline]
-pub fn id_of(ptr: *mut Thing) -> Option<ThingId> {
-    OBJECTS.id_for_ptr(ptr)
-}
-
-/// A stable raw handle to the object behind `id` (null when stale).
-#[inline]
-pub fn ptr_of(id: ThingId) -> *mut Thing {
-    OBJECTS.ptr(id)
 }
 
 /// Whether `id` still refers to a live object in the global arena.
@@ -412,21 +320,6 @@ mod tests {
 
         // The new handle resolves.
         assert!(arena.contains(fresh));
-    }
-
-    /// The raw-pointer bridge round-trips and refuses stale addresses.
-    #[test]
-    fn pointer_bridge_round_trips() {
-        let arena = ThingArena::new();
-        let id = arena.insert(object());
-        let raw = arena.ptr(id);
-        assert!(!raw.is_null());
-        assert_eq!(arena.id_for_ptr(raw), Some(id));
-        assert!(arena.remove_by_ptr(raw).is_some());
-        // After removal the same address no longer maps to a live object.
-        assert!(arena.id_for_ptr(raw).is_none());
-        assert!(arena.remove_by_ptr(raw).is_none());
-        assert_eq!(arena.id_for_ptr(std::ptr::null_mut()), None);
     }
 
     /// Scoped mutable access can mutate and is released afterwards.

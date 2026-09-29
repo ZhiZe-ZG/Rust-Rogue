@@ -2,7 +2,7 @@
 //!
 //! Ported from `src/c/armor.c` to Rust.
 use crate::daemon::{do_daemons, do_fuses};
-use crate::entity::player::{ObjectFlags, Thing};
+use crate::entity::player::ObjectFlags;
 use crate::game::PLAYER;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::arena::{ThingId, OBJECTS};
@@ -86,7 +86,6 @@ pub unsafe fn waste_time() {
     do_fuses(spread(2));
 }
 
-/// rust_armor:
 /// Rust the given armor if it is a legal kind to rust.
 pub unsafe fn rust_armor_id(arm: Option<ThingId>) {
     let Some(id) = arm else {
@@ -113,9 +112,4 @@ pub unsafe fn rust_armor_id(arm: Option<ThingId>) {
             msg_str("your armor weakens");
         }
     }
-}
-
-/// Legacy pointer wrapper around [`rust_armor_id`].
-pub unsafe fn rust_armor(arm: *mut Thing) {
-    rust_armor_id(crate::item::arena::id_of(arm));
 }

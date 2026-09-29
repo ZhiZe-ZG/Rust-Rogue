@@ -2,7 +2,7 @@
 //!
 //! Ported from `src/c/sticks.c` to Rust.
 use crate::entity::monsters::{save, save_throw_id};
-use crate::entity::player::{ObjectFlags, Thing};
+use crate::entity::player::ObjectFlags;
 use crate::game::PLAYER;
 use crate::game::globals::ws_info;
 use crate::item::item_type::{ItemFilter, ItemType};
@@ -105,7 +105,6 @@ fn stick_type(id: ThingId) -> Option<StickType> {
     OBJECTS.with_object(id, |o| StickType::from_raw(o.o_which)).flatten()
 }
 
-/// fix_stick:
 /// Set up a new stick with the expected damage and charge values.
 pub unsafe fn fix_stick_id(id: ThingId) {
     if !matches!(
@@ -127,12 +126,6 @@ pub unsafe fn fix_stick_id(id: ThingId) {
     });
 }
 
-/// Legacy pointer wrapper around [`fix_stick_id`].
-pub unsafe fn fix_stick(cur: *mut Thing) {
-    if let Some(id) = crate::item::arena::id_of(cur) {
-        fix_stick_id(id);
-    }
-}
 
 /// do_zap:
 /// Perform a zap with a wand or staff and apply a simplified effect.

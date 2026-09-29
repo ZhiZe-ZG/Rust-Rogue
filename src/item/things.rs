@@ -8,14 +8,14 @@ use crate::misc::chg_str;
 use crate::rnd::rnd;
 use crate::ui::output::msg_str;
 
-use crate::entity::player::{ObjectFlags, Thing};
+use crate::entity::player::ObjectFlags;
 use crate::game::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, ObjInfo,
 };
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::rings::RingType;
 use crate::item::sticks::fix_stick_id;
-use crate::item::arena::{new_item_id, ptr_of};
+use crate::item::arena::new_item_id;
 use crate::item::weapons::init_weapon;
 
 const MAXSTR: usize = 1024;
@@ -185,15 +185,7 @@ pub unsafe fn inv_name_id(id: crate::item::arena::ThingId, drop: bool) -> String
     copy_to_prbuf(&name)
 }
 
-/// Legacy pointer wrapper around [`inv_name_id`].
-pub unsafe fn inv_name(obj: *mut Thing, drop: u8) -> String {
-    match crate::item::arena::id_of(obj) {
-        Some(id) => inv_name_id(id, drop != 0),
-        None => String::new(),
-    }
-}
-
-/// Pointer-free version of [`dropcheck`]: works on an arena [`ThingId`].
+/// Pointer-free version of `dropcheck`: works on an arena [`ThingId`].
 pub unsafe fn dropcheck_id(id: crate::item::arena::ThingId) -> bool {
     let eq = PLAYER.equipment();
     let is_weapon = eq.weapon_id() == Some(id);
@@ -228,14 +220,6 @@ pub unsafe fn dropcheck_id(id: crate::item::arena::ThingId) -> bool {
         }
     }
     true
-}
-
-/// Legacy pointer wrapper around [`dropcheck_id`].
-pub unsafe fn dropcheck(obj: *mut Thing) -> u8 {
-    match crate::item::arena::id_of(obj) {
-        Some(id) => dropcheck_id(id) as u8,
-        None => true as u8,
-    }
 }
 
 /// Allocate and initialize a random object, returning its arena handle.
@@ -348,11 +332,6 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
     cur_id
 }
 
-/// Legacy pointer wrapper around [`new_thing_id`].
-pub unsafe fn new_thing() -> *mut Thing {
-    ptr_of(new_thing_id())
-}
-
 pub unsafe fn drop() {
     let Some(id) = get_item_id("drop", ItemFilter::Any) else {
         return;
@@ -384,49 +363,6 @@ unsafe fn end_line() {}
 
 unsafe fn nothing(_type: u8) -> String {
     copy_to_prbuf("Nothing found")
-}
-
-pub unsafe fn nameit(
-    obj: *mut Thing,
-    typ: &str,
-    which: &str,
-    op: &ObjInfo,
-    prfunc: unsafe fn(*mut Thing) -> String,
-) {
-    if obj.is_null() {
-        return;
-    }
-    let typ = typ;
-    let which = which;
-    let pr_text = prfunc(obj);
-    let count = crate::item::arena::id_of(obj)
-        .and_then(|id| crate::item::arena::with_object(id, |o| o.o_count))
-        .unwrap_or(0);
-
-    let text = if op.oi_know || op.oi_guess.is_some() {
-        let prefix = if count == 1 {
-            format!("A {typ} ")
-        } else {
-            format!("{count} {typ}s ")
-        };
-        if op.oi_know {
-            format!("{prefix}of {}{}({which})", op.oi_name, pr_text)
-        } else if let Some(guess) = &op.oi_guess {
-            format!("{prefix}called {guess}{pr_text}({which})")
-        } else {
-            prefix
-        }
-    } else if count == 1 {
-        format!("A{which} {which} {typ}")
-    } else {
-        format!("{count} {which} {typ}s")
-    };
-
-    copy_to_prbuf(&text);
-}
-
-unsafe fn nullstr(_: *mut Thing) -> String {
-    String::new()
 }
 
 #[allow(dead_code)]

@@ -7,11 +7,11 @@
 //! raw handles produced by the item arena through the legacy order/stack merge
 //! algorithm of the C original.
 
-use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
+use crate::entity::player::{MonsterFlags, ObjectFlags};
 use crate::game::MONSTER_LIST;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::scrolls::ScrollType;
-use crate::item::arena::{id_of, ptr_of, with_object, with_object_mut, ThingId, OBJECTS};
+use crate::item::arena::{with_object, with_object_mut, ThingId, OBJECTS};
 use crate::item::things::{add_line, inv_name_id};
 use crate::misc::{find_obj_id, show_floor};
 use crate::ui::input::readchar;
@@ -75,7 +75,7 @@ unsafe fn floor_char_for_room() -> u8 {
     }
 }
 
-/// Pointer-free core of [`add_pack`]: `item` is `None` when picking up the
+/// Pointer-free core of `add_pack`: `item` is `None` when picking up the
 /// object on the hero's floor cell.
 pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
     let mut from_floor = false;
@@ -252,15 +252,10 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
     }
 }
 
-/// Legacy pointer wrapper around [`add_pack_id`].
-pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
-    add_pack_id(id_of(obj), silent != 0);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entity::player::ThingObject;
+    use crate::entity::player::{Thing, ThingObject};
     use crate::game::{with_current_level_mut, PLAYER};
     use crate::item::arena::OBJECTS;
     use crate::misc::find_obj_id;
@@ -284,13 +279,13 @@ mod tests {
                 ..ThingObject::default()
             }));
             with_current_level_mut(|level| level.add_item(food));
-            add_pack(std::ptr::null_mut(), 1);
+            add_pack_id(None, true);
             assert_eq!(PLAYER.pack(), vec![food]);
             assert_eq!(find_obj_id(pos.y, pos.x), None);
             assert_eq!({ inpack }, 1);
             assert!(OBJECTS.with_object(food, |obj| obj.o_flags.contains(ObjectFlags::FOUND)).unwrap());
 
-            add_pack(std::ptr::null_mut(), 1);
+            add_pack_id(None, true);
             assert_eq!(OBJECTS.with_object(food, |obj| obj.o_count), Some(1));
             assert_eq!(PLAYER.pack(), vec![food]);
 
@@ -301,7 +296,7 @@ mod tests {
                 ..ThingObject::default()
             }));
             with_current_level_mut(|level| level.add_item(weapon));
-            add_pack(std::ptr::null_mut(), 1);
+            add_pack_id(None, true);
             assert_eq!(PLAYER.pack(), vec![food, weapon]);
             assert_eq!(find_obj_id(pos.y, pos.x), None);
             assert_eq!({ inpack }, 2);
@@ -315,7 +310,7 @@ mod tests {
                 ..ThingObject::default()
             }));
             with_current_level_mut(|level| level.add_item(more_food));
-            add_pack(std::ptr::null_mut(), 1);
+            add_pack_id(None, true);
             assert_eq!(PLAYER.pack(), vec![food, weapon]);
             assert_eq!(find_obj_id(pos.y, pos.x), None);
             assert_eq!(OBJECTS.with_object(food, |obj| obj.o_count), Some(2));
@@ -332,7 +327,7 @@ mod tests {
     }
 }
 
-/// Pointer-free core of [`pack_room`]: returns whether the object fits.
+/// Pointer-free core of `pack_room`: returns whether the object fits.
 pub unsafe fn pack_room_id(from_floor: bool, id: ThingId) -> bool {
     if inpack + 1 > MAXPACK {
         if terse == 0 {
@@ -364,15 +359,7 @@ pub unsafe fn pack_room_id(from_floor: bool, id: ThingId) -> bool {
     true
 }
 
-/// Legacy pointer wrapper around [`pack_room_id`].
-pub unsafe fn pack_room(from_floor: u8, obj: *mut Thing) -> u8 {
-    match id_of(obj) {
-        Some(id) => pack_room_id(from_floor != 0, id) as u8,
-        None => true as u8,
-    }
-}
-
-/// Pointer-free version of [`leave_pack`]: works on an arena [`ThingId`].
+/// Pointer-free version of `leave_pack`: works on an arena [`ThingId`].
 ///
 /// Splits `id` out of the player's pack (or one item off its stack) and returns
 /// the handle to use for the departed object: the original `id` when the whole
@@ -404,15 +391,6 @@ pub unsafe fn leave_pack_id(id: ThingId, newobj: bool, all: bool) -> Option<Thin
         }
         crate::game::PLAYER.remove_from_pack(id);
         Some(id)
-    }
-}
-
-/// Legacy pointer wrapper around [`leave_pack_id`].
-pub unsafe fn leave_pack(obj: *mut Thing, newobj: u8, all: u8) -> *mut Thing {
-    match id_of(obj) {
-        Some(id) => leave_pack_id(id, newobj != 0, all != 0)
-            .map_or(obj, crate::item::arena::ptr_of),
-        None => obj,
     }
 }
 
@@ -501,7 +479,7 @@ pub unsafe fn pick_up(ch: u8) {
     }
 }
 
-/// Pointer-free version of [`get_item`]: resolves the player's selection to an
+/// Pointer-free version of `get_item`: resolves the player's selection to an
 /// arena [`ThingId`] (or `None` when the player cancels / carries nothing).
 pub unsafe fn get_item_id(purpose: &str, filter: ItemFilter) -> Option<ThingId> {
     let mut ch: i32;
@@ -557,11 +535,6 @@ pub unsafe fn get_item_id(purpose: &str, filter: ItemFilter) -> Option<ThingId> 
     }
 }
 
-/// Legacy pointer wrapper around [`get_item_id`].
-pub unsafe fn get_item(purpose: &str, filter: ItemFilter) -> *mut Thing {
-    get_item_id(purpose, filter).map_or(std::ptr::null_mut(), ptr_of)
-}
-
 pub unsafe fn money(value: i32) {
     purse += value;
     // The gold object was discarded, so the terrain glyph shows via draw.
@@ -596,19 +569,12 @@ pub unsafe fn reset_last() {
     last_pick = l_last_pick;
 }
 
-/// Pointer-free core of [`move_msg`]: works on an arena handle.
+/// Pointer-free core of `move_msg`: works on an arena handle.
 pub unsafe fn move_msg_id(id: ThingId) {
     if terse == 0 {
         addmsg_str("you ");
     }
     msg_str(&format!("moved onto {}", inv_name_id(id, true)));
-}
-
-/// Legacy pointer wrapper around [`move_msg_id`].
-pub unsafe fn move_msg(obj: *mut Thing) {
-    if let Some(id) = id_of(obj) {
-        move_msg_id(id);
-    }
 }
 
 pub unsafe fn picky_inven() {

@@ -217,7 +217,7 @@ pub unsafe fn aggravate() {
 }
 
 /// Whether the object `id` is currently equipped (worn/wielded), announcing so
-/// when it is. Pointer-free counterpart of [`is_current`].
+/// when it is.
 pub fn is_current_id(id: crate::item::arena::ThingId) -> bool {
     let eq = PLAYER.equipment();
     if eq.armor_id() == Some(id)
@@ -234,13 +234,6 @@ pub fn is_current_id(id: crate::item::arena::ThingId) -> bool {
         return true;
     }
     false
-}
-
-pub unsafe fn is_current(obj: *mut Thing) -> bool {
-    match crate::item::arena::id_of(obj) {
-        Some(id) => is_current_id(id),
-        None => false,
-    }
 }
 
 pub unsafe fn get_dir() -> u8 {

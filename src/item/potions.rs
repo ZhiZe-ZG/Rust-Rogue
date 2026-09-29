@@ -454,15 +454,6 @@ pub fn is_magic_id(id: ThingId) -> bool {
     }
 }
 
-/// is_magic:
-/// Returns true if an object radiates magic.
-pub unsafe fn is_magic(obj: *mut Thing) -> u8 {
-    match crate::item::arena::id_of(obj) {
-        Some(id) => is_magic_id(id) as u8,
-        None => 0,
-    }
-}
-
 /// invis_on:
 /// Turn on the ability to see invisible.
 pub unsafe fn invis_on() {

@@ -176,55 +176,6 @@ impl Equipment {
         crate::item::arena::OBJECTS.with_object_mut(id, f)
     }
 
-    /// A stable raw handle to the equipped armor (null when empty or freed).
-    #[inline]
-    pub fn armor(&self) -> *mut Thing {
-        self.armor
-            .get()
-            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
-    }
-
-    /// Set (or clear) the equipped armor from a raw handle.
-    #[inline]
-    pub fn set_armor(&self, armor: *mut Thing) {
-        self.armor.set(crate::item::arena::id_of(armor));
-    }
-
-    #[inline]
-    pub fn left_ring(&self) -> *mut Thing {
-        self.rings[0]
-            .get()
-            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
-    }
-
-    #[inline]
-    pub fn right_ring(&self) -> *mut Thing {
-        self.rings[1]
-            .get()
-            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
-    }
-
-    #[inline]
-    pub fn set_left_ring(&self, ring: *mut Thing) {
-        self.rings[0].set(crate::item::arena::id_of(ring));
-    }
-
-    #[inline]
-    pub fn set_right_ring(&self, ring: *mut Thing) {
-        self.rings[1].set(crate::item::arena::id_of(ring));
-    }
-
-    #[inline]
-    pub fn weapon(&self) -> *mut Thing {
-        self.weapon
-            .get()
-            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
-    }
-
-    #[inline]
-    pub fn set_weapon(&self, weapon: *mut Thing) {
-        self.weapon.set(crate::item::arena::id_of(weapon));
-    }
 }
 
 /// The zero-valued actor [`Thing`] used to seed the global player.
@@ -471,12 +422,6 @@ impl Player {
         &self.equipment
     }
 
-    /// The armor the player is wearing (or a null handle).
-    #[inline]
-    pub fn armor(&self) -> *mut Thing {
-        self.equipment.armor()
-    }
-
     /// The protection value of the currently worn armor, or `None` when the
     /// player is not wearing any armor (pointer-free).
     #[inline]
@@ -555,47 +500,6 @@ impl Player {
         self.equipment.set_weapon_id(weapon);
     }
 
-    /// Set (or clear) the armor the player is wearing.
-    #[inline]
-    pub fn set_armor(&self, armor: *mut Thing) {
-        self.equipment.set_armor(armor);
-    }
-
-    /// The ring on the player's left hand (or a null handle).
-    #[inline]
-    pub fn left_ring(&self) -> *mut Thing {
-        self.equipment.left_ring()
-    }
-
-    /// The ring on the player's right hand (or a null handle).
-    #[inline]
-    pub fn right_ring(&self) -> *mut Thing {
-        self.equipment.right_ring()
-    }
-
-    /// Set (or clear) the ring on the player's left hand.
-    #[inline]
-    pub fn set_left_ring(&self, ring: *mut Thing) {
-        self.equipment.set_left_ring(ring);
-    }
-
-    /// Set (or clear) the ring on the player's right hand.
-    #[inline]
-    pub fn set_right_ring(&self, ring: *mut Thing) {
-        self.equipment.set_right_ring(ring);
-    }
-
-    /// The weapon the player is wielding (or a null handle).
-    #[inline]
-    pub fn weapon(&self) -> *mut Thing {
-        self.equipment.weapon()
-    }
-
-    /// Set (or clear) the weapon the player is wielding.
-    #[inline]
-    pub fn set_weapon(&self, weapon: *mut Thing) {
-        self.equipment.set_weapon(weapon);
-    }
 }
 
 /// Process-wide owner of the player's actor and equipment.
@@ -644,8 +548,8 @@ mod tests {
     #[test]
     fn equipment_is_a_player_component() {
         let player = Player::EMPTY;
-        assert!(player.equipment().weapon().is_null());
-        player.equipment().set_weapon(std::ptr::null_mut());
-        assert!(player.equipment().armor().is_null());
+        assert_eq!(player.equipment().weapon_id(), None);
+        player.equipment().set_weapon_id(None);
+        assert_eq!(player.equipment().armor_id(), None);
     }
 }

@@ -404,15 +404,7 @@ pub unsafe fn read_scroll() {
     }
 }
 
-/// uncurse:
 /// Uncurse an item.
 pub unsafe fn uncurse_id(id: ThingId) {
     OBJECTS.with_object_mut(id, |o| o.o_flags.remove(ObjectFlags::CURSED));
-}
-
-/// Legacy pointer wrapper around [`uncurse_id`].
-pub unsafe fn uncurse(obj: *mut Thing) {
-    if let Some(id) = crate::item::arena::id_of(obj) {
-        uncurse_id(id);
-    }
 }

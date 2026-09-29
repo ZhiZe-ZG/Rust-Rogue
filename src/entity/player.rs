@@ -13,7 +13,7 @@ use crate::entity::fight::{fight, swing};
 use crate::entity::monsters::save;
 use crate::game;
 use crate::game::PLAYER;
-use crate::item::armor::rust_armor;
+use crate::item::armor::rust_armor_id;
 use crate::item::pack::floor_at;
 use crate::item::rings::RingType;
 use crate::item::arena::new_item_id;
@@ -649,7 +649,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
             if let Some(msg) = trap.msg(hit) {
                 msg_str(&msg);
             }
-            rust_armor(PLAYER.armor());
+            rust_armor_id(PLAYER.equipment().armor_id());
         }
     }
 
