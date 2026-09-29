@@ -54,19 +54,6 @@ pub(crate) struct CorridorPlan {
 // Corridor geometry (pure: no map or room records are mutated)
 // ---------------------------------------------------------------------------
 
-/// Linear cell index for absolute map coordinates, or `None` out of bounds.
-fn cell_index(y: i32, x: i32) -> Option<usize> {
-    if y < 0 || x < 0 {
-        return None;
-    }
-    let (y, x) = (y as usize, x as usize);
-    if y < GameConfig::LEVEL_HEIGHT && x < GameConfig::LEVEL_WIDTH {
-        Some(y * GameConfig::LEVEL_WIDTH + x)
-    } else {
-        None
-    }
-}
-
 /// Determine the direction of the corridor between rooms `r1` and `r2`.
 ///
 /// Rooms side by side (indices differing by one) are connected by a
@@ -292,10 +279,15 @@ pub(crate) fn build_passage(tiles: Vec<IVec2>, entry_points: Vec<IVec2>) -> Opti
 /// Marks the cell as [`Tile::Passage`] in the level map so it becomes part of
 /// the canonical grid.
 pub(crate) fn stamp_passage(map: &mut Structure, flags: &mut LevelFlags, pos: IVec2) {
-    let (y, x) = (pos.y, pos.x);
-    if let Some(idx) = cell_index(y, x) {
-        map.set(y as usize, x as usize, Tile::Passage);
-        flags.passage[idx] = true;
+    let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) else {
+        return;
+    };
+    if y < GameConfig::LEVEL_HEIGHT && x < GameConfig::LEVEL_WIDTH && map.set(y, x, Tile::Passage)
+    {
+        let idx = y * GameConfig::LEVEL_WIDTH + x;
+        if let Some(passage) = flags.passage.get_mut(idx) {
+            *passage = true;
+        }
     }
 }
 
@@ -328,15 +320,21 @@ pub(crate) fn stamp_door(
     let secret = rnd(10) + 1 < depth && rnd(5) == 0;
 
     let local = pos - position;
-    if let Some(idx) = cell_index(pos.y, pos.x) {
-        if secret {
-            // A secret door stays disguised as a wall in the tile map
-            // (rendered `-`/`|` like the wall it replaces) and is marked
-            // non-real so the C side can reveal it as `+`.
-            map.set(pos.y as usize, pos.x as usize, Tile::HiddenDoor);
-            flags.real[idx] = false;
-        } else {
-            map.set(pos.y as usize, pos.x as usize, Tile::Door);
+    if let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) {
+        if y < GameConfig::LEVEL_HEIGHT && x < GameConfig::LEVEL_WIDTH {
+            let idx = y * GameConfig::LEVEL_WIDTH + x;
+            if secret {
+                // A secret door stays disguised as a wall in the tile map
+                // (rendered `-`/`|` like the wall it replaces) and is marked
+                // non-real so the C side can reveal it as `+`.
+                if map.set(y, x, Tile::HiddenDoor) {
+                    if let Some(real) = flags.real.get_mut(idx) {
+                        *real = false;
+                    }
+                }
+            } else {
+                map.set(y, x, Tile::Door);
+            }
         }
     }
     rooms[room_index].place_door(local, secret);
