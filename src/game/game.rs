@@ -95,39 +95,6 @@ pub fn clear_monster(y: i32, x: i32) {
     MONSTER_MAP.set(y as usize, x as usize, None);
 }
 
-/// Read the monster at `(y, x)` as a raw handle, or null.
-///
-/// The per-cell map stores a pointer-free [`MonsterId`]; this resolves it to the
-/// monster's stable raw address for the legacy engine boundary.
-#[inline]
-pub unsafe fn monster_at(y: i32, x: i32) -> *mut Thing {
-    match MONSTER_MAP.at(y as usize, x as usize) {
-        Some(id) => crate::game::MONSTER_LIST
-            .handle(id)
-            .unwrap_or(std::ptr::null_mut()),
-        None => std::ptr::null_mut(),
-    }
-}
-
-/// Place `tp` at `(y, x)` in the per-cell monster occupancy map.
-#[inline]
-pub unsafe fn set_monster(y: i32, x: i32, tp: *mut Thing) {
-    let id = crate::game::MONSTER_LIST.find(tp);
-    MONSTER_MAP.set(y as usize, x as usize, id);
-}
-
-/// Read the monster map at `(y, x)` (equivalent to [`monster_at`]).
-#[inline]
-pub unsafe fn moat_at(y: i32, x: i32) -> *mut Thing {
-    monster_at(y, x)
-}
-
-/// Place a monster in the per-cell monster occupancy map.
-#[inline]
-pub unsafe fn set_moat_at(y: i32, x: i32, tp: *mut Thing) {
-    set_monster(y, x, tp);
-}
-
 /// Clear every cell's monster pointer for a fresh level.
 pub unsafe fn clear_level() {
     MONSTER_MAP.clear();
@@ -278,19 +245,6 @@ pub fn item_ids() -> Vec<crate::item::arena::ThingId> {
             .filter(|&id| crate::item::arena::OBJECTS.contains(id))
             .collect()
     })
-}
-
-/// Stable raw handles to the floor items of the live level, head first.
-///
-/// This is the safe bridge from the level's `Vec<ThingId>` floor-item list to
-/// the legacy `*mut Thing` engine boundary; the underlying objects are owned by
-/// [`crate::item::arena::OBJECTS`].
-#[inline]
-pub fn item_ptrs() -> Vec<*mut Thing> {
-    item_ids()
-        .into_iter()
-        .map(crate::item::arena::ptr_of)
-        .collect()
 }
 
 /// Convenience alias for the crate-wide level size constants.

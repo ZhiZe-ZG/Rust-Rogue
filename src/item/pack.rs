@@ -230,10 +230,8 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
 
     let item_dest = crate::entity::player::DestRef::Object(item_id);
     for id in MONSTER_LIST.ids() {
-        if let Some(op) = MONSTER_LIST.handle(id) {
-            if crate::entity::player::thing_dest(op) == item_dest {
-                crate::entity::player::set_thing_dest_hero(op);
-            }
+        if crate::entity::player::monster_dest(id) == item_dest {
+            crate::entity::player::set_monster_dest_hero(id);
         }
     }
 

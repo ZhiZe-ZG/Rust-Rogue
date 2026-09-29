@@ -8,8 +8,8 @@ use crate::daemons::{come_down, sight};
 use crate::draw::look;
 
 use crate::entity::chase::see_monst;
-use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster};
-use crate::game::MONSTER_LIST;
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
+use crate::game::{MonsterId, MONSTER_LIST};
 use crate::game::PLAYER;
 use crate::game::globals::{pot_info, ObjInfo};
 use crate::item::item_type::{ItemFilter, ItemType};
@@ -120,12 +120,6 @@ unsafe fn pot_info_at(index: usize) -> &'static mut ObjInfo {
     &mut pot_info[index]
 }
 
-/// Cast a generic thing pointer to the monster portion of the union.
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
 #[inline]
 fn hero() -> IVec2 {
     crate::game::PLAYER.pos()
@@ -137,13 +131,18 @@ fn player_has(flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn thing_has(tp: *mut Thing, flag: MonsterFlags) -> bool {
-    (*thing_t(tp)).t_flags.contains(flag)
+fn thing_has(id: MonsterId, flag: MonsterFlags) -> bool {
+    MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_flags.contains(flag),
+            Thing::Object { .. } => false,
+        })
+        .unwrap_or(false)
 }
 
 #[inline]
-unsafe fn moat(y: i32, x: i32) -> *mut Thing {
-    crate::game::monster_at(y, x)
+fn moat(y: i32, x: i32) -> Option<MonsterId> {
+    crate::game::monster_id_at(y, x)
 }
 
 /// Shared implementation for potion effects that need the normal fuse/flag
@@ -469,15 +468,18 @@ pub unsafe fn is_magic(obj: *mut Thing) -> u8 {
 pub unsafe fn invis_on() {
     crate::game::PLAYER.add_flag(MonsterFlags::CANSEE);
     for id in MONSTER_LIST.ids() {
-        if let Some(mp) = MONSTER_LIST.handle(id) {
-            if thing_has(mp, MonsterFlags::INVIS)
-                && see_monst(mp) != 0
-                && !player_has(MonsterFlags::HALU)
+        if thing_has(id, MonsterFlags::INVIS)
+            && see_monst(id) != 0
+            && !player_has(MonsterFlags::HALU)
+        {
+            if let Some(pos) = MONSTER_LIST
+                .with(id, |t| match t {
+                    Thing::Monster { data } => Some(data.t_pos),
+                    Thing::Object { .. } => None,
+                })
+                .flatten()
             {
-                output::write_glyph_at(
-                    IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
-                    crate::draw::monster_glyph(mp),
-                );
+                output::write_glyph_at(IVec2::new(pos.x, pos.y), crate::draw::monster_glyph(id));
             }
         }
     }
@@ -489,19 +491,25 @@ pub unsafe fn turn_see(turn_off: u8) -> u8 {
     let mut add_new = 0;
 
     for id in MONSTER_LIST.ids() {
-        if let Some(mp) = MONSTER_LIST.handle(id) {
-            output::move_cursor(IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y));
-            let can_see = see_monst(mp) != 0;
+        if let Some((pos, oldch)) = MONSTER_LIST
+            .with(id, |t| match t {
+                Thing::Monster { data } => Some((data.t_pos, data.t_oldch)),
+                Thing::Object { .. } => None,
+            })
+            .flatten()
+        {
+            output::move_cursor(IVec2::new(pos.x, pos.y));
+            let can_see = see_monst(id) != 0;
             if turn_off != 0 {
                 if !can_see {
-                    output::write_glyph(((*thing_t(mp)).t_oldch as u8) as char);
+                    output::write_glyph((oldch as u8) as char);
                 }
             } else {
                 if !can_see {
                     output::set_standout(true);
                 }
                 if !player_has(MonsterFlags::HALU) {
-                    output::write_glyph(crate::draw::monster_type_glyph(mp));
+                    output::write_glyph(crate::draw::monster_type_glyph(id));
                 } else {
                     output::write_glyph(crate::draw::hallucination_glyph());
                 }
@@ -529,7 +537,6 @@ pub unsafe fn turn_see(turn_off: u8) -> u8 {
 /// seen_stairs:
 /// Return true if the player has seen the stairs.
 pub unsafe fn seen_stairs() -> u8 {
-    let tp: *mut Thing;
     let stairs = crate::game::stairs();
 
     output::move_cursor(IVec2::new(stairs.x, stairs.y));
@@ -540,12 +547,17 @@ pub unsafe fn seen_stairs() -> u8 {
         return 1;
     }
 
-    tp = moat(stairs.y, stairs.x);
-    if !tp.is_null() {
+    if let Some(tp) = moat(stairs.y, stairs.x) {
         if see_monst(tp) != 0 && thing_has(tp, MonsterFlags::RUN) {
             return 1;
         }
-        if player_has(MonsterFlags::SEEMONST) && (*thing_t(tp)).t_oldch as i32 == STAIRS {
+        let oldch = MONSTER_LIST
+            .with(tp, |t| match t {
+                Thing::Monster { data } => data.t_oldch as i32,
+                Thing::Object { .. } => 0,
+            })
+            .unwrap_or(0);
+        if player_has(MonsterFlags::SEEMONST) && oldch == STAIRS {
             return 1;
         }
     }

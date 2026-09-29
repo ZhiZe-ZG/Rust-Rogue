@@ -18,9 +18,10 @@ use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon, Daemon};
 use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
 use crate::entity::monsters::{wanderer, MonsterType};
-use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
+use crate::entity::player::{MonsterFlags, Thing};
 use crate::game::MONSTER_LIST;
 use crate::game::PLAYER;
+use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
 use crate::rip::death;
@@ -46,20 +47,15 @@ use crate::game::globals::{after, amulet, count, food_left, hungry_state, jump, 
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
 
+/// The `(position, disguise, oldch, flags)` of a monster `id`, if it exists.
 #[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-/// ISRING(hand, ring_type): true when the player wears ring_type on hand.
-#[inline]
-unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
-    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
+fn monster_view(id: crate::game::MonsterId) -> Option<(IVec2, u8, u8, MonsterFlags)> {
+    MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => Some((data.t_pos, data.t_disguise, data.t_oldch, data.t_flags)),
+            Thing::Object { .. } => None,
+        })
+        .flatten()
 }
 
 // ─── Module globals ───────────────────────────────────────────────────────────
@@ -132,12 +128,9 @@ pub unsafe fn unconfuse() {
 /// Turn off the ability to see invisible.
 pub unsafe fn unsee() {
     for id in MONSTER_LIST.ids() {
-        if let Some(th) = MONSTER_LIST.handle(id) {
-            if (*thing_t(th)).t_flags.contains(MonsterFlags::INVIS) && see_monst(th) != 0 {
-                output::write_glyph_at(
-                    IVec2::new((*thing_t(th)).t_pos.x, (*thing_t(th)).t_pos.y),
-                    ((*thing_t(th)).t_oldch as u8) as char,
-                );
+        if let Some((pos, _disguise, oldch, flags)) = monster_view(id) {
+            if flags.contains(MonsterFlags::INVIS) && see_monst(id) != 0 {
+                output::write_glyph_at(IVec2::new(pos.x, pos.y), (oldch as u8) as char);
             }
         }
     }
@@ -240,13 +233,11 @@ pub unsafe fn come_down() {
     }
 
     // Undo the things (objects on the level).
-    for tp in crate::game::item_ptrs() {
-        let op = thing_o(tp);
-        if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
-            output::write_glyph_at(
-                IVec2::new((*op).o_pos.x, (*op).o_pos.y),
-                crate::draw::item_glyph((*op).o_type),
-            );
+    for id in crate::game::item_ids() {
+        if let Some((pos, otype)) = OBJECTS.with_object(id, |o| (o.o_pos, o.o_type)) {
+            if cansee(pos.y, pos.x) != 0 {
+                output::write_glyph_at(IVec2::new(pos.x, pos.y), crate::draw::item_glyph(otype));
+            }
         }
     }
 
@@ -254,18 +245,15 @@ pub unsafe fn come_down() {
     let seemonst = PLAYER.has_flag(MonsterFlags::SEEMONST);
     let cansee_invis = PLAYER.has_flag(MonsterFlags::CANSEE);
     for id in MONSTER_LIST.ids() {
-        if let Some(tp) = MONSTER_LIST.handle(id) {
-            output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
-            if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
-                if !(*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS) || cansee_invis {
-                    output::write_glyph(crate::draw::monster_glyph(tp));
+        if let Some((pos, _disguise, _oldch, flags)) = monster_view(id) {
+            output::move_cursor(IVec2::new(pos.x, pos.y));
+            if cansee(pos.y, pos.x) != 0 {
+                if !flags.contains(MonsterFlags::INVIS) || cansee_invis {
+                    output::write_glyph(crate::draw::monster_glyph(id));
                 }
-                // If invisible and player can't see invisible, skip (original code
-                // falls through to the else-if, but cansee returned true here,
-                // so seemonst branch is not reached — matching C behavior).
             } else if seemonst {
                 output::set_standout(true);
-                output::write_glyph(crate::draw::monster_type_glyph(tp));
+                output::write_glyph(crate::draw::monster_type_glyph(id));
                 output::set_standout(false);
             }
         }
@@ -281,13 +269,11 @@ pub unsafe fn visuals() {
     }
 
     // Change the things (objects).
-    for tp in crate::game::item_ptrs() {
-        let op = thing_o(tp);
-        if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
-            output::write_glyph_at(
-                IVec2::new((*op).o_pos.x, (*op).o_pos.y),
-                (rnd_thing() as u8) as char,
-            );
+    for id in crate::game::item_ids() {
+        if let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) {
+            if cansee(pos.y, pos.x) != 0 {
+                output::write_glyph_at(IVec2::new(pos.x, pos.y), (rnd_thing() as u8) as char);
+            }
         }
     }
 
@@ -300,10 +286,16 @@ pub unsafe fn visuals() {
     // Change the monsters.
     let seemonst = PLAYER.has_flag(MonsterFlags::SEEMONST);
     for id in MONSTER_LIST.ids() {
-        if let Some(tp) = MONSTER_LIST.handle(id) {
-            output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
-            if see_monst(tp) != 0 {
-                if (*thing_t(tp)).t_type == Some(MonsterType::Xeroc) && (*thing_t(tp)).t_disguise != b'X' {
+        if let Some((pos, disguise, _oldch, _flags)) = monster_view(id) {
+            let typ = MONSTER_LIST
+                .with(id, |t| match t {
+                    Thing::Monster { data } => data.t_type,
+                    Thing::Object { .. } => None,
+                })
+                .flatten();
+            output::move_cursor(IVec2::new(pos.x, pos.y));
+            if see_monst(id) != 0 {
+                if typ == Some(MonsterType::Xeroc) && disguise != b'X' {
                     output::write_glyph((rnd_thing() as u8) as char);
                 } else {
                     output::write_glyph(crate::draw::hallucination_glyph());

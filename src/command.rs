@@ -12,21 +12,19 @@ use crate::config::GameConfig;
 use crate::daemon::{do_daemons, do_fuses};
 use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
-use crate::entity::player::{
-    do_move, do_run, MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject,
-};
-use crate::game::PLAYER;
+use crate::entity::player::{do_move, do_run, MonsterFlags, ObjectFlags, Thing};
+use crate::game::{MonsterId, PLAYER};
 use crate::game::globals::{pot_info, ring_info, scr_info, ws_info, ObjInfo};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::help::{help, identify};
 use crate::item::armor::{take_off, wear};
-use crate::item::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
+use crate::item::pack::{add_pack_id, get_item_id, inventory, pick_up, picky_inven};
 use crate::item::potions::{quaff, raise_level, turn_see};
 use crate::item::rings::{ring_off, ring_on, RingType};
 use crate::item::scrolls::read_scroll;
 use crate::item::sticks::do_zap;
-use crate::item::arena::new_item;
-use crate::item::things::{discovered, drop, inv_name};
+use crate::item::arena::{new_item_id, ThingId, OBJECTS};
+use crate::item::things::{discovered, drop, inv_name_id};
 use crate::item::weapons::{init_weapon, missile, wield};
 use crate::level::new_level;
 use crate::misc::{eat, get_dir};
@@ -126,16 +124,6 @@ use crate::game::globals::{after, again, amulet, count, delta, dir_ch, dnum, doo
 // ─── Module-local helpers ─────────────────────────────────────────────────────
 
 #[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-#[inline]
 fn hero_pos() -> IVec2 {
     crate::game::PLAYER.pos()
 }
@@ -143,16 +131,6 @@ fn hero_pos() -> IVec2 {
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
     crate::game::PLAYER.has_flag(flag)
-}
-
-#[inline]
-unsafe fn moat_at(y: i32, x: i32) -> *mut Thing {
-    crate::game::monster_at(y, x)
-}
-
-#[inline]
-unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
-    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
 }
 
 /// Copy a string slice into an owned [`String`].
@@ -176,7 +154,7 @@ fn cstr_at(s: &str) -> String {
 pub unsafe fn command() {
     let mut ch: u8;
     let mut ntimes: i32 = 1; // Number of player moves
-    let mut mp: *mut Thing;
+    let mut mp: Option<MonsterId>;
 
     if player_has(MonsterFlags::HASTE) {
         ntimes += 1;
@@ -340,19 +318,23 @@ pub unsafe fn command() {
                 match ch {
                     b',' => {
                         let hero = hero_pos();
-                        let mut found_obj: *mut Thing = std::ptr::null_mut();
-                        for obj in crate::game::item_ptrs() {
-                            if (*thing_o(obj)).o_pos.y == hero.y
-                                && (*thing_o(obj)).o_pos.x == hero.x
+                        let mut found_obj: Option<ThingId> = None;
+                        for obj in crate::game::item_ids() {
+                            if crate::item::arena::with_object(obj, |o| {
+                                o.o_pos.y == hero.y && o.o_pos.x == hero.x
+                            })
+                            .unwrap_or(false)
                             {
-                                found_obj = obj;
+                                found_obj = Some(obj);
                                 break;
                             }
                         }
 
-                        if !found_obj.is_null() {
+                        if let Some(obj) = found_obj {
                             if levit_check() == 0 {
-                                pick_up((*thing_o(found_obj)).o_type.code() as u8);
+                                let code = crate::item::arena::with_object(obj, |o| o.o_type.code())
+                                    .unwrap_or(0);
+                                pick_up(code as u8);
                             }
                         } else {
                             if terse == 0 {
@@ -416,10 +398,14 @@ pub unsafe fn command() {
                             let hero = hero_pos();
                             delta.y += hero.y;
                             delta.x += hero.x;
-                            mp = moat_at(delta.y, delta.x);
-                            if mp.is_null()
-                                || (see_monst(mp) == 0 && !player_has(MonsterFlags::SEEMONST))
-                            {
+                            mp = crate::game::monster_id_at(delta.y, delta.x);
+                            let no_monster = match mp {
+                                None => true,
+                                Some(id) => {
+                                    see_monst(id) == 0 && !player_has(MonsterFlags::SEEMONST)
+                                }
+                            };
+                            if no_monster {
                                 if terse == 0 {
                                     addmsg_str("I see ");
                                 }
@@ -428,7 +414,13 @@ pub unsafe fn command() {
                             } else if diag_ok(hero_pos(), delta) != 0 {
                                 to_death = true as u8;
                                 max_hit = 0;
-                                (*thing_t(mp)).t_flags.insert(MonsterFlags::TARGET);
+                                if let Some(id) = mp {
+                                    crate::game::MONSTER_LIST.with_mut(id, |t| {
+                                        if let Thing::Monster { data } = t {
+                                            data.t_flags.insert(MonsterFlags::TARGET);
+                                        }
+                                    });
+                                }
                                 runch = dir_ch;
                                 ch = dir_ch as u8;
                                 continue 'dispatch;
@@ -679,42 +671,40 @@ pub unsafe fn command() {
                                 }
                                 CTRL_TILDE => {
                                     let item =
-                                        get_item("charge", ItemFilter::Category(ItemType::STICK));
-                                    if !item.is_null() {
-                                        (*thing_o(item)).o_arm = 10000;
+                                        get_item_id("charge", ItemFilter::Category(ItemType::STICK));
+                                    if let Some(id) = item {
+                                        OBJECTS.with_object_mut(id, |o| o.o_arm = 10000);
                                     }
                                 }
                                 CTRL_I => {
-                                    let mut obj: *mut Thing;
-
                                     for _ in 0..9 {
                                         raise_level();
                                     }
                                     /*
                                      * Give him a sword (+1,+1)
                                      */
-                                    obj = new_item();
-                                    init_weapon(
-                                        crate::item::arena::id_of(obj)
-                                            .expect("object came from the arena"),
-                                        TWOSWORD,
-                                    );
-                                    (*thing_o(obj)).o_hplus = 1;
-                                    (*thing_o(obj)).o_dplus = 1;
-                                    add_pack(obj, true as u8);
-                                    PLAYER.set_weapon(obj);
+                                    let sword = new_item_id();
+                                    init_weapon(sword, TWOSWORD);
+                                    OBJECTS.with_object_mut(sword, |o| {
+                                        o.o_hplus = 1;
+                                        o.o_dplus = 1;
+                                    });
+                                    add_pack_id(Some(sword), true);
+                                    PLAYER.set_weapon_id(Some(sword));
                                     /*
                                      * And his suit of armor
                                      */
-                                    obj = new_item();
-                                    (*thing_o(obj)).o_type = ItemType::Armor(PLATE_MAIL);
-                                    (*thing_o(obj)).o_which = PLATE_MAIL;
-                                    (*thing_o(obj)).o_arm = -5;
-                                    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-                                    (*thing_o(obj)).o_count = 1;
-                                    (*thing_o(obj)).o_group = 0;
-                                    PLAYER.set_armor(obj);
-                                    add_pack(obj, true as u8);
+                                    let armor = new_item_id();
+                                    OBJECTS.with_object_mut(armor, |o| {
+                                        o.o_type = ItemType::Armor(PLATE_MAIL);
+                                        o.o_which = PLATE_MAIL;
+                                        o.o_arm = -5;
+                                        o.o_flags.insert(ObjectFlags::KNOW);
+                                        o.o_count = 1;
+                                        o.o_group = 0;
+                                    });
+                                    PLAYER.set_armor_id(Some(armor));
+                                    add_pack_id(Some(armor), true);
                                 }
                                 b'*' => pr_list(),
                                 _ => illcom(ch as i32),
@@ -928,14 +918,16 @@ pub unsafe fn levit_check() -> u8 {
 /// Uses globals: ring_info, r_stones, pot_info, p_colors, scr_info,
 /// s_names, ws_info, ws_made, terse, prbuf.
 pub unsafe fn call() {
-    let obj = get_item("call", ItemFilter::Callable);
-
-    // Make certain that it's something that we want to wear
-    if obj.is_null() {
+    let Some(obj) = get_item_id("call", ItemFilter::Callable) else {
         return;
-    }
+    };
 
-    let otype = (*thing_o(obj)).o_type;
+    let (otype, label, o_which) = match OBJECTS.with_object(obj, |o| {
+        (o.o_type, o.o_label.clone(), o.o_which)
+    }) {
+        Some(v) => v,
+        None => return,
+    };
 
     if matches!(otype, ItemType::Food) {
         msg_str("you can't call that anything");
@@ -947,7 +939,7 @@ pub unsafe fn call() {
         otype,
         ItemType::Ring(_) | ItemType::Potion(_) | ItemType::Scroll(_) | ItemType::Stick(_)
     ) {
-        if let Some(elsewise) = (*thing_o(obj)).o_label.as_ref() {
+        if let Some(elsewise) = label.as_ref() {
             if terse == 0 {
                 addmsg_str("Was ");
             }
@@ -960,9 +952,9 @@ pub unsafe fn call() {
             msg_str("what do you want to call it? ");
         }
 
-        let initial = (*thing_o(obj)).o_label.clone().unwrap_or_default();
+        let initial = label.clone().unwrap_or_default();
         if let Some(text) = read_line(&initial, Window::Stdscr) {
-            (*thing_o(obj)).o_label = Some(text);
+            OBJECTS.with_object_mut(obj, |o| o.o_label = Some(text));
         }
         return;
     }
@@ -975,7 +967,7 @@ pub unsafe fn call() {
         _ => &mut ws_info[..],
     };
 
-    let which = (*thing_o(obj)).o_which as usize;
+    let which = o_which as usize;
     let mut elsewise: String = match otype {
         ItemType::Ring(_) => cstr_at(r_stones[which]),
         ItemType::Potion(_) => cstr_at(p_colors[which]),
@@ -1018,8 +1010,7 @@ pub unsafe fn call() {
 /// Uses globals: after, terse, inv_describe.
 pub unsafe fn current(cur: Option<crate::item::arena::ThingId>, how: &str, where_: &str) {
     after = false as u8;
-    let obj = cur.map_or(std::ptr::null_mut(), crate::item::arena::ptr_of);
-    if !obj.is_null() {
+    if let Some(id) = cur {
         if terse == 0 {
             addmsg_str(&format!(
                 "you are {} (",
@@ -1027,11 +1018,8 @@ pub unsafe fn current(cur: Option<crate::item::arena::ThingId>, how: &str, where
             ));
         }
         inv_describe = false as u8;
-        addmsg_str(&format!(
-            "{}) {}",
-            (*thing_o(obj)).o_packch as char,
-            inv_name(obj, true as u8)
-        ));
+        let packch = OBJECTS.with_object(id, |o| o.o_packch).unwrap_or(0);
+        addmsg_str(&format!("{}) {}", packch as char, inv_name_id(id, true)));
         inv_describe = true as u8;
         if !where_.is_empty() {
             addmsg_str(&format!(" {}", where_));
@@ -1059,11 +1047,12 @@ pub unsafe fn current(cur: Option<crate::item::arena::ThingId>, how: &str, where
 ///
 /// Uses globals: lvl_obj, mlist.
 pub unsafe fn pr_list() {
-    for obj in crate::game::item_ptrs() {
+    for obj in crate::game::item_ids() {
+        let otype = crate::item::arena::with_object(obj, |o| o.o_type).unwrap_or(ItemType::None);
         msg_str(&format!(
             "{}) {}",
-            crate::draw::item_glyph((*thing_o(obj)).o_type),
-            inv_name(obj, false as u8)
+            crate::draw::item_glyph(otype),
+            inv_name_id(obj, false)
         ));
     }
 }

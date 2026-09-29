@@ -9,7 +9,7 @@ use crate::entity::fight::set_mname;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
 use crate::item::rings::RingType;
-use crate::game::{new_actor, MonsterId, MONSTER_LIST};
+use crate::game::{MonsterId, MONSTER_LIST};
 use crate::item::things::new_thing_id;
 use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
@@ -202,18 +202,13 @@ use crate::game::globals::{max_level, wizard};
 
 
 #[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-#[inline]
-unsafe fn has_flag(tp: *mut Thing, flag: MonsterFlags) -> bool {
-    (*thing_t(tp)).t_flags.contains(flag)
+fn has_flag(id: MonsterId, flag: MonsterFlags) -> bool {
+    MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_flags.contains(flag),
+            Thing::Object { .. } => false,
+        })
+        .unwrap_or(false)
 }
 
 #[inline]
@@ -248,16 +243,7 @@ pub unsafe fn randmonster(wander: bool) -> MonsterType {
     }
 }
 
-/// Initializes a freshly allocated monster thing and places it on the map.
-pub unsafe fn new_monster(tp: *mut Thing, monster_type: MonsterType, cp: IVec2) {
-    if let Some(id) = MONSTER_LIST.find(tp) {
-        new_monster_id(id, monster_type, cp);
-    }
-}
-
 /// Initializes the already-spawned monster `id` and places it on the map.
-///
-/// This is the pointer-free counterpart of [`new_monster`].
 pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2) {
     let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
@@ -308,14 +294,17 @@ pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2
 }
 
 /// Computes bonus experience from a monster's level and max HP.
-pub unsafe fn exp_add(tp: *mut Thing) -> i32 {
-    exp_add_for(
-        (*thing_t(tp)).t_stats.level,
-        (*thing_t(tp)).t_stats.max_hit_points,
-    )
+pub fn exp_add(id: MonsterId) -> i32 {
+    let (level, max_hp) = MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => (data.t_stats.level, data.t_stats.max_hit_points),
+            Thing::Object { .. } => (0, 0),
+        })
+        .unwrap_or((0, 0));
+    exp_add_for(level, max_hp)
 }
 
-/// Bonus experience from an explicit monster `level` and `max_hp` (pointer-free).
+/// Bonus experience from an explicit monster `level` and `max_hp`.
 #[inline]
 fn exp_add_for(level: i32, max_hp: i32) -> i32 {
     let mut modu = if level == 1 { max_hp / 8 } else { max_hp / 6 };
@@ -329,7 +318,7 @@ fn exp_add_for(level: i32, max_hp: i32) -> i32 {
 
 /// Spawns a wandering monster in a different room and sets it running toward the hero.
 pub unsafe fn wanderer() {
-    let tp = new_actor();
+    let id = MONSTER_LIST.spawn_actor();
     let mut cp;
 
     loop {
@@ -339,60 +328,81 @@ pub unsafe fn wanderer() {
         }
     }
 
-    new_monster(tp, randmonster(true), cp);
+    new_monster_id(id, randmonster(true), cp);
 
     if player_has(MonsterFlags::SEEMONST) {
         output::set_standout(true);
         if !player_has(MonsterFlags::HALU) {
-            output::write_glyph(crate::draw::monster_type_glyph(tp));
+            output::write_glyph(crate::draw::monster_type_glyph(id));
         } else {
             output::write_glyph(crate::draw::hallucination_glyph());
         }
         output::set_standout(false);
     }
 
-    runto((*thing_t(tp)).t_pos);
+    let pos = MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_pos,
+            Thing::Object { .. } => IVec2::ZERO,
+        })
+        .unwrap_or(IVec2::ZERO);
+    runto(pos);
 
     if wizard != 0 {
-        msg_str(&format!(
-            "started a wandering {}",
-            (*thing_t(tp)).t_type.map_or("", |m| m.name())
-        ));
+        let name = MONSTER_LIST
+            .with(id, |t| match t {
+                Thing::Monster { data } => data.t_type.map_or("", |m| m.name()).to_string(),
+                Thing::Object { .. } => String::new(),
+            })
+            .unwrap_or_default();
+        msg_str(&format!("started a wandering {name}"));
     }
 }
 
 /// Wakes and updates an adjacent monster's pursuit behavior and special gaze logic.
-pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
-    let tp = crate::game::monster_at(y, x);
-    if tp.is_null() {
+pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
+    let Some(id) = crate::game::monster_id_at(y, x) else {
         runtime::shutdown();
         std::process::abort();
-    }
+    };
 
-    let ch = (*thing_t(tp)).t_type;
+    let ch = MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_type,
+            Thing::Object { .. } => None,
+        })
+        .flatten();
 
-    if !has_flag(tp, MonsterFlags::RUN)
+    if !has_flag(id, MonsterFlags::RUN)
         && rnd(3) != 0
-        && has_flag(tp, MonsterFlags::MEAN)
-        && !has_flag(tp, MonsterFlags::HELD)
+        && has_flag(id, MonsterFlags::MEAN)
+        && !has_flag(id, MonsterFlags::HELD)
         && !iswearing(RingType::Stealth)
         && !player_has(MonsterFlags::LEVIT)
     {
-        crate::entity::player::set_thing_dest_hero(tp);
-        (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
+        crate::entity::player::set_monster_dest_hero(id);
+        MONSTER_LIST.with_mut(id, |t| {
+            if let Thing::Monster { data } = t {
+                data.t_flags.insert(MonsterFlags::RUN);
+            }
+        });
     }
 
     if ch == Some(MonsterType::Medusa)
         && !player_has(MonsterFlags::BLIND)
         && !player_has(MonsterFlags::HALU)
-        && !has_flag(tp, MonsterFlags::FOUND)
-        && !has_flag(tp, MonsterFlags::CANCELLED)
-        && has_flag(tp, MonsterFlags::RUN)
+        && !has_flag(id, MonsterFlags::FOUND)
+        && !has_flag(id, MonsterFlags::CANCELLED)
+        && has_flag(id, MonsterFlags::RUN)
     {
         let rp = crate::game::PLAYER.room();
         let hero = crate::game::PLAYER.pos();
         if (rp.is_some() && !crate::game::room_dark(rp)) || dist(y, x, hero.y, hero.x) < LAMPDIST {
-            (*thing_t(tp)).t_flags.insert(MonsterFlags::FOUND);
+            MONSTER_LIST.with_mut(id, |t| {
+                if let Thing::Monster { data } = t {
+                    data.t_flags.insert(MonsterFlags::FOUND);
+                }
+            });
             if save(VS_MAGIC) == 0 {
                 if player_has(MonsterFlags::HUH) {
                     lengthen(Daemon::Unconfuse, spread(HUHDURATION));
@@ -400,7 +410,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
                     fuse(Daemon::Unconfuse, 0, spread(HUHDURATION), AFTER);
                 }
                 crate::game::PLAYER.add_flag(MonsterFlags::HUH);
-                let mname_str = set_mname(tp);
+                let mname_str = set_mname(id);
                 addmsg_str(&mname_str);
                 if mname_str != "it" {
                     addmsg_str("'");
@@ -410,31 +420,28 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
         }
     }
 
-    if has_flag(tp, MonsterFlags::GREED) && !has_flag(tp, MonsterFlags::RUN) {
-        (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
+    if has_flag(id, MonsterFlags::GREED) && !has_flag(id, MonsterFlags::RUN) {
+        MONSTER_LIST.with_mut(id, |t| {
+            if let Thing::Monster { data } = t {
+                data.t_flags.insert(MonsterFlags::RUN);
+            }
+        });
         let pr = crate::game::PLAYER.room();
         if let Some(room) = pr {
             if crate::game::room_goldval(pr) != 0 {
-                crate::entity::player::set_thing_dest(tp, DestRef::RoomGold(room));
+                crate::entity::player::set_monster_dest(id, DestRef::RoomGold(room));
             } else {
-                crate::entity::player::set_thing_dest_hero(tp);
+                crate::entity::player::set_monster_dest_hero(id);
             }
         } else {
-            crate::entity::player::set_thing_dest_hero(tp);
+            crate::entity::player::set_monster_dest_hero(id);
         }
     }
 
-    tp
+    Some(id)
 }
 
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
-pub unsafe fn give_pack(tp: *mut Thing) {
-    if let Some(id) = MONSTER_LIST.find(tp) {
-        give_pack_id(id);
-    }
-}
-
-/// Pointer-free counterpart of [`give_pack`]: works on a [`MonsterId`].
 pub unsafe fn give_pack_id(id: MonsterId) {
     let kind = MONSTER_LIST
         .with(id, |t| match t {
@@ -451,11 +458,6 @@ pub unsafe fn give_pack_id(id: MonsterId) {
             }
         });
     }
-}
-
-/// Rolls a saving throw for any creature against an effect category.
-pub unsafe fn save_throw(which: i32, tp: *mut Thing) -> i32 {
-    save_throw_for_level(which, (*thing_t(tp)).t_stats.level)
 }
 
 /// Roll a saving throw for the monster behind `id` (pointer-free variant).

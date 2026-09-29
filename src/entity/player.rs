@@ -438,97 +438,100 @@ impl Default for ThingObject {
     }
 }
 
+// ─── Pointer-free actor (monster) accessors ─────────────────────────────────
+
 /// Read the actor's chase destination (a stable [`DestRef`] handle).
 #[inline]
-pub unsafe fn thing_dest(tp: *mut Thing) -> DestRef {
-    (*thing_t(tp)).t_dest
+pub fn monster_dest(id: crate::game::MonsterId) -> DestRef {
+    crate::game::MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_dest,
+            Thing::Object { .. } => DestRef::None,
+        })
+        .unwrap_or(DestRef::None)
 }
 
 /// Set the actor's chase destination.
 #[inline]
-pub unsafe fn set_thing_dest(tp: *mut Thing, value: DestRef) {
-    (*thing_t(tp)).t_dest = value;
+pub fn set_monster_dest(id: crate::game::MonsterId, value: DestRef) {
+    crate::game::MONSTER_LIST.with_mut(id, |t| {
+        if let Thing::Monster { data } = t {
+            data.t_dest = value;
+        }
+    });
 }
 
 /// Whether the actor is chasing the hero.
 #[inline]
-pub unsafe fn is_thing_dest_hero(tp: *mut Thing) -> bool {
-    matches!((*thing_t(tp)).t_dest, DestRef::Hero)
+pub fn is_monster_dest_hero(id: crate::game::MonsterId) -> bool {
+    matches!(monster_dest(id), DestRef::Hero)
 }
 
 /// Make the actor chase the hero (clearing any stored destination).
 #[inline]
-pub unsafe fn set_thing_dest_hero(tp: *mut Thing) {
-    (*thing_t(tp)).t_dest = DestRef::Hero;
+pub fn set_monster_dest_hero(id: crate::game::MonsterId) {
+    set_monster_dest(id, DestRef::Hero);
 }
 
 /// The actor's pack as arena handles, head first.
 #[inline]
-pub unsafe fn thing_pack(tp: *mut Thing) -> Vec<ThingId> {
-    (*thing_t(tp)).t_pack.clone()
+pub fn monster_pack(id: crate::game::MonsterId) -> Vec<ThingId> {
+    crate::game::MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_pack.clone(),
+            Thing::Object { .. } => Vec::new(),
+        })
+        .unwrap_or_default()
 }
 
 /// Replace the actor's pack with `pack`.
 #[inline]
-pub unsafe fn set_thing_pack(tp: *mut Thing, pack: Vec<ThingId>) {
-    (*thing_t(tp)).t_pack = pack;
+pub fn set_monster_pack(id: crate::game::MonsterId, pack: Vec<ThingId>) {
+    crate::game::MONSTER_LIST.with_mut(id, |t| {
+        if let Thing::Monster { data } = t {
+            data.t_pack = pack;
+        }
+    });
 }
 
-/// Prepend `item` to the actor `owner`'s pack.
-pub unsafe fn attach_pack(owner: *mut Thing, item: *mut Thing) {
-    if let Some(id) = crate::item::arena::id_of(item) {
-        (*thing_t(owner)).t_pack.insert(0, id);
-    }
+/// Prepend the object `item` to the actor `owner`'s pack.
+pub fn attach_pack_id(owner: crate::game::MonsterId, item: ThingId) {
+    crate::game::MONSTER_LIST.with_mut(owner, |t| {
+        if let Thing::Monster { data } = t {
+            data.t_pack.insert(0, item);
+        }
+    });
 }
 
-/// Unlink `item` (by handle) from the actor `owner`'s pack.
-pub unsafe fn detach_pack(owner: *mut Thing, item: *mut Thing) {
-    if let Some(id) = crate::item::arena::id_of(item) {
-        (*thing_t(owner)).t_pack.retain(|&x| x != id);
-    }
+/// Unlink the object `item` from the actor `owner`'s pack.
+pub fn detach_pack_id(owner: crate::game::MonsterId, item: ThingId) {
+    crate::game::MONSTER_LIST.with_mut(owner, |t| {
+        if let Thing::Monster { data } = t {
+            data.t_pack.retain(|&x| x != item);
+        }
+    });
 }
 
 /// Drop every item in the actor `owner`'s pack.
-pub unsafe fn free_pack(owner: *mut Thing) {
-    let pack = std::mem::take(&mut (*thing_t(owner)).t_pack);
+pub fn free_pack_id(owner: crate::game::MonsterId) {
+    let pack = crate::game::MONSTER_LIST
+        .with_mut(owner, |t| match t {
+            Thing::Monster { data } => std::mem::take(&mut data.t_pack),
+            Thing::Object { .. } => Vec::new(),
+        })
+        .unwrap_or_default();
     for id in pack {
         let _ = crate::item::arena::OBJECTS.remove(id);
     }
 }
 
-/// Discard a thing: monsters are owned by the pointer-free
-/// [`crate::game::MONSTER_LIST`], objects by the item arena.
-///
-/// Safe: it only consults the two safe containers and never dereferences the
-/// handle itself.
-pub fn discard(item: *mut Thing) {
-    if let Some(id) = crate::game::MONSTER_LIST.find(item) {
-        let _ = crate::game::MONSTER_LIST.remove(id);
-        return;
-    }
-    let _ = crate::item::arena::OBJECTS.discard(item);
+/// Remove the monster `id` from the live monster list.
+pub fn discard_monster(id: crate::game::MonsterId) {
+    let _ = crate::game::MONSTER_LIST.remove(id);
 }
 
 use crate::game::globals::{after, count, delta, door_stop, firstmove, jump, move_on, no_command, no_move, oldpos, passgo, runch, running, seenstairs, take, to_death};
 
-
-/// Borrow the actor payload of `tp` (null when `tp` is an object).
-#[inline]
-pub unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    match &mut *tp {
-        Thing::Monster { data, .. } => data as *mut ThingMonster,
-        Thing::Object { .. } => std::ptr::null_mut(),
-    }
-}
-
-/// Borrow the object payload of `tp` (null when `tp` is an actor).
-#[inline]
-pub unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    match &mut *tp {
-        Thing::Object { data, .. } => data as *mut ThingObject,
-        Thing::Monster { .. } => std::ptr::null_mut(),
-    }
-}
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
@@ -876,26 +879,20 @@ mod tests {
     #[test]
     fn attach_detach_pack_preserves_order() {
         let _guard = serial();
-        let mut owner = Thing::actor(ThingMonster::default());
+        let owner = crate::game::MONSTER_LIST.spawn_actor();
         let a = new_object_id();
         let b = new_object_id();
 
-        unsafe {
-            attach_pack(&mut owner, crate::item::arena::ptr_of(a));
-            attach_pack(&mut owner, crate::item::arena::ptr_of(b));
-        }
-        let pack = unsafe { thing_pack(&mut owner) };
-        assert_eq!(pack, vec![b, a]);
+        attach_pack_id(owner, a);
+        attach_pack_id(owner, b);
+        assert_eq!(monster_pack(owner), vec![b, a]);
 
-        unsafe {
-            detach_pack(&mut owner, crate::item::arena::ptr_of(b));
-        }
-        assert_eq!(unsafe { thing_pack(&mut owner) }, vec![a]);
+        detach_pack_id(owner, b);
+        assert_eq!(monster_pack(owner), vec![a]);
 
-        unsafe {
-            free_pack(&mut owner);
-        }
-        assert!(unsafe { thing_pack(&mut owner) }.is_empty());
+        free_pack_id(owner);
+        assert!(monster_pack(owner).is_empty());
+        let _ = crate::game::MONSTER_LIST.remove(owner);
     }
 
     /// Allocating and discarding objects keeps the tracked count balanced.

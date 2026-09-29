@@ -5,7 +5,8 @@ use std::io::Write;
 
 use crate::game::globals::{allscore, monsters, numscores, MonsterInfo, NUMNAME};
 use crate::item::item_type::ItemType;
-use crate::item::things::inv_name;
+use crate::item::arena::{with_object, OBJECTS};
+use crate::item::things::inv_name_id;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
 use crate::mdport::md_getuid;
 use crate::score::{rd_score, wr_score, Score};
@@ -35,21 +36,6 @@ pub const RIP_ART: &[&str] = &[
 static mut KILLNAME_BUFFER: [u8; MAXSTR] = [0; MAXSTR];
 
 use crate::game::globals::{amulet, max_level, noscore, purse, tombstone, wizard};
-
-
-#[inline]
-unsafe fn thing_t(
-    tp: *mut crate::entity::player::Thing,
-) -> *mut crate::entity::player::ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(
-    tp: *mut crate::entity::player::Thing,
-) -> *mut crate::entity::player::ThingObject {
-    crate::entity::player::thing_o(tp)
-}
 
 
 #[inline]
@@ -403,22 +389,20 @@ pub unsafe fn total_winner() {
     output::write_text_at(IVec2::new(0, 0), "   Worth  Item\n");
     let oldpurse = purse;
     for id in crate::game::PLAYER.pack() {
-        let obj = crate::item::arena::ptr_of(id);
-        if obj.is_null() {
+        let Some((item_type, o_count, packch)) =
+            with_object(id, |o| (o.o_type, o.o_count, o.o_packch))
+        else {
             continue;
-        }
+        };
         let mut worth = 0;
-        let item_type = (*thing_o(obj)).o_type;
-        match item_type {
-            ItemType::Food => worth = 2 * (*thing_o(obj)).o_count,
-            _ => {}
+        if matches!(item_type, ItemType::Food) {
+            worth = 2 * o_count;
         }
         if worth < 0 {
             worth = 0;
         }
-        let packch = (*thing_o(obj)).o_packch as u8;
-        let item_name = inv_name(obj, 0);
-        let line = format!("{} ) {:5}  {}\n", packch, worth, item_name);
+        let item_name = inv_name_id(id, false);
+        let line = format!("{} ) {:5}  {}\n", packch as u8, worth, item_name);
         output::write_text(&line);
         purse += worth;
     }

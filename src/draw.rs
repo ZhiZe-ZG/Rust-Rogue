@@ -18,7 +18,9 @@
 use crate::config::GameConfig;
 use crate::entity::chase::{roomin, see_monst};
 use crate::entity::monsters::wake_monster;
-use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
+use crate::entity::player::{MonsterFlags, Thing};
+use crate::game::{MonsterId, MONSTER_LIST};
+use crate::item::arena::ThingId;
 use crate::game;
 use crate::level::{door_open, with_current_level, with_current_level_mut};
 use crate::rnd::rnd;
@@ -63,16 +65,6 @@ use crate::game::globals::{after, door_stop, firstmove, jump, oldpos, oldrp, run
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
 
 #[inline]
 fn hero_pos() -> IVec2 {
@@ -163,8 +155,8 @@ pub(crate) fn item_glyph(ty: crate::item::item_type::ItemType) -> char {
 
 /// The rendering glyph for a floor object handle (its kind's character).
 #[inline]
-pub(crate) unsafe fn obj_glyph(obj: *mut Thing) -> char {
-    item_glyph((*thing_o(obj)).o_type)
+pub(crate) fn obj_glyph(id: ThingId) -> char {
+    crate::item::arena::with_object(id, |o| item_glyph(o.o_type)).unwrap_or(' ')
 }
 
 pub(crate) unsafe fn cell_glyph(y: i32, x: i32) -> u8 {
@@ -185,15 +177,25 @@ pub(crate) unsafe fn redraw_cell(y: i32, x: i32) {
 /// under hallucination. This is the single place a monster's identity becomes a
 /// screen character; callers must not cast `t_type`/`t_disguise` themselves.
 #[inline]
-pub(crate) unsafe fn monster_glyph(tp: *mut Thing) -> char {
-    ((*thing_t(tp)).t_disguise) as char
+pub(crate) fn monster_glyph(id: MonsterId) -> char {
+    MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_disguise as char,
+            Thing::Object { .. } => ' ',
+        })
+        .unwrap_or(' ')
 }
 
 /// The glyph a merely-*sensed* monster (`SEEMONST`) is drawn as: its real
 /// identity, or a random letter under hallucination.
 #[inline]
-pub(crate) unsafe fn monster_type_glyph(tp: *mut Thing) -> char {
-    (*thing_t(tp)).t_type.map_or(' ', |m| m.glyph() as char)
+pub(crate) fn monster_type_glyph(id: MonsterId) -> char {
+    MONSTER_LIST
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_type.map_or(' ', |m| m.glyph() as char),
+            Thing::Object { .. } => ' ',
+        })
+        .unwrap_or(' ')
 }
 
 /// A random `'A'..='Z'` glyph used when the hero is hallucinating.
@@ -205,11 +207,14 @@ pub(crate) fn hallucination_glyph() -> char {
 /// Visible glyph at `(y, x)`: a monster's disguise if one stands here,
 /// otherwise [`cell_glyph`].
 pub(crate) unsafe fn winat(y: i32, x: i32) -> u8 {
-    let tp = game::monster_at(y, x);
-    if tp.is_null() {
-        cell_glyph(y, x)
-    } else {
-        (*thing_t(tp)).t_disguise as u8
+    match game::monster_id_at(y, x) {
+        None => cell_glyph(y, x),
+        Some(id) => MONSTER_LIST
+            .with(id, |t| match t {
+                Thing::Monster { data } => data.t_disguise,
+                Thing::Object { .. } => cell_glyph(y, x),
+            })
+            .unwrap_or_else(|| cell_glyph(y, x)),
     }
 }
 
@@ -356,9 +361,13 @@ pub unsafe fn add_pass() {
                 }
                 set_seen_at(y, x);
                 output::move_cursor(IVec2::new(x, y));
-                let monst = game::monster_at(y, x);
-                if !monst.is_null() {
-                    (*thing_t(monst)).t_oldch = ch as u8;
+                let monst = game::monster_id_at(y, x);
+                if let Some(id) = monst {
+                    MONSTER_LIST.with_mut(id, |t| {
+                        if let Thing::Monster { data } = t {
+                            data.t_oldch = ch as u8;
+                        }
+                    });
                 } else if (flags as u8 & F_REAL as u8) != 0 {
                     output::write_glyph((out_ch as u8) as char);
                 } else {
@@ -380,7 +389,6 @@ pub unsafe fn add_pass() {
 /// wake monsters that the hero can now see.
 pub unsafe fn look(wakeup: u8) {
     let mut ch: i32;
-    let mut tp: *mut Thing;
     let mut ey: i32;
     let mut ex: i32;
     let mut passcount: i32 = 0;
@@ -446,26 +454,38 @@ pub unsafe fn look(wakeup: u8) {
                 }
             }
 
-            tp = game::monster_at(y, x);
-            if tp.is_null() {
-                ch = trip_ch(y, x, ch);
-            } else {
-                if player_has(MonsterFlags::SEEMONST)
-                    && (*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS)
-                {
-                    if door_stop != 0 && firstmove == 0 {
-                        running = false as u8;
+            let tp = game::monster_id_at(y, x);
+            match tp {
+                None => {
+                    ch = trip_ch(y, x, ch);
+                }
+                Some(id) => {
+                    let invis = MONSTER_LIST
+                        .with(id, |t| match t {
+                            Thing::Monster { data } => data.t_flags.contains(MonsterFlags::INVIS),
+                            Thing::Object { .. } => false,
+                        })
+                        .unwrap_or(false);
+                    if player_has(MonsterFlags::SEEMONST) && invis {
+                        if door_stop != 0 && firstmove == 0 {
+                            running = false as u8;
+                        }
+                        continue;
                     }
-                    continue;
-                }
-                if wakeup != 0 {
-                    wake_monster(y, x);
-                }
-                if see_monst(tp) != 0 {
-                    if player_has(MonsterFlags::HALU) {
-                        ch = rnd(26) + b'A' as i32;
-                    } else {
-                        ch = (*thing_t(tp)).t_disguise as i32;
+                    if wakeup != 0 {
+                        wake_monster(y, x);
+                    }
+                    if see_monst(id) != 0 {
+                        if player_has(MonsterFlags::HALU) {
+                            ch = rnd(26) + b'A' as i32;
+                        } else {
+                            ch = MONSTER_LIST
+                                .with(id, |t| match t {
+                                    Thing::Monster { data } => data.t_disguise as i32,
+                                    Thing::Object { .. } => ch,
+                                })
+                                .unwrap_or(ch);
+                        }
                     }
                 }
             }
@@ -486,7 +506,7 @@ pub unsafe fn look(wakeup: u8) {
             }
 
             let screen_ch = output::glyph_at_cursor() as i32;
-            if tp.is_null() || ch != screen_ch {
+            if tp.is_none() || ch != screen_ch {
                 output::write_glyph((ch as u8) as char);
             }
 
@@ -633,27 +653,34 @@ pub unsafe fn enter_room(cp: IVec2) {
         output::move_cursor(IVec2::new(x0, y));
         let mut x = x0;
         while x < x_end {
-            let tp = game::monster_at(y, x);
+            let tp = game::monster_id_at(y, x);
             let ch = cell_glyph(y, x);
 
-            if tp.is_null() {
-                if cchar_at_cursor() != ch {
-                    output::write_glyph((ch as u8) as char);
-                } else {
-                    output::move_cursor(IVec2::new(x + 1, y));
-                }
-            } else {
-                (*thing_t(tp)).t_oldch = ch as u8;
-                if see_monst(tp) == 0 {
-                    if player_has(MonsterFlags::SEEMONST) {
-                        output::set_standout(true);
-                        output::write_glyph(crate::draw::monster_glyph(tp));
-                        output::set_standout(false);
-                    } else {
+            match tp {
+                None => {
+                    if cchar_at_cursor() != ch {
                         output::write_glyph((ch as u8) as char);
+                    } else {
+                        output::move_cursor(IVec2::new(x + 1, y));
                     }
-                } else {
-                    output::write_glyph(crate::draw::monster_glyph(tp));
+                }
+                Some(id) => {
+                    MONSTER_LIST.with_mut(id, |t| {
+                        if let Thing::Monster { data } = t {
+                            data.t_oldch = ch as u8;
+                        }
+                    });
+                    if see_monst(id) == 0 {
+                        if player_has(MonsterFlags::SEEMONST) {
+                            output::set_standout(true);
+                            output::write_glyph(monster_glyph(id));
+                            output::set_standout(false);
+                        } else {
+                            output::write_glyph((ch as u8) as char);
+                        }
+                    } else {
+                        output::write_glyph(monster_glyph(id));
+                    }
                 }
             }
             x += 1;

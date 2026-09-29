@@ -18,8 +18,8 @@ use crate::rnd::rnd;
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::item::item_type::ItemType;
-use crate::item::pack::add_pack;
-use crate::item::arena::{new_item, new_item_id, ptr_of};
+use crate::item::pack::add_pack_id;
+use crate::item::arena::{new_item_id, OBJECTS};
 use crate::item::weapons::init_weapon;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -184,18 +184,6 @@ static mut USED: [u8; 33] = [0; 33];
 use crate::game::globals::{a_class, food_left, max_stats};
 
 
-// ─── Private helpers ─────────────────────────────────────────────────────────
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
 // ─── Exported functions ───────────────────────────────────────────────────────
 
 /// Roll up the starting player: give food, armor, weapons, and arrows.
@@ -204,46 +192,53 @@ pub unsafe fn init_player() {
     food_left = HUNGERTIME;
 
     // Give her some food
-    let obj = new_item();
-    (*thing_o(obj)).o_type = ItemType::Food;
-    (*thing_o(obj)).o_count = 1;
-    add_pack(obj, true as u8);
+    let food = new_item_id();
+    OBJECTS.with_object_mut(food, |o| {
+        o.o_type = ItemType::Food;
+        o.o_count = 1;
+    });
+    add_pack_id(Some(food), true);
 
     // A suit of ring-mail armor
-    let obj = new_item();
-    (*thing_o(obj)).o_type = ItemType::Armor(RING_MAIL);
-    (*thing_o(obj)).o_which = RING_MAIL;
-    (*thing_o(obj)).o_arm = a_class[RING_MAIL as usize] - 1;
-    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    (*thing_o(obj)).o_count = 1;
-    PLAYER.set_armor(obj);
-    add_pack(obj, true as u8);
+    let armor = new_item_id();
+    OBJECTS.with_object_mut(armor, |o| {
+        o.o_type = ItemType::Armor(RING_MAIL);
+        o.o_which = RING_MAIL;
+        o.o_arm = a_class[RING_MAIL as usize] - 1;
+        o.o_flags.insert(ObjectFlags::KNOW);
+        o.o_count = 1;
+    });
+    PLAYER.set_armor_id(Some(armor));
+    add_pack_id(Some(armor), true);
 
     // A +1 mace
     let mace_id = new_item_id();
     init_weapon(mace_id, MACE);
-    let obj = ptr_of(mace_id);
-    (*thing_o(obj)).o_hplus = 1;
-    (*thing_o(obj)).o_dplus = 1;
-    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    add_pack(obj, true as u8);
+    OBJECTS.with_object_mut(mace_id, |o| {
+        o.o_hplus = 1;
+        o.o_dplus = 1;
+        o.o_flags.insert(ObjectFlags::KNOW);
+    });
+    add_pack_id(Some(mace_id), true);
     PLAYER.set_weapon_id(Some(mace_id));
 
     // A +1 bow
     let bow_id = new_item_id();
     init_weapon(bow_id, BOW);
-    let obj = ptr_of(bow_id);
-    (*thing_o(obj)).o_hplus = 1;
-    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    add_pack(obj, true as u8);
+    OBJECTS.with_object_mut(bow_id, |o| {
+        o.o_hplus = 1;
+        o.o_flags.insert(ObjectFlags::KNOW);
+    });
+    add_pack_id(Some(bow_id), true);
 
     // Arrows
     let arrow_id = new_item_id();
     init_weapon(arrow_id, ARROW);
-    let obj = ptr_of(arrow_id);
-    (*thing_o(obj)).o_count = rnd(15) + 25;
-    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    add_pack(obj, true as u8);
+    OBJECTS.with_object_mut(arrow_id, |o| {
+        o.o_count = rnd(15) + 25;
+        o.o_flags.insert(ObjectFlags::KNOW);
+    });
+    add_pack_id(Some(arrow_id), true);
 }
 
 /// Assign a random colour from [`crate::colors::POTION_COLORS`] to each potion.

@@ -6,7 +6,7 @@ use crate::command::command;
 use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
 use crate::entity::chase::roomin;
-use crate::entity::player::{MonsterFlags, Thing, ThingMonster};
+use crate::entity::player::MonsterFlags;
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
@@ -39,11 +39,6 @@ fn flush_stdout() {
 
 use crate::game::globals::{after, count, dnum, in_shell, inv_type, jump, master_mode_enabled, mpos, noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death, wizard};
 
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
 
 // ── Game control functions ported from src/c/main.c ─────────────────────────
 

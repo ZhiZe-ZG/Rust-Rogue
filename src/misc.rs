@@ -8,13 +8,14 @@ use crate::entity::chase::runto;
 use crate::game::PLAYER;
 use crate::game::globals::ObjInfo;
 use crate::item::item_type::{ItemFilter, ItemType};
-use crate::item::pack::{get_item, leave_pack, reset_last};
+use crate::item::arena::OBJECTS;
+use crate::item::pack::{get_item_id, leave_pack_id, reset_last};
 use crate::rnd::rnd;
 use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, msg_str};
 use glam::IVec2;
 
-use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
+use crate::entity::player::{MonsterFlags, Thing};
 use crate::game::MONSTER_LIST;
 use crate::startup::roll;
 
@@ -45,21 +46,6 @@ const F_SEEN: u8 = 0x40;
 
 use crate::game::globals::{after, again, amulet, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump, last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running, see_floor, seenstairs, terse};
 
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-#[inline]
-unsafe fn on(thing: *mut Thing, flag: MonsterFlags) -> bool {
-    (*thing_t(thing)).t_flags.contains(flag)
-}
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
@@ -106,16 +92,11 @@ pub fn find_obj_id(y: i32, x: i32) -> Option<crate::item::arena::ThingId> {
     None
 }
 
-pub unsafe fn find_obj(y: i32, x: i32) -> *mut Thing {
-    find_obj_id(y, x).map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
-}
-
 pub unsafe fn eat() {
-    let obj = get_item("eat", ItemFilter::Category(ItemType::Food));
-    if obj.is_null() {
+    let Some(obj) = get_item_id("eat", ItemFilter::Category(ItemType::Food)) else {
         return;
-    }
-    if !matches!((*thing_o(obj)).o_type, ItemType::Food) {
+    };
+    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Food)) {
         if terse == 0 {
             msg_str("ugh, you would get ill if you ate that");
         } else {
@@ -132,11 +113,11 @@ pub unsafe fn eat() {
         food_left = STOMACHSIZE;
     }
     hungry_state = 0;
-    if crate::item::arena::id_of(obj).is_some_and(|id| PLAYER.equipment().weapon_id() == Some(id))
-    {
+    if PLAYER.equipment().weapon_id() == Some(obj) {
         PLAYER.set_weapon_id(None);
     }
-    if (*thing_o(obj)).o_which == 1 {
+    let which = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
+    if which == 1 {
         msg_str(&format!("my, that was a yummy {}", crate::game::globals::fruit()));
     } else if rnd(100) > 70 {
         PLAYER.with_stats_mut(|stats| stats.experience += 1);
@@ -144,7 +125,7 @@ pub unsafe fn eat() {
     } else {
         msg_str("yum, that tasted good");
     }
-    leave_pack(obj, false as u8, false as u8);
+    leave_pack_id(obj, false, false);
 }
 
 pub unsafe fn check_level() {
@@ -223,8 +204,14 @@ pub unsafe fn add_haste(potion: bool) -> bool {
 
 pub unsafe fn aggravate() {
     for id in MONSTER_LIST.ids() {
-        if let Some(mp) = MONSTER_LIST.handle(id) {
-            runto((*thing_t(mp)).t_pos);
+        if let Some(pos) = MONSTER_LIST
+            .with(id, |t| match t {
+                Thing::Monster { data } => Some(data.t_pos),
+                Thing::Object { .. } => None,
+            })
+            .flatten()
+        {
+            runto(pos);
         }
     }
 }

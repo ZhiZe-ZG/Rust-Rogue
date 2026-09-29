@@ -32,9 +32,7 @@ unsafe fn reset_level() {
 
 unsafe fn clear_previous_level_items() {
     for id in MONSTER_LIST.ids() {
-        if let Some(monster) = MONSTER_LIST.handle(id) {
-            crate::entity::player::free_pack(monster);
-        }
+        crate::entity::player::free_pack_id(id);
     }
     MONSTER_LIST.clear();
     with_current_level_mut(|current| current.clear_items());

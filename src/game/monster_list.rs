@@ -11,10 +11,8 @@
 //! single-threaded gameplay code can add or remove monsters between calls. To
 //! iterate while mutating, snapshot the handles with [`MonsterList::ids`] first.
 //!
-//! The rest of the port still threads raw `*mut Thing` handles through combat
-//! and level code; [`MonsterList::handle`] is the single, explicitly documented
-//! bridge that produces such a handle from an owned monster, and
-//! [`MonsterList::find`] maps an existing handle back to its [`MonsterId`].
+//! Callers address monsters exclusively by [`MonsterId`]; there is no raw
+//! `*mut Thing` bridge any more.
 
 use crate::entity::player::{Thing, ThingMonster};
 use std::sync::{Mutex, MutexGuard};
@@ -78,14 +76,6 @@ impl MonsterList {
         self.spawn(Thing::actor(ThingMonster::default()))
     }
 
-    /// Store a fresh default actor and return its stable raw handle.
-    ///
-    /// Producing the pointer uses only safe casts (no `unsafe` block).
-    pub fn new_actor(&self) -> *mut Thing {
-        let id = self.spawn_actor();
-        self.handle(id).unwrap_or(std::ptr::null_mut())
-    }
-
     /// Remove and return the monster behind `id`, if still present.
     pub fn remove(&self, id: MonsterId) -> Option<Thing> {
         let mut slots = self.lock();
@@ -139,47 +129,6 @@ impl MonsterList {
             .map(operation)
     }
 
-    /// A stable raw handle to the monster behind `id`.
-    ///
-    /// This is the one bridge to the legacy `*mut Thing` engine boundary. The
-    /// monster is boxed, so the address stays valid until the slot is cleared.
-    /// Producing the pointer uses only safe casts (no `unsafe` block).
-    pub fn handle(&self, id: MonsterId) -> Option<*mut Thing> {
-        let slots = self.lock();
-        slots
-            .get(id.0)
-            .and_then(Option::as_deref)
-            .map(|thing| thing as *const Thing as *mut Thing)
-    }
-
-    /// A stable raw handle to the first live monster (or null when empty).
-    ///
-    /// The save layer uses this as the head of the monster sequence; the order
-    /// matches [`MonsterList::ids`].
-    pub fn head(&self) -> *mut Thing {
-        self.ids()
-            .first()
-            .and_then(|&id| self.handle(id))
-            .unwrap_or(std::ptr::null_mut())
-    }
-
-    /// Map an existing raw handle back to its [`MonsterId`].
-    pub fn find(&self, handle: *mut Thing) -> Option<MonsterId> {
-        if handle.is_null() {
-            return None;
-        }
-        let slots = self.lock();
-        slots
-            .iter()
-            .enumerate()
-            .find_map(|(index, slot)| match slot.as_deref() {
-                Some(thing) if thing as *const Thing == handle as *const Thing => {
-                    Some(MonsterId(index))
-                }
-                _ => None,
-            })
-    }
-
     /// The traversal index of `id` among live monsters (for the save layer).
     pub fn position(&self, id: MonsterId) -> Option<usize> {
         self.ids().iter().position(|&other| other == id)
@@ -193,8 +142,3 @@ impl MonsterList {
 
 /// The monster list for the live level.
 pub static MONSTER_LIST: MonsterList = MonsterList::new();
-
-/// Allocate a fresh actor (monster) thing and return its stable raw handle.
-pub fn new_actor() -> *mut Thing {
-    MONSTER_LIST.new_actor()
-}
