@@ -16,7 +16,7 @@ use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::game::MONSTER_LIST;
 use crate::misc::{aggravate, call_it, choose_str};
-use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win, status};
+use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win};
 use crate::ui::output;
 use crate::wizard::{teleport, whatis};
 use glam::IVec2;
@@ -395,8 +395,6 @@ pub unsafe fn read_scroll() {
 
     let _ = orig_obj;
     look(true as u8);
-    status();
-
     call_it(&mut scr_info[o_which as usize]);
     if discardit {
         let _ = OBJECTS.remove(obj);

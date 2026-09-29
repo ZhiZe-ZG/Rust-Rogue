@@ -29,7 +29,7 @@ use crate::misc::{check_level, chg_str, choose_str};
 use crate::rip::death;
 use crate::startup::roll;
 use crate::ui::output;
-use crate::ui::output::{addmsg_str, endmsg, msg_str, status};
+use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -400,7 +400,6 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                     msg_str("your purse feels lighter");
                 }
                 count = 0;
-                status();
                 return -1;
             } else if mtype == Some(MonsterType::Nymph) {
                 // Nymph: steals a magic item
@@ -428,7 +427,6 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                     msg_str(&format!("she stole {}!", inv_name_id(steal, true)));
                     let _ = OBJECTS.remove(steal);
                     count = 0;
-                    status();
                     return -1;
                 }
             }
@@ -452,7 +450,6 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
         flush_type();
     }
     count = 0;
-    status();
     0
 }
 

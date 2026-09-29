@@ -18,7 +18,7 @@ use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::item::rings::RingType;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
 use crate::startup::roll;
-use crate::ui::output::{self, msg_str, show_win, status};
+use crate::ui::output::{self, msg_str, show_win};
 use glam::IVec2;
 
 /// Potion and status-effect handling.
@@ -421,7 +421,6 @@ pub unsafe fn quaff() {
         }
     }
 
-    status();
     call_it(pot_info_at(o_which as usize));
     if discardit {
         let _ = OBJECTS.remove(obj);

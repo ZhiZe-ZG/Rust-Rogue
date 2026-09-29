@@ -35,9 +35,9 @@ unsafe fn render_current_level() {
             crate::item::potions::turn_see(false as u8);
         }
         crate::ui::output::write_glyph_at(hero, '@');
-        crate::ui::output::status();
         crate::ui::output::refresh();
     }
+    crate::ui::output::status();
     crate::ui::output::render_pending();
 }
 

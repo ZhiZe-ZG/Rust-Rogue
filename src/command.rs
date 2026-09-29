@@ -195,7 +195,7 @@ pub unsafe fn command() {
         if running == 0 {
             door_stop = false as u8;
         }
-        status();
+        crate::daemon::Daemon::UiRender.run(0);
         lastscore = purse;
         let hero = hero_pos();
         output::move_cursor(IVec2::new(hero.x, hero.y));
