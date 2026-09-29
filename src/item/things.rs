@@ -3,19 +3,19 @@
 //! Ported from `src/c/things.c` to Rust.
 use crate::game::PLAYER;
 use crate::item::armor::waste_time;
-use crate::item::pack::{get_item, leave_pack};
+use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::misc::chg_str;
 use crate::rnd::rnd;
 use crate::ui::output::msg_str;
 
-use crate::entity::player::{ObjectFlags, Thing, ThingObject};
+use crate::entity::player::{ObjectFlags, Thing};
 use crate::game::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, ObjInfo,
 };
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::rings::RingType;
-use crate::item::sticks::fix_stick;
-use crate::item::arena::{id_of, new_item_id, ptr_of};
+use crate::item::sticks::fix_stick_id;
+use crate::item::arena::{new_item_id, ptr_of};
 use crate::item::weapons::init_weapon;
 
 const MAXSTR: usize = 1024;
@@ -29,11 +29,6 @@ const MAXSTICKS: usize = 14;
 
 use crate::game::globals::{a_class, inv_describe, no_food};
 
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
 
 #[inline]
 fn starts_with_article(name: &str) -> &'static str {
@@ -243,25 +238,21 @@ pub unsafe fn dropcheck(obj: *mut Thing) -> u8 {
     }
 }
 
-pub unsafe fn new_thing() -> *mut Thing {
+/// Allocate and initialize a random object, returning its arena handle.
+pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
     let cur_id = new_item_id();
-    let cur = ptr_of(cur_id);
-    (*thing_o(cur)).o_hplus = 0;
-    (*thing_o(cur)).o_dplus = 0;
-    std::ptr::copy_nonoverlapping(
-        b"0x0\0".as_ptr(),
-        (*thing_o(cur)).o_damage.as_mut_ptr(),
-        4,
-    );
-    std::ptr::copy_nonoverlapping(
-        b"0x0\0".as_ptr(),
-        (*thing_o(cur)).o_hurldmg.as_mut_ptr(),
-        4,
-    );
-    (*thing_o(cur)).o_arm = 11;
-    (*thing_o(cur)).o_count = 1;
-    (*thing_o(cur)).o_group = 0;
-    (*thing_o(cur)).o_flags = ObjectFlags::NONE;
+
+    // Baseline weapon/armor fields, shared by every generated object.
+    crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+        o.o_hplus = 0;
+        o.o_dplus = 0;
+        o.o_damage = [b'0', b'x', b'0', 0, 0, 0, 0, 0];
+        o.o_hurldmg = [b'0', b'x', b'0', 0, 0, 0, 0, 0];
+        o.o_arm = 11;
+        o.o_count = 1;
+        o.o_group = 0;
+        o.o_flags = ObjectFlags::NONE;
+    });
 
     let choice = if no_food > 3 {
         2
@@ -271,100 +262,107 @@ pub unsafe fn new_thing() -> *mut Thing {
     match choice {
         0 => {
             let which = pick_one(&pot_info[..], MAXPOTIONS);
-            (*thing_o(cur)).o_which = which;
-            (*thing_o(cur)).o_type = ItemType::potion(which);
+            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+                o.o_which = which;
+                o.o_type = ItemType::potion(which);
+            });
         }
         1 => {
             let which = pick_one(&scr_info[..], MAXSCROLLS);
-            (*thing_o(cur)).o_which = which;
-            (*thing_o(cur)).o_type = ItemType::scroll(which);
+            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+                o.o_which = which;
+                o.o_type = ItemType::scroll(which);
+            });
         }
         2 => {
-            (*thing_o(cur)).o_type = ItemType::Food;
             no_food = 0;
-            if rnd(10) != 0 {
-                (*thing_o(cur)).o_which = 0;
-            } else {
-                (*thing_o(cur)).o_which = 1;
-            }
+            let which = if rnd(10) != 0 { 0 } else { 1 };
+            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+                o.o_type = ItemType::Food;
+                o.o_which = which;
+            });
         }
         3 => {
             init_weapon(cur_id, pick_one(&weap_info[..], MAXWEAPONS));
             let r = rnd(100);
-            if r < 10 {
-                (*thing_o(cur)).o_flags.insert(ObjectFlags::CURSED);
-                (*thing_o(cur)).o_hplus -= rnd(3) + 1;
-            } else if r < 15 {
-                (*thing_o(cur)).o_hplus += rnd(3) + 1;
-            }
+            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+                if r < 10 {
+                    o.o_flags.insert(ObjectFlags::CURSED);
+                    o.o_hplus -= rnd(3) + 1;
+                } else if r < 15 {
+                    o.o_hplus += rnd(3) + 1;
+                }
+            });
         }
         4 => {
             let which = pick_one(&arm_info[..], MAXARMORS);
-            (*thing_o(cur)).o_which = which;
-            (*thing_o(cur)).o_type = ItemType::Armor(which);
-            (*thing_o(cur)).o_arm = a_class[(*thing_o(cur)).o_which as usize];
             let r = rnd(100);
-            if r < 20 {
-                (*thing_o(cur)).o_flags.insert(ObjectFlags::CURSED);
-                (*thing_o(cur)).o_arm += rnd(3) + 1;
-            } else if r < 28 {
-                (*thing_o(cur)).o_arm -= rnd(3) + 1;
-            }
+            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+                o.o_which = which;
+                o.o_type = ItemType::Armor(which);
+                o.o_arm = a_class[which as usize];
+                if r < 20 {
+                    o.o_flags.insert(ObjectFlags::CURSED);
+                    o.o_arm += rnd(3) + 1;
+                } else if r < 28 {
+                    o.o_arm -= rnd(3) + 1;
+                }
+            });
         }
         5 => {
             let ring_type = RingType::from_raw(pick_one(&ring_info[..], MAXRINGS))
                 .expect("ring metadata produced an invalid ring type");
-            (*thing_o(cur)).o_which = ring_type as i32;
-            (*thing_o(cur)).o_type = ItemType::Ring(ring_type);
-            match ring_type {
-                RingType::Protection
-                | RingType::SustainStrength
-                | RingType::AddHit
-                | RingType::AddDamage => {
-                    let mut arm = rnd(3);
-                    if arm == 0 {
-                        arm = -1;
-                        (*thing_o(cur)).o_flags.insert(ObjectFlags::CURSED);
+            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+                o.o_which = ring_type as i32;
+                o.o_type = ItemType::Ring(ring_type);
+                match ring_type {
+                    RingType::Protection
+                    | RingType::SustainStrength
+                    | RingType::AddHit
+                    | RingType::AddDamage => {
+                        let mut arm = rnd(3);
+                        if arm == 0 {
+                            arm = -1;
+                            o.o_flags.insert(ObjectFlags::CURSED);
+                        }
+                        o.o_arm = arm;
                     }
-                    (*thing_o(cur)).o_arm = arm;
+                    RingType::Adornment | RingType::Aggravate => {
+                        o.o_flags.insert(ObjectFlags::CURSED);
+                    }
+                    _ => {}
                 }
-                RingType::Adornment | RingType::Aggravate => {
-                    (*thing_o(cur)).o_flags.insert(ObjectFlags::CURSED);
-                }
-                _ => {}
-            }
+            });
         }
         6 => {
             let which = pick_one(&ws_info[..], MAXSTICKS);
-            (*thing_o(cur)).o_which = which;
-            (*thing_o(cur)).o_type = ItemType::stick(which);
-            fix_stick(cur);
+            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+                o.o_which = which;
+                o.o_type = ItemType::stick(which);
+            });
+            fix_stick_id(cur_id);
         }
         _ => {}
     }
 
-    cur
+    cur_id
 }
 
-/// Allocate and initialize a random object, returning its arena handle.
-pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
-    id_of(new_thing()).expect("new_thing allocated an arena object")
+/// Legacy pointer wrapper around [`new_thing_id`].
+pub unsafe fn new_thing() -> *mut Thing {
+    ptr_of(new_thing_id())
 }
 
 pub unsafe fn drop() {
-    let obj = get_item("drop", ItemFilter::Any);
-    if obj.is_null() {
+    let Some(id) = get_item_id("drop", ItemFilter::Any) else {
         return;
-    }
-    if dropcheck(obj) == 0 {
-        return;
-    }
-    let all = if (*thing_o(obj)).o_type.drop_whole_stack_by_default() {
-        true as u8
-    } else {
-        false as u8
     };
-    let _ = leave_pack(obj, true as u8, all);
+    if !dropcheck_id(id) {
+        return;
+    }
+    let all = crate::item::arena::with_object(id, |o| o.o_type.drop_whole_stack_by_default())
+        .unwrap_or(false);
+    let _ = leave_pack_id(id, true, all);
 }
 
 pub unsafe fn discovered() {}
@@ -401,7 +399,9 @@ pub unsafe fn nameit(
     let typ = typ;
     let which = which;
     let pr_text = prfunc(obj);
-    let count = (*thing_o(obj)).o_count;
+    let count = crate::item::arena::id_of(obj)
+        .and_then(|id| crate::item::arena::with_object(id, |o| o.o_count))
+        .unwrap_or(0);
 
     let text = if op.oi_know || op.oi_guess.is_some() {
         let prefix = if count == 1 {

@@ -2,21 +2,20 @@
 //!
 //! Ported from `src/c/potions.c` to Rust.
 use crate::rnd::rnd;
-use std::ptr;
 
 use crate::daemon::{fuse, lengthen, start_daemon, Daemon};
 use crate::daemons::{come_down, sight};
 use crate::draw::look;
 
 use crate::entity::chase::see_monst;
-use crate::entity::player::{MonsterFlags, ObjectFlags, Stats, Thing, ThingMonster, ThingObject};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster};
 use crate::game::MONSTER_LIST;
 use crate::game::PLAYER;
 use crate::game::globals::{pot_info, ObjInfo};
 use crate::item::item_type::{ItemFilter, ItemType};
-use crate::item::pack::{get_item, leave_pack};
+use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::item::rings::RingType;
-use crate::entity::player::discard;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
 use crate::startup::roll;
 use crate::ui::output::{self, msg_str, show_win, status};
@@ -127,12 +126,6 @@ unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
     crate::entity::player::thing_t(tp)
 }
 
-/// Cast a generic thing pointer to the object portion of the union.
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
 #[inline]
 fn hero() -> IVec2 {
     crate::game::PLAYER.pos()
@@ -149,34 +142,8 @@ unsafe fn thing_has(tp: *mut Thing, flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn ring_is(ring: *mut Thing, ring_type: RingType) -> bool {
-    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
-}
-
-#[inline]
-unsafe fn next_thing(_tp: *mut Thing) -> *mut Thing {
-    std::ptr::null_mut()
-}
-
-#[inline]
 unsafe fn moat(y: i32, x: i32) -> *mut Thing {
     crate::game::monster_at(y, x)
-}
-
-#[inline]
-unsafe fn is_magic_local(obj: *mut Thing) -> bool {
-    match (*thing_o(obj)).o_type {
-        ItemType::Armor(_) => {
-            (*thing_o(obj)).o_flags.contains(ObjectFlags::PROT) || (*thing_o(obj)).o_arm != 0
-        }
-        ItemType::Weapon(_) => (*thing_o(obj)).o_hplus != 0 || (*thing_o(obj)).o_dplus != 0,
-        ItemType::Potion(_)
-        | ItemType::Scroll(_)
-        | ItemType::Stick(_)
-        | ItemType::Ring(_)
-        | ItemType::Amulet => true,
-        _ => false,
-    }
 }
 
 /// Shared implementation for potion effects that need the normal fuse/flag
@@ -258,17 +225,13 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
 /// quaff:
 /// Quaff a potion from the pack.
 pub unsafe fn quaff() {
-    let obj = get_item("quaff", ItemFilter::Category(ItemType::POTION));
-    let mut tp: *mut Thing;
-    let mut mp: *mut Thing;
-    let discardit;
+    let Some(obj) = get_item_id("quaff", ItemFilter::Category(ItemType::POTION)) else {
+        return;
+    };
     let mut show = false;
     let trip = player_has(MonsterFlags::HALU);
 
-    if obj.is_null() {
-        return;
-    }
-    if !matches!((*thing_o(obj)).o_type, ItemType::Potion(_)) {
+    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Potion(_))) {
         if terse == 0 {
             msg_str("yuk! Why would you want to drink that?");
         } else {
@@ -276,14 +239,17 @@ pub unsafe fn quaff() {
         }
         return;
     }
-    if crate::item::arena::id_of(obj).is_some_and(|id| PLAYER.equipment().weapon_id() == Some(id)) {
+    if PLAYER.equipment().weapon_id() == Some(obj) {
         PLAYER.set_weapon_id(None);
     }
 
-    discardit = (*thing_o(obj)).o_count == 1;
-    leave_pack(obj, false as u8, false as u8);
+    let (o_count, o_which) = OBJECTS
+        .with_object(obj, |o| (o.o_count, o.o_which))
+        .unwrap_or((0, 0));
+    let discardit = o_count == 1;
+    leave_pack_id(obj, false, false);
 
-    let potion = PotionType::from_raw((*thing_o(obj)).o_which);
+    let potion = PotionType::from_raw(o_which);
     match potion {
         PotionType::Confuse => do_pot_impl(PotionType::Confuse, if trip { false } else { true }),
         PotionType::Poison => {
@@ -329,36 +295,35 @@ pub unsafe fn quaff() {
             }
         }
         PotionType::TrapFind => {
-            let floor = crate::game::item_ptrs();
+            let floor = crate::game::item_ids();
             if !floor.is_empty() {
                 let window = Window::Stdscr;
                 output::clear_window(window);
-                for tp in floor {
-                    if is_magic_local(tp) {
+                for id in floor {
+                    if is_magic_id(id) {
                         show = true;
-                        output::move_window_cursor(
-                            window,
-                            IVec2::new((*thing_o(tp)).o_pos.x, (*thing_o(tp)).o_pos.y),
-                        );
-                        output::write_window_glyph(window, (MAGIC as u8) as char);
+                        if let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) {
+                            output::move_window_cursor(window, IVec2::new(pos.x, pos.y));
+                            output::write_window_glyph(window, (MAGIC as u8) as char);
+                        }
                         pot_info_at(PotionType::TrapFind.index()).oi_know = true;
                     }
                 }
                 for id in MONSTER_LIST.ids() {
-                    if let Some(mp) = MONSTER_LIST.handle(id) {
-                        for pack_id in crate::entity::player::thing_pack(mp) {
-                            let tp = crate::item::arena::ptr_of(pack_id);
-                            if tp.is_null() {
-                                continue;
-                            }
-                            if is_magic_local(tp) {
-                                show = true;
-                                output::move_window_cursor(
-                                    window,
-                                    IVec2::new((*thing_t(mp)).t_pos.x, (*thing_t(mp)).t_pos.y),
-                                );
-                                output::write_window_glyph(window, (MAGIC as u8) as char);
-                            }
+                    let (mp_pos, pack) = MONSTER_LIST
+                        .with(id, |t| match t {
+                            Thing::Monster { data } => (Some(data.t_pos), data.t_pack.clone()),
+                            Thing::Object { .. } => (None, Vec::new()),
+                        })
+                        .unwrap_or((None, Vec::new()));
+                    let Some(mp_pos) = mp_pos else {
+                        continue;
+                    };
+                    for pack_id in pack {
+                        if is_magic_id(pack_id) {
+                            show = true;
+                            output::move_window_cursor(window, IVec2::new(mp_pos.x, mp_pos.y));
+                            output::write_window_glyph(window, (MAGIC as u8) as char);
                         }
                     }
                 }
@@ -459,22 +424,43 @@ pub unsafe fn quaff() {
     }
 
     status();
-    call_it(pot_info_at((*thing_o(obj)).o_which as usize));
+    call_it(pot_info_at(o_which as usize));
     if discardit {
-        discard(obj);
+        let _ = OBJECTS.remove(obj);
+    }
+}
+
+/// Whether the object `id` radiates magic (pointer-free).
+pub fn is_magic_id(id: ThingId) -> bool {
+    let Some((typ, prot, o_arm, o_hplus, o_dplus)) = OBJECTS.with_object(id, |o| {
+        (
+            o.o_type,
+            o.o_flags.contains(ObjectFlags::PROT),
+            o.o_arm,
+            o.o_hplus,
+            o.o_dplus,
+        )
+    }) else {
+        return false;
+    };
+    match typ {
+        ItemType::Armor(_) => prot || o_arm != 0,
+        ItemType::Weapon(_) => o_hplus != 0 || o_dplus != 0,
+        ItemType::Potion(_)
+        | ItemType::Scroll(_)
+        | ItemType::Stick(_)
+        | ItemType::Ring(_)
+        | ItemType::Amulet => true,
+        _ => false,
     }
 }
 
 /// is_magic:
 /// Returns true if an object radiates magic.
 pub unsafe fn is_magic(obj: *mut Thing) -> u8 {
-    if obj.is_null() {
-        return 0;
-    }
-    if is_magic_local(obj) {
-        1
-    } else {
-        0
+    match crate::item::arena::id_of(obj) {
+        Some(id) => is_magic_id(id) as u8,
+        None => 0,
     }
 }
 

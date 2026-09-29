@@ -5,16 +5,16 @@ use crate::rnd::rnd;
 
 use crate::config::GameConfig;
 use crate::draw::{look, map_cell_reveal};
-use crate::entity::monsters::{new_monster, randmonster};
-use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::entity::monsters::{new_monster_id, randmonster};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game;
 use crate::game::PLAYER;
 use crate::game::globals::{scr_info, weap_info};
 use crate::init::pick_color;
 use crate::item::item_type::{ItemFilter, ItemType};
-use crate::item::pack::{get_item, leave_pack};
-use crate::entity::player::discard;
-use crate::game::new_actor;
+use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::pack::{get_item_id, leave_pack_id};
+use crate::game::MONSTER_LIST;
 use crate::misc::{aggravate, call_it, choose_str};
 use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win, status};
 use crate::ui::{output, Window};
@@ -107,16 +107,6 @@ use crate::game::globals::{no_command, terse};
 
 
 #[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-#[inline]
 fn hero() -> IVec2 {
     crate::game::PLAYER.pos()
 }
@@ -137,12 +127,11 @@ fn player_has(flag: MonsterFlags) -> bool {
 /// read_scroll:
 /// Read a scroll from the pack and apply its effect.
 pub unsafe fn read_scroll() {
-    let mut obj = get_item("read", ItemFilter::Category(ItemType::SCROLL));
-    if obj.is_null() {
+    let Some(obj) = get_item_id("read", ItemFilter::Category(ItemType::SCROLL)) else {
         return;
-    }
+    };
 
-    if !matches!((*thing_o(obj)).o_type, ItemType::Scroll(_)) {
+    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Scroll(_))) {
         if terse == 0 {
             msg_str("there is nothing on it to read");
         } else {
@@ -151,15 +140,18 @@ pub unsafe fn read_scroll() {
         return;
     }
 
-    if crate::item::arena::id_of(obj).is_some_and(|id| PLAYER.equipment().weapon_id() == Some(id)) {
+    if PLAYER.equipment().weapon_id() == Some(obj) {
         PLAYER.set_weapon_id(None);
     }
 
-    let discardit = (*thing_o(obj)).o_count == 1;
-    leave_pack(obj, false as u8, false as u8);
+    let (o_count, o_which) = OBJECTS
+        .with_object(obj, |o| (o.o_count, o.o_which))
+        .unwrap_or((0, 0));
+    let discardit = o_count == 1;
+    leave_pack_id(obj, false, false);
     let orig_obj = obj;
 
-    let scroll_type = ScrollType::from_raw((*thing_o(obj)).o_which);
+    let scroll_type = ScrollType::from_raw(o_which);
     match scroll_type {
         ScrollType::Confuse => {
             crate::game::PLAYER.add_flag(MonsterFlags::CANHUH);
@@ -263,8 +255,8 @@ pub unsafe fn read_scroll() {
             if i == 0 {
                 msg_str("you hear a faint cry of anguish in the distance");
             } else {
-                obj = new_actor();
-                new_monster(obj, randmonster(false), mp);
+                let id = MONSTER_LIST.spawn_actor();
+                new_monster_id(id, randmonster(false), mp);
             }
         }
         ScrollType::IdentifyPotion
@@ -284,12 +276,12 @@ pub unsafe fn read_scroll() {
                 ItemFilter::Category(ItemType::ARMOR),
                 ItemFilter::RingOrStick,
             ];
-            scr_info[(*thing_o(obj)).o_which as usize].oi_know = true;
+            scr_info[o_which as usize].oi_know = true;
             msg_str(&format!(
                 "this scroll is an {} scroll",
-                scr_info[(*thing_o(obj)).o_which as usize].oi_name
+                scr_info[o_which as usize].oi_name
             ));
-            whatis(true as u8, id_filter[(*thing_o(obj)).o_which as usize]);
+            whatis(true as u8, id_filter[o_which as usize]);
         }
         ScrollType::Map => {
             scr_info[ScrollType::Map.index()].oi_know = true;
@@ -402,20 +394,25 @@ pub unsafe fn read_scroll() {
         _ => {}
     }
 
-    obj = orig_obj;
+    let _ = orig_obj;
     look(true as u8);
     status();
 
-    call_it(&mut scr_info[(*thing_o(obj)).o_which as usize]);
+    call_it(&mut scr_info[o_which as usize]);
     if discardit {
-        discard(obj);
+        let _ = OBJECTS.remove(obj);
     }
 }
 
 /// uncurse:
 /// Uncurse an item.
+pub unsafe fn uncurse_id(id: ThingId) {
+    OBJECTS.with_object_mut(id, |o| o.o_flags.remove(ObjectFlags::CURSED));
+}
+
+/// Legacy pointer wrapper around [`uncurse_id`].
 pub unsafe fn uncurse(obj: *mut Thing) {
-    if !obj.is_null() {
-        (*thing_o(obj)).o_flags.remove(ObjectFlags::CURSED);
+    if let Some(id) = crate::item::arena::id_of(obj) {
+        uncurse_id(id);
     }
 }

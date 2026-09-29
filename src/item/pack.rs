@@ -7,14 +7,13 @@
 //! raw handles produced by the item arena through the legacy order/stack merge
 //! algorithm of the C original.
 
-use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingObject};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game::MONSTER_LIST;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::scrolls::ScrollType;
-use crate::entity::player::discard;
-use crate::item::arena::{id_of, ptr_of, ThingId};
-use crate::item::things::{add_line, inv_name};
-use crate::misc::{find_obj, show_floor};
+use crate::item::arena::{id_of, ptr_of, with_object, with_object_mut, ThingId, OBJECTS};
+use crate::item::things::{add_line, inv_name_id};
+use crate::misc::{find_obj_id, show_floor};
 use crate::ui::input::readchar;
 use crate::ui::output;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
@@ -39,19 +38,14 @@ const ESCAPE: i32 = 27;
 use crate::game::globals::{after, again, amulet, inpack, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, move_on, mpos, msg_esc, n_objs, pack_used, purse, terse};
 
 
-unsafe fn thing_o(tp: *mut Thing) -> *mut crate::entity::player::ThingObject {
-    crate::entity::player::thing_o(tp)
+/// Unlink `id` from the current level's floor-item list.
+unsafe fn detach_floor(id: ThingId) {
+    crate::game::with_current_level_mut(|level| level.remove_item(id));
 }
 
-unsafe fn discard_item(item: *mut Thing) {
-    discard(item);
-}
-
-/// Unlink `item` from the current level's floor-item list.
-unsafe fn detach_floor(item: *mut Thing) {
-    if let Some(id) = id_of(item) {
-        crate::game::with_current_level_mut(|level| level.remove_item(id));
-    }
+/// Discard the object `id` from the item arena.
+unsafe fn discard_item(id: ThingId) {
+    let _ = OBJECTS.remove(id);
 }
 
 /// The player's pack as arena handles, head first.
@@ -81,51 +75,49 @@ unsafe fn floor_char_for_room() -> u8 {
     }
 }
 
-pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
-    let mut item = obj;
-    let mut from_floor = false as u8;
+/// Pointer-free core of [`add_pack`]: `item` is `None` when picking up the
+/// object on the hero's floor cell.
+pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
+    let mut from_floor = false;
 
-    if item.is_null() {
-        item = find_obj(hero_coord().y, hero_coord().x);
-        if item.is_null() {
+    if item.is_none() {
+        item = find_obj_id(hero_coord().y, hero_coord().x);
+        if item.is_none() {
             return;
         }
-        from_floor = true as u8;
+        from_floor = true;
     }
+    let mut item_id = item.expect("item resolved above");
 
-    if matches!(
-        (*thing_o(item)).o_type,
-        ItemType::Scroll(ScrollType::Scare)
-    ) && (*thing_o(item)).o_flags.contains(ObjectFlags::FOUND)
-    {
-        detach_floor(item);
+    let is_scare_dust = with_object(item_id, |o| {
+        matches!(o.o_type, ItemType::Scroll(ScrollType::Scare)) && o.o_flags.contains(ObjectFlags::FOUND)
+    })
+    .unwrap_or(false);
+    if is_scare_dust {
+        detach_floor(item_id);
         // The object is removed from the floor list, so the terrain glyph
         // shows automatically via draw.
         output::write_glyph_at(
             IVec2::new(hero_coord().x, hero_coord().y),
             (floor_char_for_room() as u8) as char,
         );
-        discard_item(item);
+        discard_item(item_id);
         msg_str("the scroll turns to dust as you pick it up");
         return;
     }
 
-    let item_id = match id_of(item) {
-        Some(id) => id,
-        None => return,
-    };
     let mut pack = crate::game::PLAYER.pack();
 
     if pack.is_empty() {
-        if pack_room(from_floor, item) == 0 {
+        if !pack_room_id(from_floor, item_id) {
             return;
         }
-        (*thing_o(item)).o_packch = pack_char() as u8;
+        with_object_mut(item_id, |o| o.o_packch = pack_char());
         pack.push(item_id);
     } else {
-        let item_type = (*thing_o(item)).o_type;
-        let item_which = (*thing_o(item)).o_which;
-        let item_group = (*thing_o(item)).o_group;
+        let item_type = with_object(item_id, |o| o.o_type).unwrap_or(ItemType::None);
+        let item_which = with_object(item_id, |o| o.o_which).unwrap_or(0);
+        let item_group = with_object(item_id, |o| o.o_group).unwrap_or(0);
         let n = pack.len();
 
         // Walk the pack exactly as the C list traversal did, tracking the
@@ -133,19 +125,18 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
         let mut lp: Option<usize> = None;
         let mut op = 0usize;
         let mut merged = false;
+        let cat_of = |id: ThingId| with_object(id, |o| o.o_type).unwrap_or(ItemType::None);
+        let which_of = |id: ThingId| with_object(id, |o| o.o_which).unwrap_or(0);
+        let group_of = |id: ThingId| with_object(id, |o| o.o_group).unwrap_or(0);
         'outer: while op < n {
-            let opp = ptr_of(pack[op]);
-            if !(*thing_o(opp)).o_type.same_category(item_type) {
+            if !cat_of(pack[op]).same_category(item_type) {
                 lp = Some(op);
                 op += 1;
                 continue;
             }
             // Same category: advance while the `o_which` differs.
             loop {
-                let opp = ptr_of(pack[op]);
-                if (*thing_o(opp)).o_type.same_category(item_type)
-                    && (*thing_o(opp)).o_which != item_which
-                {
+                if cat_of(pack[op]).same_category(item_type) && which_of(pack[op]) != item_which {
                     lp = Some(op);
                     if op + 1 >= n {
                         op = n;
@@ -156,64 +147,66 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
                     break;
                 }
             }
-            if op < n {
-                let opp = ptr_of(pack[op]);
-                if (*thing_o(opp)).o_type.same_category(item_type)
-                    && (*thing_o(opp)).o_which == item_which
-                {
-                    if matches!(item_type, ItemType::Food | ItemType::Potion(_) | ItemType::Scroll(_))
-                    {
-                        if pack_room(from_floor, item) == 0 {
-                            return;
-                        }
-                        (*thing_o(opp)).o_count += 1;
-                        discard_item(item);
-                        item = opp;
-                        lp = None;
-                        merged = true;
-                        break 'outer;
+            if op < n
+                && cat_of(pack[op]).same_category(item_type)
+                && which_of(pack[op]) == item_which
+            {
+                let opp = pack[op];
+                if matches!(
+                    item_type,
+                    ItemType::Food | ItemType::Potion(_) | ItemType::Scroll(_)
+                ) {
+                    if !pack_room_id(from_floor, item_id) {
+                        return;
                     }
-                    if item_group != 0 {
-                        lp = Some(op);
-                        loop {
-                            let opp = ptr_of(pack[op]);
-                            if (*thing_o(opp)).o_type.same_category(item_type)
-                                && (*thing_o(opp)).o_which == item_which
-                                && (*thing_o(opp)).o_group != item_group
-                            {
-                                lp = Some(op);
-                                if op + 1 >= n {
-                                    op = n;
-                                    break;
-                                }
-                                op += 1;
-                            } else {
+                    with_object_mut(opp, |o| o.o_count += 1);
+                    discard_item(item_id);
+                    item_id = opp;
+                    lp = None;
+                    merged = true;
+                    break 'outer;
+                }
+                if item_group != 0 {
+                    lp = Some(op);
+                    loop {
+                        let o = pack[op];
+                        if cat_of(o).same_category(item_type)
+                            && which_of(o) == item_which
+                            && group_of(o) != item_group
+                        {
+                            lp = Some(op);
+                            if op + 1 >= n {
+                                op = n;
                                 break;
                             }
+                            op += 1;
+                        } else {
+                            break;
                         }
-                        if op < n {
-                            let opp = ptr_of(pack[op]);
-                            if (*thing_o(opp)).o_type.same_category(item_type)
-                                && (*thing_o(opp)).o_which == item_which
-                                && (*thing_o(opp)).o_group == item_group
-                            {
-                                (*thing_o(opp)).o_count += (*thing_o(item)).o_count;
-                                inpack -= 1;
-                                if pack_room(from_floor, item) == 0 {
-                                    return;
-                                }
-                                (*thing_o(opp)).o_count += 1;
-                                discard_item(item);
-                                item = opp;
-                                lp = None;
-                                merged = true;
-                                break 'outer;
+                    }
+                    if op < n {
+                        let o = pack[op];
+                        if cat_of(o).same_category(item_type)
+                            && which_of(o) == item_which
+                            && group_of(o) == item_group
+                        {
+                            let item_count = with_object(item_id, |x| x.o_count).unwrap_or(0);
+                            with_object_mut(o, |x| x.o_count += item_count);
+                            inpack -= 1;
+                            if !pack_room_id(from_floor, item_id) {
+                                return;
                             }
-                            lp = Some(op);
+                            with_object_mut(o, |x| x.o_count += 1);
+                            discard_item(item_id);
+                            item_id = o;
+                            lp = None;
+                            merged = true;
+                            break 'outer;
                         }
-                    } else {
                         lp = Some(op);
                     }
+                } else {
+                    lp = Some(op);
                 }
             }
             break;
@@ -222,21 +215,20 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
         if !merged {
             if let Some(pos) = lp {
                 if pos + 1 <= pack.len() {
-                    if pack_room(from_floor, item) == 0 {
+                    if !pack_room_id(from_floor, item_id) {
                         return;
                     }
-                    (*thing_o(item)).o_packch = pack_char() as u8;
+                    with_object_mut(item_id, |o| o.o_packch = pack_char());
                     pack.insert(pos + 1, item_id);
                 }
             }
         }
     }
 
-    (*thing_o(item)).o_flags.insert(ObjectFlags::FOUND);
+    with_object_mut(item_id, |o| o.o_flags.insert(ObjectFlags::FOUND));
     crate::game::PLAYER.set_pack(pack);
 
-    let item_dest = id_of(item)
-        .map_or(crate::entity::player::DestRef::None, crate::entity::player::DestRef::Object);
+    let item_dest = crate::entity::player::DestRef::Object(item_id);
     for id in MONSTER_LIST.ids() {
         if let Some(op) = MONSTER_LIST.handle(id) {
             if crate::entity::player::thing_dest(op) == item_dest {
@@ -245,25 +237,32 @@ pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
         }
     }
 
-    if matches!((*thing_o(item)).o_type, ItemType::Amulet) {
+    if matches!(with_object(item_id, |o| o.o_type), Some(ItemType::Amulet)) {
         amulet = true as u8;
     }
 
-    if silent == 0 {
+    if !silent {
         if terse == 0 {
             addmsg_str("you now have ");
         }
+        let packch = with_object(item_id, |o| o.o_packch).unwrap_or(0);
         msg_str(&format!(
             "{} ({})",
-            inv_name(item, if terse == 0 { 0 } else { 1 }),
-            (*thing_o(item)).o_packch as char,
+            inv_name_id(item_id, terse == 0),
+            packch as char,
         ));
     }
+}
+
+/// Legacy pointer wrapper around [`add_pack_id`].
+pub unsafe fn add_pack(obj: *mut Thing, silent: u8) {
+    add_pack_id(id_of(obj), silent != 0);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entity::player::ThingObject;
     use crate::game::{with_current_level_mut, PLAYER};
     use crate::item::arena::OBJECTS;
     use crate::misc::find_obj_id;
@@ -335,7 +334,8 @@ mod tests {
     }
 }
 
-pub unsafe fn pack_room(from_floor: u8, obj: *mut Thing) -> u8 {
+/// Pointer-free core of [`pack_room`]: returns whether the object fits.
+pub unsafe fn pack_room_id(from_floor: bool, id: ThingId) -> bool {
     if inpack + 1 > MAXPACK {
         if terse == 0 {
             addmsg_str("there's ");
@@ -345,15 +345,15 @@ pub unsafe fn pack_room(from_floor: u8, obj: *mut Thing) -> u8 {
             addmsg_str(" in your pack");
         }
         endmsg();
-        if from_floor != 0 {
-            move_msg(obj);
+        if from_floor {
+            move_msg_id(id);
         }
         inpack = MAXPACK;
-        return false as u8;
+        return false;
     }
 
-    if from_floor != 0 {
-        detach_floor(obj);
+    if from_floor {
+        detach_floor(id);
         // The object is removed from the floor list, so the terrain glyph
         // shows automatically via draw.
         output::write_glyph_at(
@@ -363,7 +363,15 @@ pub unsafe fn pack_room(from_floor: u8, obj: *mut Thing) -> u8 {
     }
 
     inpack += 1;
-    true as u8
+    true
+}
+
+/// Legacy pointer wrapper around [`pack_room_id`].
+pub unsafe fn pack_room(from_floor: u8, obj: *mut Thing) -> u8 {
+    match id_of(obj) {
+        Some(id) => pack_room_id(from_floor != 0, id) as u8,
+        None => true as u8,
+    }
 }
 
 /// Pointer-free version of [`leave_pack`]: works on an arena [`ThingId`].
@@ -427,19 +435,21 @@ pub unsafe fn inventory(items: &[ThingId], filter: ItemFilter) -> u8 {
     let any = filter == ItemFilter::Any;
 
     for &id in items {
-        let cur = ptr_of(id);
-        if cur.is_null() || !filter.matches((*thing_o(cur)).o_type) {
+        let Some((otyp, packch)) = with_object(id, |o| (o.o_type, o.o_packch)) else {
+            continue;
+        };
+        if !filter.matches(otyp) {
             continue;
         }
 
         n_objs += 1;
         msg_esc = 1;
-        let format = if (*thing_o(cur)).o_packch == 0 {
+        let format = if packch == 0 {
             "%s".to_string()
         } else {
-            format!("{}) %s", (*thing_o(cur)).o_packch as char)
+            format!("{}) %s", packch as char)
         };
-        let _ = add_line(&format, &inv_name(cur, false as u8));
+        let _ = add_line(&format, &inv_name_id(id, false));
         msg_esc = 0;
     }
 
@@ -464,29 +474,29 @@ pub unsafe fn inventory(items: &[ThingId], filter: ItemFilter) -> u8 {
 }
 
 pub unsafe fn pick_up(ch: u8) {
-    let obj = find_obj(hero_coord().y, hero_coord().x);
+    let obj = find_obj_id(hero_coord().y, hero_coord().x);
     if player_has(MonsterFlags::LEVIT) {
         return;
     }
     if move_on != 0 {
-        if !obj.is_null() {
-            move_msg(obj);
+        if let Some(id) = obj {
+            move_msg_id(id);
         }
     } else {
         match ch as i32 {
             x if x == GOLD as i32 => {
-                if obj.is_null() {
+                let Some(id) = obj else {
                     return;
-                }
-                money((*thing_o(obj)).o_arm);
-                detach_floor(obj);
-                discard_item(obj);
+                };
+                money(with_object(id, |o| o.o_arm).unwrap_or(0));
+                detach_floor(id);
+                discard_item(id);
                 if proom().is_some() {
                     crate::game::set_room_goldval(proom(), 0);
                 }
             }
             ARMOR | POTION | FOOD | WEAPON | SCROLL | AMULET | RING | STICK => {
-                add_pack(std::ptr::null_mut(), false as u8);
+                add_pack_id(None, false);
             }
             _ => {}
         }
@@ -588,11 +598,19 @@ pub unsafe fn reset_last() {
     last_pick = l_last_pick;
 }
 
-pub unsafe fn move_msg(obj: *mut Thing) {
+/// Pointer-free core of [`move_msg`]: works on an arena handle.
+pub unsafe fn move_msg_id(id: ThingId) {
     if terse == 0 {
         addmsg_str("you ");
     }
-    msg_str(&format!("moved onto {}", inv_name(obj, true as u8)));
+    msg_str(&format!("moved onto {}", inv_name_id(id, true)));
+}
+
+/// Legacy pointer wrapper around [`move_msg_id`].
+pub unsafe fn move_msg(obj: *mut Thing) {
+    if let Some(id) = id_of(obj) {
+        move_msg_id(id);
+    }
 }
 
 pub unsafe fn picky_inven() {
@@ -600,8 +618,7 @@ pub unsafe fn picky_inven() {
     if pack.is_empty() {
         msg_str("you aren't carrying anything");
     } else if pack.len() == 1 {
-        let obj = ptr_of(pack[0]);
-        msg_str(&format!("a) {}", inv_name(obj, false as u8)));
+        msg_str(&format!("a) {}", inv_name_id(pack[0], false)));
     } else {
         msg_str(if terse != 0 {
             "item: "
@@ -615,17 +632,16 @@ pub unsafe fn picky_inven() {
             return;
         }
         for id in &pack {
-            let obj = ptr_of(*id);
-            if !obj.is_null() && mch as u8 == (*thing_o(obj)).o_packch {
+            if with_object(*id, |o| o.o_packch) == Some(mch) {
                 msg_str(&format!(
                     "{}) {}",
-                    mch as u8 as char,
-                    inv_name(obj, false as u8)
+                    mch as char,
+                    inv_name_id(*id, false)
                 ));
                 return;
             }
         }
-        msg_str(&format!("'{}' not in pack", output::format_key(mch as u8)));
+        msg_str(&format!("'{}' not in pack", output::format_key(mch)));
     }
 }
 

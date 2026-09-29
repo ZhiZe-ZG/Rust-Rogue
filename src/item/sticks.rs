@@ -2,11 +2,12 @@
 //!
 //! Ported from `src/c/sticks.c` to Rust.
 use crate::entity::monsters::{save, save_throw_id};
-use crate::entity::player::{ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::entity::player::{ObjectFlags, Thing};
 use crate::game::PLAYER;
 use crate::game::globals::ws_info;
 use crate::item::item_type::{ItemFilter, ItemType};
-use crate::item::pack::get_item;
+use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::pack::get_item_id;
 use crate::item::weapons::{do_motion, hit_monster};
 use crate::rip::death;
 use crate::rnd::rnd;
@@ -74,16 +75,6 @@ use crate::game::globals::{after, delta, terse};
 
 
 #[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
 fn hero_pos() -> IVec2 {
     crate::game::PLAYER.pos()
 }
@@ -110,44 +101,51 @@ unsafe fn set_c_string(dst: &mut [u8], src: &str) {
 }
 
 #[inline]
-unsafe fn stick_type(obj: *mut Thing) -> Option<StickType> {
-    StickType::from_raw((*thing_o(obj)).o_which)
+fn stick_type(id: ThingId) -> Option<StickType> {
+    OBJECTS.with_object(id, |o| StickType::from_raw(o.o_which)).flatten()
 }
 
 /// fix_stick:
 /// Set up a new stick with the expected damage and charge values.
-pub unsafe fn fix_stick(cur: *mut Thing) {
-    if !matches!((*thing_o(cur)).o_type, ItemType::Stick(_)) {
+pub unsafe fn fix_stick_id(id: ThingId) {
+    if !matches!(
+        OBJECTS.with_object(id, |o| o.o_type),
+        Some(ItemType::Stick(_))
+    ) {
         return;
     }
 
-    if stick_type(cur) == Some(StickType::Light) {
-        set_c_string(&mut (*thing_o(cur)).o_damage, "2x3");
-    } else {
-        set_c_string(&mut (*thing_o(cur)).o_damage, "1x1");
-    }
-    set_c_string(&mut (*thing_o(cur)).o_hurldmg, "1x1");
+    let light = stick_type(id) == Some(StickType::Light);
+    OBJECTS.with_object_mut(id, |o| {
+        if light {
+            set_c_string(&mut o.o_damage, "2x3");
+        } else {
+            set_c_string(&mut o.o_damage, "1x1");
+        }
+        set_c_string(&mut o.o_hurldmg, "1x1");
+        o.o_arm = if light { rnd(10) + 10 } else { rnd(5) + 3 };
+    });
+}
 
-    (*thing_o(cur)).o_arm = if stick_type(cur) == Some(StickType::Light) {
-        rnd(10) + 10
-    } else {
-        rnd(5) + 3
-    };
+/// Legacy pointer wrapper around [`fix_stick_id`].
+pub unsafe fn fix_stick(cur: *mut Thing) {
+    if let Some(id) = crate::item::arena::id_of(cur) {
+        fix_stick_id(id);
+    }
 }
 
 /// do_zap:
 /// Perform a zap with a wand or staff and apply a simplified effect.
 pub unsafe fn do_zap() {
-    let obj = get_item("zap with", ItemFilter::Category(ItemType::STICK));
-    if obj.is_null() {
+    let Some(obj) = get_item_id("zap with", ItemFilter::Category(ItemType::STICK)) else {
         return;
-    }
-    if !matches!((*thing_o(obj)).o_type, ItemType::Stick(_)) {
+    };
+    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Stick(_))) {
         after = false as u8;
         msg_str("you can't zap with that!");
         return;
     }
-    if (*thing_o(obj)).o_arm == 0 {
+    if OBJECTS.with_object(obj, |o| o.o_arm).unwrap_or(0) == 0 {
         msg_str("nothing happens");
         return;
     }
@@ -245,7 +243,7 @@ pub unsafe fn do_zap() {
         }
     }
 
-    (*thing_o(obj)).o_arm -= 1;
+    OBJECTS.with_object_mut(obj, |o| o.o_arm -= 1);
 }
 
 /// drain:
