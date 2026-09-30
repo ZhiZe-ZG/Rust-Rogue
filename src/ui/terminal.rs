@@ -292,14 +292,6 @@ pub(crate) fn raw() {
     ensure_terminal();
 }
 
-pub(crate) fn erasechar() -> u8 {
-    0x7f
-}
-
-pub(crate) fn killchar() -> u8 {
-    0x15
-}
-
 pub(crate) fn flushinp() {
     use crossterm::event;
     while event::poll(std::time::Duration::ZERO).unwrap_or(false) {

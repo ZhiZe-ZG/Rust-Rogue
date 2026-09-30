@@ -3,7 +3,7 @@
 //! Ported from `src/c/options.c` to Rust.
 
 use crate::draw::{erase_lamp, look};
-use crate::ui::input::{self, readchar, wait_for};
+use crate::ui::input::{readchar, wait_for, ERASE_KEY, KILL_KEY};
 use crate::ui::output;
 use glam::IVec2;
 
@@ -357,11 +357,11 @@ pub unsafe fn read_line(initial: &str) -> Option<String> {
         if c == -1 {
             continue;
         }
-        if c == input::erase_key() as i32 {
+        if c == ERASE_KEY as i32 {
             buf.pop();
             continue;
         }
-        if c == input::kill_key() as i32 {
+        if c == KILL_KEY as i32 {
             buf.clear();
             output::move_window_cursor(origin);
             continue;

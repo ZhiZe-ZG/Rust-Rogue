@@ -22,6 +22,8 @@ const KEY_BACKSPACE: i32 = 0o407;
 const KEY_NPAGE: i32 = 0o522;
 const KEY_PPAGE: i32 = 0o523;
 const KEY_END: i32 = 0o550;
+pub(crate) const ERASE_KEY: u8 = 0x7f;
+pub(crate) const KILL_KEY: u8 = 0x15;
 
 fn curses_key_code(event: &KeyEvent) -> i32 {
     match event.code {
@@ -128,14 +130,6 @@ pub(crate) fn enable_raw_mode() {
     terminal::raw();
 }
 
-pub(crate) fn erase_key() -> u8 {
-    terminal::erasechar()
-}
-
-pub(crate) fn kill_key() -> u8 {
-    terminal::killchar()
-}
-
 pub(crate) fn flush_pending() {
     terminal::flushinp();
 }
@@ -143,10 +137,16 @@ pub(crate) fn flush_pending() {
 #[cfg(test)]
 mod tests {
     use super::{
-        curses_key_code, map_cooked_key, ERR, KEY_BACKSPACE, KEY_DOWN, KEY_END, KEY_HOME, KEY_LEFT,
-        KEY_NPAGE, KEY_PPAGE, KEY_RIGHT, KEY_UP,
+        curses_key_code, map_cooked_key, ERASE_KEY, ERR, KEY_BACKSPACE, KEY_DOWN, KEY_END,
+        KEY_HOME, KEY_LEFT, KEY_NPAGE, KEY_PPAGE, KEY_RIGHT, KEY_UP, KILL_KEY,
     };
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn erase_and_kill_keys_keep_legacy_values() {
+        assert_eq!(ERASE_KEY, 0x7f);
+        assert_eq!(KILL_KEY, 0x15);
+    }
 
     #[test]
     fn crossterm_keys_map_to_curses_codes() {
