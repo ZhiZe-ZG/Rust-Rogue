@@ -130,20 +130,6 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
             has_hit = false as u8;
         }
 
-        /*
-         * these are illegal things for the player to be, so if any are
-         * set, someone's been poking in memory
-         */
-        if player_has(
-            MonsterFlags::SLOW
-                | MonsterFlags::GREED
-                | MonsterFlags::INVIS
-                | MonsterFlags::REGEN
-                | MonsterFlags::TARGET,
-        ) {
-            std::process::exit(1);
-        }
-
         look(true as u8);
         if running == 0 {
             door_stop = false as u8;
