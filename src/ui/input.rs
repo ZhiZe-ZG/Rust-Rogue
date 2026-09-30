@@ -10,7 +10,6 @@ use crate::ui::terminal;
 
 const ESCAPE: i32 = 27;
 const ERR: i32 = -1;
-#[cfg(not(test))]
 const CTRL_C: i32 = 3;
 
 const KEY_DOWN: i32 = 0o402;
@@ -65,7 +64,6 @@ fn map_cooked_key(key: i32) -> i32 {
 }
 
 /// Read one command character for legacy prompt and helper call sites.
-#[cfg(not(test))]
 pub fn readchar() -> i32 {
     crate::ui::output::render_pending();
     let key = read_legacy_key();
