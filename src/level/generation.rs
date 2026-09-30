@@ -11,20 +11,18 @@ use crate::config::GameConfig;
 use crate::draw::winat;
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::MonsterFlags;
-use crate::game::globals::{max_level, no_food};
 use crate::game::MONSTER_LIST;
 use crate::game::{self, clear_level, with_current_level_mut};
 
 use super::presence::populate_level;
+use super::{bump_no_food, record_max_depth};
 use crate::structure::Room;
 
 unsafe fn reset_level() {
     let depth = with_current_level_mut(|current| current.reset_for_new_level());
 
     game::player_remove_flag(MonsterFlags::HELD);
-    if depth > max_level {
-        max_level = depth;
-    }
+    record_max_depth(depth);
 
     clear_level();
 }
@@ -71,6 +69,6 @@ pub unsafe fn new_level() {
         current.do_passages();
     });
 
-    no_food += 1;
+    bump_no_food();
     populate_level();
 }

@@ -8,8 +8,8 @@ use crate::rnd::rnd;
 use glam::IVec2;
 
 use super::passages::{
-    apply_passage, build_passage, collect_corridor_end, corridor_tiles, mark_passages,
-    number_passages, plan_corridor, PassageLinks,
+    build_passage, corridor_tiles, mark_passages, number_passages, plan_corridor, CorridorPlan,
+    PassageLinks,
 };
 use super::roomgraph::RoomGraph;
 use crate::config::GameConfig;
@@ -201,31 +201,23 @@ impl Level {
     /// Dig a single corridor between two adjacent rooms `r1` and `r2`.
     ///
     /// Works in three phases: first the corridor geometry is generated purely
-    /// (see [`plan_corridor`], [`collect_corridor_end`], and
-    /// [`corridor_tiles`]) and modelled as a [`Passage`] (see
-    /// [`build_passage`]); only then is the model copied into this level's
-    /// room records and tile map (see [`apply_passage`]).
+    /// (see [`plan_corridor`] and [`corridor_tiles`]) and modelled as a
+    /// [`Passage`] (see [`build_passage`]); only then is the model copied into
+    /// this level's room records and tile map (see [`Level::apply_passage`]).
     fn conn(&mut self, r1: usize, r2: usize) {
         let plan = plan_corridor(&self.rooms, &self.map, r1, r2);
 
         // Phase 1 — generate the corridor geometry purely, without touching
-        // the level map or room records.
+        // the level map or room records. Each corridor end contributes a tile
+        // (and an entry point, unless the room was removed).
         let mut tiles = Vec::new();
         let mut entry_points = Vec::new();
-        collect_corridor_end(
-            &self.rooms,
-            plan.base_room,
-            plan.start,
-            &mut tiles,
-            &mut entry_points,
-        );
-        collect_corridor_end(
-            &self.rooms,
-            plan.partner_room,
-            plan.end,
-            &mut tiles,
-            &mut entry_points,
-        );
+        for (room_index, pos) in [(plan.base_room, plan.start), (plan.partner_room, plan.end)] {
+            tiles.push(pos);
+            if !self.rooms[room_index].is_gone() {
+                entry_points.push(pos);
+            }
+        }
         tiles.extend(corridor_tiles(&plan));
 
         // Phase 2 — build the Passage model from the collected geometry.
@@ -235,15 +227,93 @@ impl Level {
         };
 
         // Phase 3 — copy the model into the level map and room records.
-        apply_passage(
-            &mut self.map,
-            &mut self.flags,
-            &mut self.rooms,
-            &passage,
-            &plan,
-            self.depth,
-        );
+        self.apply_passage(&passage, &plan);
         self.passages.push(passage);
+    }
+
+    /// Stamp a passage tile at absolute map position `pos`.
+    ///
+    /// Marks the cell as [`Tile::Passage`] in the level map and sets the
+    /// matching `flags.passage` bit, so it becomes part of the canonical grid.
+    fn stamp_passage(&mut self, pos: IVec2) {
+        let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) else {
+            return;
+        };
+        if y < GameConfig::LEVEL_HEIGHT
+            && x < GameConfig::LEVEL_WIDTH
+            && self.map.set(pos, Tile::Passage)
+        {
+            let idx = y * GameConfig::LEVEL_WIDTH + x;
+            if let Some(passage) = self.flags.passage.get_mut(idx) {
+                *passage = true;
+            }
+        }
+    }
+
+    /// Place a door at `pos` on the boundary of `rooms[room_index]`.
+    ///
+    /// Registers `pos` as an exit of the room and, unless the room is a maze,
+    /// places a door on the room itself (see [`Room::place_door`]). Whether the
+    /// door is secret (a hidden wall segment instead of an open `+`, chosen by
+    /// depth and randomness) is decided here.
+    fn stamp_door(&mut self, room_index: usize, pos: IVec2) {
+        let (is_maze, position) = {
+            let room = &self.rooms[room_index];
+            (room.is_maze(), room.position)
+        };
+
+        if is_maze {
+            self.rooms[room_index].add_entry_point(pos - position);
+            return;
+        }
+
+        let secret = rnd(10) + 1 < self.depth && rnd(5) == 0;
+
+        let local = pos - position;
+        if let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) {
+            if y < GameConfig::LEVEL_HEIGHT && x < GameConfig::LEVEL_WIDTH {
+                let idx = y * GameConfig::LEVEL_WIDTH + x;
+                if secret {
+                    // A secret door stays disguised as a wall in the tile map
+                    // (rendered `-`/`|` like the wall it replaces) and is marked
+                    // non-real so the C side can reveal it as `+`.
+                    if self.map.set(pos, Tile::HiddenDoor) {
+                        if let Some(real) = self.flags.real.get_mut(idx) {
+                            *real = false;
+                        }
+                    }
+                } else {
+                    self.map.set(pos, Tile::Door);
+                }
+            }
+        }
+        self.rooms[room_index].place_door(local, secret);
+    }
+
+    /// Copy a [`Passage`] model into the level tile map and room records.
+    ///
+    /// Registers a door on the owning room for every entry point (see
+    /// [`Level::stamp_door`]) and stamps the remaining corridor cells as
+    /// passages (see [`Level::stamp_passage`]).
+    fn apply_passage(&mut self, passage: &Passage, plan: &CorridorPlan) {
+        // Doors at the corridor's ends (only entry points reach here — ends on
+        // gone rooms were never recorded as entry points).
+        for rel in &passage.entry_points {
+            let abs = *rel + passage.position;
+            let room_index = if abs == plan.start {
+                plan.base_room
+            } else {
+                plan.partner_room
+            };
+            self.stamp_door(room_index, abs);
+        }
+
+        // The remaining corridor cells become plain passage tiles.
+        for rel in &passage.tiles {
+            if !passage.entry_points.contains(rel) {
+                self.stamp_passage(*rel + passage.position);
+            }
+        }
     }
 
     /// Dig all corridors that connect the rooms of this level.
@@ -538,7 +608,6 @@ fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room>
 
 #[cfg(test)]
 mod tests {
-    use super::super::passages::{stamp_door, stamp_passage};
     use super::*;
 
     #[test]
@@ -550,8 +619,8 @@ mod tests {
         assert_eq!(level.generation(), 1);
     }
 
-    /// A door placed through [`stamp_door`] registers an entry point on the
-    /// room and stamps the tile map.
+    /// A door placed through [`Level::stamp_door`] registers an entry point on
+    /// the room and stamps the tile map.
     #[test]
     fn stamp_door_stamps_tile_map_and_registers_entry_point() {
         let mut level = Level::new();
@@ -560,14 +629,7 @@ mod tests {
 
         // `stamp_door` decides whether the door is secret randomly
         // (depth 1 → always open).
-        stamp_door(
-            &mut level.map,
-            &mut level.flags,
-            &mut level.rooms,
-            0,
-            IVec2::new(15, 11),
-            level.depth,
-        );
+        level.stamp_door(0, IVec2::new(15, 11));
 
         let room = &level.rooms[0];
         assert_eq!(room.entry_points.len(), 1);
@@ -630,7 +692,7 @@ mod tests {
     #[test]
     fn putpass_stamps_passage_into_map() {
         let mut level = Level::new();
-        stamp_passage(&mut level.map, &mut level.flags, IVec2::new(5, 7));
+        level.stamp_passage(IVec2::new(5, 7));
 
         assert_eq!(level.map.get(IVec2::new(5, 7)), Some(Tile::Passage));
         assert!(level.flags.passage[7 * GameConfig::LEVEL_WIDTH + 5]);
@@ -643,10 +705,10 @@ mod tests {
     fn putpass_ignores_out_of_bounds_positions() {
         let mut level = Level::new();
 
-        stamp_passage(&mut level.map, &mut level.flags, IVec2::new(-1, 7));
+        level.stamp_passage(IVec2::new(-1, 7));
         assert_eq!(level.map.get(IVec2::new(0, 7)), Some(Tile::Empty));
 
-        stamp_passage(&mut level.map, &mut level.flags, IVec2::new(5, -3));
+        level.stamp_passage(IVec2::new(5, -3));
         assert_eq!(level.map.get(IVec2::new(5, 0)), Some(Tile::Empty));
     }
 

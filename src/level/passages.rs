@@ -1,9 +1,12 @@
 //! Corridor/passage digging helpers and Rust-side per-cell flags.
 //!
-//! Level generation writes per-cell flags into [`LevelFlags`] and the door
-//! exits of each numbered passage component into `Level::passage_links` (see
-//! [`mark_passages`] and [`number_passages`]). The tile map itself is the
-//! canonical record of the emitted cells; no separate C array is maintained.
+//! This module holds the *pure* corridor geometry ([`plan_corridor`],
+//! [`corridor_tiles`], [`build_passage`]) plus the passage-network passes that
+//! work on the level map and its flag grids ([`mark_passages`],
+//! [`number_passages`]). Stamping a built passage into the map/rooms is a
+//! [`Level`](super::level::Level) method, so map/flag/room mutation stays with
+//! the owning level. The tile map itself is the canonical record of the emitted
+//! cells; no separate C array is maintained.
 
 use glam::IVec2;
 
@@ -213,25 +216,6 @@ pub(crate) fn corridor_tiles(plan: &CorridorPlan) -> Vec<IVec2> {
     tiles
 }
 
-/// Record one end of a corridor at `pos` on `rooms[room_index]`.
-///
-/// Pure: records `pos` into `tiles` always, and into `entry_points` only
-/// when the room is still present (so the end will be a door when the
-/// passage is applied). If the room was removed (`ISGONE`), the end will
-/// be stamped as a plain passage tile instead.
-pub(crate) fn collect_corridor_end(
-    rooms: &[Room],
-    room_index: usize,
-    pos: IVec2,
-    tiles: &mut Vec<IVec2>,
-    entry_points: &mut Vec<IVec2>,
-) {
-    tiles.push(pos);
-    if !rooms[room_index].is_gone() {
-        entry_points.push(pos);
-    }
-}
-
 /// Wrap the corridor's generated geometry into a [`Passage`] model.
 ///
 /// Takes the absolute tile and entry-point coordinates generated for a
@@ -270,110 +254,6 @@ pub(crate) fn build_passage(tiles: Vec<IVec2>, entry_points: Vec<IVec2>) -> Opti
 }
 
 // ---------------------------------------------------------------------------
-// Map stamping
-// ---------------------------------------------------------------------------
-
-/// Stamp a passage tile at absolute map position `pos`.
-///
-/// Marks the cell as [`Tile::Passage`] in the level map so it becomes part of
-/// the canonical grid.
-pub(crate) fn stamp_passage(map: &mut Structure, flags: &mut LevelFlags, pos: IVec2) {
-    let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) else {
-        return;
-    };
-    if y < GameConfig::LEVEL_HEIGHT && x < GameConfig::LEVEL_WIDTH && map.set(pos, Tile::Passage) {
-        let idx = y * GameConfig::LEVEL_WIDTH + x;
-        if let Some(passage) = flags.passage.get_mut(idx) {
-            *passage = true;
-        }
-    }
-}
-
-/// Place a door at `pos` on the boundary of `rooms[room_index]`.
-///
-/// Registers `pos` as an exit of the room and, unless the room is a maze,
-/// places a door on the room itself (see [`Room::place_door`]). Whether the
-/// door is secret (a hidden wall segment instead of an open `+`, chosen by
-/// depth and randomness) is decided here. Returns `pos` so the caller can
-/// record it both as a passage tile and as an entry point of the current
-/// corridor.
-pub(crate) fn stamp_door(
-    map: &mut Structure,
-    flags: &mut LevelFlags,
-    rooms: &mut [Room],
-    room_index: usize,
-    pos: IVec2,
-    depth: i32,
-) -> IVec2 {
-    let (is_maze, position) = {
-        let room = &rooms[room_index];
-        (room.is_maze(), room.position)
-    };
-
-    if is_maze {
-        rooms[room_index].add_entry_point(pos - position);
-        return pos;
-    }
-
-    let secret = rnd(10) + 1 < depth && rnd(5) == 0;
-
-    let local = pos - position;
-    if let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) {
-        if y < GameConfig::LEVEL_HEIGHT && x < GameConfig::LEVEL_WIDTH {
-            let idx = y * GameConfig::LEVEL_WIDTH + x;
-            if secret {
-                // A secret door stays disguised as a wall in the tile map
-                // (rendered `-`/`|` like the wall it replaces) and is marked
-                // non-real so the C side can reveal it as `+`.
-                if map.set(pos, Tile::HiddenDoor) {
-                    if let Some(real) = flags.real.get_mut(idx) {
-                        *real = false;
-                    }
-                }
-            } else {
-                map.set(pos, Tile::Door);
-            }
-        }
-    }
-    rooms[room_index].place_door(local, secret);
-
-    pos
-}
-
-/// Copy a [`Passage`] model into the level tile map and room records.
-///
-/// Registers a door on the owning room for every entry point (see
-/// [`stamp_door`]) and stamps the remaining corridor cells as passages (see
-/// [`stamp_passage`]).
-pub(crate) fn apply_passage(
-    map: &mut Structure,
-    flags: &mut LevelFlags,
-    rooms: &mut [Room],
-    passage: &Passage,
-    plan: &CorridorPlan,
-    depth: i32,
-) {
-    // Doors at the corridor's ends (only entry points reach here — ends on
-    // gone rooms were never recorded as entry points).
-    for rel in &passage.entry_points {
-        let abs = *rel + passage.position;
-        let room_index = if abs == plan.start {
-            plan.base_room
-        } else {
-            plan.partner_room
-        };
-        stamp_door(map, flags, rooms, room_index, abs, depth);
-    }
-
-    // The remaining corridor cells become plain passage tiles.
-    for rel in &passage.tiles {
-        if !passage.entry_points.contains(rel) {
-            stamp_passage(map, flags, *rel + passage.position);
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Marking and numbering the passage network
 // ---------------------------------------------------------------------------
 
@@ -398,30 +278,17 @@ pub(crate) fn mark_passages(map: &Structure, flags: &mut LevelFlags, depth: i32)
     }
 }
 
-/// Scan state for [`number_passages`].
+/// Flood-fill bookkeeping for [`number_passages`].
 ///
-/// Wraps the flood-fill bookkeeping that the legacy C `passnum`/`numpass`
-/// kept in the `PNUM`/`NEW_PNUM` globals: the current passage component
-/// number and whether the next reached cell opens a new component.
+/// Mirrors the legacy C `passnum`/`numpass` state kept in the `PNUM`/`NEW_PNUM`
+/// globals: the current passage component number and whether the next reached
+/// cell opens a new component.
+#[derive(Default)]
 struct PassageScan {
     /// Current passage component number; 0 before any component is opened.
     num: usize,
     /// Whether the next unnumbered cell reached should open a new component.
     pending_start: bool,
-}
-
-impl PassageScan {
-    fn new() -> Self {
-        Self {
-            num: 0,
-            pending_start: false,
-        }
-    }
-
-    /// Mark that the next unnumbered cell starts a new passage component.
-    fn open_component(&mut self) {
-        self.pending_start = true;
-    }
 }
 
 /// Number the contiguous passage networks reachable from every room exit.
@@ -436,7 +303,7 @@ pub(crate) fn number_passages(
     links: &mut Vec<PassageLinks>,
 ) {
     links.clear();
-    let mut scan = PassageScan::new();
+    let mut scan = PassageScan::default();
     // Collect absolute entry-point seeds up front so the flood-fill can
     // borrow `flags` mutably while iterating.
     let seeds: Vec<IVec2> = rooms
@@ -444,7 +311,7 @@ pub(crate) fn number_passages(
         .flat_map(|room| room.entry_points.iter().map(|ep| ep + room.position))
         .collect();
     for seed in seeds {
-        scan.open_component();
+        scan.pending_start = true;
         number_passage(map, flags, links, &mut scan, seed.y, seed.x);
     }
 }

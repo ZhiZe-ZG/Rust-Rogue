@@ -2,13 +2,13 @@
 //! the hero spawn.
 //!
 //! Room selection, geometry, and candidate-cell validation go through the Rust
-//! `Level` model (`Level::rnd_room`/`Level::rnd_pos` through scoped level
-//! access) and the safe per-cell monster occupancy grid, so [`find_floor`] is
-//! entirely safe. Items are addressed by arena [`ThingId`] handles and monsters
-//! by [`MonsterId`] handles; the remaining `unsafe` comes only from the
-//! process-wide `static mut` game globals (`amulet`, `ntraps`, `seenstairs`) and
-//! the item/monster stores, which [`super::generation::new_level`] triggers
-//! after the rooms/passages have been dug.
+//! `Level` model (`Level::find_floor`, `Level::rnd_room`, `Level::rnd_pos`) and
+//! the safe per-cell monster occupancy grid. Items are addressed by arena
+//! [`ThingId`] handles and monsters by [`MonsterId`] handles; the remaining
+//! `unsafe` comes only from the process-wide `static mut` game globals
+//! (`amulet`, `ntraps`, `seenstairs`) and the item/monster stores, which
+//! [`super::generation::new_level`] triggers after the rooms/passages have been
+//! dug.
 
 use glam::IVec2;
 
@@ -16,7 +16,7 @@ use crate::config::GameConfig;
 use crate::entity::chase::roomin;
 use crate::entity::monsters::{give_pack_id, new_monster_id, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
-use crate::game::globals::{amulet, max_level, ntraps, seenstairs};
+use crate::game::globals::{amulet, ntraps, seenstairs};
 use crate::game::MONSTER_LIST;
 use crate::game::{self, with_current_level, with_current_level_mut};
 use crate::item::arena::{new_item_id, ThingId, OBJECTS};
@@ -24,66 +24,68 @@ use crate::item::item_type::ItemType;
 use crate::item::things::new_thing_id;
 use crate::rnd::rnd;
 
-use super::level::LevelFlags;
+use super::level::{Level, LevelFlags};
+use super::max_depth;
 use crate::tile::{Tile, TrapType};
 
 // -- Glyphs --
 const GOLDGRP: i32 = 1;
 
-/// Find a floor cell to place something, optionally avoiding monsters.
-///
-/// If `room_idx` is `None` a random room slot is tried each iteration via
-/// `Level::rnd_room`; otherwise the cell is chosen inside that room. Room
-/// selection and geometry come from the Rust `Level` model (`Level::rnd_pos`),
-/// while the candidate cell is validated against the level tile map and the
-/// per-cell monster occupancy grid. Returns the chosen cell, or `None` when
-/// `limit` (if nonzero) attempts are exhausted.
-pub(crate) fn find_floor(room_idx: Option<usize>, limit: i32, monst: bool) -> Option<IVec2> {
-    let mut cnt = limit;
-    // Safety bound: unlimited scans must eventually give up rather than hang
-    // level generation on a packed level.
-    let mut guard = 0u32;
-    loop {
-        if limit != 0 {
-            if cnt == 0 {
+impl Level {
+    /// Find a floor cell to place something, optionally avoiding monsters.
+    ///
+    /// If `room_idx` is `None` a random room slot is tried each iteration via
+    /// [`Level::rnd_room`]; otherwise the cell is chosen inside that room. The
+    /// candidate cell is validated against this level's tile map and the
+    /// per-cell monster occupancy grid. Returns the chosen cell, or `None` when
+    /// `limit` (if nonzero) attempts are exhausted.
+    pub(crate) fn find_floor(&self, room_idx: Option<usize>, limit: i32, monst: bool) -> Option<IVec2> {
+        let mut cnt = limit;
+        // Safety bound: unlimited scans must eventually give up rather than
+        // hang level generation on a packed level.
+        let mut guard = 0u32;
+        loop {
+            if limit != 0 {
+                if cnt == 0 {
+                    return None;
+                }
+                cnt -= 1;
+            }
+            guard += 1;
+            if guard > 1_000_000 {
                 return None;
             }
-            cnt -= 1;
-        }
-        guard += 1;
-        if guard > 1_000_000 {
-            return None;
-        }
 
-        let (expected_tile, pos) = with_current_level(|current| {
-            let idx = match room_idx {
-                Some(idx) => idx,
-                None => current.rnd_room(),
-            };
-            let room = &current.rooms[idx];
+            let idx = room_idx.unwrap_or_else(|| self.rnd_room());
+            let room = &self.rooms[idx];
             let expected_tile = if room.is_maze() {
                 Tile::Passage
             } else {
                 Tile::Floor
             };
-            (expected_tile, current.rnd_pos(room))
-        });
+            let pos = self.rnd_pos(room);
 
-        // `find_floor` validates the map tile directly; an object overlay does
-        // not count as a free floor cell.
-        let tile = with_current_level(|current| current.tile_at(pos.y as usize, pos.x as usize));
+            // `find_floor` validates the map tile directly; an object overlay
+            // does not count as a free floor cell.
+            let tile = self.tile_at(pos.y as usize, pos.x as usize);
 
-        if monst {
-            let occupied = game::MONSTER_MAP
-                .at(pos.y as usize, pos.x as usize)
-                .is_some();
-            if !occupied && tile.is_walkable() {
+            if monst {
+                let occupied = game::MONSTER_MAP
+                    .at(pos.y as usize, pos.x as usize)
+                    .is_some();
+                if !occupied && tile.is_walkable() {
+                    return Some(pos);
+                }
+            } else if tile == expected_tile {
                 return Some(pos);
             }
-        } else if tile == expected_tile {
-            return Some(pos);
         }
     }
+}
+
+/// Find a floor cell on the live level (see [`Level::find_floor`]).
+pub(crate) fn find_floor(room_idx: Option<usize>, limit: i32, monst: bool) -> Option<IVec2> {
+    with_current_level(|current| current.find_floor(room_idx, limit, monst))
 }
 
 /// Link an already-allocated floor object into the level's item list.
@@ -156,6 +158,7 @@ unsafe fn treas_room() {
 /// chance of a monster guarding it (higher when the room has gold).
 unsafe fn place_room_contents() {
     let level = game::current_depth();
+    let max_level = max_depth();
 
     for i in 0..GameConfig::MAX_ROOMS {
         let gone = with_current_level(|current| current.rooms[i].gone);
@@ -198,7 +201,7 @@ unsafe fn put_things() {
 
     // Once you have found the amulet, the only way to get new stuff is
     // go down into the dungeon.
-    if amulet != 0 && level < max_level {
+    if amulet != 0 && level < max_depth() {
         return;
     }
 
