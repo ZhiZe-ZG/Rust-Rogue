@@ -239,7 +239,7 @@ pub unsafe fn relocate(id: MonsterId, new_loc: IVec2) {
     if see_monst(id) != false as u8 {
         crate::draw::write_cell_glyph(new_loc, crate::draw::monster_glyph(id));
     } else if player_has(MonsterFlags::SEEMONST) {
-        crate::draw::write_standout_cell_glyph(new_loc, crate::draw::monster_type_glyph(id));
+        crate::draw::write_reverse_video_cell_glyph(new_loc, crate::draw::monster_type_glyph(id));
     }
 }
 

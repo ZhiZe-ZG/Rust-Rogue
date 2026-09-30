@@ -219,12 +219,12 @@ pub(crate) fn screen_glyph_at(pos: IVec2) -> char {
     crate::ui::terminal::glyph_at(pos)
 }
 
-/// Write a standout world-cell glyph through the drawing layer.
+/// Write a world-cell glyph with reverse video enabled.
 #[inline]
-pub(crate) fn write_standout_cell_glyph(pos: IVec2, glyph: char) {
-    crate::ui::terminal::set_standout(true);
+pub(crate) fn write_reverse_video_cell_glyph(pos: IVec2, glyph: char) {
+    crate::ui::terminal::set_reverse_video(true);
     crate::ui::terminal::write_glyph_at(pos, glyph);
-    crate::ui::terminal::set_standout(false);
+    crate::ui::terminal::set_reverse_video(false);
 }
 
 /// Visible glyph at `(y, x)`: a monster's disguise if one stands here,
@@ -383,13 +383,13 @@ pub unsafe fn add_pass() {
                 } else if (flags as u8 & F_REAL as u8) != 0 {
                     crate::ui::terminal::write_glyph((out_ch as u8) as char);
                 } else {
-                    crate::ui::terminal::set_standout(true);
+                    crate::ui::terminal::set_reverse_video(true);
                     crate::ui::terminal::write_glyph(if (flags as u8 & F_PASS as u8) != 0 {
                         (PASSAGE as u8) as char
                     } else {
                         (DOOR as u8) as char
                     });
-                    crate::ui::terminal::set_standout(false);
+                    crate::ui::terminal::set_reverse_video(false);
                 }
             }
         }
@@ -684,9 +684,9 @@ pub unsafe fn enter_room(cp: IVec2) {
                     });
                     if see_monst(id) == 0 {
                         if player_has(MonsterFlags::SEEMONST) {
-                            crate::ui::terminal::set_standout(true);
+                            crate::ui::terminal::set_reverse_video(true);
                             crate::ui::terminal::write_glyph(monster_glyph(id));
-                            crate::ui::terminal::set_standout(false);
+                            crate::ui::terminal::set_reverse_video(false);
                         } else {
                             crate::ui::terminal::write_glyph((ch as u8) as char);
                         }
@@ -746,9 +746,9 @@ pub unsafe fn leave_room(cp: IVec2) {
                 }
             } else if is_upper(ch) {
                 if player_has(MonsterFlags::SEEMONST) {
-                    crate::ui::terminal::set_standout(true);
+                    crate::ui::terminal::set_reverse_video(true);
                     crate::ui::terminal::write_glyph((ch as u8) as char);
-                    crate::ui::terminal::set_standout(false);
+                    crate::ui::terminal::set_reverse_video(false);
                 } else {
                     let out = if game::is_door_at(y, x) { DOOR } else { floor };
                     crate::ui::terminal::write_glyph((out as u8) as char);

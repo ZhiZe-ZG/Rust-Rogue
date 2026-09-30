@@ -12,7 +12,9 @@
 //! `static mut`, so the whole module is safe.
 
 use std::io::Write;
-use std::sync::atomic::Ordering;
+#[cfg(not(test))]
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Mutex;
 
 use glam::IVec2;
@@ -21,11 +23,96 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::style::{Modifier, Style};
 use ratatui::Terminal;
 
-use super::state::{ScreenCell, UI};
-
 /// Terminal size (fixed by [`crate::config::GameConfig`]).
 const NROWS: usize = crate::config::GameConfig::SCREEN_LINES as usize; // 24
 const NCOLS: usize = crate::config::GameConfig::SCREEN_COLS as usize; // 80
+
+#[derive(Clone, Copy)]
+struct ScreenCell {
+    ch: u8,
+    reverse_video: bool,
+}
+
+impl ScreenCell {
+    const BLANK: Self = Self {
+        ch: b' ',
+        reverse_video: false,
+    };
+}
+
+#[cfg(not(test))]
+#[derive(Default)]
+pub(super) struct MessageState {
+    pub(super) pending: String,
+    pub(super) next_position: i32,
+}
+
+type Backend = CrosstermBackend<Box<dyn Write + Send>>;
+
+pub(super) struct UiState {
+    grid: Mutex<[[ScreenCell; NCOLS]; NROWS]>,
+    cursor: Mutex<IVec2>,
+    reverse_video: AtomicBool,
+    input_timeout: AtomicI32,
+    shutdown: AtomicBool,
+    terminal: Mutex<Option<Terminal<Backend>>>,
+    #[cfg(not(test))]
+    pub(super) message: Mutex<MessageState>,
+    pub(super) render_pending: AtomicBool,
+    #[cfg(not(test))]
+    pub(super) hp_width: AtomicI32,
+    #[cfg(not(test))]
+    pub(super) status_hungry: AtomicI32,
+    #[cfg(not(test))]
+    pub(super) status_level: AtomicI32,
+    #[cfg(not(test))]
+    pub(super) status_purse: AtomicI32,
+    #[cfg(not(test))]
+    pub(super) status_hp: AtomicI32,
+    #[cfg(not(test))]
+    pub(super) status_armor: AtomicI32,
+    #[cfg(not(test))]
+    pub(super) status_strength: AtomicU32,
+    #[cfg(not(test))]
+    pub(super) status_experience: AtomicI32,
+}
+
+impl UiState {
+    const fn new() -> Self {
+        Self {
+            grid: Mutex::new([[ScreenCell::BLANK; NCOLS]; NROWS]),
+            cursor: Mutex::new(IVec2::ZERO),
+            reverse_video: AtomicBool::new(false),
+            input_timeout: AtomicI32::new(-1),
+            shutdown: AtomicBool::new(true),
+            terminal: Mutex::new(None),
+            #[cfg(not(test))]
+            message: Mutex::new(MessageState {
+                pending: String::new(),
+                next_position: 0,
+            }),
+            render_pending: AtomicBool::new(false),
+            #[cfg(not(test))]
+            hp_width: AtomicI32::new(0),
+            #[cfg(not(test))]
+            status_hungry: AtomicI32::new(0),
+            #[cfg(not(test))]
+            status_level: AtomicI32::new(0),
+            #[cfg(not(test))]
+            status_purse: AtomicI32::new(-1),
+            #[cfg(not(test))]
+            status_hp: AtomicI32::new(0),
+            #[cfg(not(test))]
+            status_armor: AtomicI32::new(0),
+            #[cfg(not(test))]
+            status_strength: AtomicU32::new(0),
+            #[cfg(not(test))]
+            status_experience: AtomicI32::new(0),
+        }
+    }
+}
+
+pub(super) static UI: UiState = UiState::new();
 
 /// Lock a `Mutex`, recovering from poisoning instead of panicking.
 #[inline]
@@ -106,7 +193,7 @@ pub(super) fn render() {
                     let symbol = (cell.ch as char).to_string();
                     if let Some(target) = buf.cell_mut((x as u16, y as u16)) {
                         target.set_symbol(&symbol);
-                        if cell.standout {
+                        if cell.reverse_video {
                             target.set_style(Style::default().add_modifier(Modifier::REVERSED));
                         } else {
                             target.set_style(Style::default());
@@ -119,9 +206,9 @@ pub(super) fn render() {
 }
 
 #[inline]
-fn set_cell(y: i32, x: i32, ch: u8, standout: bool) {
+fn set_cell(y: i32, x: i32, ch: u8, reverse_video: bool) {
     if in_bounds(y, x) {
-        lock(&UI.grid)[y as usize][x as usize] = ScreenCell { ch, standout };
+        lock(&UI.grid)[y as usize][x as usize] = ScreenCell { ch, reverse_video };
     }
 }
 
@@ -180,8 +267,9 @@ pub(crate) fn clear_to_end_of_line() {
     }
 }
 
-pub(crate) fn set_standout(enabled: bool) {
-    UI.standout.store(enabled, Ordering::Relaxed);
+/// Set the reverse-video mode captured by subsequent cell writes.
+pub(crate) fn set_reverse_video(enabled: bool) {
+    UI.reverse_video.store(enabled, Ordering::Relaxed);
 }
 
 pub(crate) fn move_cursor(pos: IVec2) {
@@ -198,7 +286,7 @@ pub(crate) fn write_glyph(ch: char) {
         cursor.y,
         cursor.x,
         ch as u8,
-        UI.standout.load(Ordering::Relaxed),
+        UI.reverse_video.load(Ordering::Relaxed),
     );
     advance_cursor();
 }
@@ -218,7 +306,7 @@ pub(crate) fn glyph_at(pos: IVec2) -> char {
 }
 
 pub(crate) fn write_text(text: &str) {
-    let standout = UI.standout.load(Ordering::Relaxed);
+    let reverse_video = UI.reverse_video.load(Ordering::Relaxed);
     let mut cursor = lock(&UI.cursor);
     for byte in text.bytes() {
         match byte {
@@ -232,7 +320,7 @@ pub(crate) fn write_text(text: &str) {
             ch => {
                 if in_bounds(cursor.y, cursor.x) {
                     lock(&UI.grid)[cursor.y as usize][cursor.x as usize] =
-                        ScreenCell { ch, standout };
+                        ScreenCell { ch, reverse_video };
                 }
                 cursor.x += 1;
                 if cursor.x >= NCOLS as i32 {

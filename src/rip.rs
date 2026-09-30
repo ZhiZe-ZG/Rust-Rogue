@@ -338,11 +338,11 @@ pub unsafe fn total_winner() {
     ];
 
     crate::ui::terminal::clear();
-    crate::ui::terminal::set_standout(true);
+    crate::ui::terminal::set_reverse_video(true);
     for line in lines {
         crate::ui::terminal::write_text(line);
     }
-    crate::ui::terminal::set_standout(false);
+    crate::ui::terminal::set_reverse_video(false);
     crate::ui::terminal::write_text("\nYou have joined the elite ranks of those who have escaped the\nDungeons of Doom alive.  You journey home and sell all your loot at\na great profit and are admitted to the Fighters' Guild.\n");
     crate::ui::terminal::write_text_at(IVec2::new(0, 23), "--Press space to continue--");
     output::refresh();

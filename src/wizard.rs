@@ -273,7 +273,7 @@ pub unsafe fn show_map() {
             let real = flat(y, x);
             let glyph = (chat(y, x) as u8) as char;
             if ((real as u8) & (F_REAL as u8)) == 0 {
-                crate::draw::write_standout_cell_glyph(IVec2::new(x, y), glyph);
+                crate::draw::write_reverse_video_cell_glyph(IVec2::new(x, y), glyph);
             } else {
                 crate::draw::write_cell_glyph(IVec2::new(x, y), glyph);
             }

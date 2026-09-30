@@ -273,7 +273,7 @@ pub unsafe fn come_down() {
                     crate::draw::write_cell_glyph(pos, crate::draw::monster_glyph(id));
                 }
             } else if seemonst {
-                crate::draw::write_standout_cell_glyph(pos, crate::draw::monster_type_glyph(id));
+                crate::draw::write_reverse_video_cell_glyph(pos, crate::draw::monster_type_glyph(id));
             }
         }
     }
@@ -319,7 +319,7 @@ pub unsafe fn visuals() {
                     crate::draw::write_cell_glyph(pos, crate::draw::hallucination_glyph());
                 }
             } else if seemonst {
-                crate::draw::write_standout_cell_glyph(pos, crate::draw::hallucination_glyph());
+                crate::draw::write_reverse_video_cell_glyph(pos, crate::draw::hallucination_glyph());
             }
         }
     }

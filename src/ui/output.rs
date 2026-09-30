@@ -13,8 +13,9 @@ use crate::game::globals::{
 use crate::game::PLAYER;
 #[cfg(not(test))]
 use crate::ui::input::{readchar, wait_for};
-use crate::ui::state::UI;
 use crate::ui::terminal as cur;
+use crate::ui::terminal::UI;
+#[cfg(not(test))]
 use glam::IVec2;
 
 #[cfg(not(test))]

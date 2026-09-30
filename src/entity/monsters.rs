@@ -334,7 +334,7 @@ pub unsafe fn wanderer() {
         } else {
             crate::draw::hallucination_glyph()
         };
-        crate::draw::write_standout_cell_glyph(cp, glyph);
+        crate::draw::write_reverse_video_cell_glyph(cp, glyph);
     }
 
     let pos = MONSTER_LIST

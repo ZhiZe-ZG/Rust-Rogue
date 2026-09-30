@@ -4,5 +4,4 @@
 
 pub(crate) mod input;
 pub(crate) mod output;
-mod state;
 pub(crate) mod terminal;

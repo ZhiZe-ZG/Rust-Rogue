@@ -501,7 +501,7 @@ pub unsafe fn turn_see(turn_off: u8) -> u8 {
                 if can_see {
                     crate::draw::write_cell_glyph(pos, glyph);
                 } else {
-                    crate::draw::write_standout_cell_glyph(pos, glyph);
+                    crate::draw::write_reverse_video_cell_glyph(pos, glyph);
                     add_new += 1;
                 }
             }
