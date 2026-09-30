@@ -1,6 +1,9 @@
 use std::io::Write;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32};
+use std::sync::atomic::{AtomicBool, AtomicI32};
 use std::sync::Mutex;
+
+#[cfg(not(test))]
+use std::sync::atomic::AtomicU32;
 
 use glam::IVec2;
 use ratatui::backend::CrosstermBackend;
@@ -24,6 +27,7 @@ impl ScreenCell {
     };
 }
 
+#[cfg(not(test))]
 #[derive(Default)]
 pub(super) struct MessageState {
     pub(super) pending: String,
@@ -43,15 +47,24 @@ pub(super) struct UiState {
     pub(super) input_timeout: AtomicI32,
     pub(super) shutdown: AtomicBool,
     pub(super) terminal: Mutex<Option<Terminal<Backend>>>,
+    #[cfg(not(test))]
     pub(super) message: Mutex<MessageState>,
     pub(super) render_pending: AtomicBool,
+    #[cfg(not(test))]
     pub(super) hp_width: AtomicI32,
+    #[cfg(not(test))]
     pub(super) status_hungry: AtomicI32,
+    #[cfg(not(test))]
     pub(super) status_level: AtomicI32,
+    #[cfg(not(test))]
     pub(super) status_purse: AtomicI32,
+    #[cfg(not(test))]
     pub(super) status_hp: AtomicI32,
+    #[cfg(not(test))]
     pub(super) status_armor: AtomicI32,
+    #[cfg(not(test))]
     pub(super) status_strength: AtomicU32,
+    #[cfg(not(test))]
     pub(super) status_experience: AtomicI32,
 }
 
@@ -64,18 +77,27 @@ impl UiState {
             input_timeout: AtomicI32::new(-1),
             shutdown: AtomicBool::new(true),
             terminal: Mutex::new(None),
+            #[cfg(not(test))]
             message: Mutex::new(MessageState {
                 pending: String::new(),
                 next_position: 0,
             }),
             render_pending: AtomicBool::new(false),
+            #[cfg(not(test))]
             hp_width: AtomicI32::new(0),
+            #[cfg(not(test))]
             status_hungry: AtomicI32::new(0),
+            #[cfg(not(test))]
             status_level: AtomicI32::new(0),
+            #[cfg(not(test))]
             status_purse: AtomicI32::new(-1),
+            #[cfg(not(test))]
             status_hp: AtomicI32::new(0),
+            #[cfg(not(test))]
             status_armor: AtomicI32::new(0),
+            #[cfg(not(test))]
             status_strength: AtomicU32::new(0),
+            #[cfg(not(test))]
             status_experience: AtomicI32::new(0),
         }
     }

@@ -10,6 +10,7 @@ use crate::ui::terminal;
 
 const ESCAPE: i32 = 27;
 const ERR: i32 = -1;
+#[cfg(not(test))]
 const CTRL_C: i32 = 3;
 
 const KEY_DOWN: i32 = 0o402;
@@ -17,9 +18,35 @@ const KEY_UP: i32 = 0o403;
 const KEY_LEFT: i32 = 0o404;
 const KEY_RIGHT: i32 = 0o405;
 const KEY_HOME: i32 = 0o406;
+const KEY_BACKSPACE: i32 = 0o407;
 const KEY_NPAGE: i32 = 0o522;
 const KEY_PPAGE: i32 = 0o523;
 const KEY_END: i32 = 0o550;
+
+fn curses_key_code(event: &KeyEvent) -> i32 {
+    match event.code {
+        KeyCode::Char(c) => {
+            if event.modifiers.contains(KeyModifiers::CONTROL) {
+                (c.to_ascii_lowercase() as u8 & 0x1f) as i32
+            } else {
+                c as u8 as i32
+            }
+        }
+        KeyCode::Enter => b'\n' as i32,
+        KeyCode::Esc => ESCAPE,
+        KeyCode::Tab => b'\t' as i32,
+        KeyCode::Backspace => KEY_BACKSPACE,
+        KeyCode::Left => KEY_LEFT,
+        KeyCode::Right => KEY_RIGHT,
+        KeyCode::Up => KEY_UP,
+        KeyCode::Down => KEY_DOWN,
+        KeyCode::Home => KEY_HOME,
+        KeyCode::End => KEY_END,
+        KeyCode::PageUp => KEY_PPAGE,
+        KeyCode::PageDown => KEY_NPAGE,
+        _ => ERR,
+    }
+}
 
 fn map_cooked_key(key: i32) -> i32 {
     match key {
@@ -39,7 +66,7 @@ fn map_cooked_key(key: i32) -> i32 {
 #[cfg(not(test))]
 pub fn readchar() -> i32 {
     crate::ui::output::render_pending();
-    let key = terminal::getch();
+    let key = read_legacy_key();
     if key == CTRL_C {
         unsafe { crate::startup::quit(0) };
         return ESCAPE;
@@ -48,6 +75,11 @@ pub fn readchar() -> i32 {
         return ESCAPE;
     }
     map_cooked_key(key)
+}
+
+#[cfg(not(test))]
+fn read_legacy_key() -> i32 {
+    terminal::get_key_event().map_or(ERR, |event| curses_key_code(&event))
 }
 
 #[cfg(test)]
@@ -74,12 +106,6 @@ pub fn wait_for(ch: char) {
 
 #[cfg(test)]
 pub fn wait_for(_ch: char) {}
-
-/// Read one raw terminal key code before game-level key translation.
-pub(crate) fn read_raw_key() -> i32 {
-    crate::ui::output::render_pending();
-    terminal::getch()
-}
 
 /// Read a Crossterm event without flattening its key code or modifiers.
 pub(crate) fn read_key_event() -> KeyEvent {
@@ -120,10 +146,6 @@ pub(crate) fn set_echo(enabled: bool) {
 
 pub(crate) fn set_keypad(_enabled: bool) {}
 
-pub(crate) fn set_input_timeout(tenths: i32) {
-    terminal::halfdelay(tenths);
-}
-
 pub(crate) fn erase_key() -> u8 {
     terminal::erasechar()
 }
@@ -139,9 +161,43 @@ pub(crate) fn flush_pending() {
 #[cfg(test)]
 mod tests {
     use super::{
-        map_cooked_key, KEY_DOWN, KEY_END, KEY_HOME, KEY_LEFT, KEY_NPAGE, KEY_PPAGE, KEY_RIGHT,
-        KEY_UP,
+        curses_key_code, map_cooked_key, ERR, KEY_BACKSPACE, KEY_DOWN, KEY_END, KEY_HOME, KEY_LEFT,
+        KEY_NPAGE, KEY_PPAGE, KEY_RIGHT, KEY_UP,
     };
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn crossterm_keys_map_to_curses_codes() {
+        let cases = [
+            (KeyCode::Left, KEY_LEFT),
+            (KeyCode::Down, KEY_DOWN),
+            (KeyCode::Home, KEY_HOME),
+            (KeyCode::End, KEY_END),
+            (KeyCode::PageUp, KEY_PPAGE),
+            (KeyCode::PageDown, KEY_NPAGE),
+            (KeyCode::Backspace, KEY_BACKSPACE),
+            (KeyCode::Enter, b'\n' as i32),
+        ];
+
+        for (key, expected) in cases {
+            assert_eq!(
+                curses_key_code(&KeyEvent::new(key, KeyModifiers::NONE)),
+                expected
+            );
+        }
+        assert_eq!(
+            curses_key_code(&KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE)),
+            ERR
+        );
+    }
+
+    #[test]
+    fn control_characters_map_to_ascii_control_codes() {
+        assert_eq!(
+            curses_key_code(&KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            3
+        );
+    }
 
     #[test]
     fn cooked_navigation_keys_map_to_rogue_directions() {

@@ -2,28 +2,37 @@
 
 use std::sync::atomic::Ordering;
 
+#[cfg(not(test))]
 use crate::config::GameConfig;
+#[cfg(not(test))]
 use crate::game::globals::{
     get_hungry_state, get_max_stats, get_mpos, get_purse, lower_msg_enabled, msg_esc_enabled,
     save_msg_enabled, set_huh_string, set_mpos, stat_msg_enabled,
 };
+#[cfg(not(test))]
 use crate::game::PLAYER;
+#[cfg(not(test))]
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::state::UI;
 use crate::ui::terminal as cur;
 use glam::IVec2;
 
+#[cfg(not(test))]
 const ESCAPE: i32 = 27;
+#[cfg(not(test))]
 const MAXMSG: usize = GameConfig::SCREEN_COLS as usize - 9;
+#[cfg(not(test))]
 const STATLINE: i32 = 23;
 
 /// Result of displaying or flushing a message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MessageResult {
     Displayed,
+    #[cfg(not(test))]
     Escaped,
 }
 
+#[cfg(not(test))]
 fn split_message_at(text: &str, limit: usize) -> usize {
     if text.len() <= limit {
         return text.len();
@@ -154,11 +163,6 @@ pub(crate) fn set_clear_on_refresh(_enabled: bool) {}
 /// Enable or disable line optimization for a window (no-op).
 pub(crate) fn set_line_optimization(_enabled: bool) {}
 
-/// Enable or disable standout output for a window.
-pub(crate) fn set_window_standout(enabled: bool) {
-    set_standout(enabled);
-}
-
 /// Render a key byte in printable caret notation.
 pub(crate) fn format_key(key: u8) -> String {
     match key {
@@ -176,6 +180,7 @@ pub(crate) fn format_key(key: u8) -> String {
     }
 }
 
+#[cfg(not(test))]
 fn append_message(text: &str) {
     let mut remaining = text;
     while !remaining.is_empty() {
@@ -204,6 +209,7 @@ fn append_message(text: &str) {
     }
 }
 
+#[cfg(not(test))]
 fn display_message(text: &str) -> MessageResult {
     if text.is_empty() {
         move_cursor(IVec2::new(0, 0));
@@ -297,6 +303,7 @@ pub(crate) fn endmsg() -> MessageResult {
 
 // ─── Status line cache (single-threaded; atomics avoid `static mut`) ─────────
 
+#[cfg(not(test))]
 const STATE_NAMES: [&str; 4] = ["", "Hungry", "Weak", "Faint"];
 
 #[cfg(not(test))]

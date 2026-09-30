@@ -13,8 +13,7 @@
 //! The only remaining FFI is genuine OS interop (`libc` signal/termios/passwd
 //! calls); all hands own their data with Rust types.
 
-use crate::save::auto_save;
-use crate::startup::{endit, quit, tstp};
+use crate::startup::tstp;
 use crate::ui::input;
 use crate::ui::output;
 
@@ -30,43 +29,6 @@ unsafe fn c_ptr_to_string(p: *const u8) -> String {
     }
     String::from_utf8_lossy(std::slice::from_raw_parts(p, len)).into_owned()
 }
-
-/// Curses key codes used by the keypad/arrow-key reader. These mirror the
-/// ncurses public header (`keys.h`) values so behaviour is identical to the
-/// original C `mdport.c` key translation. The arrow keys reuse the derived
-/// integer codes; the remaining numeric literals are the ncurses keypad
-/// constants for this game's arrow/keypad mapping.
-const KEY_DOWN: i32 = 0o402; // 258
-const KEY_UP: i32 = 0o403; // 259
-const KEY_LEFT: i32 = 0o404; // 260
-const KEY_RIGHT: i32 = 0o405; // 261
-const KEY_HOME: i32 = 0o406; // 262
-const KEY_BACKSPACE: i32 = 0o407; // 263
-const KEY_NPAGE: i32 = 0o522; // 338
-const KEY_PPAGE: i32 = 0o523; // 339
-const KEY_LL: i32 = 0o545; // 357
-const KEY_A1: i32 = 0o534; // 348
-const KEY_A3: i32 = 0o536; // 350
-const KEY_B2: i32 = 0o541; // 353
-const KEY_C1: i32 = 0o542; // 354
-const KEY_C3: i32 = 0o544; // 356
-const KEY_END: i32 = 0o550; // 360
-
-// Extended keypad codes not covered above; values match ncurses `keys.h`.
-const KEY_B1: i32 = 353; // keypad lower-left
-const KEY_B3: i32 = 354; // keypad lower-right
-const KEY_A2: i32 = 355; // keypad up
-const KEY_C2: i32 = 356; // keypad down
-const KEY_SUP: i32 = 337; // shift up
-const KEY_SDOWN: i32 = 336; // shift down
-const KEY_SEND: i32 = 0o551; // 361
-const KEY_SHOME: i32 = 0o552; // 362
-const KEY_SLEFT: i32 = 0o553; // 363
-const KEY_SNEXT: i32 = 0o556; // 366
-const KEY_SPREVIOUS: i32 = 0o557; // 367
-const KEY_SRIGHT: i32 = 0o560; // 368
-const KEY_EOL: i32 = 0o600; // 384
-const ERR: i32 = -1;
 
 // -------------------------------------------------------------------------
 // Signal handling
@@ -110,27 +72,6 @@ pub unsafe fn md_onsignal_exit() {
     }
 }
 
-/// md_onsignal_autosave:
-/// Arrange for signals to auto-save the game.
-unsafe fn md_onsignal_autosave() {
-    // The auto-save handlers (`auto_save`, `endit`, `quit`) are plain Rust
-    // `extern "C"` signal handlers; wire them up to the signals on Unix.
-    #[cfg(unix)]
-    {
-        libc::signal(libc::SIGHUP, auto_save as libc::sighandler_t);
-        libc::signal(libc::SIGQUIT, endit as libc::sighandler_t);
-        libc::signal(libc::SIGILL, auto_save as libc::sighandler_t);
-        libc::signal(libc::SIGTRAP, auto_save as libc::sighandler_t);
-        libc::signal(libc::SIGABRT, auto_save as libc::sighandler_t);
-        libc::signal(libc::SIGFPE, auto_save as libc::sighandler_t);
-        libc::signal(libc::SIGBUS, auto_save as libc::sighandler_t);
-        libc::signal(libc::SIGSEGV, auto_save as libc::sighandler_t);
-        libc::signal(libc::SIGSYS, auto_save as libc::sighandler_t);
-        libc::signal(libc::SIGTERM, auto_save as libc::sighandler_t);
-        libc::signal(libc::SIGINT, quit as libc::sighandler_t);
-    }
-}
-
 /// md_ignoreallsignals:
 /// Ignore all signals.
 pub unsafe fn md_ignoreallsignals() {
@@ -158,12 +99,6 @@ pub unsafe fn md_hasclreol() -> i32 {
     // The ncurses crate doesn't expose clr_eol/CE directly.  Assume the
     // terminal supports it (all common terminals do).
     1
-}
-
-/// md_putchar:
-/// Output a single character.
-unsafe fn md_putchar(c: i32) {
-    libc::putchar(c);
 }
 
 // -------------------------------------------------------------------------
@@ -417,50 +352,9 @@ pub unsafe fn md_shellescape() -> i32 {
 // Filesystem helpers
 // -------------------------------------------------------------------------
 
-/// directory_exists:
-/// Return 1 if the given path is a directory, 0 otherwise.
-unsafe fn directory_exists(dirname: &str) -> i32 {
-    match std::fs::metadata(dirname) {
-        Ok(md) => {
-            if md.is_dir() {
-                1
-            } else {
-                0
-            }
-        }
-        Err(_) => 0,
-    }
-}
-
-/// md_getrealname:
-/// Return the real (login) name for the given uid, or the numeric uid
-/// string if no passwd entry exists.
-unsafe fn md_getrealname(uid: i32) -> String {
-    #[cfg(unix)]
-    {
-        let pw = libc::getpwuid(uid as libc::uid_t);
-        if !pw.is_null() && !(*pw).pw_name.is_null() {
-            return c_ptr_to_string((*pw).pw_name as *const u8);
-        }
-    }
-    uid.to_string()
-}
-
 // -------------------------------------------------------------------------
 // Tty character helpers
 // -------------------------------------------------------------------------
-
-/// md_erasechar:
-/// Return the terminal erase character.
-unsafe fn md_erasechar() -> i32 {
-    input::erase_key() as i32
-}
-
-/// md_killchar:
-/// Return the terminal kill character.
-unsafe fn md_killchar() -> i32 {
-    input::kill_key() as i32
-}
 
 /// md_dsuspchar:
 /// Return the terminal delete-suspend character.
@@ -490,258 +384,6 @@ pub unsafe fn md_suspchar() -> i32 {
     #[cfg(not(unix))]
     {
         0
-    }
-}
-
-/// md_setsuspchar:
-/// Set the terminal suspend character.
-unsafe fn md_setsuspchar(_c: i32) -> i32 {
-    // Changing the suspend char is rarely needed; keep the ncurses setting.
-    0
-}
-
-// -------------------------------------------------------------------------
-// Cursor / keypad support
-// -------------------------------------------------------------------------
-
-const M_NORMAL: i32 = 0;
-const M_ESC: i32 = 1;
-const M_KEYPAD: i32 = 2;
-const M_TRAIL: i32 = 3;
-
-/// md_readchar:
-/// Read a character, translating cursor/keypad escape sequences into the
-/// classic rogue movement commands (h j k l y u b n, plus Ctrl-modified runs).
-pub unsafe fn md_readchar() -> i32 {
-    let mut ch = 0;
-    let mut lastch = 0;
-    let mut mode = M_NORMAL;
-    let mut mode2 = M_NORMAL;
-
-    loop {
-        ch = input::read_raw_key();
-
-        if ch == ERR {
-            // Timed out waiting for a valid sequence: flush and treat as ESC.
-            mode = M_NORMAL;
-            input::set_raw_mode(false);
-            input::set_raw_mode(true);
-            ch = 27;
-            break;
-        }
-
-        if mode == M_TRAIL {
-            // msys console: '^' prefix means modified.
-            if ch == '^' as i32 {
-                ch = ctrl_upcase(lastch);
-            }
-            // cygwin/telnet: '~' suffix means normal.
-            if ch == '~' as i32 {
-                ch = (lastch as u8).to_ascii_lowercase() as i32;
-            }
-            if mode2 == M_ESC {
-                ch = ctrl_upcase(ch);
-            }
-            break;
-        }
-
-        if mode == M_ESC {
-            if ch == 27 {
-                mode2 = M_ESC;
-                continue;
-            }
-            if ch == 'F' as i32 || ch == 'O' as i32 || ch == '[' as i32 {
-                mode = M_KEYPAD;
-                continue;
-            }
-
-            // Cygwin / PuTTY: cooked cursor keys.
-            match ch {
-                KEY_LEFT => ch = ctrl('H'),
-                KEY_RIGHT => ch = ctrl('L'),
-                KEY_UP => ch = ctrl('K'),
-                KEY_DOWN => ch = ctrl('J'),
-                KEY_HOME => ch = ctrl('Y'),
-                KEY_PPAGE => ch = ctrl('U'),
-                KEY_NPAGE => ch = ctrl('N'),
-                KEY_END => ch = ctrl('B'),
-                _ => {}
-            }
-            break;
-        }
-
-        if mode == M_KEYPAD {
-            match ch {
-                // Interix: shift-left/shift-right.
-                0x5E => ch = ctrl('H'), // '^'
-                0x24 => ch = ctrl('L'), // '$'
-                // Interix: home.
-                0x48 => ch = 'y' as i32, // 'H'
-                // Interix: ctrl-keypad.
-                1 => ch = ctrl('K'),
-                2 => ch = ctrl('J'),
-                3 => ch = ctrl('L'),
-                4 => ch = ctrl('H'),
-                263 => ch = ctrl('Y'),
-                19 => ch = ctrl('U'),
-                20 => ch = ctrl('N'),
-                21 => ch = ctrl('B'),
-                // Cygwin: keypad 5.
-                0x47 => ch = '.' as i32, // 'G'
-                // Cygwin: ctrl-home/page.
-                0x37 => {
-                    // '7'
-                    lastch = 'Y' as i32;
-                    mode = M_TRAIL;
-                }
-                0x35 => {
-                    // '5'
-                    lastch = 'U' as i32;
-                    mode = M_TRAIL;
-                }
-                0x36 => {
-                    // '6'
-                    lastch = 'N' as i32;
-                    mode = M_TRAIL;
-                }
-                // Win32 telnet / PuTTY: home/end.
-                0x31 => {
-                    // '1'
-                    lastch = 'y' as i32;
-                    mode = M_TRAIL;
-                }
-                0x34 => {
-                    // '4'
-                    lastch = 'b' as i32;
-                    mode = M_TRAIL;
-                }
-                // PuTTY ESC O sequences.
-                0x44 => ch = ctrl('H'),  // 'D'
-                0x43 => ch = ctrl('L'),  // 'C'
-                0x41 => ch = ctrl('K'),  // 'A'
-                0x42 => ch = ctrl('J'),  // 'B'
-                0x74 => ch = 'h' as i32, // 't'
-                0x76 => ch = 'l' as i32, // 'v'
-                0x78 => ch = 'k' as i32, // 'x'
-                0x72 => ch = 'j' as i32, // 'r'
-                0x77 => ch = 'y' as i32, // 'w'
-                0x79 => ch = 'u' as i32, // 'y'
-                0x73 => ch = 'n' as i32, // 's'
-                0x71 => ch = 'b' as i32, // 'q'
-                0x75 => ch = '.' as i32, // 'u'
-                _ => {}
-            }
-
-            if mode != M_KEYPAD {
-                continue;
-            }
-        }
-
-        if ch == 27 {
-            input::set_input_timeout(1);
-            mode = M_ESC;
-            continue;
-        }
-
-        // Handle cooked curses keys.
-        match ch {
-            KEY_LEFT => ch = 'h' as i32,
-            KEY_DOWN => ch = 'j' as i32,
-            KEY_UP => ch = 'k' as i32,
-            KEY_RIGHT => ch = 'l' as i32,
-            KEY_HOME => ch = 'y' as i32,
-            KEY_PPAGE => ch = 'u' as i32,
-            KEY_END => ch = 'b' as i32,
-            KEY_LL => ch = 'b' as i32,
-            KEY_NPAGE => ch = 'n' as i32,
-            KEY_B1 => ch = 'h' as i32,
-            KEY_C2 => ch = 'j' as i32,
-            KEY_A2 => ch = 'k' as i32,
-            KEY_B3 => ch = 'l' as i32,
-            KEY_A1 => ch = 'y' as i32,
-            KEY_A3 => ch = 'u' as i32,
-            KEY_C1 => ch = 'b' as i32,
-            KEY_C3 => ch = 'n' as i32,
-            // next should be '.', but there is a problem with putty/linux
-            KEY_B2 => ch = 'u' as i32,
-            KEY_SRIGHT => ch = ctrl('L'),
-            KEY_SLEFT => ch = ctrl('H'),
-            KEY_SUP => ch = ctrl('K'),
-            KEY_SDOWN => ch = ctrl('J'),
-            KEY_SHOME => ch = ctrl('Y'),
-            KEY_SPREVIOUS => ch = ctrl('U'),
-            KEY_SEND => ch = ctrl('B'),
-            KEY_SNEXT => ch = ctrl('N'),
-            0x146 => ch = ctrl('K'),
-            0x145 => ch = ctrl('J'),
-            KEY_EOL => ch = ctrl('B'),
-            _ => {}
-        }
-
-        break;
-    }
-
-    input::set_raw_mode(false);
-    input::set_raw_mode(true);
-
-    ch & 0x7F
-}
-
-/// ctrl(c): return the control character for c.
-#[inline]
-fn ctrl(c: char) -> i32 {
-    (c as u8 & 0x1f) as i32
-}
-
-/// ctrl_upcase(c): CTRL(toupper(c)).
-#[inline]
-fn ctrl_upcase(c: i32) -> i32 {
-    let up = (c as u8).to_ascii_uppercase();
-    ctrl(up as char)
-}
-
-// -------------------------------------------------------------------------
-// Load average and checkout timer
-// -------------------------------------------------------------------------
-
-/// md_loadav:
-/// Fill `avg` (3 doubles) with the 1/5/15 minute load averages.
-unsafe fn md_loadav(avg: *mut f64) {
-    if avg.is_null() {
-        return;
-    }
-    let mut a = [0.0f64; 3];
-    if libc::getloadavg(a.as_mut_ptr(), 3) < 0 {
-        a = [0.0; 3];
-    }
-    for i in 0..3 {
-        *avg.add(i) = a[i];
-    }
-}
-
-/// md_start_checkout_timer:
-/// Start the SIGALRM-based checkout timer.
-///
-/// The original C implementation wired SIGALRM to the `checkout()` handler,
-/// which lived in mach_dep.c under `#ifdef CHECKTIME`.  CHECKTIME is not
-/// enabled in the standard build, so we only need the exported symbol; the
-/// alarm is not armed.
-unsafe fn md_start_checkout_timer(_time: i32) {
-    // CHECKTIME is disabled in the standard build; keep SIGALRM at its
-    // default disposition so no reference to the removed `checkout()` is
-    // emitted.
-    #[cfg(unix)]
-    {
-        libc::signal(libc::SIGALRM, libc::SIG_DFL);
-    }
-}
-
-/// md_stop_checkout_timer:
-/// Disable the SIGALRM checkout timer.
-unsafe fn md_stop_checkout_timer() {
-    #[cfg(unix)]
-    {
-        libc::signal(libc::SIGALRM, libc::SIG_IGN);
     }
 }
 

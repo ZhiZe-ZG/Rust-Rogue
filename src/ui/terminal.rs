@@ -33,19 +33,6 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|poison| poison.into_inner())
 }
 
-// ─── Curses key codes (mirrors ncurses `keys.h`) ──────────────────────────────
-
-const ERR: i32 = -1;
-const KEY_DOWN: i32 = 0o402; // 258
-const KEY_UP: i32 = 0o403; // 259
-const KEY_LEFT: i32 = 0o404; // 260
-const KEY_RIGHT: i32 = 0o405; // 261
-const KEY_HOME: i32 = 0o406; // 262
-const KEY_BACKSPACE: i32 = 0o407; // 263
-const KEY_NPAGE: i32 = 0o522; // 338
-const KEY_PPAGE: i32 = 0o523; // 339
-const KEY_END: i32 = 0o550; // 360
-
 // ─── Backend internals ───────────────────────────────────────────────────────
 
 /// Fixed screen size in (columns, rows).
@@ -162,34 +149,6 @@ fn advance_cursor() {
         if cursor.y >= NROWS as i32 {
             cursor.y = 0;
         }
-    }
-}
-
-/// Map a crossterm key event to a curses-compatible code.
-fn map_key(event: &crossterm::event::KeyEvent) -> i32 {
-    use crossterm::event::{KeyCode, KeyModifiers};
-
-    match event.code {
-        KeyCode::Char(c) => {
-            if event.modifiers.contains(KeyModifiers::CONTROL) {
-                (c.to_ascii_lowercase() as u8 & 0x1f) as i32
-            } else {
-                (c as u8) as i32
-            }
-        }
-        KeyCode::Enter => b'\n' as i32,
-        KeyCode::Esc => 27,
-        KeyCode::Tab => b'\t' as i32,
-        KeyCode::Backspace => KEY_BACKSPACE,
-        KeyCode::Left => KEY_LEFT,
-        KeyCode::Right => KEY_RIGHT,
-        KeyCode::Up => KEY_UP,
-        KeyCode::Down => KEY_DOWN,
-        KeyCode::Home => KEY_HOME,
-        KeyCode::End => KEY_END,
-        KeyCode::PageUp => KEY_PPAGE,
-        KeyCode::PageDown => KEY_NPAGE,
-        _ => ERR,
     }
 }
 
@@ -333,10 +292,6 @@ pub(crate) fn get_key_event() -> Option<crossterm::event::KeyEvent> {
     }
 }
 
-pub(crate) fn getch() -> i32 {
-    get_key_event().map_or(ERR, |key| map_key(&key))
-}
-
 pub(crate) fn set_escape_delay(_milliseconds: i32) {}
 
 pub(crate) fn raw() {
@@ -349,10 +304,6 @@ pub(crate) fn nocbreak() {}
 pub(crate) fn echo() {}
 
 pub(crate) fn noecho() {}
-
-pub(crate) fn halfdelay(tenths: i32) {
-    UI.input_timeout.store(tenths, Ordering::Relaxed);
-}
 
 pub(crate) fn erasechar() -> u8 {
     0x7f
