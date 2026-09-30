@@ -220,9 +220,7 @@ pub(crate) unsafe fn help() {
     output::write_window_text("--Press space to continue--");
     output::refresh_window();
     wait_for(' ');
-    output::set_clear_on_refresh(true);
     msg_str("");
-    output::touch_window();
     output::refresh_window();
 }
 

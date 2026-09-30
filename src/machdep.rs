@@ -126,16 +126,8 @@ pub unsafe fn setup() {
         libc::signal(signal, libc::SIG_DFL);
     }
 
-    input::set_raw_mode(true);
-    input::set_echo(false);
-    input::set_keypad(true);
+    input::enable_raw_mode();
 }
-
-/// start_score:
-/// Start the scoring sequence.
-///
-/// The CHECKTIME feature is not enabled in the standard build.
-pub unsafe fn start_score() {}
 
 /// is_symlink:
 /// See if the file is not a regular file (i.e. a symbolic link or

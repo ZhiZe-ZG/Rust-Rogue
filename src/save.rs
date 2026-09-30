@@ -10,7 +10,6 @@ use crate::state::{rs_restore_file, rs_save_file};
 use crate::ui::input::{self, readchar};
 use crate::ui::output::{self, msg_str};
 use crate::ui::runtime;
-use glam::IVec2;
 use std::fs::File;
 use std::io::{Read, Write};
 
@@ -115,11 +114,6 @@ pub unsafe fn save_game() {
 /// Writes the RON save-file header and hands off the actual save payload to the
 /// state serializer.
 pub unsafe fn save_file(savef: &mut File) {
-    let size = crate::ui::screen_size();
-    let lines = size.y;
-    let cols = size.x;
-
-    runtime::move_physical_cursor(IVec2::new(cols - 1, 0), IVec2::new(0, lines - 1));
     let _ = std::io::stdout().write_all(b"\n");
     runtime::shutdown();
     use std::os::unix::fs::PermissionsExt;
@@ -169,8 +163,6 @@ pub unsafe fn restore(file: &str) -> u8 {
     if runtime::is_shutdown() {
         runtime::initialize();
     }
-    input::set_keypad(true);
-
     setup();
     if let Err(err) = rs_restore_file(&mut inf) {
         runtime::shutdown();
@@ -184,7 +176,6 @@ pub unsafe fn restore(file: &str) -> u8 {
     }
 
     mpos = 0;
-    output::set_clear_on_refresh(true);
 
     if restore_player_dead() {
         runtime::shutdown();
@@ -195,7 +186,6 @@ pub unsafe fn restore(file: &str) -> u8 {
     #[cfg(unix)]
     libc::signal(libc::SIGTSTP, crate::startup::tstp as libc::sighandler_t);
     crate::game::globals::set_file_name(file_name.clone());
-    output::set_clear_on_refresh(true);
     set_seed(std::process::id() as i32);
     msg_str(&format!("file name: {}", file_name));
     playit();

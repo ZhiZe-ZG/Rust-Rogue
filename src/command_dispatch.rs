@@ -20,7 +20,7 @@ use crate::item::potions::{quaff, raise_level, turn_see};
 use crate::item::rings::{ring_off, ring_on};
 use crate::item::scrolls::read_scroll;
 use crate::item::sticks::do_zap;
-use crate::item::things::{discovered, drop, inv_name_id};
+use crate::item::things::{drop, inv_name_id};
 use crate::item::weapons::{init_weapon, missile, wield};
 use crate::level::new_level;
 use crate::misc::{eat, get_dir};
@@ -340,17 +340,13 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             after = false as u8;
                         }
                     }
-                    Command::Discover => {
-                        after = false as u8;
-                        discovered();
-                    }
+                    Command::Discover => after = false as u8,
                     Command::MessageHistory => {
                         after = false as u8;
                         msg_str(&crate::game::globals::huh_string());
                     }
                     Command::Refresh => {
                         after = false as u8;
-                        output::set_clear_on_refresh(true);
                         output::refresh_window();
                     }
                     Command::Version => {

@@ -7,7 +7,7 @@ use crate::game::globals::{allscore, get_purse, monster_info, numscores, NUMNAME
 use crate::item::arena::{with_object, OBJECTS};
 use crate::item::item_type::ItemType;
 use crate::item::things::inv_name_id;
-use crate::machdep::{lock_sc, start_score, unlock_sc};
+use crate::machdep::{lock_sc, unlock_sc};
 use crate::score::{rd_score, wr_score, Score};
 use crate::startup::my_exit;
 use crate::ui::input::wait_for;
@@ -117,8 +117,6 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
             sc_time: 0,
         });
     }
-
-    start_score();
 
     if flags >= 0 || wizard != 0 {
         // Keep the legacy interactive flow behavior close to the C version without

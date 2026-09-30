@@ -131,10 +131,6 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
      * leave nicely
      */
     let old_cursor = output::window_cursor();
-    runtime::move_physical_cursor(
-        IVec2::new(GameConfig::SCREEN_COLS - 1, 0),
-        IVec2::new(0, GameConfig::SCREEN_LINES - 1),
-    );
     runtime::shutdown();
     flush_stdout();
     #[cfg(unix)]
@@ -145,12 +141,8 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
      */
     #[cfg(unix)]
     libc::signal(libc::SIGTSTP, tstp as libc::sighandler_t);
-    input::set_raw_mode(true);
-    input::set_echo(false);
-    input::set_keypad(true);
-    output::set_clear_on_refresh(true);
+    input::enable_raw_mode();
     output::refresh_window();
-    runtime::move_physical_cursor(output::window_cursor(), old_cursor);
     output::move_cursor(old_cursor);
     flush_stdout();
 }
@@ -235,10 +227,6 @@ pub unsafe extern "C" fn leave(sig: i32) {
     let _ = sig;
 
     if !runtime::is_shutdown() {
-        runtime::move_physical_cursor(
-            IVec2::new(GameConfig::SCREEN_COLS - 1, 0),
-            IVec2::new(0, GameConfig::SCREEN_LINES - 1),
-        );
         runtime::shutdown();
     }
 
@@ -272,12 +260,9 @@ pub unsafe fn shell() {
 
     print!("\n[Press return to continue]");
     let _ = std::io::stdout().flush();
-    input::set_echo(false);
-    input::set_raw_mode(true);
-    input::set_keypad(true);
+    input::enable_raw_mode();
     in_shell = false as u8;
     wait_for('\n');
-    output::set_clear_on_refresh(true);
 }
 
 /// my_exit:
@@ -286,7 +271,6 @@ pub unsafe fn shell() {
 /// No globals used directly.
 pub unsafe fn my_exit(st: i32) -> ! {
     if !runtime::is_shutdown() {
-        input::set_echo(true);
         runtime::shutdown();
     }
     flush_stdout();
@@ -414,7 +398,6 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     init_stones();
     init_materials();
     setup();
-    output::set_line_optimization(true);
     if master_mode_enabled != 0 {
         noscore = wizard;
     }

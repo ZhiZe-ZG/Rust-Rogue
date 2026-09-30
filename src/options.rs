@@ -259,8 +259,6 @@ pub unsafe fn option() {
     paint("--Press space to continue--");
     output::refresh_window();
     wait_for(' ');
-    output::set_clear_on_refresh(true);
-    output::touch_window();
     after = false as u8;
 }
 

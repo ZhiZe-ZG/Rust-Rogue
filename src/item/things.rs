@@ -343,10 +343,6 @@ pub unsafe fn drop() {
     let _ = leave_pack_id(id, true, all);
 }
 
-pub unsafe fn discovered() {}
-
-unsafe fn print_disc(_type: u8) {}
-
 /// Formats a single `%s` substitution from `fmt` and `arg` and hands the
 /// result to `msg_str`, mirroring the legacy `add_line` helper.
 pub unsafe fn add_line(fmt: &str, arg: &str) -> u8 {
@@ -357,8 +353,6 @@ pub unsafe fn add_line(fmt: &str, arg: &str) -> u8 {
     msg_str(&text);
     0
 }
-
-unsafe fn end_line() {}
 
 unsafe fn nothing(_type: u8) -> String {
     copy_to_prbuf("Nothing found")

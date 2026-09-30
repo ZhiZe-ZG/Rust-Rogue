@@ -118,12 +118,6 @@ pub(crate) fn write_text_at(position: IVec2, text: &str) {
     cur::write_text_at(position, text);
 }
 
-/// Control whether the terminal may leave the physical cursor after refresh.
-///
-/// The backend always leaves the cursor where it was; retained only for call
-/// sites that mirrored the legacy `leaveok`.
-pub(crate) fn set_leave_cursor(_enabled: bool) {}
-
 /// Return the current cursor position.
 pub(crate) fn window_cursor() -> IVec2 {
     cur::cursor_pos()
@@ -153,15 +147,6 @@ pub(crate) fn write_window_text(text: &str) {
 pub(crate) fn refresh_window() {
     refresh();
 }
-
-/// Mark a window for repaint during its next refresh (no-op; single grid).
-pub(crate) fn touch_window() {}
-
-/// Request a full repaint of a window on its next refresh (no-op).
-pub(crate) fn set_clear_on_refresh(_enabled: bool) {}
-
-/// Enable or disable line optimization for a window (no-op).
-pub(crate) fn set_line_optimization(_enabled: bool) {}
 
 /// Render a key byte in printable caret notation.
 pub(crate) fn format_key(key: u8) -> String {
@@ -401,13 +386,10 @@ pub(crate) fn status() {
 pub(crate) fn show_win(message: &str) {
     move_window_cursor(IVec2::new(0, 0));
     write_window_text(message);
-    touch_window();
     let hero = PLAYER.pos();
     move_window_cursor(IVec2::new(hero.x, hero.y));
     refresh_window();
     wait_for(' ');
-    set_clear_on_refresh(true);
-    touch_window();
 }
 
 #[cfg(test)]

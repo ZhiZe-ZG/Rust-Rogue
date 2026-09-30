@@ -35,11 +35,6 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 // ─── Backend internals ───────────────────────────────────────────────────────
 
-/// Fixed screen size in (columns, rows).
-pub(crate) const fn screen_size() -> IVec2 {
-    IVec2::new(NCOLS as i32, NROWS as i32)
-}
-
 /// The physical terminal size in (columns, rows), if it can be queried.
 ///
 /// Used by startup to reject terminals smaller than the fixed game grid.
@@ -297,12 +292,6 @@ pub(crate) fn raw() {
     ensure_terminal();
 }
 
-pub(crate) fn nocbreak() {}
-
-pub(crate) fn echo() {}
-
-pub(crate) fn noecho() {}
-
 pub(crate) fn erasechar() -> u8 {
     0x7f
 }
@@ -321,5 +310,3 @@ pub(crate) fn flushinp() {
 pub(crate) fn baudrate() -> i32 {
     9600
 }
-
-pub(crate) fn move_physical_cursor(_from: IVec2, _to: IVec2) {}

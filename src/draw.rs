@@ -768,9 +768,7 @@ pub unsafe fn turnref() {
     let hero = hero_pos();
     if (flat_at(hero.y, hero.x) as u8 & F_SEEN as u8) == 0 {
         if jump != 0 {
-            output::set_leave_cursor(true);
             output::refresh();
-            output::set_leave_cursor(false);
         }
         set_seen_at(hero.y, hero.x);
     }

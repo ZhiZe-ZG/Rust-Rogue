@@ -124,23 +124,9 @@ pub(crate) fn read_key_event() -> KeyEvent {
     event
 }
 
-pub(crate) fn set_raw_mode(enabled: bool) {
-    if enabled {
-        terminal::raw();
-    } else {
-        terminal::nocbreak();
-    }
+pub(crate) fn enable_raw_mode() {
+    terminal::raw();
 }
-
-pub(crate) fn set_echo(enabled: bool) {
-    if enabled {
-        terminal::echo();
-    } else {
-        terminal::noecho();
-    }
-}
-
-pub(crate) fn set_keypad(_enabled: bool) {}
 
 pub(crate) fn erase_key() -> u8 {
     terminal::erasechar()
