@@ -94,7 +94,7 @@ impl Level {
             rooms: (0..GameConfig::MAX_ROOMS)
                 .map(|_| Room::new(IVec2::ZERO, IVec2::ZERO))
                 .collect(),
-            room_graph: RoomGraph::new(),
+            room_graph: RoomGraph::default(),
             passages: Vec::new(),
             map: Structure::new(
                 GameConfig::LEVEL_HEIGHT,
@@ -149,7 +149,7 @@ impl Level {
             Tile::Empty,
         );
         self.rooms.clear();
-        self.room_graph.reset();
+        self.room_graph = RoomGraph::default();
         self.passages.clear();
         self.passage_links.clear();
         self.reset_flags();
@@ -377,7 +377,7 @@ impl Level {
     ) -> [Room; GameConfig::MAX_ROOMS] {
         generate_rooms(&mut rooms, bsze, self.depth);
         let gone: [bool; GameConfig::MAX_ROOMS] = std::array::from_fn(|i| rooms[i].is_gone());
-        self.room_graph.generate(&gone);
+        self.room_graph = RoomGraph::plan_connections(&gone);
 
         let generated_rooms = build_generated_rooms(rooms);
         self.rooms = generated_rooms.to_vec();
