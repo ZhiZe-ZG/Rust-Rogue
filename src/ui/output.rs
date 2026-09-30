@@ -2,18 +2,19 @@
 
 use std::sync::atomic::Ordering;
 
-#[cfg(not(test))]
-use crate::config::GameConfig;
-#[cfg(not(test))]
-use crate::game::globals::{
-    get_hungry_state, get_max_stats, get_mpos, get_purse, lower_msg_enabled, msg_esc_enabled,
-    save_msg_enabled, set_huh_string, set_mpos, stat_msg_enabled,
-};
-#[cfg(not(test))]
-use crate::game::PLAYER;
-#[cfg(not(test))]
-use crate::ui::input::{readchar, wait_for};
 use crate::ui::terminal::UI;
+#[cfg(not(test))]
+use crate::{
+    config::GameConfig,
+    game::{
+        globals::{
+            get_hungry_state, get_max_stats, get_mpos, get_purse, lower_msg_enabled,
+            msg_esc_enabled, save_msg_enabled, set_huh_string, set_mpos, stat_msg_enabled,
+        },
+        PLAYER,
+    },
+    ui::input::{readchar, wait_for},
+};
 #[cfg(not(test))]
 use glam::IVec2;
 
