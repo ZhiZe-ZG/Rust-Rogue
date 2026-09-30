@@ -183,7 +183,6 @@ pub struct GameSnapshot {
     pub purse: i32,
     pub quiet: i32,
     pub vf_hit: i32,
-    pub dnum: i32,
     pub seed: i32,
     pub e_levels: Vec<i32>,
     pub delta: IVec2,
@@ -500,7 +499,6 @@ unsafe fn build_snapshot() -> GameSnapshot {
         purse,
         quiet,
         vf_hit,
-        dnum,
         seed,
         e_levels: e_levels.to_vec(),
         delta,
@@ -688,7 +686,6 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     purse = s.purse;
     quiet = s.quiet;
     vf_hit = s.vf_hit;
-    dnum = s.dnum;
     seed = s.seed;
     for (i, v) in s.e_levels.iter().enumerate() {
         if i < e_levels.len() {
@@ -925,7 +922,6 @@ mod tests {
             purse: 0,
             quiet: 0,
             vf_hit: 0,
-            dnum: 0,
             seed: 42,
             e_levels: vec![10, 20],
             delta: IVec2::new(1, 0),

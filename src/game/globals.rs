@@ -128,7 +128,6 @@ pub static mut no_move: i32 = 0;
 pub static mut purse: i32 = 0;
 pub static mut quiet: i32 = 0;
 pub static mut vf_hit: i32 = 0;
-pub static mut dnum: i32 = 0;
 pub static mut seed: i32 = 0;
 pub static mut e_levels: [i32; 21] = [
     10, 20, 40, 80, 160, 320, 640, 1300, 2600, 5200, 13000, 26000, 50000, 100000, 200000, 400000,
@@ -1226,13 +1225,6 @@ pub fn stat_msg_enabled() -> bool {
 #[inline]
 pub fn get_max_stats() -> Stats {
     unsafe { max_stats }
-}
-
-/// The current dungeon number (`dnum`), read without touching `static mut`
-/// directly.
-#[inline]
-pub fn get_dnum() -> i32 {
-    unsafe { dnum }
 }
 
 /// The number of items currently carried (`inpack`).

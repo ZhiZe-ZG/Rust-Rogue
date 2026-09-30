@@ -70,7 +70,7 @@ impl Default for CommandState {
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
 use crate::game::globals::{
-    after, again, amulet, count, delta, dir_ch, door_stop, firstmove, get_dnum, get_food_left,
+    after, again, amulet, count, delta, dir_ch, door_stop, firstmove, get_food_left,
     get_inpack, has_hit, inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick,
     last_comm, last_dir, last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore,
     p_colors, purse, q_comm, r_stones, runch, running, save_msg, seenstairs, stat_msg, take, terse,
@@ -412,7 +412,9 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 turn_see(false as u8);
                                 msg_str(&format!(
                                     "you are suddenly as smart as Ken Arnold in dungeon #{}",
-                                    get_dnum()
+                                    1234
+                                    // should show seed here
+                                    // get_dnum()
                                 ));
                             }
                         }

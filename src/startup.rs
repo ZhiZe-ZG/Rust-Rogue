@@ -12,7 +12,7 @@ use crate::daemon::{fuse, start_daemon, Daemon};
 use crate::entity::chase::roomin;
 use crate::entity::player::MonsterFlags;
 use crate::game::globals::{
-    after, count, dnum, get_dnum, get_purse, in_shell, inv_type, master_mode_enabled, mpos,
+    after, count, get_purse, in_shell, inv_type, master_mode_enabled, mpos,
     noscore, oldpos, oldrp, playing, purse, q_comm, seed, to_death, wizard,
 };
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
@@ -323,29 +323,11 @@ unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupErr
         .map(|d| d.as_secs() as i32)
         .unwrap_or(0);
     let clock_seed = now_secs + std::process::id() as i32;
-    dnum = parameter.seed.unwrap_or(clock_seed);
-    seed = dnum;
+    seed = parameter.seed.unwrap_or(clock_seed);
     set_seed(seed);
     open_score();
     drop_privileges()?;
     install_signal_handlers().map_err(StartupError::SignalHandlers)?;
-
-    if parameter.scores {
-        noscore = 1;
-        score(0, -1, 0);
-        return Ok(0);
-    }
-    if parameter.debug_death {
-        dnum = rnd(100);
-        while dnum > 1 {
-            dnum -= 1;
-            rnd(100);
-        }
-        purse = rnd(100) + 1;
-        crate::game::set_current_depth(rnd(100) + 1);
-        death(death_monst());
-        return Ok(0);
-    }
 
     init_check();
     if let Some(save_file) = restore_target {
