@@ -70,7 +70,7 @@ impl Daemon {
     /// # Safety
     ///
     /// Every callback mutates process-wide game state through the global owners
-    /// (`PLAYER`, `MONSTER_LIST`, `CURRENT_LEVEL`, ...); the game is
+    /// (`PLAYER`, `MONSTER_LIST`, `DUNGEON`, ...); the game is
     /// single-threaded, so callers must not invoke this concurrently.
     pub unsafe fn run(self, arg: i32) {
         match self {

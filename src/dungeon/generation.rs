@@ -13,7 +13,7 @@ use crate::entity::monsters::wake_monster;
 use crate::entity::player::MonsterFlags;
 use crate::game::MONSTER_LIST;
 use crate::game::{self, clear_level, with_current_level_mut};
-use crate::level::{bump_no_food, record_max_depth};
+use crate::dungeon::{bump_no_food, record_max_depth};
 use crate::structure::Room;
 
 use super::presence::populate_level;

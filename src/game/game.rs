@@ -15,58 +15,14 @@
 //! `crate::draw`, which computes them from the [`Level`] tile map and flag
 //! grids on the fly.
 
-use std::sync::RwLock;
-
 use crate::config::GameConfig;
+use crate::dungeon::DUNGEON;
 use crate::entity::player::Thing;
 use crate::level::Level;
 use crate::tile::Tile;
 use glam::IVec2;
 
 use crate::game::MONSTER_MAP;
-
-/// Lazily initialized owner of the live dungeon level.
-pub struct CurrentLevel {
-    level: RwLock<Option<Level>>,
-}
-
-impl CurrentLevel {
-    const EMPTY: Self = Self {
-        level: RwLock::new(None),
-    };
-
-    /// Ensure the live level exists, initializing it on first access.
-    #[inline]
-    fn ensure_initialized(&self) {
-        let mut level = self
-            .level
-            .write()
-            .unwrap_or_else(|poison| poison.into_inner());
-        if level.is_none() {
-            *level = Some(Level::new());
-        }
-    }
-
-    #[inline]
-    pub fn with<R>(&self, operation: impl FnOnce(&Level) -> R) -> R {
-        self.ensure_initialized();
-        let level = self
-            .level
-            .read()
-            .unwrap_or_else(|poison| poison.into_inner());
-        operation(level.as_ref().unwrap())
-    }
-
-    #[inline]
-    pub fn with_mut<R>(&self, operation: impl FnOnce(&mut Level) -> R) -> R {
-        self.ensure_initialized();
-        let mut level = self
-            .level
-            .write()
-            .unwrap_or_else(|poison| poison.into_inner());
-        operation(level.as_mut().unwrap())
-    }
-}
 
 /// The [`MonsterId`] occupying `(y, x)`, or `None`.
 ///
@@ -120,76 +76,70 @@ pub unsafe fn is_door_at(y: i32, x: i32) -> bool {
     with_current_level(|level| level.is_door_at(y as usize, x as usize))
 }
 
-/// Process-wide owner for the live dungeon level.
-///
-/// The canonical holder of the current level. The level is initialized lazily
-/// on its first access and is available only through scoped closure access.
-pub static CURRENT_LEVEL: CurrentLevel = CurrentLevel::EMPTY;
-
 /// Run `operation` with immutable access to the live level.
 #[inline]
 pub fn with_current_level<R>(operation: impl FnOnce(&Level) -> R) -> R {
-    CURRENT_LEVEL.with(operation)
+    DUNGEON.with_level(operation)
 }
 
 /// Run `operation` with mutable access to the live level.
 #[inline]
 pub fn with_current_level_mut<R>(operation: impl FnOnce(&mut Level) -> R) -> R {
-    CURRENT_LEVEL.with_mut(operation)
+    DUNGEON.with_level_mut(operation)
 }
 
 /// Read the current dungeon depth (`Level::depth`).
 #[inline]
 pub fn current_depth() -> i32 {
-    CURRENT_LEVEL.with(|level| level.depth)
+    DUNGEON.current_depth()
 }
 
 /// Set the current dungeon depth (`Level::depth`).
 #[inline]
 pub fn set_current_depth(depth: i32) {
-    CURRENT_LEVEL.with_mut(|level| level.depth = depth);
+    DUNGEON.set_current_depth(depth);
 }
 
 /// Read the current down-staircase position (`Level::stairs`).
 #[inline]
 pub fn stairs() -> IVec2 {
-    CURRENT_LEVEL.with(|level| level.stairs)
+    DUNGEON.stairs()
 }
 
 /// Set the current down-staircase position (`Level::stairs`).
 #[inline]
 pub fn set_stairs(pos: IVec2) {
-    CURRENT_LEVEL.with_mut(|level| level.stairs = pos);
+    DUNGEON.set_stairs(pos);
 }
 
 /// Whether the room reference `reference` points to a dark room.
 #[inline]
 pub fn room_dark(room: Option<usize>) -> bool {
-    CURRENT_LEVEL.with(|level| level.room_dark(room))
+    DUNGEON.with_level(|level| level.room_dark(room))
 }
 
 /// Whether the room reference `reference` points to a removed room.
 #[inline]
 pub fn room_gone(room: Option<usize>) -> bool {
-    CURRENT_LEVEL.with(|level| level.room_gone(room))
+    DUNGEON.with_level(|level| level.room_gone(room))
 }
 
 /// Whether the room reference `reference` points to a maze room.
 #[inline]
 pub fn room_maze(room: Option<usize>) -> bool {
-    CURRENT_LEVEL.with(|level| level.room_maze(room))
+    DUNGEON.with_level(|level| level.room_maze(room))
 }
 
 /// The value of the gold stash of the room `reference` points to.
 #[inline]
 pub fn room_goldval(room: Option<usize>) -> i32 {
-    CURRENT_LEVEL.with(|level| level.room_goldval(room))
+    DUNGEON.with_level(|level| level.room_goldval(room))
 }
 
 /// Set the value of the gold stash of the room `reference` points to.
 #[inline]
 pub fn set_room_goldval(room: Option<usize>, value: i32) {
-    CURRENT_LEVEL.with_mut(|level| level.set_room_goldval(room, value));
+    DUNGEON.with_level_mut(|level| level.set_room_goldval(room, value));
 }
 
 /// Stable per-room gold positions, mirrored out of `Level` so a
@@ -216,19 +166,19 @@ pub unsafe fn room_gold_pos(room: Option<usize>) -> Option<IVec2> {
 /// The `(position, size)` of the room `reference` points to.
 #[inline]
 pub fn room_bounds(room: Option<usize>) -> Option<(IVec2, IVec2)> {
-    CURRENT_LEVEL.with(|level| level.room_bounds(room))
+    DUNGEON.with_level(|level| level.room_bounds(room))
 }
 
 /// Absolute door-exit coordinates for the room/passage `reference` points to.
 #[inline]
 pub fn room_exits(room: Option<usize>) -> Vec<IVec2> {
-    CURRENT_LEVEL.with(|level| level.room_exits(room))
+    DUNGEON.with_level(|level| level.room_exits(room))
 }
 
 /// Absolute door-exit coordinates for a passage index.
 #[inline]
 pub fn passage_exits(passage: Option<usize>) -> Vec<IVec2> {
-    CURRENT_LEVEL.with(|level| level.passage_exits(passage))
+    DUNGEON.with_level(|level| level.passage_exits(passage))
 }
 
 /// Arena handles for the floor items of the live level, head first.
@@ -253,15 +203,14 @@ pub const GAME_WIDTH: usize = GameConfig::LEVEL_WIDTH;
 
 #[cfg(test)]
 mod tests {
-    use super::{CurrentLevel, Level};
+    use super::with_current_level;
 
     #[test]
     fn current_level_initializes_once() {
-        let current_level = CurrentLevel::EMPTY;
-
-        // A mutation through `with_mut` is visible to a later `with`, which
-        // confirms both scoped views observe the same lazily-created level.
-        current_level.with_mut(|level| level.depth = 7);
-        assert_eq!(current_level.with(|level| level.depth), 7);
+        // A mutation through the mutable view is visible to a later immutable
+        // read, confirming both scoped views observe the same lazily-created
+        // level owned by the `DUNGEON` singleton.
+        crate::game::set_current_depth(7);
+        assert_eq!(with_current_level(|level| level.depth), 7);
     }
 }

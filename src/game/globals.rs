@@ -165,12 +165,8 @@ pub static mut inpack: i32 = 0;
 pub static mut inv_type: i32 = 0;
 /// Maximum hit value reached by the player.
 pub static mut max_hit: i32 = 0;
-/// Highest dungeon level reached.
-pub static mut max_level: i32 = 0;
 /// Current message cursor position.
 pub static mut mpos: i32 = 0;
-/// Whether food generation is disabled.
-pub static mut no_food: i32 = 0;
 /// Armor class values indexed by armor kind.
 pub static mut a_class: [i32; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
 /// Number of turns elapsed in the current action.

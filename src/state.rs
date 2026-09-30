@@ -7,7 +7,7 @@
 //!
 //! The engine's live state is still held in process-wide safe owners
 //! ([`crate::game::PLAYER`], [`crate::game::MONSTER_LIST`],
-//! [`crate::game::MONSTER_MAP`], [`crate::game::CURRENT_LEVEL`], the item
+//! [`crate::game::MONSTER_MAP`], [`crate::dungeon::DUNGEON`], the item
 //! arena and the many `static mut` globals). This module only *snapshots* that
 //! state into plain value types, and rebuilds it on restore. Pointers between
 //! things (intrusive list links, chase targets, equipment slots) are encoded as
@@ -487,9 +487,9 @@ unsafe fn build_snapshot() -> GameSnapshot {
         hungry_state,
         inpack,
         inv_type,
-        max_level,
+        max_level: crate::dungeon::max_depth(),
         mpos,
-        no_food,
+        no_food: crate::dungeon::no_food(),
         a_class: a_class.to_vec(),
         count,
         food_left,
@@ -670,9 +670,9 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     hungry_state = s.hungry_state;
     inpack = s.inpack;
     inv_type = s.inv_type;
-    max_level = s.max_level;
+    crate::dungeon::set_max_depth(s.max_level);
     mpos = s.mpos;
-    no_food = s.no_food;
+    crate::dungeon::set_no_food(s.no_food);
     for (i, v) in s.a_class.iter().enumerate() {
         if i < a_class.len() {
             a_class[i] = *v;

@@ -1,11 +1,210 @@
 //! Dungeon-level generation and lifecycle orchestration.
 //!
-//! Owns the level-transition entry points ([`new_level`] and [`door_open`])
-//! that build and populate a fresh dungeon level, driving the room/passage
-//! generation and population passes owned by [`crate::level`].
+//! Owns the [`Dungeon`] singleton (the live level plus its `max_level`/`no_food`
+//! counters) and the level-transition entry points ([`new_level`] and
+//! [`door_open`]) that build and populate a fresh dungeon level, driving the
+//! room/passage generation and population passes owned by [`crate::level`].
+
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::RwLock;
+
+use glam::IVec2;
+
+use crate::level::Level;
 
 mod generation;
 mod presence;
 
 pub use generation::{door_open, new_level};
 pub(crate) use presence::find_floor;
+
+/// Process-wide owner of the live dungeon level and its counters.
+///
+/// Replaces the scattered process-wide globals of the legacy engine (the
+/// `CURRENT_LEVEL` singleton plus the `max_level` and `no_food` counters) with
+/// one owner, keeping the same scoped-closure access pattern (see
+/// [`Dungeon::with_level`]).
+pub struct Dungeon {
+    /// The live [`Level`], created lazily on first access.
+    level: RwLock<Option<Level>>,
+    /// Highest dungeon depth reached so far.
+    max_level: AtomicI32,
+    /// Whether food generation is disabled.
+    no_food: AtomicI32,
+}
+
+impl Dungeon {
+    /// Build an empty dungeon, ready for lazy initialization.
+    pub const fn empty() -> Self {
+        Self {
+            level: RwLock::new(None),
+            max_level: AtomicI32::new(0),
+            no_food: AtomicI32::new(0),
+        }
+    }
+
+    /// Ensure the live level exists, initializing it on first access.
+    #[inline]
+    fn ensure_initialized(&self) {
+        let mut level = self
+            .level
+            .write()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if level.is_none() {
+            *level = Some(Level::new());
+        }
+    }
+
+    /// Run `operation` with immutable access to the live level.
+    #[inline]
+    pub fn with_level<R>(&self, operation: impl FnOnce(&Level) -> R) -> R {
+        self.ensure_initialized();
+        let level = self
+            .level
+            .read()
+            .unwrap_or_else(|poison| poison.into_inner());
+        operation(level.as_ref().unwrap())
+    }
+
+    /// Run `operation` with mutable access to the live level.
+    #[inline]
+    pub fn with_level_mut<R>(&self, operation: impl FnOnce(&mut Level) -> R) -> R {
+        self.ensure_initialized();
+        let mut level = self
+            .level
+            .write()
+            .unwrap_or_else(|poison| poison.into_inner());
+        operation(level.as_mut().unwrap())
+    }
+
+    /// The current dungeon depth (`Level::depth`).
+    #[inline]
+    pub fn current_depth(&self) -> i32 {
+        self.with_level(|level| level.depth)
+    }
+
+    /// Set the current dungeon depth (`Level::depth`).
+    #[inline]
+    pub fn set_current_depth(&self, depth: i32) {
+        self.with_level_mut(|level| level.depth = depth);
+    }
+
+    /// The current down-staircase position (`Level::stairs`).
+    #[inline]
+    pub fn stairs(&self) -> IVec2 {
+        self.with_level(|level| level.stairs)
+    }
+
+    /// Set the current down-staircase position (`Level::stairs`).
+    #[inline]
+    pub fn set_stairs(&self, pos: IVec2) {
+        self.with_level_mut(|level| level.stairs = pos);
+    }
+
+    /// The highest dungeon depth reached so far.
+    #[inline]
+    pub fn max_depth(&self) -> i32 {
+        self.max_level.load(Ordering::Relaxed)
+    }
+
+    /// Set the recorded maximum dungeon depth.
+    #[inline]
+    pub fn set_max_depth(&self, depth: i32) {
+        self.max_level.store(depth, Ordering::Relaxed);
+    }
+
+    /// Raise the recorded maximum dungeon depth to at least `depth`.
+    #[inline]
+    pub fn record_max_depth(&self, depth: i32) {
+        self.max_level.fetch_max(depth, Ordering::Relaxed);
+    }
+
+    /// The `no_food` counter.
+    #[inline]
+    pub fn no_food(&self) -> i32 {
+        self.no_food.load(Ordering::Relaxed)
+    }
+
+    /// Set the `no_food` counter.
+    #[inline]
+    pub fn set_no_food(&self, value: i32) {
+        self.no_food.store(value, Ordering::Relaxed);
+    }
+
+    /// Increment the `no_food` counter and return the new value.
+    #[inline]
+    pub fn bump_no_food(&self) -> i32 {
+        self.no_food.fetch_add(1, Ordering::Relaxed) + 1
+    }
+}
+
+/// Process-wide dungeon singleton.
+pub static DUNGEON: Dungeon = Dungeon::empty();
+
+// ---------------------------------------------------------------------------
+// Dungeon-global accessors
+// ---------------------------------------------------------------------------
+//
+// Small helpers so callers read/update the `max_level` and `no_food` counters
+// without touching the singleton directly.
+
+/// Raise the recorded maximum dungeon depth to at least `depth`.
+pub(crate) fn record_max_depth(depth: i32) {
+    DUNGEON.record_max_depth(depth);
+}
+
+/// The highest dungeon depth reached so far.
+pub(crate) fn max_depth() -> i32 {
+    DUNGEON.max_depth()
+}
+
+/// Set the recorded maximum dungeon depth.
+pub(crate) fn set_max_depth(depth: i32) {
+    DUNGEON.set_max_depth(depth);
+}
+
+/// The current `no_food` counter.
+pub(crate) fn no_food() -> i32 {
+    DUNGEON.no_food()
+}
+
+/// Set the `no_food` counter.
+pub(crate) fn set_no_food(value: i32) {
+    DUNGEON.set_no_food(value);
+}
+
+/// Increment the `no_food` counter.
+pub(crate) fn bump_no_food() {
+    DUNGEON.bump_no_food();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Dungeon;
+
+    #[test]
+    fn level_initializes_once_and_shares_scoped_views() {
+        let dungeon = Dungeon::empty();
+
+        // A mutation through `with_level_mut` is visible to a later
+        // `with_level`, confirming both scoped views observe the same
+        // lazily-created level.
+        dungeon.with_level_mut(|level| level.depth = 7);
+        assert_eq!(dungeon.with_level(|level| level.depth), 7);
+    }
+
+    #[test]
+    fn counters_round_trip() {
+        let dungeon = Dungeon::empty();
+        dungeon.record_max_depth(3);
+        dungeon.record_max_depth(2);
+        assert_eq!(dungeon.max_depth(), 3);
+        dungeon.set_max_depth(9);
+        assert_eq!(dungeon.max_depth(), 9);
+
+        assert_eq!(dungeon.no_food(), 0);
+        assert_eq!(dungeon.bump_no_food(), 1);
+        dungeon.set_no_food(5);
+        assert_eq!(dungeon.no_food(), 5);
+    }
+}

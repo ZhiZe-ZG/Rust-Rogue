@@ -22,7 +22,8 @@ use crate::game::{self, with_current_level, with_current_level_mut};
 use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::item::item_type::ItemType;
 use crate::item::things::new_thing_id;
-use crate::level::{max_depth, LevelFlags};
+use crate::dungeon::max_depth;
+use crate::level::LevelFlags;
 use crate::rnd::rnd;
 use crate::tile::{Tile, TrapType};
 

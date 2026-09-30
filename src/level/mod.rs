@@ -9,36 +9,6 @@ mod roomgraph;
 
 pub use level::{Level, LevelFlags};
 
-// ---------------------------------------------------------------------------
-// Generation-global accessors
-// ---------------------------------------------------------------------------
-//
-// Level generation reads and updates a handful of process-wide globals. Rather
-// than reaching into `game::globals` from several modules, funnel the access
-// through these small helpers so generation code stays free of raw `static mut`
-// references.
-
-use crate::game::globals::{max_level, no_food};
-
-/// Raise the recorded maximum dungeon depth to at least `depth`.
-pub(crate) unsafe fn record_max_depth(depth: i32) {
-    if depth > max_level {
-        max_level = depth;
-    }
-}
-
-/// The highest dungeon depth reached so far.
-pub(crate) fn max_depth() -> i32 {
-    unsafe { max_level }
-}
-
-/// Note that one more level's food has been supplied.
-pub(crate) fn bump_no_food() {
-    unsafe {
-        no_food += 1;
-    }
-}
-
 pub use passages::PassageLinks;
 pub use roomgraph::RoomGraph;
 

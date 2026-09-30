@@ -27,7 +27,7 @@ const MAXSCROLLS: usize = 18;
 const MAXWEAPONS: usize = 9;
 const MAXSTICKS: usize = 14;
 
-use crate::game::globals::{a_class, inv_describe, no_food};
+use crate::game::globals::{a_class, inv_describe};
 
 #[inline]
 fn starts_with_article(name: &str) -> &'static str {
@@ -237,7 +237,7 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
         o.o_flags = ObjectFlags::NONE;
     });
 
-    let choice = if no_food > 3 {
+    let choice = if crate::dungeon::no_food() > 3 {
         2
     } else {
         pick_one(&things[..], NUMTHINGS)
@@ -258,7 +258,7 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
             });
         }
         2 => {
-            no_food = 0;
+            crate::dungeon::set_no_food(0);
             let which = if rnd(10) != 0 { 0 } else { 1 };
             crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
                 o.o_type = ItemType::Food;

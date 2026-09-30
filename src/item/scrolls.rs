@@ -120,7 +120,7 @@ fn player_has(flag: MonsterFlags) -> bool {
 }
 
 // Map reveal now lives in `crate::draw::map_cell_reveal`, operating directly
-// on the `CURRENT_LEVEL` tile map and flag grids.
+// on the `DUNGEON` level's tile map and flag grids.
 
 /// read_scroll:
 /// Read a scroll from the pack and apply its effect.

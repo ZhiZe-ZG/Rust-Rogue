@@ -197,7 +197,7 @@ static WAND_MONS: [Option<MonsterType>; 26] = [
     None,
 ];
 
-use crate::game::globals::{max_level, wizard};
+use crate::game::globals::wizard;
 
 #[inline]
 fn has_flag(id: MonsterId, flag: MonsterFlags) -> bool {
@@ -447,7 +447,7 @@ pub unsafe fn give_pack_id(id: MonsterId) {
         })
         .flatten();
     let carry = monsters[kind.map_or(0, |m| m.index())].m_carry;
-    if crate::game::current_depth() >= max_level && rnd(100) < carry {
+    if crate::game::current_depth() >= crate::dungeon::max_depth() && rnd(100) < carry {
         let item = new_thing_id();
         MONSTER_LIST.with_mut(id, |t| {
             if let Thing::Monster { data } = t {

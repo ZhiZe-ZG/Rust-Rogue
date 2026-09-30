@@ -31,7 +31,7 @@ pub const RIP_ART: &[&str] = &[
     "         ________)/\\\\_//(\\/(/\\)/\\//\\/|_)_______\n",
 ];
 
-use crate::game::globals::{amulet, max_level, noscore, purse, tombstone, wizard};
+use crate::game::globals::{amulet, noscore, purse, tombstone, wizard};
 
 #[inline]
 fn vowelstr(s: &str) -> &'static str {
@@ -172,7 +172,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
             entry.sc_score = amount;
             entry.sc_flags = flags as u32;
             entry.sc_level = if flags == 2 {
-                max_level
+                crate::dungeon::max_depth()
             } else {
                 crate::game::current_depth()
             };

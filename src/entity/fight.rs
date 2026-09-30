@@ -112,7 +112,7 @@ impl Mon {
 }
 
 use crate::game::globals::{
-    count, e_levels, fight_flush, has_hit, kamikaze, max_hit, max_level, no_command, purse, quiet,
+    count, e_levels, fight_flush, has_hit, kamikaze, max_hit, no_command, purse, quiet,
     running, terse, to_death, vf_hit,
 };
 
@@ -909,7 +909,7 @@ pub unsafe fn killed(tp: MonsterId, pr: u8) {
     } else if mtype == Some(MonsterType::Leprechaun) {
         let tp_room = mon.room;
         let level = crate::game::current_depth();
-        if tp_room.is_some() && fallpos(mon.pos).is_some() && level >= max_level {
+        if tp_room.is_some() && fallpos(mon.pos).is_some() && level >= crate::dungeon::max_depth() {
             let gold = crate::item::arena::new_item_id();
             OBJECTS.with_object_mut(gold, |o| {
                 o.o_type = ItemType::Gold;

@@ -1,6 +1,7 @@
 //! Per-turn drawing and level-cell access.
 //!
-//! The single place that turns the Rust `CURRENT_LEVEL` (tile [`Tile`] map +
+//! The single place that turns the Rust [`DUNGEON`](crate::dungeon::DUNGEON)
+//! level (tile [`Tile`] map +
 //! [`LevelFlags`] grids) plus the global monster/object lists into the ASCII
 //! graphic printed by ncurses. Cell *state* (the legacy `p_ch`) is never
 //! cached: every read ([`cell_glyph`], [`winat`], [`flat_at`]) is computed on
@@ -12,7 +13,7 @@
 //! The Rust-native replacements for the legacy `look`, `erase_lamp`,
 //! `trip_ch`, `add_pass`, `enter_room`, `leave_room`, and `turnref` routines
 //! are plain Rust functions (`pub unsafe fn`), driven entirely by
-//! `CURRENT_LEVEL`; no C ABI symbols are exported.
+//! `DUNGEON`; no C ABI symbols are exported.
 
 use crate::config::GameConfig;
 use crate::entity::chase::{roomin, see_monst};
@@ -296,7 +297,7 @@ pub(crate) unsafe fn reveal_secret_at(y: i32, x: i32) {
 /// Reveal cell `(y, x)` for a magic-map scroll, returning the glyph to draw.
 ///
 /// Equivalent of the legacy `map_cell_reveal` over the C `places` grid,
-/// operating directly on `CURRENT_LEVEL`: page-mapping reveals hidden doors
+/// operating directly on the `DUNGEON` level: page-mapping reveals hidden doors
 /// as `+`, hidden passages as `#`, and hidden traps as `^`.
 pub(crate) unsafe fn map_cell_reveal(y: i32, x: i32) -> i32 {
     let ch = terrain_chat_at(y, x);
@@ -361,7 +362,7 @@ fn is_door_or_hidden(ch: u8, flags: u8) -> bool {
 ///
 /// Iterates the screen and redraws every cell marked as a passage or a door,
 /// marking it seen. Every glyph comes from [`cell_glyph`]/[`flat_at`] which read
-/// `CURRENT_LEVEL` directly.
+/// the `DUNGEON` level directly.
 pub unsafe fn add_pass() {
     for y in 1..GameConfig::SCREEN_LINES - 1 {
         for x in 0..GameConfig::SCREEN_COLS {
