@@ -61,6 +61,7 @@ pub enum Daemon {
     TurnSee,
     ComeDown,
     Land,
+    RingEffects,
 }
 
 impl Daemon {
@@ -89,6 +90,7 @@ impl Daemon {
             }
             Daemon::ComeDown => crate::daemons::come_down(),
             Daemon::Land => crate::daemons::land(),
+            Daemon::RingEffects => crate::daemons::ring_effects(),
         }
     }
 
@@ -112,7 +114,8 @@ impl Daemon {
             | Daemon::UiRender
             | Daemon::TurnSee
             | Daemon::ComeDown
-            | Daemon::Land => None,
+            | Daemon::Land
+            | Daemon::RingEffects => None,
         }
     }
 

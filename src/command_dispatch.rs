@@ -10,14 +10,14 @@ use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
 use crate::entity::player::{do_move, do_run, MonsterFlags, ObjectFlags, Thing};
 use crate::game::globals::{pot_info, ring_info, scr_info, ws_info};
-use crate::game::{MonsterId, PLAYER};
+use crate::game::PLAYER;
 use crate::help::{help, identify};
 use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::item::armor::{take_off, wear};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{add_pack_id, get_item_id, inventory, pick_up, picky_inven};
 use crate::item::potions::{quaff, raise_level, turn_see};
-use crate::item::rings::{ring_off, ring_on, RingType};
+use crate::item::rings::{ring_off, ring_on};
 use crate::item::scrolls::read_scroll;
 use crate::item::sticks::do_zap;
 use crate::item::things::{discovered, drop, inv_name_id};
@@ -49,11 +49,23 @@ const AFTER: i32 = 2;
 /// compiled in, matching the style used by wizard.rs, chase.rs and friends.
 const MASTER: bool = true;
 
-// ─── Static locals for command() ─────────────────────────────────────────────
+// ─── Command-local persistent state ──────────────────────────────────────────
 
-static mut COUNTCH: Command = Command::UnknownKey;
-static mut DIRECTION: Command = Command::UnknownKey;
-static mut NEWCOUNT: u8 = false as u8;
+pub(crate) struct CommandState {
+    repeat_command: Command,
+    run_command: Command,
+    new_count: bool,
+}
+
+impl Default for CommandState {
+    fn default() -> Self {
+        Self {
+            repeat_command: Command::UnknownKey,
+            run_command: Command::UnknownKey,
+            new_count: false,
+        }
+    }
+}
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
@@ -97,14 +109,8 @@ fn cstr_at(s: &str) -> String {
 /// terse, mlist (via moat), max_hit, mp/t_flags (via to_death),
 /// dir_ch, delta, q_comm, huh, release, amulet, level, seenstairs,
 /// tr_name, stat_msg, inpack, food_left, equipment, inv_describe.
-pub(crate) unsafe fn do_command() {
-    let mut command: Command;
-    let mut ntimes: i32 = 1; // Number of player moves
-    let mut mp: Option<MonsterId>;
-
-    if player_has(MonsterFlags::HASTE) {
-        ntimes += 1;
-    }
+pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
+    let mut ntimes = initial_move_budget(player_has(MonsterFlags::HASTE));
 
     /*
      * Let the daemons start up
@@ -159,58 +165,8 @@ pub(crate) unsafe fn do_command() {
             noscore = 1;
         }
 
-        if no_command == 0 {
-            if running != 0 || to_death != 0 {
-                command = Command::Move(runch);
-            } else if count != 0 {
-                command = COUNTCH;
-            } else {
-                command = Command::from_key_event(crate::ui::input::read_key_event());
-                move_on = false as u8;
-                if mpos != 0 {
-                    // Erase message if it's there
-                    msg_str("");
-                }
-            }
-        } else {
-            command = Command::Rest;
-        }
-
-        if no_command != 0 {
-            no_command -= 1;
-            if no_command == 0 {
-                crate::game::PLAYER.add_flag(MonsterFlags::RUN);
-                msg_str("you can move again");
-            }
-        } else {
-            /*
-             * check for prefixes
-             */
-            NEWCOUNT = false as u8;
-            if let Command::Digit(mut digit) = command {
-                count = 0;
-                NEWCOUNT = true as u8;
-                loop {
-                    count = count * 10 + digit as i32;
-                    if count > 255 {
-                        count = 255;
-                    }
-                    command = Command::from_key_event(crate::ui::input::read_key_event());
-                    let Command::Digit(next_digit) = command else {
-                        break;
-                    };
-                    digit = next_digit;
-                }
-                COUNTCH = command;
-                /*
-                 * turn off count for commands which don't make sense
-                 * to repeat
-                 */
-                if !COUNTCH.is_repeatable() {
-                    count = 0;
-                }
-            }
-
+        let (mut command, can_dispatch) = read_command(command_state);
+        if can_dispatch {
             /*
              * execute a command
              */
@@ -278,11 +234,11 @@ pub(crate) unsafe fn do_command() {
                             door_stop = true as u8;
                             firstmove = true as u8;
                         }
-                        command = if count != 0 && NEWCOUNT == 0 {
-                            DIRECTION
+                        command = if count != 0 && !command_state.new_count {
+                            command_state.run_command
                         } else {
                             let run = Command::Run(direction);
-                            DIRECTION = run;
+                            command_state.run_command = run;
                             run
                         };
                         continue 'dispatch;
@@ -297,7 +253,7 @@ pub(crate) unsafe fn do_command() {
                             let hero = hero_pos();
                             delta.y += hero.y;
                             delta.x += hero.x;
-                            mp = crate::game::monster_id_at(delta.y, delta.x);
+                            let mp = crate::game::monster_id_at(delta.y, delta.x);
                             let no_monster = match mp {
                                 None => true,
                                 Some(id) => {
@@ -485,7 +441,7 @@ pub(crate) unsafe fn do_command() {
                             after = false as u8;
                         } else {
                             command = Command::Move(dir_ch);
-                            COUNTCH = Command::Move(dir_ch);
+                            command_state.repeat_command = Command::Move(dir_ch);
                             continue 'dispatch;
                         }
                     }
@@ -622,19 +578,67 @@ pub(crate) unsafe fn do_command() {
 
     do_daemons(AFTER);
     do_fuses(AFTER);
-    // Ring-of-searching / ring-of-teleportation effects, evaluated per hand
-    // through the pointer-free equipment accessor.
-    let equipment = PLAYER.equipment();
-    for hand in 0..2usize {
-        match equipment.ring_type(hand) {
-            Some(RingType::Searching) => search(),
-            Some(RingType::Teleport) => {
-                if rnd(50) == 0 {
-                    teleport();
-                }
-            }
-            _ => {}
+}
+
+/// Read the next command, consume any repeat-count prefix, and report whether
+/// the command should be dispatched this turn (cooldown turns dispatch nothing).
+unsafe fn read_command(command_state: &mut CommandState) -> (Command, bool) {
+    if no_command != 0 {
+        no_command -= 1;
+        if no_command == 0 {
+            crate::game::PLAYER.add_flag(MonsterFlags::RUN);
+            msg_str("you can move again");
         }
+        return (Command::Rest, false);
+    }
+
+    let mut command = if running != 0 || to_death != 0 {
+        Command::Move(runch)
+    } else if count != 0 {
+        command_state.repeat_command
+    } else {
+        let command = Command::from_key_event(crate::ui::input::read_key_event());
+        move_on = false as u8;
+        if mpos != 0 {
+            msg_str("");
+        }
+        command
+    };
+
+    command_state.new_count = false;
+    if let Command::Digit(first_digit) = command {
+        count = 0;
+        command_state.new_count = true;
+        let (next_command, prefix_count) = Command::capture_count_prefix(first_digit, || {
+            Command::from_key_event(crate::ui::input::read_key_event())
+        });
+        command = next_command;
+        count = prefix_count;
+        command_state.repeat_command = command;
+        if !command_state.repeat_command.is_repeatable() {
+            count = 0;
+        }
+    }
+
+    (command, true)
+}
+
+fn initial_move_budget(haste: bool) -> i32 {
+    if haste {
+        2
+    } else {
+        1
+    }
+}
+
+#[cfg(test)]
+mod command_loop_tests {
+    use super::initial_move_budget;
+
+    #[test]
+    fn haste_adds_one_move_to_the_initial_budget() {
+        assert_eq!(initial_move_budget(false), 1);
+        assert_eq!(initial_move_budget(true), 2);
     }
 }
 

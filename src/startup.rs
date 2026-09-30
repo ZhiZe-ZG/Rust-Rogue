@@ -2,7 +2,7 @@
 
 use std::io::Write;
 
-use crate::command_dispatch::do_command;
+use crate::command_dispatch::{do_command, CommandState};
 use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
 use crate::entity::chase::roomin;
@@ -144,8 +144,9 @@ pub unsafe fn playit() {
     oldrp = roomin(hero_pos);
     start_daemon(Daemon::UiRender, 0, AFTER);
     Daemon::UiRender.run(0);
+    let mut command_state = CommandState::default();
     while playing != false as u8 {
-        do_command(); /* Command execution */
+        do_command(&mut command_state); /* Command execution */
     }
     endit(0);
 }
@@ -374,6 +375,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     start_daemon(Daemon::Doctor, 0, AFTER);
     fuse(Daemon::Swander, 0, WANDERTIME, AFTER);
     start_daemon(Daemon::Stomach, 0, AFTER);
+    start_daemon(Daemon::RingEffects, 0, AFTER);
     playit();
     0
 }

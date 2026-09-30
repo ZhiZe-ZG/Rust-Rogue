@@ -67,6 +67,22 @@ use crate::game::globals::between;
 
 // ─── Daemon / fuse callbacks ──────────────────────────────────────────────────
 
+/// Apply the effects of searching and teleportation rings.
+pub unsafe fn ring_effects() {
+    let equipment = PLAYER.equipment();
+    for hand in 0..2usize {
+        match equipment.ring_type(hand) {
+            Some(RingType::Searching) => crate::command_dispatch::search(),
+            Some(RingType::Teleport) => {
+                if rnd(50) == 0 {
+                    crate::wizard::teleport();
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// doctor:
 /// A healing daemon that restores hit points after rest.
 pub unsafe fn doctor() {

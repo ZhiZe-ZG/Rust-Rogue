@@ -78,6 +78,23 @@ pub enum Command {
 }
 
 impl Command {
+    /// Capture a decimal repeat-count prefix and return its terminating command.
+    pub(crate) fn capture_count_prefix(
+        first_digit: u8,
+        mut next_command: impl FnMut() -> Self,
+    ) -> (Self, i32) {
+        let mut count = 0;
+        let mut digit = first_digit;
+        let command = loop {
+            count = (count * 10 + digit as i32).min(255);
+            match next_command() {
+                Self::Digit(next_digit) => digit = next_digit,
+                command => break command,
+            }
+        };
+        (command, count)
+    }
+
     pub fn from_key_event(event: KeyEvent) -> Self {
         match event.code {
             KeyCode::Char(character) => {
@@ -323,6 +340,32 @@ mod command_type_tests {
     fn illegal_command_label_uses_command_name() {
         assert_eq!(Command::WizardMap.illegal_command_name(), "WizardMap");
         assert_eq!(Command::UnknownKey.illegal_command_name(), "UnknownKey");
+    }
+
+    #[test]
+    fn count_prefix_preserves_terminating_command() {
+        let mut commands = [Command::Digit(7), Command::Move(Direction::East)].into_iter();
+        let (command, count) = Command::capture_count_prefix(2, || commands.next().unwrap());
+
+        assert_eq!(command, Command::Move(Direction::East));
+        assert_eq!(count, 27);
+    }
+
+    #[test]
+    fn count_prefix_saturates_at_255() {
+        let mut commands = [Command::Digit(9), Command::Digit(9), Command::Search].into_iter();
+        let (command, count) = Command::capture_count_prefix(9, || commands.next().unwrap());
+
+        assert_eq!(command, Command::Search);
+        assert_eq!(count, 255);
+    }
+
+    #[test]
+    fn count_prefix_can_terminate_with_unknown_key() {
+        let (command, count) = Command::capture_count_prefix(0, || Command::UnknownKey);
+
+        assert_eq!(command, Command::UnknownKey);
+        assert_eq!(count, 0);
     }
 
     #[test]
