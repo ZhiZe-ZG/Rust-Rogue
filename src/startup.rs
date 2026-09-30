@@ -361,18 +361,6 @@ unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupErr
         return Ok(requested_exit_code().unwrap_or(0));
     }
 
-    if master_mode_enabled != 0 && wizard != 0 {
-        print!(
-            "Hello {}, welcome to dungeon #{}",
-            crate::game::globals::whoami(),
-            get_dnum()
-        );
-    } else {
-        print!(
-            "Hello {}, just a moment while I dig the dungeon...",
-            crate::game::globals::whoami()
-        );
-    }
     std::io::stdout()
         .flush()
         .map_err(StartupError::StartupOutput)?;
