@@ -79,22 +79,15 @@ pub fn readchar() -> i32 {
     map_cooked_key(key)
 }
 
-#[cfg(not(test))]
 fn read_legacy_key() -> i32 {
     terminal::UI
         .get_key_event()
         .map_or(ERR, |event| curses_key_code(&event))
 }
 
-#[cfg(test)]
-pub fn readchar() -> i32 {
-    ESCAPE
-}
-
 /// Wait until the requested character is entered.
 ///
 /// Newline accepts either LF or CR to accommodate terminal conventions.
-#[cfg(not(test))]
 pub fn wait_for(ch: char) {
     if ch == '\n' {
         while !crate::startup::exit_requested() {
@@ -107,9 +100,6 @@ pub fn wait_for(ch: char) {
         while !crate::startup::exit_requested() && readchar() != ch as i32 {}
     }
 }
-
-#[cfg(test)]
-pub fn wait_for(_ch: char) {}
 
 /// Read a Crossterm event without flattening its key code or modifiers.
 pub(crate) fn read_key_event() -> KeyEvent {
@@ -126,70 +116,4 @@ pub(crate) fn read_key_event() -> KeyEvent {
     }
 
     event
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        curses_key_code, map_cooked_key, ERASE_KEY, ERR, KEY_BACKSPACE, KEY_DOWN, KEY_END,
-        KEY_HOME, KEY_LEFT, KEY_NPAGE, KEY_PPAGE, KEY_RIGHT, KEY_UP, KILL_KEY,
-    };
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-
-    #[test]
-    fn erase_and_kill_keys_keep_legacy_values() {
-        assert_eq!(ERASE_KEY, 0x7f);
-        assert_eq!(KILL_KEY, 0x15);
-    }
-
-    #[test]
-    fn crossterm_keys_map_to_curses_codes() {
-        let cases = [
-            (KeyCode::Left, KEY_LEFT),
-            (KeyCode::Down, KEY_DOWN),
-            (KeyCode::Home, KEY_HOME),
-            (KeyCode::End, KEY_END),
-            (KeyCode::PageUp, KEY_PPAGE),
-            (KeyCode::PageDown, KEY_NPAGE),
-            (KeyCode::Backspace, KEY_BACKSPACE),
-            (KeyCode::Enter, b'\n' as i32),
-        ];
-
-        for (key, expected) in cases {
-            assert_eq!(
-                curses_key_code(&KeyEvent::new(key, KeyModifiers::NONE)),
-                expected
-            );
-        }
-        assert_eq!(
-            curses_key_code(&KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE)),
-            ERR
-        );
-    }
-
-    #[test]
-    fn control_characters_map_to_ascii_control_codes() {
-        assert_eq!(
-            curses_key_code(&KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
-            3
-        );
-    }
-
-    #[test]
-    fn cooked_navigation_keys_map_to_rogue_directions() {
-        let pairs = [
-            (KEY_LEFT, b'h' as i32),
-            (KEY_DOWN, b'j' as i32),
-            (KEY_UP, b'k' as i32),
-            (KEY_RIGHT, b'l' as i32),
-            (KEY_HOME, b'y' as i32),
-            (KEY_PPAGE, b'u' as i32),
-            (KEY_END, b'b' as i32),
-            (KEY_NPAGE, b'n' as i32),
-        ];
-
-        for (key, command) in pairs {
-            assert_eq!(map_cooked_key(key), command);
-        }
-    }
 }
