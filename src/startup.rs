@@ -269,17 +269,6 @@ pub unsafe fn shell() {
     wait_for('\n');
 }
 
-/// my_exit:
-/// Leave the process properly.
-///
-/// No globals used directly.
-fn my_exit(st: i32) -> ! {
-    output::flush_now();
-    terminal::UI.deinit_terminal();
-    let _ = std::io::stdout().flush();
-    let _ = std::io::stderr().flush();
-    std::process::exit(st);
-}
 
 /// The game entry point. `args` mirrors the process `argv` (including the
 /// program name at index 0); `src/bin/rogue.rs` calls this with
@@ -292,7 +281,10 @@ pub unsafe fn rogue_main(parameter: CommandLineParameter) -> ! {
             1
         }
     };
-    my_exit(exit_code);
+    terminal::UI.deinit_terminal();
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
+    std::process::exit(exit_code);
 }
 
 unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupError> {
