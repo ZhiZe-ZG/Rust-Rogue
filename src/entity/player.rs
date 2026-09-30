@@ -668,6 +668,9 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
         } else {
             b'd' as u8
         });
+        if crate::startup::exit_requested() {
+            return trap;
+        }
     }
 
     flush_type();

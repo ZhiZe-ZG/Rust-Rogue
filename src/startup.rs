@@ -3,7 +3,7 @@
 use std::error::Error;
 use std::fmt;
 use std::io::{self, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use clap::Parser;
 
@@ -33,6 +33,22 @@ const AFTER: i32 = 2;
 const WANDERTIME: i32 = 70;
 const INV_CLEAR: i32 = 2;
 static EXIT_ON_INTERRUPT: AtomicBool = AtomicBool::new(false);
+static REQUESTED_EXIT: AtomicI32 = AtomicI32::new(-1);
+
+pub(crate) fn request_exit(code: i32) {
+    let _ = REQUESTED_EXIT.compare_exchange(-1, code, Ordering::Relaxed, Ordering::Relaxed);
+}
+
+pub(crate) fn exit_requested() -> bool {
+    REQUESTED_EXIT.load(Ordering::Relaxed) >= 0
+}
+
+fn requested_exit_code() -> Option<i32> {
+    match REQUESTED_EXIT.load(Ordering::Relaxed) {
+        -1 => None,
+        code => Some(code),
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "rogue", version)]
@@ -109,10 +125,8 @@ fn install_signal_handlers() -> std::io::Result<()> {
                 for signal in signals.forever() {
                     match signal {
                         SIGTSTP => suspend_terminal(),
-                        SIGINT if EXIT_ON_INTERRUPT.load(Ordering::Relaxed) => leave(),
-                        SIGINT => {
-                            let _ = signal_hook::low_level::emulate_default_handler(signal);
-                        }
+                        SIGINT if EXIT_ON_INTERRUPT.load(Ordering::Relaxed) => request_exit(0),
+                        SIGINT => request_exit(128 + signal),
                         _ => {}
                     }
                 }
@@ -134,13 +148,6 @@ fn suspend_terminal() {
     output::refresh();
     terminal::UI.move_cursor(old_cursor);
     let _ = std::io::stdout().flush();
-}
-
-fn leave() -> ! {
-    output::flush_now();
-    terminal::UI.deinit_terminal();
-    let _ = std::io::stdout().write_all(b"\n");
-    my_exit(0);
 }
 
 fn drop_privileges() -> Result<(), StartupError> {
@@ -207,7 +214,7 @@ pub unsafe fn main_loop_step() {
     start_daemon(Daemon::UiRender, 0, AFTER);
     Daemon::UiRender.run(0);
     let mut command_state = CommandState::default();
-    while playing != false as u8 {
+    while playing != false as u8 && !exit_requested() {
         do_command(&mut command_state); /* Command execution */
     }
 }
@@ -233,7 +240,7 @@ pub unsafe fn quit() {
         output::refresh();
         EXIT_ON_INTERRUPT.store(true, Ordering::Relaxed);
         score(purse, 1, 0);
-        my_exit(0);
+        request_exit(0);
     } else {
         crate::ui::terminal::UI.move_cursor(IVec2::new(0, 0));
         crate::ui::terminal::UI.clear_to_end_of_line();
@@ -282,7 +289,7 @@ pub unsafe fn shell() {
 /// Leave the process properly.
 ///
 /// No globals used directly.
-pub(crate) fn my_exit(st: i32) -> ! {
+fn my_exit(st: i32) -> ! {
     output::flush_now();
     terminal::UI.deinit_terminal();
     let _ = std::io::stdout().flush();
@@ -293,7 +300,18 @@ pub(crate) fn my_exit(st: i32) -> ! {
 /// The game entry point. `args` mirrors the process `argv` (including the
 /// program name at index 0); `src/bin/rogue.rs` calls this with
 /// `std::env::args()`.
-pub unsafe fn rogue_main(args: &[String]) -> Result<i32, StartupError> {
+pub unsafe fn rogue_main(args: &[String]) -> ! {
+    let exit_code = match run_startup(args) {
+        Ok(exit_code) => exit_code,
+        Err(error) => {
+            eprintln!("rogue: {error}");
+            1
+        }
+    };
+    my_exit(exit_code);
+}
+
+unsafe fn run_startup(args: &[String]) -> Result<i32, StartupError> {
     let cli = match Cli::try_parse_from(args) {
         Ok(cli) => cli,
         Err(error) => {
@@ -371,7 +389,7 @@ pub unsafe fn rogue_main(args: &[String]) -> Result<i32, StartupError> {
     init_check();
     if let Some(save_file) = restore_target {
         restore(&save_file).map_err(StartupError::Restore)?;
-        return Ok(0);
+        return Ok(requested_exit_code().unwrap_or(0));
     }
 
     if master_mode_enabled != 0 && wizard != 0 {
@@ -423,7 +441,7 @@ pub unsafe fn rogue_main(args: &[String]) -> Result<i32, StartupError> {
     start_daemon(Daemon::Stomach, 0, AFTER);
     start_daemon(Daemon::RingEffects, 0, AFTER);
     main_loop_step();
-    my_exit(0);
+    Ok(requested_exit_code().unwrap_or(0))
 }
 
 #[cfg(test)]

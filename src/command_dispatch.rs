@@ -117,6 +117,9 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
      */
     do_daemons(BEFORE);
     do_fuses(BEFORE);
+    if crate::startup::exit_requested() {
+        return;
+    }
 
     while ntimes > 0 {
         ntimes -= 1;
@@ -152,6 +155,9 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
         }
 
         let (mut command, can_dispatch) = read_command(command_state);
+        if crate::startup::exit_requested() {
+            return;
+        }
         if can_dispatch {
             /*
              * execute a command
@@ -544,6 +550,10 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
             }
         }
 
+        if crate::startup::exit_requested() {
+            return;
+        }
+
         /*
          * If he ran into something to take, let him pick it up.
          */
@@ -761,6 +771,9 @@ pub unsafe fn u_level() {
             crate::game::set_current_depth(crate::game::current_depth() - 1);
             if crate::game::current_depth() == 0 {
                 total_winner();
+                if crate::startup::exit_requested() {
+                    return;
+                }
             }
             new_level();
             msg_str("you feel a wrenching sensation in your gut");

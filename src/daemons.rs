@@ -192,6 +192,9 @@ pub unsafe fn stomach() {
         food_left -= 1;
         if old_food < -STARVETIME {
             death(b's' as u8);
+            if crate::startup::exit_requested() {
+                return;
+            }
         }
         // The hero is fainting.
         if no_command != 0 || rnd(5) != 0 {

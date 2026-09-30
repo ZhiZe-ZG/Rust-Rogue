@@ -283,6 +283,9 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
 
         if PLAYER.stats().hit_points <= 0 {
             death(mon.typ.map_or(0, |m| m.glyph()));
+            if crate::startup::exit_requested() {
+                return 0;
+            }
         } else if kamikaze == 0 {
             let damage_dealt = oldhp - PLAYER.stats().hit_points;
             if damage_dealt > max_hit {
@@ -311,6 +314,9 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                 no_command += rnd(2) + 2;
                 if no_command > BORE_LEVEL {
                     death(b'h' as u8);
+                    if crate::startup::exit_requested() {
+                        return 0;
+                    }
                 }
             } else if mtype == Some(MonsterType::Rattlesnake) {
                 // Rattlesnake: poisonous bite
@@ -342,6 +348,9 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                     if mtype == Some(MonsterType::Wraith) {
                         if PLAYER.stats().experience == 0 {
                             death(b'W' as u8);
+                            if crate::startup::exit_requested() {
+                                return 0;
+                            }
                         }
                         PLAYER.with_stats_mut(|pstats| {
                             pstats.level -= 1;
@@ -370,6 +379,9 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                         });
                         if dead {
                             death(mtype.map_or(0, |m| m.glyph()));
+                            if crate::startup::exit_requested() {
+                                return 0;
+                            }
                         }
                     }
                     msg_str("you suddenly feel weaker");
@@ -387,6 +399,9 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                 PLAYER.with_stats_mut(|stats| stats.hit_points -= 1);
                 if PLAYER.stats().hit_points <= 0 {
                     death(b'F' as u8);
+                    if crate::startup::exit_requested() {
+                        return 0;
+                    }
                 }
             } else if mtype == Some(MonsterType::Leprechaun) {
                 // Leprechaun: steals gold
@@ -446,6 +461,9 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
             PLAYER.with_stats_mut(|stats| stats.hit_points -= vf_hit);
             if PLAYER.stats().hit_points <= 0 {
                 death(mon.typ.map_or(0, |m| m.glyph()));
+                if crate::startup::exit_requested() {
+                    return 0;
+                }
             }
         }
         miss(Some(&mname), None, false as u8);

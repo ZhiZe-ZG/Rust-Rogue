@@ -302,17 +302,21 @@ impl UiState {
         }
 
         let timeout = self.input_timeout.load(Ordering::Relaxed);
-        let wait = if timeout <= 0 {
-            None
+        let wait = std::time::Duration::from_millis(if timeout <= 0 {
+            100
         } else {
-            Some(std::time::Duration::from_millis((timeout as u64) * 100))
-        };
+            (timeout as u64) * 100
+        });
 
         loop {
-            if let Some(duration) = wait {
-                if !event::poll(duration).unwrap_or(false) {
+            if !event::poll(wait).unwrap_or(false) {
+                if crate::startup::exit_requested() {
                     return None;
                 }
+                if timeout > 0 {
+                    return None;
+                }
+                continue;
             }
 
             match event::read() {

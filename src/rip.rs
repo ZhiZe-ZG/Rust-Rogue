@@ -9,7 +9,6 @@ use crate::item::item_type::ItemType;
 use crate::item::things::inv_name_id;
 use crate::machdep::{lock_sc, unlock_sc};
 use crate::score::{rd_score, wr_score, Score};
-use crate::startup::my_exit;
 use crate::ui::input::wait_for;
 use crate::ui::output;
 use glam::IVec2;
@@ -318,7 +317,7 @@ pub unsafe fn death(monst: u8) {
     print!("[Press return to continue]");
     let _ = std::io::stdout().flush();
     wait_for('\n');
-    my_exit(0);
+    crate::startup::request_exit(0);
 }
 
 pub unsafe fn total_winner() {
@@ -370,7 +369,7 @@ pub unsafe fn total_winner() {
     crate::ui::terminal::UI.write_text(&summary);
     output::refresh();
     score(purse, 2, b' ' as u8);
-    my_exit(0);
+    crate::startup::request_exit(0);
 }
 
 /// Returns the Rust-owned tombstone artwork used by the death screen.

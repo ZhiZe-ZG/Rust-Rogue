@@ -97,14 +97,14 @@ pub fn readchar() -> i32 {
 #[cfg(not(test))]
 pub fn wait_for(ch: char) {
     if ch == '\n' {
-        loop {
+        while !crate::startup::exit_requested() {
             let input = readchar();
             if input == '\n' as i32 || input == '\r' as i32 {
                 break;
             }
         }
     } else {
-        while readchar() != ch as i32 {}
+        while !crate::startup::exit_requested() && readchar() != ch as i32 {}
     }
 }
 

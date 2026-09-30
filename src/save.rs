@@ -5,7 +5,7 @@
 use crate::machdep::setup;
 use crate::options::read_line;
 use crate::rnd::set_seed;
-use crate::startup::{main_loop_step, my_exit};
+use crate::startup::{main_loop_step, request_exit};
 use crate::state::{rs_restore_file, rs_save_file};
 use crate::ui::input::{self, readchar};
 use crate::ui::output::{self, msg_str};
@@ -170,7 +170,7 @@ pub unsafe fn save_game() {
             crate::game::globals::set_file_name(buf.clone());
             match File::create(&buf) {
                 Ok(mut savef) => match save_file(&mut savef) {
-                    Ok(()) => my_exit(0),
+                    Ok(()) => request_exit(0),
                     Err(error) => {
                         input::enable_raw_mode();
                         msg_str(&format!("could not save game: {error}"));
@@ -272,9 +272,7 @@ pub unsafe fn restore(file: &str) -> Result<(), RestoreError> {
 }
 
 /// Handles signal-triggered autosave by reopening the current save file and delegating to save_file.
-pub unsafe extern "C" fn auto_save(sig: i32) {
-    let _ = sig;
-
+pub unsafe fn auto_save() -> io::Result<()> {
     #[cfg(unix)]
     for signal in 0..32 {
         libc::signal(signal, libc::SIG_IGN);
@@ -288,12 +286,10 @@ pub unsafe extern "C" fn auto_save(sig: i32) {
                 Err(_) => Err(create_error),
             },
         };
-        if let Err(error) = save_result {
-            eprintln!("could not autosave {file_name}: {error}");
-            std::process::exit(1);
-        }
+        save_result?;
     }
-    my_exit(0);
+    request_exit(0);
+    Ok(())
 }
 
 #[cfg(test)]
