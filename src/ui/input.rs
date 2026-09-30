@@ -128,14 +128,6 @@ pub(crate) fn read_key_event() -> KeyEvent {
     event
 }
 
-pub(crate) fn enable_raw_mode() {
-    terminal::UI.raw();
-}
-
-pub(crate) fn flush_pending() {
-    terminal::flushinp();
-}
-
 #[cfg(test)]
 mod tests {
     use super::{

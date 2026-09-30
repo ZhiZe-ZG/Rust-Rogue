@@ -172,7 +172,7 @@ pub unsafe fn save_game() {
                 Ok(mut savef) => match save_file(&mut savef) {
                     Ok(()) => request_exit(0),
                     Err(error) => {
-                        input::enable_raw_mode();
+                        terminal::UI.raw();
                         msg_str(&format!("could not save game: {error}"));
                         buf = String::new();
                     }

@@ -13,7 +13,7 @@ use std::fs::{File, OpenOptions};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::game::globals::scoreboard;
-use crate::ui::input;
+use crate::ui::terminal;
 
 // Build-time feature flags mirroring config.h for the standard build.
 const SCOREFILE_ENABLED: bool = true; // config.h: #define SCOREFILE "rogue.scr"
@@ -126,7 +126,7 @@ pub unsafe fn setup() {
         libc::signal(signal, libc::SIG_DFL);
     }
 
-    input::enable_raw_mode();
+    terminal::UI.raw();
 }
 
 /// is_symlink:
@@ -232,5 +232,5 @@ pub unsafe fn unlock_sc() {
 /// flush_type:
 /// Flush typeahead for traps, etc.
 pub unsafe fn flush_type() {
-    input::flush_pending();
+    terminal::flushinp();
 }

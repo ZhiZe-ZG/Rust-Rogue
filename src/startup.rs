@@ -143,7 +143,7 @@ fn suspend_terminal() {
     output::flush_now();
     let _ = std::io::stdout().flush();
     let _ = signal_hook::low_level::emulate_default_handler(SIGTSTP);
-    input::enable_raw_mode();
+    terminal::UI.raw();
     output::refresh();
     terminal::UI.move_cursor(old_cursor);
     let _ = std::io::stdout().flush();
@@ -278,7 +278,7 @@ pub unsafe fn shell() {
 
     print!("\n[Press return to continue]");
     let _ = std::io::stdout().flush();
-    input::enable_raw_mode();
+    terminal::UI.raw();
     in_shell = false as u8;
     wait_for('\n');
 }
