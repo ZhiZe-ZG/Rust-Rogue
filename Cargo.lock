@@ -521,6 +521,7 @@ dependencies = [
  "ratatui",
  "ron",
  "serde",
+ "signal-hook",
 ]
 
 [[package]]

@@ -143,9 +143,6 @@ pub unsafe fn restore(file: &str) -> u8 {
         file_name = crate::game::globals::file_name();
     }
 
-    #[cfg(unix)]
-    libc::signal(libc::SIGTSTP, libc::SIG_IGN);
-
     let mut inf = match File::open(&file_name) {
         Ok(f) => f,
         Err(_) => {
@@ -183,8 +180,6 @@ pub unsafe fn restore(file: &str) -> u8 {
         return 0;
     }
 
-    #[cfg(unix)]
-    libc::signal(libc::SIGTSTP, crate::startup::tstp as libc::sighandler_t);
     crate::game::globals::set_file_name(file_name.clone());
     set_seed(std::process::id() as i32);
     msg_str(&format!("file name: {}", file_name));

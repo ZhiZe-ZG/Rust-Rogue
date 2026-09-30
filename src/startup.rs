@@ -1,6 +1,7 @@
 //! Process startup sequence, ported from `src/c/main.c`.
 
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::Parser;
 
@@ -29,6 +30,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const AFTER: i32 = 2;
 const WANDERTIME: i32 = 70;
 const INV_CLEAR: i32 = 2;
+static EXIT_ON_INTERRUPT: AtomicBool = AtomicBool::new(false);
 
 #[derive(Parser)]
 #[command(name = "rogue", version)]
@@ -47,6 +49,53 @@ struct Cli {
 #[inline]
 fn flush_stdout() {
     let _ = std::io::stdout().flush();
+}
+
+fn install_signal_handlers() -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use signal_hook::consts::{SIGINT, SIGTSTP};
+        use signal_hook::iterator::Signals;
+
+        let mut signals = Signals::new([SIGINT, SIGTSTP])?;
+        std::thread::Builder::new()
+            .name("rogue-signals".to_owned())
+            .spawn(move || {
+                for signal in signals.forever() {
+                    match signal {
+                        SIGTSTP => suspend_terminal(),
+                        SIGINT if EXIT_ON_INTERRUPT.load(Ordering::Relaxed) => leave(),
+                        SIGINT => {
+                            let _ = signal_hook::low_level::emulate_default_handler(signal);
+                        }
+                        _ => {}
+                    }
+                }
+            })?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn suspend_terminal() {
+    use signal_hook::consts::SIGTSTP;
+
+    let old_cursor = terminal::UI.cursor_pos();
+    output::flush_now();
+    terminal::UI.deinit_terminal();
+    flush_stdout();
+    let _ = signal_hook::low_level::emulate_default_handler(SIGTSTP);
+    input::enable_raw_mode();
+    output::refresh();
+    terminal::UI.move_cursor(old_cursor);
+    flush_stdout();
+}
+
+fn leave() -> ! {
+    output::flush_now();
+    terminal::UI.deinit_terminal();
+    let _ = std::io::stdout().write_all(b"\n");
+    my_exit(0);
 }
 
 fn drop_privileges() -> Result<(), &'static str> {
@@ -95,30 +144,6 @@ pub fn roll(mut number: i32, sides: i32) -> i32 {
     dtotal
 }
 
-/// tstp:
-/// Handle stop and start signals.
-pub unsafe extern "C" fn tstp(_ignored: libc::c_int) {
-    /*
-     * leave nicely
-     */
-    let old_cursor = crate::ui::terminal::UI.cursor_pos();
-    output::flush_now();
-    terminal::UI.deinit_terminal();
-    flush_stdout();
-    #[cfg(unix)]
-    libc::kill(0, libc::SIGTSTP);
-
-    /*
-     * start back up again
-     */
-    #[cfg(unix)]
-    libc::signal(libc::SIGTSTP, tstp as *const () as libc::sighandler_t);
-    input::enable_raw_mode();
-    output::refresh();
-    crate::ui::terminal::UI.move_cursor(old_cursor);
-    flush_stdout();
-}
-
 /// playit:
 /// The main loop of the program.  Loop until the game is over,
 /// refreshing things and looking at the proper times.
@@ -161,12 +186,12 @@ pub unsafe fn quit() {
     let old_cursor = crate::ui::terminal::UI.cursor_pos();
     msg_str("really quit?");
     if readchar() == b'y' as i32 {
-        libc::signal(libc::SIGINT, leave as *const () as libc::sighandler_t);
         crate::ui::terminal::UI.clear();
         let line = format!("You quit with {} gold pieces", get_purse());
         crate::ui::terminal::UI.write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), &line);
         crate::ui::terminal::UI.move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
         output::refresh();
+        EXIT_ON_INTERRUPT.store(true, Ordering::Relaxed);
         score(purse, 1, 0);
         my_exit(0);
     } else {
@@ -179,16 +204,6 @@ pub unsafe fn quit() {
         count = 0;
         to_death = false as u8;
     }
-}
-
-/// leave:
-/// Leave quickly, but curteously.
-pub unsafe extern "C" fn leave(_sig: libc::c_int) {
-    output::flush_now();
-    terminal::UI.deinit_terminal();
-
-    let _ = std::io::stdout().write_all(b"\n");
-    my_exit(0);
 }
 
 /// shell:
@@ -294,6 +309,10 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     open_score();
     if let Err(error) = drop_privileges() {
         eprintln!("{error}");
+        return 1;
+    }
+    if let Err(error) = install_signal_handlers() {
+        eprintln!("Could not install signal handlers: {error}");
         return 1;
     }
 
