@@ -409,7 +409,7 @@ unsafe fn run_startup(args: &[String]) -> Result<i32, StartupError> {
     // Reject terminals smaller than the fixed game grid. The physical size is
     // unavailable on some backends; in that case keep the legacy permissive
     // behaviour and continue.
-    if let Some(size) = terminal::physical_size() {
+    if let Some(size) = terminal::UI.physical_size() {
         if size.y < GameConfig::SCREEN_LINES || size.x < GameConfig::SCREEN_COLS {
             output::flush_now();
             return Err(StartupError::TerminalTooSmall {
