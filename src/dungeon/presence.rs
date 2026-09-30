@@ -7,8 +7,8 @@
 //! [`ThingId`] handles and monsters by [`MonsterId`] handles; the remaining
 //! `unsafe` comes only from the process-wide `static mut` game globals
 //! (`amulet`, `ntraps`, `seenstairs`) and the item/monster stores, which
-//! [`crate::dungeon::generation::new_level`] triggers after the rooms/passages
-//! have been dug.
+//! [`super::generation::new_level`] triggers after the rooms/passages have been
+//! dug.
 
 use glam::IVec2;
 
@@ -22,68 +22,14 @@ use crate::game::{self, with_current_level, with_current_level_mut};
 use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::item::item_type::ItemType;
 use crate::item::things::new_thing_id;
+use crate::level::{max_depth, LevelFlags};
 use crate::rnd::rnd;
-
-use super::level::{Level, LevelFlags};
-use super::max_depth;
 use crate::tile::{Tile, TrapType};
 
 // -- Glyphs --
 const GOLDGRP: i32 = 1;
 
-impl Level {
-    /// Find a floor cell to place something, optionally avoiding monsters.
-    ///
-    /// If `room_idx` is `None` a random room slot is tried each iteration via
-    /// [`Level::rnd_room`]; otherwise the cell is chosen inside that room. The
-    /// candidate cell is validated against this level's tile map and the
-    /// per-cell monster occupancy grid. Returns the chosen cell, or `None` when
-    /// `limit` (if nonzero) attempts are exhausted.
-    pub(crate) fn find_floor(&self, room_idx: Option<usize>, limit: i32, monst: bool) -> Option<IVec2> {
-        let mut cnt = limit;
-        // Safety bound: unlimited scans must eventually give up rather than
-        // hang level generation on a packed level.
-        let mut guard = 0u32;
-        loop {
-            if limit != 0 {
-                if cnt == 0 {
-                    return None;
-                }
-                cnt -= 1;
-            }
-            guard += 1;
-            if guard > 1_000_000 {
-                return None;
-            }
-
-            let idx = room_idx.unwrap_or_else(|| self.rnd_room());
-            let room = &self.rooms[idx];
-            let expected_tile = if room.is_maze() {
-                Tile::Passage
-            } else {
-                Tile::Floor
-            };
-            let pos = self.rnd_pos(room);
-
-            // `find_floor` validates the map tile directly; an object overlay
-            // does not count as a free floor cell.
-            let tile = self.tile_at(pos.y as usize, pos.x as usize);
-
-            if monst {
-                let occupied = game::MONSTER_MAP
-                    .at(pos.y as usize, pos.x as usize)
-                    .is_some();
-                if !occupied && tile.is_walkable() {
-                    return Some(pos);
-                }
-            } else if tile == expected_tile {
-                return Some(pos);
-            }
-        }
-    }
-}
-
-/// Find a floor cell on the live level (see [`Level::find_floor`]).
+/// Find a floor cell on the live level (see [`crate::level::Level::find_floor`]).
 pub(crate) fn find_floor(room_idx: Option<usize>, limit: i32, monst: bool) -> Option<IVec2> {
     with_current_level(|current| current.find_floor(room_idx, limit, monst))
 }
@@ -309,8 +255,7 @@ unsafe fn place_hero() {
 /// Run the full population pass: gold/monsters, objects, traps, stairs, and
 /// the hero.
 ///
-/// Called by [`crate::dungeon::generation::new_level`] after the map is
-/// generated.
+/// Called by [`super::generation::new_level`] after the map is generated.
 pub(crate) unsafe fn populate_level() {
     place_room_contents();
     put_things(); /* Place objects (if any) */

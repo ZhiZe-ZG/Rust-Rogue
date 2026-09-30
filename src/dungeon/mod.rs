@@ -5,5 +5,7 @@
 //! generation and population passes owned by [`crate::level`].
 
 mod generation;
+mod presence;
 
 pub use generation::{door_open, new_level};
+pub(crate) use presence::find_floor;

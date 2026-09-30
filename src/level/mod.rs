@@ -5,11 +5,9 @@
 
 mod level;
 mod passages;
-mod presence;
 mod roomgraph;
 
 pub use level::{Level, LevelFlags};
-pub(crate) use presence::{find_floor, populate_level};
 
 // ---------------------------------------------------------------------------
 // Generation-global accessors

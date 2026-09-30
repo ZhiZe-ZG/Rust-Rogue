@@ -13,6 +13,7 @@ use super::passages::{
 };
 use super::roomgraph::RoomGraph;
 use crate::config::GameConfig;
+use crate::game;
 use crate::item::arena::{ThingId, OBJECTS};
 use crate::structure::{Passage, Room, Structure};
 use crate::tile::{Tile, TrapType};
@@ -438,6 +439,61 @@ impl Level {
             room.position.x + rnd(room.size.x - 2) + 1,
             room.position.y + rnd(room.size.y - 2) + 1,
         )
+    }
+
+    /// Find a floor cell to place something, optionally avoiding monsters.
+    ///
+    /// If `room_idx` is `None` a random room slot is tried each iteration via
+    /// [`Level::rnd_room`]; otherwise the cell is chosen inside that room. The
+    /// candidate cell is validated against this level's tile map and the
+    /// per-cell monster occupancy grid. Returns the chosen cell, or `None` when
+    /// `limit` (if nonzero) attempts are exhausted.
+    pub(crate) fn find_floor(
+        &self,
+        room_idx: Option<usize>,
+        limit: i32,
+        monst: bool,
+    ) -> Option<IVec2> {
+        let mut cnt = limit;
+        // Safety bound: unlimited scans must eventually give up rather than
+        // hang level generation on a packed level.
+        let mut guard = 0u32;
+        loop {
+            if limit != 0 {
+                if cnt == 0 {
+                    return None;
+                }
+                cnt -= 1;
+            }
+            guard += 1;
+            if guard > 1_000_000 {
+                return None;
+            }
+
+            let idx = room_idx.unwrap_or_else(|| self.rnd_room());
+            let room = &self.rooms[idx];
+            let expected_tile = if room.is_maze() {
+                Tile::Passage
+            } else {
+                Tile::Floor
+            };
+            let pos = self.rnd_pos(room);
+
+            // `find_floor` validates the map tile directly; an object overlay
+            // does not count as a free floor cell.
+            let tile = self.tile_at(pos.y as usize, pos.x as usize);
+
+            if monst {
+                let occupied = game::MONSTER_MAP
+                    .at(pos.y as usize, pos.x as usize)
+                    .is_some();
+                if !occupied && tile.is_walkable() {
+                    return Some(pos);
+                }
+            } else if tile == expected_tile {
+                return Some(pos);
+            }
+        }
     }
 
     pub fn generate_rooms_and_connections(

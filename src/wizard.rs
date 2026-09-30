@@ -14,7 +14,7 @@ use crate::item::pack::{add_pack_id, floor_at, get_item_id};
 use crate::item::sticks::fix_stick_id;
 use crate::item::things::inv_name_id;
 use crate::item::weapons::init_weapon;
-use crate::level::find_floor;
+use crate::dungeon::find_floor;
 use crate::machdep::flush_type;
 use crate::ui::input::readchar;
 use crate::ui::output::{msg_str, show_win};

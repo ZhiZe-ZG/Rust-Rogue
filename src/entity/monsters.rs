@@ -11,7 +11,7 @@ use crate::game::PLAYER;
 use crate::game::{MonsterId, MONSTER_LIST};
 use crate::item::rings::RingType;
 use crate::item::things::new_thing_id;
-use crate::level::find_floor;
+use crate::dungeon::find_floor;
 use crate::misc::{rnd_thing, spread};
 use crate::rnd::rnd;
 use crate::rnd::roll;
