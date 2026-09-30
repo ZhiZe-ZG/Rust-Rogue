@@ -1,6 +1,8 @@
 //! Process startup sequence, ported from `src/c/main.c`.
 
-use std::io::Write;
+use std::error::Error;
+use std::fmt;
+use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::Parser;
@@ -20,7 +22,7 @@ use crate::machdep::{init_check, open_score, setup};
 use crate::options::parse_opts;
 use crate::rip::{death, death_monst, score};
 use crate::rnd::{rnd, set_seed};
-use crate::save::restore;
+use crate::save::{restore, RestoreError};
 use crate::ui::input::{self, readchar, wait_for};
 use crate::ui::output::{self, msg_str, status};
 use crate::ui::terminal;
@@ -43,6 +45,55 @@ struct Cli {
     restore: Option<String>,
     #[arg(value_name = "SAVE_FILE", allow_hyphen_values = true, conflicts_with_all = ["scores", "debug_death", "restore"])]
     save_file: Option<String>,
+}
+
+#[derive(Debug)]
+pub enum StartupError {
+    PrivilegeDrop {
+        operation: &'static str,
+        source: io::Error,
+    },
+    SignalHandlers(io::Error),
+    StartupOutput(io::Error),
+    Restore(RestoreError),
+    TerminalTooSmall {
+        actual: IVec2,
+        required: IVec2,
+    },
+}
+
+impl fmt::Display for StartupError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PrivilegeDrop { operation, source } => {
+                write!(formatter, "could not {operation}: {source}")
+            }
+            Self::SignalHandlers(source) => {
+                write!(formatter, "could not install signal handlers: {source}")
+            }
+            Self::StartupOutput(source) => {
+                write!(formatter, "could not flush startup message: {source}")
+            }
+            Self::Restore(source) => write!(formatter, "could not restore game: {source}"),
+            Self::TerminalTooSmall { actual, required } => write!(
+                formatter,
+                "terminal is {}x{}; at least {}x{} is required",
+                actual.x, actual.y, required.x, required.y
+            ),
+        }
+    }
+}
+
+impl Error for StartupError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::PrivilegeDrop { source, .. }
+            | Self::SignalHandlers(source)
+            | Self::StartupOutput(source) => Some(source),
+            Self::Restore(source) => Some(source),
+            Self::TerminalTooSmall { .. } => None,
+        }
+    }
 }
 
 fn install_signal_handlers() -> std::io::Result<()> {
@@ -92,7 +143,7 @@ fn leave() -> ! {
     my_exit(0);
 }
 
-fn drop_privileges() -> Result<(), &'static str> {
+fn drop_privileges() -> Result<(), StartupError> {
     #[cfg(unix)]
     unsafe {
         let real_gid = libc::getgid();
@@ -103,7 +154,10 @@ fn drop_privileges() -> Result<(), &'static str> {
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         let group_error = libc::setregid(real_gid, real_gid) != 0;
         if group_error {
-            return Err("Could not drop setgid privileges.  Aborting.");
+            return Err(StartupError::PrivilegeDrop {
+                operation: "drop setgid privileges",
+                source: io::Error::last_os_error(),
+            });
         }
 
         #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -111,7 +165,10 @@ fn drop_privileges() -> Result<(), &'static str> {
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         let user_error = libc::setreuid(real_uid, real_uid) != 0;
         if user_error {
-            return Err("Could not drop setuid privileges.  Aborting.");
+            return Err(StartupError::PrivilegeDrop {
+                operation: "drop setuid privileges",
+                source: io::Error::last_os_error(),
+            });
         }
     }
     Ok(())
@@ -236,13 +293,13 @@ pub(crate) fn my_exit(st: i32) -> ! {
 /// The game entry point. `args` mirrors the process `argv` (including the
 /// program name at index 0); `src/bin/rogue.rs` calls this with
 /// `std::env::args()`.
-pub unsafe fn rogue_main(args: &[String]) -> i32 {
+pub unsafe fn rogue_main(args: &[String]) -> Result<i32, StartupError> {
     let cli = match Cli::try_parse_from(args) {
         Ok(cli) => cli,
         Err(error) => {
             let exit_code = error.exit_code();
             let _ = error.print();
-            return exit_code;
+            return Ok(exit_code);
         }
     };
 
@@ -290,19 +347,13 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     seed = dnum;
     set_seed(seed);
     open_score();
-    if let Err(error) = drop_privileges() {
-        eprintln!("{error}");
-        return 1;
-    }
-    if let Err(error) = install_signal_handlers() {
-        eprintln!("Could not install signal handlers: {error}");
-        return 1;
-    }
+    drop_privileges()?;
+    install_signal_handlers().map_err(StartupError::SignalHandlers)?;
 
     if cli.scores {
         noscore = 1;
         score(0, -1, 0);
-        return 0;
+        return Ok(0);
     }
     if cli.debug_death {
         dnum = rnd(100);
@@ -314,14 +365,13 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
         crate::game::set_current_depth(rnd(100) + 1);
         terminal::UI.ensure_terminal();
         death(death_monst());
-        return 0;
+        return Ok(0);
     }
 
     init_check();
     if let Some(save_file) = restore_target {
-        if restore(&save_file) == 0 {
-            my_exit(1);
-        }
+        restore(&save_file).map_err(StartupError::Restore)?;
+        return Ok(0);
     }
 
     if master_mode_enabled != 0 && wizard != 0 {
@@ -338,7 +388,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     }
     std::io::stdout()
         .flush()
-        .expect("failed to flush startup message");
+        .map_err(StartupError::StartupOutput)?;
     terminal::UI.ensure_terminal();
     // Reject terminals smaller than the fixed game grid. The physical size is
     // unavailable on some backends; in that case keep the legacy permissive
@@ -347,13 +397,10 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
         if size.y < GameConfig::SCREEN_LINES || size.x < GameConfig::SCREEN_COLS {
             output::flush_now();
             terminal::UI.deinit_terminal();
-            eprintln!(
-                "Sorry, the screen must be at least {}x{}",
-                GameConfig::SCREEN_LINES,
-                GameConfig::SCREEN_COLS
-            );
-            eprintln!("Current terminal size: {}x{}", size.x, size.y);
-            my_exit(1);
+            return Err(StartupError::TerminalTooSmall {
+                actual: size,
+                required: IVec2::new(GameConfig::SCREEN_COLS, GameConfig::SCREEN_LINES),
+            });
         }
     }
 
@@ -377,7 +424,6 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     start_daemon(Daemon::RingEffects, 0, AFTER);
     main_loop_step();
     my_exit(0);
-    0
 }
 
 #[cfg(test)]

@@ -6,6 +6,12 @@
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let code = unsafe { rogue_rust::startup::rogue_main(&args) };
+    let code = match unsafe { rogue_rust::startup::rogue_main(&args) } {
+        Ok(code) => code,
+        Err(error) => {
+            eprintln!("rogue: {error}");
+            1
+        }
+    };
     std::process::exit(code);
 }
