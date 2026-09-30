@@ -66,7 +66,9 @@ fn map_cooked_key(key: i32) -> i32 {
 /// Read one command character for legacy prompt and helper call sites.
 pub fn readchar() -> i32 {
     crate::ui::output::render_pending();
-    let key = read_legacy_key();
+    let key = terminal::UI
+        .get_key_event()
+        .map_or(ERR, |event| curses_key_code(&event));
     if key == CTRL_C {
         unsafe { crate::startup::quit() };
         return ESCAPE;
@@ -75,12 +77,6 @@ pub fn readchar() -> i32 {
         return ESCAPE;
     }
     map_cooked_key(key)
-}
-
-fn read_legacy_key() -> i32 {
-    terminal::UI
-        .get_key_event()
-        .map_or(ERR, |event| curses_key_code(&event))
 }
 
 /// Wait until the requested character is entered.
