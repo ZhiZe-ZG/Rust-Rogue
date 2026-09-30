@@ -5,7 +5,7 @@
 use crate::machdep::setup;
 use crate::options::read_line;
 use crate::rnd::set_seed;
-use crate::startup::playit;
+use crate::startup::main_loop_step;
 use crate::state::{rs_restore_file, rs_save_file};
 use crate::ui::input::{self, readchar};
 use crate::ui::output::{self, msg_str};
@@ -183,7 +183,7 @@ pub unsafe fn restore(file: &str) -> u8 {
     crate::game::globals::set_file_name(file_name.clone());
     set_seed(std::process::id() as i32);
     msg_str(&format!("file name: {}", file_name));
-    playit();
+    main_loop_step();
     0
 }
 

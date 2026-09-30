@@ -143,7 +143,7 @@ pub fn roll(mut number: i32, sides: i32) -> i32 {
 /// refreshing things and looking at the proper times.
 ///
 /// Uses globals: inv_type, oldpos, oldrp, playing.
-pub unsafe fn playit() {
+pub unsafe fn main_loop_step() {
     inv_type = INV_CLEAR;
 
     /*
@@ -386,7 +386,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     fuse(Daemon::Swander, 0, WANDERTIME, AFTER);
     start_daemon(Daemon::Stomach, 0, AFTER);
     start_daemon(Daemon::RingEffects, 0, AFTER);
-    playit();
+    main_loop_step();
     0
 }
 
