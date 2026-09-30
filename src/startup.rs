@@ -117,16 +117,6 @@ fn drop_privileges() -> Result<(), &'static str> {
     Ok(())
 }
 
-// ── Game control functions ported from src/c/main.c ─────────────────────────
-
-fn fatal(s: &str) {
-    crate::ui::terminal::UI.write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), s);
-    output::refresh();
-    output::flush_now();
-    terminal::UI.deinit_terminal();
-    my_exit(0);
-}
-
 /// Roll a number of dice.
 pub fn roll(mut number: i32, sides: i32) -> i32 {
     let mut dtotal = 0;
@@ -163,7 +153,6 @@ pub unsafe fn main_loop_step() {
     while playing != false as u8 {
         do_command(&mut command_state); /* Command execution */
     }
-    fatal("Okay, bye bye!\n");
 }
 
 /// quit:
@@ -387,6 +376,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     start_daemon(Daemon::Stomach, 0, AFTER);
     start_daemon(Daemon::RingEffects, 0, AFTER);
     main_loop_step();
+    my_exit(0);
     0
 }
 
