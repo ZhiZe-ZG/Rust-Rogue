@@ -19,7 +19,7 @@ use crate::init::{init_colors, init_materials, init_names, init_player, init_pro
 use crate::level::new_level;
 use crate::machdep::{init_check, open_score, setup};
 use crate::options::parse_opts;
-use crate::rip::{death, death_monst, score};
+use crate::rip::score;
 use crate::rnd::{rnd, set_seed};
 use crate::save::{restore, RestoreError};
 use crate::ui::input::{self, readchar, wait_for};
