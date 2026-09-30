@@ -22,7 +22,7 @@ use crate::item::scrolls::read_scroll;
 use crate::item::sticks::do_zap;
 use crate::item::things::{drop, inv_name_id};
 use crate::item::weapons::{init_weapon, missile, wield};
-use crate::dungeon::new_level;
+use crate::dungeon::DUNGEON;
 use crate::misc::{eat, get_dir};
 use crate::options::{option, read_line};
 use crate::rip::total_winner;
@@ -70,11 +70,10 @@ impl Default for CommandState {
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
 use crate::game::globals::{
-    after, again, amulet, count, delta, dir_ch, door_stop, firstmove, get_food_left,
-    get_inpack, has_hit, inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick,
-    last_comm, last_dir, last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore,
-    p_colors, purse, q_comm, r_stones, runch, running, save_msg, seenstairs, stat_msg, take, terse,
-    to_death, wizard, ws_made,
+    after, again, count, delta, dir_ch, door_stop, firstmove, get_food_left, get_inpack, has_hit,
+    inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
+    last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm,
+    r_stones, runch, running, save_msg, stat_msg, take, terse, to_death, wizard, ws_made,
 };
 
 // ─── Extern C functions called from this module ───────────────────────────────
@@ -480,13 +479,13 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                     crate::game::set_current_depth(
                                         crate::game::current_depth() + 1,
                                     );
-                                    new_level();
+                                    DUNGEON.new_level();
                                 }
                                 Command::WizardUp => {
                                     crate::game::set_current_depth(
                                         crate::game::current_depth() - 1,
                                     );
-                                    new_level();
+                                    DUNGEON.new_level();
                                 }
                                 Command::WizardMap => show_map(),
                                 Command::WizardTeleport => teleport(),
@@ -754,8 +753,8 @@ pub unsafe fn d_level() {
         msg_str("I see no way down");
     } else {
         crate::game::set_current_depth(crate::game::current_depth() + 1);
-        seenstairs = false as u8;
-        new_level();
+        DUNGEON.set_seen_stairs(false);
+        DUNGEON.new_level();
     }
 }
 
@@ -769,7 +768,7 @@ pub unsafe fn u_level() {
     }
     let hero = hero_pos();
     if crate::game::tile_at(hero.y, hero.x) == crate::tile::Tile::Stairs {
-        if amulet != 0 {
+        if DUNGEON.has_amulet() {
             crate::game::set_current_depth(crate::game::current_depth() - 1);
             if crate::game::current_depth() == 0 {
                 total_winner();
@@ -777,7 +776,7 @@ pub unsafe fn u_level() {
                     return;
                 }
             }
-            new_level();
+            DUNGEON.new_level();
             msg_str("you feel a wrenching sensation in your gut");
         } else {
             msg_str("your way is magically blocked");

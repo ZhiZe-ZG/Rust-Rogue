@@ -31,7 +31,8 @@ pub const RIP_ART: &[&str] = &[
     "         ________)/\\\\_//(\\/(/\\)/\\//\\/|_)_______\n",
 ];
 
-use crate::game::globals::{amulet, noscore, purse, tombstone, wizard};
+use crate::dungeon::DUNGEON;
+use crate::game::globals::{noscore, purse, tombstone, wizard};
 
 #[inline]
 fn vowelstr(s: &str) -> &'static str {
@@ -311,7 +312,7 @@ pub unsafe fn death(monst: u8) {
     }
 
     output::refresh();
-    score(purse, if amulet != 0 { 3 } else { 0 }, monst);
+    score(purse, if DUNGEON.has_amulet() { 3 } else { 0 }, monst);
     print!("[Press return to continue]");
     let _ = std::io::stdout().flush();
     wait_for('\n');

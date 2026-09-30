@@ -462,6 +462,22 @@ impl Level {
 
         generated_rooms
     }
+
+    /// Generate this level's rooms and dig their connecting passages in a
+    /// single pass.
+    ///
+    /// Combines [`Level::generate_rooms_and_connections`] with
+    /// [`Level::do_passages`] so a caller needs only one mutable borrow of the
+    /// level to build a complete dungeon floor.
+    pub fn rebuild_rooms_and_passages(
+        &mut self,
+        rooms: [Room; GameConfig::MAX_ROOMS],
+        bsze: IVec2,
+    ) -> [Room; GameConfig::MAX_ROOMS] {
+        let generated = self.generate_rooms_and_connections(rooms, bsze);
+        self.do_passages();
+        generated
+    }
 }
 
 /// Generate the room geometry, sizes, and flags for one level in place.

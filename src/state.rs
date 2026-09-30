@@ -431,8 +431,8 @@ unsafe fn build_snapshot() -> GameSnapshot {
         after: after != 0,
         again: again != 0,
         noscore,
-        seenstairs: seenstairs != 0,
-        amulet: amulet != 0,
+        seenstairs: DUNGEON.seen_stairs(),
+        amulet: DUNGEON.has_amulet(),
         door_stop: door_stop != 0,
         fight_flush: fight_flush != 0,
         firstmove: firstmove != 0,
@@ -484,7 +484,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         last_comm,
         last_dir,
         n_objs,
-        ntraps,
+        ntraps: DUNGEON.ntraps(),
         hungry_state,
         inpack,
         inv_type,
@@ -576,8 +576,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     set_flag!(after);
     set_flag!(again);
     noscore = s.noscore;
-    set_flag!(seenstairs);
-    set_flag!(amulet);
+    DUNGEON.set_seen_stairs(s.seenstairs);
+    DUNGEON.set_amulet(s.amulet);
     set_flag!(door_stop);
     set_flag!(fight_flush);
     set_flag!(firstmove);
@@ -667,7 +667,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     last_comm = s.last_comm;
     last_dir = s.last_dir;
     n_objs = s.n_objs;
-    ntraps = s.ntraps;
+    DUNGEON.set_ntraps(s.ntraps);
     hungry_state = s.hungry_state;
     inpack = s.inpack;
     inv_type = s.inv_type;

@@ -35,8 +35,8 @@ const R_OR_S: i32 = -2;
 const ESCAPE: i32 = 27;
 
 use crate::game::globals::{
-    after, again, amulet, inpack, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
-    last_pick, move_on, mpos, msg_esc, n_objs, pack_used, purse, terse,
+    after, again, inpack, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick,
+    move_on, mpos, msg_esc, n_objs, pack_used, purse, terse,
 };
 
 /// Unlink `id` from the current level's floor-item list.
@@ -235,7 +235,7 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
     }
 
     if matches!(with_object(item_id, |o| o.o_type), Some(ItemType::Amulet)) {
-        amulet = true as u8;
+        crate::dungeon::DUNGEON.set_amulet(true);
     }
 
     if !silent {

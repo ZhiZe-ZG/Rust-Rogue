@@ -108,7 +108,7 @@ const BEFORE: i32 = 1;
 const AFTER: i32 = 2;
 
 /// Process-wide game state and UI flags read by the potion effects.
-use crate::game::globals::{after, e_levels, max_stats, seenstairs, terse};
+use crate::game::globals::{after, e_levels, max_stats, terse};
 
 /// A mutable reference to the static `pot_info` entry at `index`.
 ///
@@ -343,7 +343,7 @@ pub unsafe fn quaff() {
                     turn_see(false as u8);
                 }
                 start_daemon(Daemon::Visuals, 0, BEFORE);
-                seenstairs = seen_stairs();
+                DUNGEON.set_seen_stairs(seen_stairs() != 0);
             }
             do_pot_impl(PotionType::Lsd, true);
         }

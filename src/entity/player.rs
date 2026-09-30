@@ -18,7 +18,7 @@ use crate::item::armor::rust_armor_id;
 use crate::item::pack::floor_at;
 use crate::item::rings::RingType;
 use crate::item::weapons::{fall, init_weapon};
-use crate::dungeon::new_level;
+use crate::dungeon::DUNGEON;
 use crate::machdep::flush_type;
 use crate::misc::{chg_str, spread};
 use crate::rip::death;
@@ -530,7 +530,7 @@ pub fn discard_monster(id: crate::game::MonsterId) {
 
 use crate::game::globals::{
     after, count, delta, door_stop, firstmove, jump, move_on, no_command, no_move, oldpos, passgo,
-    runch, running, seenstairs, take, to_death,
+    runch, running, take, to_death,
 };
 
 #[inline]
@@ -596,7 +596,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
     match trap {
         TrapType::Door => {
             crate::game::set_current_depth(crate::game::current_depth() + 1);
-            new_level();
+            DUNGEON.new_level();
         }
         TrapType::Bear => {
             no_move += spread(3);
@@ -844,7 +844,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
             move_stuff(&mut next_pos, fl);
         }
         STAIRS => {
-            seenstairs = true as u8;
+            DUNGEON.set_seen_stairs(true);
             running = false as u8;
             if is_upper(ch) || game::monster_here(next_pos.y, next_pos.x) {
                 fight(next_pos, game::PLAYER.weapon_id(), false as u8);

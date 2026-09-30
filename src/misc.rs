@@ -45,9 +45,8 @@ const NORM: i32 = 0;
 const F_SEEN: u8 = 0x40;
 
 use crate::game::globals::{
-    after, again, amulet, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state,
-    jump, last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running,
-    see_floor, seenstairs, terse,
+    after, again, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump,
+    last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running, see_floor, terse,
 };
 
 #[inline]

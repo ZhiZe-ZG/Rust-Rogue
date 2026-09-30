@@ -12,7 +12,6 @@ use crate::dungeon::DUNGEON;
 use crate::game::MonsterId;
 use crate::item::rings::RingType;
 use crate::item::things::new_thing_id;
-use crate::dungeon::find_floor;
 use crate::misc::{rnd_thing, spread};
 use crate::rnd::rnd;
 use crate::rnd::roll;
@@ -321,7 +320,7 @@ pub unsafe fn wanderer() {
     let mut cp;
 
     loop {
-        cp = find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
+        cp = DUNGEON.find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
         if roomin(cp) != crate::game::PLAYER.room() {
             break;
         }

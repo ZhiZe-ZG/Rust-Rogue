@@ -1,11 +1,12 @@
 //! Dungeon-level generation and lifecycle orchestration.
 //!
 //! Owns the [`Dungeon`] singleton (the live level plus its `max_level`/`no_food`
-//! counters) and the level-transition entry points ([`new_level`] and
-//! [`door_open`]) that build and populate a fresh dungeon level, driving the
-//! room/passage generation and population passes owned by [`crate::level`].
+//! counters) and the level-transition entry points ([`Dungeon::new_level`] and
+//! [`Dungeon::door_open`]) that build and populate a fresh dungeon level,
+//! driving the room/passage generation and population passes owned by
+//! [`crate::level`].
 
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use std::sync::RwLock;
 
 use glam::IVec2;
@@ -18,18 +19,17 @@ mod monster_list;
 mod monster_map;
 mod presence;
 
-pub use generation::{door_open, new_level};
 pub use monster_list::{MonsterId, MonsterList};
 pub use monster_map::MonsterMap;
-pub(crate) use presence::find_floor;
 
 /// Process-wide owner of the live dungeon level, its counters, and the live
 /// monsters.
 ///
 /// Replaces the scattered process-wide globals of the legacy engine (the
-/// `CURRENT_LEVEL` singleton, the `max_level`/`no_food` counters, and the
-/// `mlist`/`DUNGEON.monster_map` monster owners) with one owner, keeping the same
-/// scoped-closure access pattern (see [`Dungeon::with_level`]).
+/// `CURRENT_LEVEL` singleton, the `max_level`/`no_food` counters, the
+/// `amulet`/`ntraps`/`seenstairs` counters, and the
+/// `mlist`/`DUNGEON.monster_map` monster owners) with one owner, keeping the
+/// same scoped-closure access pattern (see [`Dungeon::with_level`]).
 pub struct Dungeon {
     /// The live [`Level`], created lazily on first access.
     level: RwLock<Option<Level>>,
@@ -37,6 +37,12 @@ pub struct Dungeon {
     max_level: AtomicI32,
     /// Whether food generation is disabled.
     no_food: AtomicI32,
+    /// Number of traps on the current level.
+    ntraps: AtomicI32,
+    /// Whether the player has seen the current level's staircase.
+    seenstairs: AtomicU8,
+    /// Whether the player carries the amulet.
+    amulet: AtomicU8,
     /// The live monsters for the current level.
     pub monster_list: MonsterList,
     /// The per-cell monster occupancy grid for the current level.
@@ -50,6 +56,9 @@ impl Dungeon {
             level: RwLock::new(None),
             max_level: AtomicI32::new(0),
             no_food: AtomicI32::new(0),
+            ntraps: AtomicI32::new(0),
+            seenstairs: AtomicU8::new(0),
+            amulet: AtomicU8::new(0),
             monster_list: MonsterList::new(),
             monster_map: MonsterMap::new(),
         }
@@ -149,6 +158,42 @@ impl Dungeon {
         self.no_food.fetch_add(1, Ordering::Relaxed) + 1
     }
 
+    /// The number of traps on the current level.
+    #[inline]
+    pub fn ntraps(&self) -> i32 {
+        self.ntraps.load(Ordering::Relaxed)
+    }
+
+    /// Set the number of traps on the current level.
+    #[inline]
+    pub fn set_ntraps(&self, value: i32) {
+        self.ntraps.store(value, Ordering::Relaxed);
+    }
+
+    /// Whether the player has seen the current level's staircase.
+    #[inline]
+    pub fn seen_stairs(&self) -> bool {
+        self.seenstairs.load(Ordering::Relaxed) != 0
+    }
+
+    /// Set whether the player has seen the current level's staircase.
+    #[inline]
+    pub fn set_seen_stairs(&self, seen: bool) {
+        self.seenstairs.store(seen as u8, Ordering::Relaxed);
+    }
+
+    /// Whether the player carries the amulet.
+    #[inline]
+    pub fn has_amulet(&self) -> bool {
+        self.amulet.load(Ordering::Relaxed) != 0
+    }
+
+    /// Set whether the player carries the amulet.
+    #[inline]
+    pub fn set_amulet(&self, carries: bool) {
+        self.amulet.store(carries as u8, Ordering::Relaxed);
+    }
+
     /// Find a floor cell in the live level to place something, optionally
     /// avoiding monsters.
     ///
@@ -216,8 +261,8 @@ pub static DUNGEON: Dungeon = Dungeon::empty();
 // Dungeon-global accessors
 // ---------------------------------------------------------------------------
 //
-// Small helpers so callers read/update the `max_level` and `no_food` counters
-// without touching the singleton directly.
+// Small helpers so callers read/update the dungeon counters without touching
+// the singleton directly.
 
 /// Raise the recorded maximum dungeon depth to at least `depth`.
 pub(crate) fn record_max_depth(depth: i32) {
@@ -277,5 +322,14 @@ mod tests {
         assert_eq!(dungeon.bump_no_food(), 1);
         dungeon.set_no_food(5);
         assert_eq!(dungeon.no_food(), 5);
+
+        dungeon.set_ntraps(4);
+        assert_eq!(dungeon.ntraps(), 4);
+        assert!(!dungeon.seen_stairs());
+        dungeon.set_seen_stairs(true);
+        assert!(dungeon.seen_stairs());
+        assert!(!dungeon.has_amulet());
+        dungeon.set_amulet(true);
+        assert!(dungeon.has_amulet());
     }
 }

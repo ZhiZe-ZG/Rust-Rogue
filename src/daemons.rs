@@ -42,8 +42,7 @@ const STARVETIME: i32 = 850;
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
 use crate::game::globals::{
-    after, amulet, count, food_left, hungry_state, jump, no_command, quiet, running, seenstairs,
-    terse, to_death,
+    after, count, food_left, hungry_state, jump, no_command, quiet, running, terse, to_death,
 };
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
@@ -211,7 +210,7 @@ pub unsafe fn stomach() {
         msg_str(choose_str("You freak out", "You faint"));
     } else {
         let oldfood = food_left;
-        food_left -= ring_eat(LEFT as i32) + ring_eat(RIGHT as i32) + 1 - amulet as i32;
+        food_left -= ring_eat(LEFT as i32) + ring_eat(RIGHT as i32) + 1 - DUNGEON.has_amulet() as i32;
 
         if food_left < MORETIME && oldfood >= MORETIME {
             hungry_state = 2;
@@ -301,7 +300,7 @@ pub unsafe fn visuals() {
 
     // Change the stairs.
     let stairs = crate::game::stairs();
-    if seenstairs == 0 && cansee(stairs.y, stairs.x) != 0 {
+    if !DUNGEON.seen_stairs() && cansee(stairs.y, stairs.x) != 0 {
         crate::draw::write_cell_glyph(stairs, rnd_thing() as char);
     }
 

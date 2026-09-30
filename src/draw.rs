@@ -23,7 +23,6 @@ use crate::game;
 use crate::dungeon::DUNGEON;
 use crate::game::MonsterId;
 use crate::item::arena::ThingId;
-use crate::dungeon::door_open;
 use crate::level::{with_current_level, with_current_level_mut};
 use crate::rnd::rnd;
 use crate::tile::Tile;
@@ -64,7 +63,7 @@ const LAMPDIST: i32 = 3;
 // ─── Process-wide flags read by the draw loop ────────────────────────────────
 
 use crate::game::globals::{
-    after, door_stop, firstmove, jump, oldpos, oldrp, runch, running, see_floor, seenstairs,
+    after, door_stop, firstmove, jump, oldpos, oldrp, runch, running, see_floor,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -591,7 +590,7 @@ pub unsafe fn trip_ch(y: i32, x: i32, ch: i32) -> i32 {
             && tile != b' ' as u8
             && tile != b'-' as u8
             && tile != b'|' as u8
-            && !(y == game::stairs().y && x == game::stairs().x && seenstairs != 0)
+            && !(y == game::stairs().y && x == game::stairs().x && DUNGEON.seen_stairs())
         {
             return rnd(26) as u8 as i32;
         }
@@ -649,7 +648,7 @@ pub unsafe fn enter_room(cp: IVec2) {
     }
 
     crate::game::PLAYER.set_room(rp);
-    door_open(rp);
+    DUNGEON.door_open(rp);
 
     if crate::game::room_dark(rp) || player_has(MonsterFlags::BLIND) {
         return;
@@ -762,7 +761,7 @@ pub unsafe fn leave_room(cp: IVec2) {
         y += 1;
     }
 
-    door_open(rp);
+    DUNGEON.door_open(rp);
 }
 
 /// turnref:

@@ -68,10 +68,6 @@ pub static mut after: u8 = 0;
 pub static mut again: u8 = 0;
 /// Suppresses score recording when nonzero.
 pub static mut noscore: i32 = 0;
-/// Whether the player has seen the staircase.
-pub static mut seenstairs: u8 = 0;
-/// Whether the player carries the amulet.
-pub static mut amulet: u8 = 0;
 /// Stops automatic movement at the next door.
 pub static mut door_stop: u8 = 0;
 /// Flushes pending input during combat.
@@ -155,8 +151,6 @@ pub const NUMSCORES: u32 = 10;
 pub const NUMNAME: &str = "Ten";
 /// Number of objects initialized in the object tables.
 pub static mut n_objs: i32 = 0;
-/// Number of traps on the current level.
-pub static mut ntraps: i32 = 0;
 /// Current hunger state.
 pub static mut hungry_state: i32 = 0;
 /// Number of objects currently in the pack.

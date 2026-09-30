@@ -16,7 +16,7 @@ use crate::game::globals::{
     noscore, oldpos, oldrp, playing, purse, q_comm, seed, to_death, wizard,
 };
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
-use crate::dungeon::new_level;
+use crate::dungeon::DUNGEON;
 use crate::machdep::{init_check, open_score, setup};
 use crate::options::parse_opts;
 use crate::rip::score;
@@ -398,7 +398,7 @@ unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupErr
     if master_mode_enabled != 0 {
         noscore = wizard;
     }
-    new_level();
+    DUNGEON.new_level();
     start_game_daemons();
     main_loop_step();
     Ok(requested_exit_code().unwrap_or(0))
