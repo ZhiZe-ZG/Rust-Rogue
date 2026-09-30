@@ -57,22 +57,6 @@ pub(crate) struct CorridorPlan {
 // Corridor geometry (pure: no map or room records are mutated)
 // ---------------------------------------------------------------------------
 
-/// Determine the direction of the corridor between rooms `r1` and `r2`.
-///
-/// Rooms side by side (indices differing by one) are connected by a
-/// horizontal corridor (`'r'`); rooms stacked (any other pair) by a vertical
-/// corridor (`'d'`). Also returns the smaller index, which anchors the
-/// corridor's start.
-pub(crate) fn corridor_direction(r1: usize, r2: usize) -> (char, usize) {
-    if r1 < r2 {
-        let direc = if r1 + 1 == r2 { 'r' } else { 'd' };
-        (direc, r1)
-    } else {
-        let direc = if r2 + 1 == r1 { 'r' } else { 'd' };
-        (direc, r2)
-    }
-}
-
 /// Pick the point where the corridor meets `rooms[room_index]`'s boundary.
 ///
 /// For a vertical corridor (`direc == 'd'`) the point sits on the room's
@@ -122,7 +106,14 @@ pub(crate) fn entry_point(
 /// entry points on both room boundaries, and derives the straight run, the
 /// perpendicular turn, and the random position of the turn.
 pub(crate) fn plan_corridor(rooms: &[Room], map: &Structure, r1: usize, r2: usize) -> CorridorPlan {
-    let (direc, base_room) = corridor_direction(r1, r2);
+    // Rooms side by side (indices differing by one) are joined by a horizontal
+    // corridor (`'r'`); rooms stacked (any other pair) by a vertical one (`'d'`).
+    // The smaller index anchors the corridor's start.
+    let (base_room, direc) = if r1 < r2 {
+        (r1, if r1 + 1 == r2 { 'r' } else { 'd' })
+    } else {
+        (r2, if r2 + 1 == r1 { 'r' } else { 'd' })
+    };
     let partner_room = if direc == 'd' {
         base_room + 3
     } else {

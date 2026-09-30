@@ -289,7 +289,7 @@ unsafe fn place_stairs() {
 }
 
 /// Link every monster on the level to the room its position falls in.
-pub(crate) unsafe fn link_monsters_to_rooms() {
+unsafe fn link_monsters_to_rooms() {
     for id in MONSTER_LIST.ids() {
         MONSTER_LIST.with_mut(id, |t| {
             if let Thing::Monster { data } = t {

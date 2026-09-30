@@ -49,7 +49,7 @@ pub unsafe fn door_open(room: Option<usize>) {
     let x_end = pos.x + size.x;
     for y in pos.y..y_end {
         for x in pos.x..x_end {
-            if (winat(y, x) as u8).is_ascii_uppercase() {
+            if winat(y, x).is_ascii_uppercase() {
                 wake_monster(y, x);
             }
         }

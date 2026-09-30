@@ -133,7 +133,7 @@ impl Level {
     }
 
     /// Reset every flag grid to a fresh-level state.
-    pub fn reset_flags(&mut self) {
+    fn reset_flags(&mut self) {
         self.flags = LevelFlags::cleared();
     }
 
