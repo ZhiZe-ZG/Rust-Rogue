@@ -87,7 +87,7 @@ fn deinit_terminal() {
 }
 
 /// Render the retained grid to the real terminal as one frame.
-fn render() {
+pub(super) fn render() {
     if UI.shutdown.load(Ordering::Relaxed) {
         return;
     }
@@ -178,10 +178,6 @@ pub(crate) fn clear_to_end_of_line() {
             grid[cursor.y as usize][x] = ScreenCell::BLANK;
         }
     }
-}
-
-pub(crate) fn refresh() {
-    render();
 }
 
 pub(crate) fn set_standout(enabled: bool) {

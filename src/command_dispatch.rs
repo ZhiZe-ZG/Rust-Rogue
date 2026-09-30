@@ -347,7 +347,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                     }
                     Command::Refresh => {
                         after = false as u8;
-                        output::refresh_window();
+                        output::refresh();
                     }
                     Command::Version => {
                         after = false as u8;

@@ -142,7 +142,7 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
     #[cfg(unix)]
     libc::signal(libc::SIGTSTP, tstp as libc::sighandler_t);
     input::enable_raw_mode();
-    output::refresh_window();
+    output::refresh();
     output::move_cursor(old_cursor);
     flush_stdout();
 }

@@ -308,13 +308,13 @@ pub unsafe fn read_scroll() {
         }
         ScrollType::FindFood => {
             let mut found = false as u8;
-            output::clear_window();
+            output::clear_screen();
             for id in crate::game::item_ids() {
                 let info = crate::item::arena::with_object(id, |data| (data.o_type, data.o_pos));
                 if let Some((otype, opos)) = info {
                     if matches!(otype, ItemType::Food) {
                         found = true as u8;
-                        output::move_window_cursor(IVec2::new(opos.x, opos.y));
+                        output::move_cursor(IVec2::new(opos.x, opos.y));
                         crate::draw::write_cell_glyph(opos, FOOD as u8 as char);
                     }
                 }

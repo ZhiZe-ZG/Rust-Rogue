@@ -85,7 +85,7 @@ pub(crate) fn refresh() {
 /// Render a pending frame, returning whether a frame was flushed.
 pub(crate) fn render_pending() -> bool {
     if UI.render_pending.swap(false, Ordering::AcqRel) {
-        cur::refresh();
+        cur::render();
         true
     } else {
         false
@@ -121,31 +121,6 @@ pub(crate) fn write_text_at(position: IVec2, text: &str) {
 /// Return the current cursor position.
 pub(crate) fn window_cursor() -> IVec2 {
     cur::cursor_pos()
-}
-
-/// Clear the screen for the given (aliased) window.
-pub(crate) fn clear_window() {
-    clear_screen();
-}
-
-/// Move the (aliased) window cursor.
-pub(crate) fn move_window_cursor(position: IVec2) {
-    move_cursor(position);
-}
-
-/// Write one glyph to a window.
-pub(crate) fn write_window_glyph(glyph: char) {
-    write_glyph(glyph);
-}
-
-/// Write text to a window.
-pub(crate) fn write_window_text(text: &str) {
-    write_text(text);
-}
-
-/// Flush pending changes for a window.
-pub(crate) fn refresh_window() {
-    refresh();
 }
 
 /// Render a key byte in printable caret notation.
@@ -384,11 +359,11 @@ pub(crate) fn status() {
 
 #[cfg(not(test))]
 pub(crate) fn show_win(message: &str) {
-    move_window_cursor(IVec2::new(0, 0));
-    write_window_text(message);
+    move_cursor(IVec2::new(0, 0));
+    write_text(message);
     let hero = PLAYER.pos();
-    move_window_cursor(IVec2::new(hero.x, hero.y));
-    refresh_window();
+    move_cursor(IVec2::new(hero.x, hero.y));
+    refresh();
     wait_for(' ');
 }
 

@@ -77,7 +77,6 @@ impl UiState {
             input_timeout: AtomicI32::new(-1),
             shutdown: AtomicBool::new(true),
             terminal: Mutex::new(None),
-            
             message: Mutex::new(MessageState {
                 pending: String::new(),
                 next_position: 0,

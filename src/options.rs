@@ -201,7 +201,7 @@ unsafe fn option_list() -> [OPTION; 10] {
 }
 
 unsafe fn paint(s: &str) {
-    output::write_window_text(s);
+    output::write_text(s);
 }
 
 unsafe fn str_target_value(target: StrTarget) -> String {
@@ -231,14 +231,14 @@ pub unsafe fn option() {
     let mut optlist = option_list();
     let mut retval: i32;
 
-    output::clear_window();
+    output::clear_screen();
     for item in optlist.iter() {
         pr_optname_slot(item);
         (item.o_putfunc)(item);
-        output::write_window_glyph('\n');
+        output::write_glyph('\n');
     }
 
-    output::move_window_cursor(IVec2::new(0, 0));
+    output::move_cursor(IVec2::new(0, 0));
     for index in 0..optlist.len() {
         let item = &optlist[index];
         pr_optname_slot(item);
@@ -247,7 +247,7 @@ pub unsafe fn option() {
             break;
         }
         if retval == MINUS && index > 0 {
-            output::move_window_cursor(IVec2::new(0, (index as i32) - 1));
+            output::move_cursor(IVec2::new(0, (index as i32) - 1));
             let prev = index as isize - 2;
             if prev >= 0 {
                 let _ = prev;
@@ -255,9 +255,9 @@ pub unsafe fn option() {
         }
     }
 
-    output::move_window_cursor(IVec2::new(0, 23));
+    output::move_cursor(IVec2::new(0, 23));
     paint("--Press space to continue--");
-    output::refresh_window();
+    output::refresh();
     wait_for(' ');
     after = false as u8;
 }
@@ -267,18 +267,18 @@ unsafe fn put_bool(op: &OPTION) {
         Some(flag) => flag.get(),
         None => false,
     };
-    output::write_window_text(if on { "True" } else { "False" });
+    output::write_text(if on { "True" } else { "False" });
 }
 
 unsafe fn put_str(op: &OPTION) {
     let text = str_target_value(op.o_str);
-    output::write_window_text(&text);
+    output::write_text(&text);
 }
 
 unsafe fn put_inv_t(_op: &OPTION) {
     let idx = inv_type as usize;
     if idx < INV_T_NAME_LEN {
-        output::write_window_text(&crate::game::globals::inv_t_name(idx));
+        output::write_text(&crate::game::globals::inv_t_name(idx));
     }
 }
 
@@ -289,10 +289,10 @@ unsafe fn get_bool(op: &OPTION) -> i32 {
     let mut bad = true;
 
     let origin = output::window_cursor();
-    output::write_window_text(if flag.get() { "True" } else { "False" });
+    output::write_text(if flag.get() { "True" } else { "False" });
     while bad {
-        output::move_window_cursor(origin);
-        output::refresh_window();
+        output::move_cursor(origin);
+        output::refresh();
         match readchar() {
             ch if ch == 't' as i32 || ch == 'T' as i32 => {
                 flag.set(true);
@@ -308,14 +308,14 @@ unsafe fn get_bool(op: &OPTION) -> i32 {
             ESCAPE => return QUIT,
             ch if ch == '-' as i32 => return MINUS,
             _ => {
-                output::move_window_cursor(IVec2::new(origin.x + 10, origin.y));
-                output::write_window_text("(T or F)");
+                output::move_cursor(IVec2::new(origin.x + 10, origin.y));
+                output::write_text("(T or F)");
             }
         }
     }
-    output::move_window_cursor(origin);
-    output::write_window_text(if flag.get() { "True" } else { "False" });
-    output::write_window_glyph('\n');
+    output::move_cursor(origin);
+    output::write_text(if flag.get() { "True" } else { "False" });
+    output::write_glyph('\n');
     NORM
 }
 
@@ -347,7 +347,7 @@ pub unsafe fn read_line(initial: &str) -> Option<String> {
     let mut buf: Vec<u8> = initial.as_bytes().to_vec();
 
     let origin = output::window_cursor();
-    output::refresh_window();
+    output::refresh();
     let mut c: i32;
     loop {
         c = readchar();
@@ -363,7 +363,7 @@ pub unsafe fn read_line(initial: &str) -> Option<String> {
         }
         if c == KILL_KEY as i32 {
             buf.clear();
-            output::move_window_cursor(origin);
+            output::move_cursor(origin);
             continue;
         }
         let printable = c as u8;
@@ -371,15 +371,15 @@ pub unsafe fn read_line(initial: &str) -> Option<String> {
             continue;
         }
         buf.push(printable);
-        output::write_window_text(&output::format_key(printable));
+        output::write_text(&output::format_key(printable));
     }
 
     let text = String::from_utf8_lossy(&buf).into_owned();
 
     let out = format!("{}\n", text);
-    output::move_window_cursor(origin);
+    output::move_cursor(origin);
     paint(&out);
-    output::refresh_window();
+    output::refresh();
     mpos += buf.len() as i32;
 
     if c == ESCAPE {
@@ -407,11 +407,11 @@ unsafe fn get_inv_t(_op: &OPTION) -> i32 {
 
     let origin = output::window_cursor();
     if inv_type >= 0 && inv_type < INV_T_NAME_LEN as i32 {
-        output::write_window_text(&crate::game::globals::inv_t_name(inv_type as usize));
+        output::write_text(&crate::game::globals::inv_t_name(inv_type as usize));
     }
     while bad {
-        output::move_window_cursor(origin);
-        output::refresh_window();
+        output::move_cursor(origin);
+        output::refresh();
         match readchar() {
             ch if ch == 'o' as i32 || ch == 'O' as i32 => {
                 inv_type = INV_OVER;
@@ -431,15 +431,15 @@ unsafe fn get_inv_t(_op: &OPTION) -> i32 {
             ESCAPE => return QUIT,
             ch if ch == '-' as i32 => return MINUS,
             _ => {
-                output::move_window_cursor(IVec2::new(origin.x + 15, origin.y));
-                output::write_window_text("(O, S, or C)");
+                output::move_cursor(IVec2::new(origin.x + 15, origin.y));
+                output::write_text("(O, S, or C)");
             }
         }
     }
     if inv_type >= 0 && inv_type < INV_T_NAME_LEN as i32 {
         let name = crate::game::globals::inv_t_name(inv_type as usize);
         let out = format!("{}\n", name);
-        output::move_window_cursor(origin);
+        output::move_cursor(origin);
         paint(&out);
     }
     NORM
