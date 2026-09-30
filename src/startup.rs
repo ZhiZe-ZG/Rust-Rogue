@@ -5,7 +5,7 @@ use std::fmt;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
-use crate::command_line::CommandLineParameter;
+use crate::command_line_parameter::CommandLineParameter;
 use crate::command_dispatch::{do_command, CommandState};
 use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};

@@ -4,7 +4,7 @@
 //! is a direct port of the corresponding `.c` file and preserves its C ABI
 //! wherever the legacy engine still depends on it.
 pub mod colors;
-pub mod command_line;
+pub mod command_line_parameter;
 pub mod command;
 pub(crate) mod command_dispatch;
 pub mod config;

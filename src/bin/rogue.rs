@@ -5,7 +5,7 @@
 //! autotools.
 
 use clap::Parser;
-use rogue_rust::command_line::CommandLineParameter;
+use rogue_rust::command_line_parameter::CommandLineParameter;
 
 fn main() {
     let parameter = match CommandLineParameter::try_parse_from(std::env::args()) {
