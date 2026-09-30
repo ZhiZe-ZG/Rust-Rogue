@@ -9,7 +9,7 @@ use crate::startup::playit;
 use crate::state::{rs_restore_file, rs_save_file};
 use crate::ui::input::{self, readchar};
 use crate::ui::output::{self, msg_str};
-use crate::ui::runtime;
+use crate::ui::terminal;
 use std::fs::File;
 use std::io::{Read, Write};
 
@@ -54,7 +54,7 @@ pub unsafe fn save_game() {
             }
 
             if c == 'y' as i32 || c == 'Y' as i32 {
-                output::write_text("Yes\n");
+                crate::ui::terminal::write_text("Yes\n");
                 output::refresh();
                 buf = crate::game::globals::file_name();
             } else {
@@ -115,7 +115,8 @@ pub unsafe fn save_game() {
 /// state serializer.
 pub unsafe fn save_file(savef: &mut File) {
     let _ = std::io::stdout().write_all(b"\n");
-    runtime::shutdown();
+    output::flush_now();
+    terminal::shutdown();
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(
         crate::game::globals::file_name(),
@@ -160,12 +161,13 @@ pub unsafe fn restore(file: &str) -> u8 {
         return 0;
     }
 
-    if runtime::is_shutdown() {
-        runtime::initialize();
+    if terminal::is_shutdown() {
+        terminal::init();
     }
     setup();
     if let Err(err) = rs_restore_file(&mut inf) {
-        runtime::shutdown();
+        output::flush_now();
+        terminal::shutdown();
         msg_str(&format!("Sorry, saved game could not be read: {}", err));
         return 0;
     }
@@ -178,7 +180,8 @@ pub unsafe fn restore(file: &str) -> u8 {
     mpos = 0;
 
     if restore_player_dead() {
-        runtime::shutdown();
+        output::flush_now();
+        terminal::shutdown();
         msg_str("\n\"He's dead, Jim\"\n");
         return 0;
     }

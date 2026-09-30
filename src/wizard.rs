@@ -17,7 +17,6 @@ use crate::item::weapons::init_weapon;
 use crate::level::find_floor;
 use crate::machdep::flush_type;
 use crate::ui::input::readchar;
-use crate::ui::output;
 use crate::ui::output::{msg_str, show_win};
 use glam::IVec2;
 
@@ -268,7 +267,7 @@ pub unsafe fn show_map() {
         return;
     }
 
-    output::clear_screen();
+    crate::ui::terminal::clear();
     for y in 1..(GameConfig::SCREEN_LINES - 1) {
         for x in 0..GameConfig::SCREEN_COLS {
             let real = flat(y, x);

@@ -201,7 +201,7 @@ unsafe fn option_list() -> [OPTION; 10] {
 }
 
 unsafe fn paint(s: &str) {
-    output::write_text(s);
+    crate::ui::terminal::write_text(s);
 }
 
 unsafe fn str_target_value(target: StrTarget) -> String {
@@ -231,14 +231,14 @@ pub unsafe fn option() {
     let mut optlist = option_list();
     let mut retval: i32;
 
-    output::clear_screen();
+    crate::ui::terminal::clear();
     for item in optlist.iter() {
         pr_optname_slot(item);
         (item.o_putfunc)(item);
-        output::write_glyph('\n');
+        crate::ui::terminal::write_glyph('\n');
     }
 
-    output::move_cursor(IVec2::new(0, 0));
+    crate::ui::terminal::move_cursor(IVec2::new(0, 0));
     for index in 0..optlist.len() {
         let item = &optlist[index];
         pr_optname_slot(item);
@@ -247,7 +247,7 @@ pub unsafe fn option() {
             break;
         }
         if retval == MINUS && index > 0 {
-            output::move_cursor(IVec2::new(0, (index as i32) - 1));
+            crate::ui::terminal::move_cursor(IVec2::new(0, (index as i32) - 1));
             let prev = index as isize - 2;
             if prev >= 0 {
                 let _ = prev;
@@ -255,7 +255,7 @@ pub unsafe fn option() {
         }
     }
 
-    output::move_cursor(IVec2::new(0, 23));
+    crate::ui::terminal::move_cursor(IVec2::new(0, 23));
     paint("--Press space to continue--");
     output::refresh();
     wait_for(' ');
@@ -267,18 +267,18 @@ unsafe fn put_bool(op: &OPTION) {
         Some(flag) => flag.get(),
         None => false,
     };
-    output::write_text(if on { "True" } else { "False" });
+    crate::ui::terminal::write_text(if on { "True" } else { "False" });
 }
 
 unsafe fn put_str(op: &OPTION) {
     let text = str_target_value(op.o_str);
-    output::write_text(&text);
+    crate::ui::terminal::write_text(&text);
 }
 
 unsafe fn put_inv_t(_op: &OPTION) {
     let idx = inv_type as usize;
     if idx < INV_T_NAME_LEN {
-        output::write_text(&crate::game::globals::inv_t_name(idx));
+        crate::ui::terminal::write_text(&crate::game::globals::inv_t_name(idx));
     }
 }
 
@@ -288,10 +288,10 @@ unsafe fn get_bool(op: &OPTION) -> i32 {
     };
     let mut bad = true;
 
-    let origin = output::window_cursor();
-    output::write_text(if flag.get() { "True" } else { "False" });
+    let origin = crate::ui::terminal::cursor_pos();
+    crate::ui::terminal::write_text(if flag.get() { "True" } else { "False" });
     while bad {
-        output::move_cursor(origin);
+        crate::ui::terminal::move_cursor(origin);
         output::refresh();
         match readchar() {
             ch if ch == 't' as i32 || ch == 'T' as i32 => {
@@ -308,14 +308,14 @@ unsafe fn get_bool(op: &OPTION) -> i32 {
             ESCAPE => return QUIT,
             ch if ch == '-' as i32 => return MINUS,
             _ => {
-                output::move_cursor(IVec2::new(origin.x + 10, origin.y));
-                output::write_text("(T or F)");
+                crate::ui::terminal::move_cursor(IVec2::new(origin.x + 10, origin.y));
+                crate::ui::terminal::write_text("(T or F)");
             }
         }
     }
-    output::move_cursor(origin);
-    output::write_text(if flag.get() { "True" } else { "False" });
-    output::write_glyph('\n');
+    crate::ui::terminal::move_cursor(origin);
+    crate::ui::terminal::write_text(if flag.get() { "True" } else { "False" });
+    crate::ui::terminal::write_glyph('\n');
     NORM
 }
 
@@ -346,7 +346,7 @@ unsafe fn get_sf(op: &OPTION) -> i32 {
 pub unsafe fn read_line(initial: &str) -> Option<String> {
     let mut buf: Vec<u8> = initial.as_bytes().to_vec();
 
-    let origin = output::window_cursor();
+    let origin = crate::ui::terminal::cursor_pos();
     output::refresh();
     let mut c: i32;
     loop {
@@ -363,7 +363,7 @@ pub unsafe fn read_line(initial: &str) -> Option<String> {
         }
         if c == KILL_KEY as i32 {
             buf.clear();
-            output::move_cursor(origin);
+            crate::ui::terminal::move_cursor(origin);
             continue;
         }
         let printable = c as u8;
@@ -371,13 +371,13 @@ pub unsafe fn read_line(initial: &str) -> Option<String> {
             continue;
         }
         buf.push(printable);
-        output::write_text(&output::format_key(printable));
+        crate::ui::terminal::write_text(&output::format_key(printable));
     }
 
     let text = String::from_utf8_lossy(&buf).into_owned();
 
     let out = format!("{}\n", text);
-    output::move_cursor(origin);
+    crate::ui::terminal::move_cursor(origin);
     paint(&out);
     output::refresh();
     mpos += buf.len() as i32;
@@ -405,12 +405,12 @@ pub unsafe fn get_str(op: &OPTION) -> i32 {
 unsafe fn get_inv_t(_op: &OPTION) -> i32 {
     let mut bad = true;
 
-    let origin = output::window_cursor();
+    let origin = crate::ui::terminal::cursor_pos();
     if inv_type >= 0 && inv_type < INV_T_NAME_LEN as i32 {
-        output::write_text(&crate::game::globals::inv_t_name(inv_type as usize));
+        crate::ui::terminal::write_text(&crate::game::globals::inv_t_name(inv_type as usize));
     }
     while bad {
-        output::move_cursor(origin);
+        crate::ui::terminal::move_cursor(origin);
         output::refresh();
         match readchar() {
             ch if ch == 'o' as i32 || ch == 'O' as i32 => {
@@ -431,15 +431,15 @@ unsafe fn get_inv_t(_op: &OPTION) -> i32 {
             ESCAPE => return QUIT,
             ch if ch == '-' as i32 => return MINUS,
             _ => {
-                output::move_cursor(IVec2::new(origin.x + 15, origin.y));
-                output::write_text("(O, S, or C)");
+                crate::ui::terminal::move_cursor(IVec2::new(origin.x + 15, origin.y));
+                crate::ui::terminal::write_text("(O, S, or C)");
             }
         }
     }
     if inv_type >= 0 && inv_type < INV_T_NAME_LEN as i32 {
         let name = crate::game::globals::inv_t_name(inv_type as usize);
         let out = format!("{}\n", name);
-        output::move_cursor(origin);
+        crate::ui::terminal::move_cursor(origin);
         paint(&out);
     }
     NORM

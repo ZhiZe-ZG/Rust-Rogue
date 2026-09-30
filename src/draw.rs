@@ -211,20 +211,20 @@ pub(crate) fn hallucination_glyph() -> char {
 /// Write a world-cell glyph through the drawing layer.
 #[inline]
 pub(crate) fn write_cell_glyph(pos: IVec2, glyph: char) {
-    output::write_glyph_at(pos, glyph);
+    crate::ui::terminal::write_glyph_at(pos, glyph);
 }
 
 #[inline]
 pub(crate) fn screen_glyph_at(pos: IVec2) -> char {
-    output::glyph_at(pos)
+    crate::ui::terminal::glyph_at(pos)
 }
 
 /// Write a standout world-cell glyph through the drawing layer.
 #[inline]
 pub(crate) fn write_standout_cell_glyph(pos: IVec2, glyph: char) {
-    output::set_standout(true);
-    output::write_glyph_at(pos, glyph);
-    output::set_standout(false);
+    crate::ui::terminal::set_standout(true);
+    crate::ui::terminal::write_glyph_at(pos, glyph);
+    crate::ui::terminal::set_standout(false);
 }
 
 /// Visible glyph at `(y, x)`: a monster's disguise if one stands here,
@@ -372,7 +372,7 @@ pub unsafe fn add_pass() {
                     out_ch = PASSAGE;
                 }
                 set_seen_at(y, x);
-                output::move_cursor(IVec2::new(x, y));
+                crate::ui::terminal::move_cursor(IVec2::new(x, y));
                 let monst = game::monster_id_at(y, x);
                 if let Some(id) = monst {
                     MONSTER_LIST.with_mut(id, |t| {
@@ -381,15 +381,15 @@ pub unsafe fn add_pass() {
                         }
                     });
                 } else if (flags as u8 & F_REAL as u8) != 0 {
-                    output::write_glyph((out_ch as u8) as char);
+                    crate::ui::terminal::write_glyph((out_ch as u8) as char);
                 } else {
-                    output::set_standout(true);
-                    output::write_glyph(if (flags as u8 & F_PASS as u8) != 0 {
+                    crate::ui::terminal::set_standout(true);
+                    crate::ui::terminal::write_glyph(if (flags as u8 & F_PASS as u8) != 0 {
                         (PASSAGE as u8) as char
                     } else {
                         (DOOR as u8) as char
                     });
-                    output::set_standout(false);
+                    crate::ui::terminal::set_standout(false);
                 }
             }
         }
@@ -506,7 +506,7 @@ pub unsafe fn look(wakeup: u8) {
                 continue;
             }
 
-            output::move_cursor(IVec2::new(x, y));
+            crate::ui::terminal::move_cursor(IVec2::new(x, y));
             let player_room = crate::game::PLAYER.room();
             if player_room.is_some()
                 && crate::game::room_dark(player_room)
@@ -517,9 +517,9 @@ pub unsafe fn look(wakeup: u8) {
                 ch = b' ' as i32;
             }
 
-            let screen_ch = output::glyph_at_cursor() as i32;
+            let screen_ch = crate::ui::terminal::glyph_at_cursor() as i32;
             if tp.is_none() || ch != screen_ch {
-                output::write_glyph((ch as u8) as char);
+                crate::ui::terminal::write_glyph((ch as u8) as char);
             }
 
             if door_stop != 0 && firstmove == 0 && running != 0 {
@@ -572,7 +572,7 @@ pub unsafe fn look(wakeup: u8) {
         running = false as u8;
     }
     if running == 0 || jump == 0 {
-        output::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
+        crate::ui::terminal::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
     }
 }
 
@@ -617,9 +617,9 @@ pub unsafe fn erase_lamp(pos: IVec2, rp: Option<usize>) {
             if y == hero.y && x == hero.x {
                 continue;
             }
-            output::move_cursor(IVec2::new(x, y));
-            if output::glyph_at_cursor() as u8 == FLOOR {
-                output::write_glyph(' ');
+            crate::ui::terminal::move_cursor(IVec2::new(x, y));
+            if crate::ui::terminal::glyph_at_cursor() as u8 == FLOOR {
+                crate::ui::terminal::write_glyph(' ');
             }
         }
     }
@@ -634,7 +634,7 @@ unsafe fn is_upper(ch: u8) -> bool {
 
 #[inline]
 unsafe fn cchar_at_cursor() -> u8 {
-    output::glyph_at_cursor() as u8
+    crate::ui::terminal::glyph_at_cursor() as u8
 }
 
 /// enter_room:
@@ -662,7 +662,7 @@ pub unsafe fn enter_room(cp: IVec2) {
     let x_end = x0 + size.x;
     let mut y = y0;
     while y < y_end {
-        output::move_cursor(IVec2::new(x0, y));
+        crate::ui::terminal::move_cursor(IVec2::new(x0, y));
         let mut x = x0;
         while x < x_end {
             let tp = game::monster_id_at(y, x);
@@ -671,9 +671,9 @@ pub unsafe fn enter_room(cp: IVec2) {
             match tp {
                 None => {
                     if cchar_at_cursor() != ch {
-                        output::write_glyph((ch as u8) as char);
+                        crate::ui::terminal::write_glyph((ch as u8) as char);
                     } else {
-                        output::move_cursor(IVec2::new(x + 1, y));
+                        crate::ui::terminal::move_cursor(IVec2::new(x + 1, y));
                     }
                 }
                 Some(id) => {
@@ -684,14 +684,14 @@ pub unsafe fn enter_room(cp: IVec2) {
                     });
                     if see_monst(id) == 0 {
                         if player_has(MonsterFlags::SEEMONST) {
-                            output::set_standout(true);
-                            output::write_glyph(monster_glyph(id));
-                            output::set_standout(false);
+                            crate::ui::terminal::set_standout(true);
+                            crate::ui::terminal::write_glyph(monster_glyph(id));
+                            crate::ui::terminal::set_standout(false);
                         } else {
-                            output::write_glyph((ch as u8) as char);
+                            crate::ui::terminal::write_glyph((ch as u8) as char);
                         }
                     } else {
-                        output::write_glyph(monster_glyph(id));
+                        crate::ui::terminal::write_glyph(monster_glyph(id));
                     }
                 }
             }
@@ -738,20 +738,20 @@ pub unsafe fn leave_room(cp: IVec2) {
     while y < y_end {
         let mut x = x0;
         while x < x_end {
-            output::move_cursor(IVec2::new(x, y));
+            crate::ui::terminal::move_cursor(IVec2::new(x, y));
             let ch = cchar_at_cursor();
             if ch == FLOOR {
                 if floor == SPACE && ch != SPACE {
-                    output::write_glyph((SPACE as u8) as char);
+                    crate::ui::terminal::write_glyph((SPACE as u8) as char);
                 }
             } else if is_upper(ch) {
                 if player_has(MonsterFlags::SEEMONST) {
-                    output::set_standout(true);
-                    output::write_glyph((ch as u8) as char);
-                    output::set_standout(false);
+                    crate::ui::terminal::set_standout(true);
+                    crate::ui::terminal::write_glyph((ch as u8) as char);
+                    crate::ui::terminal::set_standout(false);
                 } else {
                     let out = if game::is_door_at(y, x) { DOOR } else { floor };
-                    output::write_glyph((out as u8) as char);
+                    crate::ui::terminal::write_glyph((out as u8) as char);
                 }
             }
             x += 1;

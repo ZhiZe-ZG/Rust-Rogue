@@ -15,8 +15,8 @@ use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
 use crate::rnd::rnd;
 use crate::startup::roll;
-use crate::ui::output::{addmsg_str, msg_str};
-use crate::ui::runtime;
+use crate::ui::output::{addmsg_str, flush_now, msg_str};
+use crate::ui::terminal;
 use glam::IVec2;
 
 use crate::game::globals::monsters;
@@ -359,7 +359,8 @@ pub unsafe fn wanderer() {
 /// Wakes and updates an adjacent monster's pursuit behavior and special gaze logic.
 pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
     let Some(id) = crate::game::monster_id_at(y, x) else {
-        runtime::shutdown();
+        flush_now();
+        terminal::shutdown();
         std::process::abort();
     };
 

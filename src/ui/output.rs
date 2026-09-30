@@ -46,36 +46,6 @@ fn split_message_at(text: &str, limit: usize) -> usize {
         .unwrap_or_else(|| text.chars().next().map_or(0, char::len_utf8))
 }
 
-/// Move the standard-screen cursor.
-pub(crate) fn move_cursor(position: IVec2) {
-    cur::move_cursor(position);
-}
-
-/// Write one glyph at the current cursor position.
-pub(crate) fn write_glyph(glyph: char) {
-    cur::write_glyph(glyph);
-}
-
-/// Move to a position and write one glyph.
-pub(crate) fn write_glyph_at(position: IVec2, glyph: char) {
-    cur::write_glyph_at(position, glyph);
-}
-
-/// Read the glyph currently displayed under the standard-screen cursor.
-pub(crate) fn glyph_at_cursor() -> char {
-    cur::glyph_at_cursor()
-}
-
-/// Read the glyph displayed at a position on the standard screen.
-pub(crate) fn glyph_at(position: IVec2) -> char {
-    cur::glyph_at(position)
-}
-
-/// Enable or disable standout output on the standard screen.
-pub(crate) fn set_standout(enabled: bool) {
-    cur::set_standout(enabled);
-}
-
 /// Request that pending standard-screen changes be rendered at the next UI
 /// daemon boundary, or before input blocks.
 pub(crate) fn refresh() {
@@ -96,31 +66,6 @@ pub(crate) fn render_pending() -> bool {
 pub(crate) fn flush_now() {
     UI.render_pending.store(true, Ordering::Release);
     render_pending();
-}
-
-/// Clear the standard screen.
-pub(crate) fn clear_screen() {
-    cur::clear();
-}
-
-/// Clear from the cursor to the end of its line.
-pub(crate) fn clear_to_end_of_line() {
-    cur::clear_to_end_of_line();
-}
-
-/// Write UTF-8 text at the current cursor position.
-pub(crate) fn write_text(text: &str) {
-    cur::write_text(text);
-}
-
-/// Move to a position and write UTF-8 text.
-pub(crate) fn write_text_at(position: IVec2, text: &str) {
-    cur::write_text_at(position, text);
-}
-
-/// Return the current cursor position.
-pub(crate) fn window_cursor() -> IVec2 {
-    cur::cursor_pos()
 }
 
 /// Render a key byte in printable caret notation.
@@ -172,8 +117,8 @@ fn append_message(text: &str) {
 #[cfg(not(test))]
 fn display_message(text: &str) -> MessageResult {
     if text.is_empty() {
-        move_cursor(IVec2::new(0, 0));
-        clear_to_end_of_line();
+        cur::move_cursor(IVec2::new(0, 0));
+        cur::clear_to_end_of_line();
         set_mpos(0);
         return MessageResult::Displayed;
     }
@@ -224,7 +169,7 @@ pub(crate) fn endmsg() -> MessageResult {
 
     let mpos = get_mpos();
     if mpos != 0 {
-        write_text_at(IVec2::new(mpos, 0), "--More--");
+        cur::write_text_at(IVec2::new(mpos, 0), "--More--");
         refresh();
 
         if !msg_esc_enabled() {
@@ -252,8 +197,8 @@ pub(crate) fn endmsg() -> MessageResult {
         }
     }
 
-    write_text_at(IVec2::new(0, 0), &pending);
-    clear_to_end_of_line();
+    cur::write_text_at(IVec2::new(0, 0), &pending);
+    cur::clear_to_end_of_line();
     set_mpos(next_position);
     let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
     state.next_position = 0;
@@ -290,7 +235,7 @@ pub(crate) fn status() {
     }
 
     UI.status_armor.store(temp, Ordering::Relaxed);
-    let old_cursor = window_cursor();
+    let old_cursor = cur::cursor_pos();
     if UI.status_hp.load(Ordering::Relaxed) != max_hp {
         let mut temp_hp = max_hp;
         UI.status_hp.store(max_hp, Ordering::Relaxed);
@@ -319,7 +264,7 @@ pub(crate) fn status() {
         .unwrap_or("");
 
     if stat_msg {
-        move_cursor(IVec2::new(0, 0));
+        cur::move_cursor(IVec2::new(0, 0));
         msg_str(&format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -335,7 +280,7 @@ pub(crate) fn status() {
             w = hpwidth as usize,
         ));
     } else {
-        move_cursor(IVec2::new(0, STATLINE));
+        cur::move_cursor(IVec2::new(0, STATLINE));
         let line = format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -350,19 +295,19 @@ pub(crate) fn status() {
             state_name,
             w = hpwidth as usize,
         );
-        write_text(&line);
+        cur::write_text(&line);
     }
 
-    clear_to_end_of_line();
-    move_cursor(old_cursor);
+    cur::clear_to_end_of_line();
+    cur::move_cursor(old_cursor);
 }
 
 #[cfg(not(test))]
 pub(crate) fn show_win(message: &str) {
-    move_cursor(IVec2::new(0, 0));
-    write_text(message);
+    cur::move_cursor(IVec2::new(0, 0));
+    cur::write_text(message);
     let hero = PLAYER.pos();
-    move_cursor(IVec2::new(hero.x, hero.y));
+    cur::move_cursor(IVec2::new(hero.x, hero.y));
     refresh();
     wait_for(' ');
 }

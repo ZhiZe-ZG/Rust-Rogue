@@ -174,7 +174,7 @@ pub(crate) unsafe fn help() {
     mpos = 0;
 
     if helpch != b'*' {
-        output::move_cursor(IVec2::new(0, 0));
+        crate::ui::terminal::move_cursor(IVec2::new(0, 0));
         if let Some(entry) = HELP_ENTRIES.iter().find(|entry| entry.ch == helpch) {
             lower_msg = true as u8;
             msg_str(&format!("{}{}", output::format_key(entry.ch), entry.desc));
@@ -194,7 +194,7 @@ pub(crate) unsafe fn help() {
     }
     numprint = (numprint / 2).min(GameConfig::SCREEN_LINES - 1);
 
-    output::clear_screen();
+    crate::ui::terminal::clear();
     for (count, entry) in HELP_ENTRIES
         .iter()
         .filter(|entry| entry.print)
@@ -202,7 +202,7 @@ pub(crate) unsafe fn help() {
         .enumerate()
     {
         let count = count as i32;
-        output::move_cursor(IVec2::new(
+        crate::ui::terminal::move_cursor(IVec2::new(
             if count >= numprint {
                 GameConfig::SCREEN_COLS / 2
             } else {
@@ -211,13 +211,13 @@ pub(crate) unsafe fn help() {
             count % numprint,
         ));
         if entry.ch != 0 {
-            output::write_text(&output::format_key(entry.ch));
+            crate::ui::terminal::write_text(&output::format_key(entry.ch));
         }
-        output::write_text(&entry.desc);
+        crate::ui::terminal::write_text(&entry.desc);
     }
 
-    output::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
-    output::write_text("--Press space to continue--");
+    crate::ui::terminal::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
+    crate::ui::terminal::write_text("--Press space to continue--");
     output::refresh();
     wait_for(' ');
     msg_str("");
