@@ -57,87 +57,152 @@ pub struct ObjInfo {
     pub oi_know: bool,
 }
 
-pub static mut allscore: u8 = 1; // ALLSCORES is enabled in the standard build
+/// Whether the score table uses the all-scores display mode.
+pub static mut allscore: u8 = 1;
+/// Daemon scheduling phase flag.
 pub static mut after: u8 = 0;
+/// Requests that the current command be repeated.
 pub static mut again: u8 = 0;
+/// Suppresses score recording when nonzero.
 pub static mut noscore: i32 = 0;
+/// Whether the player has seen the staircase.
 pub static mut seenstairs: u8 = 0;
+/// Whether the player carries the amulet.
 pub static mut amulet: u8 = 0;
+/// Stops automatic movement at the next door.
 pub static mut door_stop: u8 = 0;
+/// Flushes pending input during combat.
 pub static mut fight_flush: u8 = 0;
+/// Whether the current command is the first move.
 pub static mut firstmove: u8 = 0;
+/// Legacy long-term condition flag.
 pub static mut got_ltc: u8 = 0;
+/// Whether the player has hit during the current action.
 pub static mut has_hit: u8 = 0;
+/// Whether the game is currently running a shell command.
 pub static mut in_shell: u8 = 0;
+/// Enables descriptive inventory output.
 pub static mut inv_describe: u8 = 1;
+/// Requests a jump during movement.
 pub static mut jump: u8 = 0;
+/// Enables the kamikaze combat behavior.
 pub static mut kamikaze: u8 = 0;
+/// Enables lower-priority message output.
 pub static mut lower_msg: u8 = 0;
+/// Requests movement onto the next tile.
 pub static mut move_on: u8 = 0;
+/// Whether the escape key should be shown in messages.
 pub static mut msg_esc: u8 = 0;
+/// Allows passage through a staircase.
 pub static mut passgo: u8 = 0;
+/// Whether the game loop is active.
 pub static mut playing: u8 = 1;
+/// Whether the player has requested to quit.
 pub static mut q_comm: u8 = 0;
+/// Whether the player is currently running.
 pub static mut running: u8 = 0;
+/// Whether save-related messages should be displayed.
 pub static mut save_msg: u8 = 1;
+/// Whether floor contents should be visible.
 pub static mut see_floor: u8 = 1;
+/// Whether a status message is pending.
 pub static mut stat_msg: u8 = 0;
+/// Uses terse message output when nonzero.
 pub static mut terse: u8 = 0;
+/// Whether the player is dead or dying.
 pub static mut to_death: u8 = 0;
+/// Whether the tombstone should be displayed on death.
 pub static mut tombstone: u8 = 1;
+/// Whether master-mode features are available.
 pub static master_mode_enabled: u8 = 1;
+/// Wizard/debug mode level.
 pub static mut wizard: i32 = 0;
+/// Tracks which inventory slots contain an item.
 pub static mut pack_used: [u8; 26] = [0; 26];
 
+/// Direction encoded by the last direction character.
 pub static mut dir_ch: Direction = Direction::None;
 /// Per-item colour names (`char *p_colors[]`), now Rust string slices.
 pub static mut p_colors: [&'static str; MAXPOTIONS] = [""; MAXPOTIONS];
 /// Per-ring stone names (`char *r_stones[]`), now Rust string slices.
 pub static mut r_stones: [&'static str; MAXRINGS] = [""; MAXRINGS];
+/// Direction used by running movement.
 pub static mut runch: Direction = Direction::None;
+/// Whether the player is taking an item.
 pub static mut take: u8 = 0;
 /// Wand/staff material names (`char *ws_made[]`), now Rust string slices.
 pub static mut ws_made: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
 /// Wand/staff kind names (`char *ws_type[]`), now Rust string slices.
 pub static mut ws_type: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
+/// Previous suspend signal state.
 pub static mut orig_dsusp: i32 = 0;
+/// Last command read by the legacy input path.
 pub static mut l_last_comm: Command = Command::UnknownKey;
+/// Last direction read by the legacy input path.
 pub static mut l_last_dir: Direction = Direction::None;
+/// Last command processed by the game.
 pub static mut last_comm: Command = Command::UnknownKey;
+/// Last direction processed by the game.
 pub static mut last_dir: Direction = Direction::None;
-pub static mut numscores: u32 = 10; // NUMSCORES from config.h
+/// Maximum number of scores retained in the score table.
+pub static mut numscores: u32 = 10;
 /// The number label for the scoreboard (`NUMNAME` from config.h).
 pub const NUMNAME: &str = "Ten";
+/// Number of objects initialized in the object tables.
 pub static mut n_objs: i32 = 0;
+/// Number of traps on the current level.
 pub static mut ntraps: i32 = 0;
+/// Current hunger state.
 pub static mut hungry_state: i32 = 0;
+/// Number of objects currently in the pack.
 pub static mut inpack: i32 = 0;
+/// Current inventory display mode.
 pub static mut inv_type: i32 = 0;
+/// Maximum hit value reached by the player.
 pub static mut max_hit: i32 = 0;
+/// Highest dungeon level reached.
 pub static mut max_level: i32 = 0;
+/// Current message cursor position.
 pub static mut mpos: i32 = 0;
+/// Whether food generation is disabled.
 pub static mut no_food: i32 = 0;
+/// Armor class values indexed by armor kind.
 pub static mut a_class: [i32; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
+/// Number of turns elapsed in the current action.
 pub static mut count: i32 = 0;
 /// The open score file, or `None` when it is not open.
 pub static mut scoreboard: Option<std::fs::File> = None;
+/// Remaining food units.
 pub static mut food_left: i32 = 0;
+/// Previous score value used by score display logic.
 pub static mut lastscore: i32 = -1;
+/// Number of commands suppressed by the current action.
 pub static mut no_command: i32 = 0;
+/// Number of movement steps suppressed by the current action.
 pub static mut no_move: i32 = 0;
+/// Player's current purse in gold pieces.
 pub static mut purse: i32 = 0;
+/// Number of quiet turns accumulated.
 pub static mut quiet: i32 = 0;
+/// Current weapon-versus-foe hit value.
 pub static mut vf_hit: i32 = 0;
+/// Current random-number seed.
 pub static mut seed: i32 = 0;
+/// Experience thresholds for each player level.
 pub static mut e_levels: [i32; 21] = [
     10, 20, 40, 80, 160, 320, 640, 1300, 2600, 5200, 13000, 26000, 50000, 100000, 200000, 400000,
     800000, 2000000, 4000000, 8000000, 0,
 ];
+/// Last movement delta.
 pub static mut delta: IVec2 = IVec2 { x: 0, y: 0 };
+/// Previous player position.
 pub static mut oldpos: IVec2 = IVec2 { x: 0, y: 0 };
+/// Previous object selected by the legacy input path.
 pub static mut l_last_pick: Option<crate::item::arena::ThingId> = None;
+/// Last object selected by the game.
 pub static mut last_pick: Option<crate::item::arena::ThingId> = None;
 
+/// Player maximum-stat snapshot.
 pub static mut max_stats: Stats = Stats {
     strength: 16,
     experience: 0,
@@ -147,6 +212,7 @@ pub static mut max_stats: Stats = Stats {
     damage: dmg_string("1x4"),
     max_hit_points: 12,
 };
+/// Previous room containing the player.
 pub static mut oldrp: Option<usize> = None;
 
 // ─── Cross-module game state, gathered here as the single owner ──────────────
@@ -181,6 +247,7 @@ pub static mut D_LIST: [CDelayedAction; MAXDAEMONS] = [CDelayedAction {
 /// sync by level population (`presence::place_room_contents`) and save
 /// restore.
 pub static mut ROOM_GOLD: [IVec2; GameConfig::MAX_ROOMS] = [IVec2::ZERO; GameConfig::MAX_ROOMS];
+/// Static monster definitions used by combat and level generation.
 pub static mut monsters: [MonsterInfo; MAXMONSTERS] = [
     MonsterInfo {
         m_name: "aquator",
@@ -548,6 +615,7 @@ pub static mut monsters: [MonsterInfo; MAXMONSTERS] = [
     },
 ];
 
+/// Base definitions for generic object kinds.
 pub static mut things: [ObjInfo; NUMTHINGS] = [
     ObjInfo {
         oi_name: "potion",
@@ -600,6 +668,7 @@ pub static mut things: [ObjInfo; NUMTHINGS] = [
     },
 ];
 
+/// Armor definitions and mutable identification state.
 pub static mut arm_info: [ObjInfo; MAXARMORS] = [
     ObjInfo {
         oi_name: "leather armor",
@@ -659,6 +728,7 @@ pub static mut arm_info: [ObjInfo; MAXARMORS] = [
     },
 ];
 
+/// Potion definitions and mutable identification state.
 pub static mut pot_info: [ObjInfo; MAXPOTIONS] = [
     ObjInfo {
         oi_name: "confusion",
@@ -760,6 +830,7 @@ pub static mut pot_info: [ObjInfo; MAXPOTIONS] = [
     },
 ];
 
+/// Ring definitions and mutable identification state.
 pub static mut ring_info: [ObjInfo; MAXRINGS] = [
     ObjInfo {
         oi_name: "protection",
@@ -861,6 +932,7 @@ pub static mut ring_info: [ObjInfo; MAXRINGS] = [
     },
 ];
 
+/// Scroll definitions and mutable identification state.
 pub static mut scr_info: [ObjInfo; MAXSCROLLS] = [
     ObjInfo {
         oi_name: "monster confusion",
@@ -990,6 +1062,7 @@ pub static mut scr_info: [ObjInfo; MAXSCROLLS] = [
     },
 ];
 
+/// Weapon definitions and mutable identification state.
 pub static mut weap_info: [ObjInfo; MAXWEAPONS + 1] = [
     ObjInfo {
         oi_name: "mace",
@@ -1063,6 +1136,7 @@ pub static mut weap_info: [ObjInfo; MAXWEAPONS + 1] = [
     },
 ];
 
+/// Wand and staff definitions and mutable identification state.
 pub static mut ws_info: [ObjInfo; MAXSTICKS] = [
     ObjInfo {
         oi_name: "light",
@@ -1261,11 +1335,17 @@ pub fn monster_info(index: usize) -> MonsterInfo {
 // They are now owned Rust `String`s behind a `Mutex`, read/written through the
 // accessors below.
 
+/// Player name storage.
 static WHOAMI: Mutex<String> = Mutex::new(String::new());
+/// Player's fruit-name storage.
 static FRUIT: Mutex<String> = Mutex::new(String::new());
+/// Home-directory storage.
 static HOME: Mutex<String> = Mutex::new(String::new());
+/// Current save-file-name storage.
 static FILE_NAME: Mutex<String> = Mutex::new(String::new());
+/// Message-history storage.
 static HUH: Mutex<String> = Mutex::new(String::new());
+/// Shared formatted-message scratch storage.
 static PRBUF: Mutex<String> = Mutex::new(String::new());
 
 /// The player's name (`char whoami[]`). Empty until set.
