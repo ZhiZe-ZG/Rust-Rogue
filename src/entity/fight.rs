@@ -7,7 +7,7 @@
 //! scoped `MONSTER_LIST.with`/`with_mut`, so no raw `*mut Thing` is threaded
 //! through combat.
 
-use crate::rnd::rnd;
+use crate::rnd::{rnd, roll};
 
 use crate::entity::chase::{runto, see_monst};
 use crate::entity::monsters::save;
@@ -27,7 +27,6 @@ use crate::item::weapons::{fall, fallpos};
 use crate::machdep::flush_type;
 use crate::misc::{check_level, chg_str, choose_str};
 use crate::rip::death;
-use crate::startup::roll;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
 

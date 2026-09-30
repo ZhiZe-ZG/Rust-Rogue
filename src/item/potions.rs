@@ -17,7 +17,7 @@ use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::item::rings::RingType;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
-use crate::startup::roll;
+use crate::rnd::roll;
 use crate::ui::output::{msg_str, show_win};
 use glam::IVec2;
 

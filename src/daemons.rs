@@ -24,7 +24,7 @@ use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
 use crate::rip::death;
-use crate::startup::roll;
+use crate::rnd::roll;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

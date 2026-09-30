@@ -18,7 +18,7 @@ use glam::IVec2;
 use crate::command::Command;
 use crate::entity::player::{MonsterFlags, Thing};
 use crate::game::MONSTER_LIST;
-use crate::startup::roll;
+use crate::rnd::roll;
 
 const PASSAGE: u8 = b'#' as u8;
 const DOOR: u8 = b'+' as u8;

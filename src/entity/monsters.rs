@@ -14,7 +14,7 @@ use crate::item::things::new_thing_id;
 use crate::level::find_floor;
 use crate::misc::{rnd_thing, spread};
 use crate::rnd::rnd;
-use crate::startup::roll;
+use crate::rnd::roll;
 use crate::ui::output::{addmsg_str, flush_now, msg_str};
 use crate::ui::terminal;
 use glam::IVec2;

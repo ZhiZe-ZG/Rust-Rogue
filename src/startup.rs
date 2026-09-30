@@ -20,9 +20,9 @@ use crate::level::new_level;
 use crate::machdep::{init_check, open_score, setup};
 use crate::options::parse_opts;
 use crate::rip::score;
-use crate::rnd::{rnd, set_seed};
+use crate::rnd::set_seed;
 use crate::save::{restore, RestoreError};
-use crate::ui::input::{self, readchar, wait_for};
+use crate::ui::input::{readchar, wait_for};
 use crate::ui::output::{self, msg_str, status};
 use crate::ui::terminal;
 use glam::IVec2;
@@ -98,6 +98,8 @@ impl Error for StartupError {
     }
 }
 
+// ─── Signal handling ──────────────────────────────────────────────────────────
+
 fn install_signal_handlers() -> std::io::Result<()> {
     #[cfg(unix)]
     {
@@ -135,6 +137,8 @@ fn suspend_terminal() {
     let _ = std::io::stdout().flush();
 }
 
+// ─── Privilege handling ───────────────────────────────────────────────────────
+
 fn drop_privileges() -> Result<(), StartupError> {
     #[cfg(unix)]
     unsafe {
@@ -166,16 +170,77 @@ fn drop_privileges() -> Result<(), StartupError> {
     Ok(())
 }
 
-/// Roll a number of dice.
-pub fn roll(mut number: i32, sides: i32) -> i32 {
-    let mut dtotal = 0;
+// ─── Startup helpers ──────────────────────────────────────────────────────────
 
-    while number > 0 {
-        dtotal += rnd(sides) + 1;
-        number -= 1;
+/// Read and apply the `ROGUEOPTS` environment variable, if it is set.
+///
+/// Returns whether `ROGUEOPTS` was present, so callers can distinguish an
+/// explicitly set (possibly empty) value from an unset one.
+unsafe fn parse_rogueopts() -> bool {
+    match std::env::var("ROGUEOPTS") {
+        Ok(options) => {
+            parse_opts(&options);
+            true
+        }
+        Err(_) => false,
     }
-    dtotal
 }
+
+/// Initialise the home directory and the default `"<home>rogue.save"` path.
+unsafe fn init_home_and_save_path() {
+    let mut home_dir = std::env::var("HOME").unwrap_or_default();
+    if !home_dir.is_empty() && !home_dir.ends_with('/') {
+        home_dir.push('/');
+    }
+    crate::game::globals::set_home(home_dir.clone());
+    crate::game::globals::set_file_name(format!("{}rogue.save", home_dir));
+}
+
+/// Resolve the player name from the environment when it is not already known.
+unsafe fn init_identity(had_options: bool) {
+    if !had_options || crate::game::globals::whoami().is_empty() {
+        let username = std::env::var("USER")
+            .or_else(|_| std::env::var("LOGNAME"))
+            .or_else(|_| std::env::var("USERNAME"))
+            .unwrap_or_else(|_| "nobody".to_owned());
+        crate::game::globals::set_whoami(crate::options::filter_printable(&username));
+    }
+}
+
+/// Seed the RNG from the command line, or from the clock and process id.
+unsafe fn init_seed(seed_arg: Option<i32>) {
+    let now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i32)
+        .unwrap_or(0);
+    let clock_seed = now_secs + std::process::id() as i32;
+    seed = seed_arg.unwrap_or(clock_seed);
+    set_seed(seed);
+}
+
+/// Build the object/trap/colour tables and the initial player.
+unsafe fn init_game_tables() {
+    crate::game::globals::init_inv_t_names();
+    crate::game::globals::init_trap_names();
+    init_probs();
+    init_player();
+    init_names();
+    init_colors();
+    init_stones();
+    init_materials();
+    setup();
+}
+
+/// Schedule the recurring daemons that drive the running game.
+unsafe fn start_game_daemons() {
+    start_daemon(Daemon::Runners, 0, AFTER);
+    start_daemon(Daemon::Doctor, 0, AFTER);
+    fuse(Daemon::Swander, 0, WANDERTIME, AFTER);
+    start_daemon(Daemon::Stomach, 0, AFTER);
+    start_daemon(Daemon::RingEffects, 0, AFTER);
+}
+
+// ─── Main loop and in-game escapes ────────────────────────────────────────────
 
 /// playit:
 /// The main loop of the program.  Loop until the game is over,
@@ -188,18 +253,15 @@ pub unsafe fn main_loop_step() {
     /*
      * parse environment declaration of options
      */
-    let c_options = std::env::var("ROGUEOPTS").ok();
-    if let Some(options) = c_options.as_ref() {
-        parse_opts(options);
-    }
+    parse_rogueopts();
 
-    oldpos = crate::game::PLAYER.pos();
     let hero_pos = crate::game::PLAYER.pos();
+    oldpos = hero_pos;
     oldrp = roomin(hero_pos);
     start_daemon(Daemon::UiRender, 0, AFTER);
     Daemon::UiRender.run(0);
     let mut command_state = CommandState::default();
-    while playing != false as u8 && !exit_requested() {
+    while playing != 0 && !exit_requested() {
         do_command(&mut command_state); /* Command execution */
     }
 }
@@ -212,7 +274,7 @@ pub unsafe fn quit() {
     /*
      * Reset the signal in case we got here via an interrupt
      */
-    if q_comm == false as u8 {
+    if q_comm == 0 {
         mpos = 0;
     }
     let old_cursor = crate::ui::terminal::UI.cursor_pos();
@@ -234,7 +296,7 @@ pub unsafe fn quit() {
         output::refresh();
         mpos = 0;
         count = 0;
-        to_death = false as u8;
+        to_death = 0;
     }
 }
 
@@ -250,8 +312,8 @@ pub unsafe fn shell() {
     output::refresh();
     output::flush_now();
     let _ = std::io::stdout().write_all(b"\n");
-    in_shell = true as u8;
-    after = false as u8;
+    in_shell = 1;
+    after = 0;
     let _ = std::io::stdout().flush();
     /*
      * Fork and do a shell
@@ -265,10 +327,11 @@ pub unsafe fn shell() {
     print!("\n[Press return to continue]");
     let _ = std::io::stdout().flush();
     terminal::UI.raw();
-    in_shell = false as u8;
+    in_shell = 0;
     wait_for('\n');
 }
 
+// ─── Entry point ──────────────────────────────────────────────────────────────
 
 /// The game entry point. `args` mirrors the process `argv` (including the
 /// program name at index 0); `src/bin/rogue.rs` calls this with
@@ -290,41 +353,21 @@ pub unsafe fn rogue_main(parameter: CommandLineParameter) -> ! {
 unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupError> {
     // Init terminal
     terminal::UI.init_terminal();
+
+    let seed_arg = parameter.seed;
     let mut restore_target = parameter.restore.or(parameter.save_file);
     if master_mode_enabled != 0 && restore_target.as_deref() == Some("") {
         wizard = 1;
         crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
         restore_target = None;
     }
-    
-    let mut home_dir = std::env::var("HOME").unwrap_or_default();
-    if !home_dir.is_empty() && !home_dir.ends_with('/') {
-        home_dir.push('/');
-    }
-    crate::game::globals::set_home(home_dir.clone());
-    // Default save file: "<home>rogue.save".
-    let save_name = format!("{}rogue.save", home_dir);
-    crate::game::globals::set_file_name(save_name);
 
-    let options = std::env::var("ROGUEOPTS").ok();
-    if let Some(options) = options.as_ref() {
-        parse_opts(options);
-    }
-    if options.is_none() || crate::game::globals::whoami().is_empty() {
-        let username = std::env::var("USER")
-            .or_else(|_| std::env::var("LOGNAME"))
-            .or_else(|_| std::env::var("USERNAME"))
-            .unwrap_or_else(|_| "nobody".to_owned());
-        crate::game::globals::set_whoami(crate::options::filter_printable(&username));
-    }
+    init_home_and_save_path();
 
-    let now_secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i32)
-        .unwrap_or(0);
-    let clock_seed = now_secs + std::process::id() as i32;
-    seed = parameter.seed.unwrap_or(clock_seed);
-    set_seed(seed);
+    let had_options = parse_rogueopts();
+    init_identity(had_options);
+    init_seed(seed_arg);
+
     open_score();
     drop_privileges()?;
     install_signal_handlers().map_err(StartupError::SignalHandlers)?;
@@ -351,25 +394,12 @@ unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupErr
         }
     }
 
-    crate::game::globals::init_inv_t_names();
-    crate::game::globals::init_trap_names();
-    init_probs();
-    init_player();
-    init_names();
-    init_colors();
-    init_stones();
-    init_materials();
-    setup();
+    init_game_tables();
     if master_mode_enabled != 0 {
         noscore = wizard;
     }
     new_level();
-    start_daemon(Daemon::Runners, 0, AFTER);
-    start_daemon(Daemon::Doctor, 0, AFTER);
-    fuse(Daemon::Swander, 0, WANDERTIME, AFTER);
-    start_daemon(Daemon::Stomach, 0, AFTER);
-    start_daemon(Daemon::RingEffects, 0, AFTER);
+    start_game_daemons();
     main_loop_step();
     Ok(requested_exit_code().unwrap_or(0))
 }
-

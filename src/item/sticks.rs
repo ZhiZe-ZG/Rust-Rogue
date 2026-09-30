@@ -11,7 +11,7 @@ use crate::item::pack::get_item_id;
 use crate::item::weapons::{do_motion, hit_monster};
 use crate::rip::death;
 use crate::rnd::rnd;
-use crate::startup::roll;
+use crate::rnd::roll;
 use crate::ui::output;
 use crate::ui::output::msg_str;
 use glam::IVec2;
