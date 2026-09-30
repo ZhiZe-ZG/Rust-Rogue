@@ -18,7 +18,7 @@ use crate::item::armor::rust_armor_id;
 use crate::item::pack::floor_at;
 use crate::item::rings::RingType;
 use crate::item::weapons::{fall, init_weapon};
-use crate::level::new_level;
+use crate::dungeon::new_level;
 use crate::machdep::flush_type;
 use crate::misc::{chg_str, spread};
 use crate::rip::death;

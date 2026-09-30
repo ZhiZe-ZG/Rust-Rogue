@@ -22,7 +22,7 @@ use crate::item::scrolls::read_scroll;
 use crate::item::sticks::do_zap;
 use crate::item::things::{drop, inv_name_id};
 use crate::item::weapons::{init_weapon, missile, wield};
-use crate::level::new_level;
+use crate::dungeon::new_level;
 use crate::misc::{eat, get_dir};
 use crate::options::{option, read_line};
 use crate::rip::total_winner;

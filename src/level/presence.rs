@@ -7,8 +7,8 @@
 //! [`ThingId`] handles and monsters by [`MonsterId`] handles; the remaining
 //! `unsafe` comes only from the process-wide `static mut` game globals
 //! (`amulet`, `ntraps`, `seenstairs`) and the item/monster stores, which
-//! [`super::generation::new_level`] triggers after the rooms/passages have been
-//! dug.
+//! [`crate::dungeon::generation::new_level`] triggers after the rooms/passages
+//! have been dug.
 
 use glam::IVec2;
 
@@ -309,7 +309,8 @@ unsafe fn place_hero() {
 /// Run the full population pass: gold/monsters, objects, traps, stairs, and
 /// the hero.
 ///
-/// Called by [`super::generation::new_level`] after the map is generated.
+/// Called by [`crate::dungeon::generation::new_level`] after the map is
+/// generated.
 pub(crate) unsafe fn populate_level() {
     place_room_contents();
     put_things(); /* Place objects (if any) */

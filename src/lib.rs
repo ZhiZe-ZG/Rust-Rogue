@@ -12,6 +12,7 @@ pub mod daemon;
 pub mod daemons;
 pub mod direction;
 pub mod draw;
+pub mod dungeon;
 pub mod entity;
 
 pub mod game;

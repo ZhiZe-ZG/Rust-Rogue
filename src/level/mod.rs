@@ -3,15 +3,13 @@
 //! Digs and populates a new dungeon level: room layout, maze corridors,
 //! passages, objects, traps, and the down staircase.
 
-mod generation;
 mod level;
 mod passages;
 mod presence;
 mod roomgraph;
 
-pub use generation::{door_open, new_level};
 pub use level::{Level, LevelFlags};
-pub(crate) use presence::find_floor;
+pub(crate) use presence::{find_floor, populate_level};
 
 // ---------------------------------------------------------------------------
 // Generation-global accessors
