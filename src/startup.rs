@@ -2,6 +2,8 @@
 
 use std::io::Write;
 
+use clap::Parser;
+
 use crate::command_dispatch::{do_command, CommandState};
 use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
@@ -27,6 +29,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const AFTER: i32 = 2;
 const WANDERTIME: i32 = 70;
 const INV_CLEAR: i32 = 2;
+
+#[derive(Parser)]
+#[command(name = "rogue", version)]
+struct Cli {
+    #[arg(short = 's', long = "scores", conflicts_with_all = ["debug_death", "restore", "save_file"])]
+    scores: bool,
+    #[arg(short = 'd', long = "debug-death", conflicts_with_all = ["scores", "restore", "save_file"])]
+    debug_death: bool,
+    #[arg(short = 'r', long = "restore", num_args = 0..=1, default_missing_value = "-r", conflicts_with_all = ["scores", "debug_death", "save_file"], value_name = "FILE")]
+    restore: Option<String>,
+    #[arg(value_name = "SAVE_FILE", allow_hyphen_values = true, conflicts_with_all = ["scores", "debug_death", "restore"])]
+    save_file: Option<String>,
+}
 
 /// Flushes the process stdout stream (replaces the C `fflush(stdout)` calls).
 #[inline]
@@ -224,13 +239,21 @@ pub(crate) fn my_exit(st: i32) -> ! {
 /// program name at index 0); `src/bin/rogue.rs` calls this with
 /// `std::env::args()`.
 pub unsafe fn rogue_main(args: &[String]) -> i32 {
-    let mut argv: Vec<String> = args.to_vec();
-    if master_mode_enabled != 0 && argv.len() >= 2 && argv[1].is_empty() {
+    let cli = match Cli::try_parse_from(args) {
+        Ok(cli) => cli,
+        Err(error) => {
+            let exit_code = error.exit_code();
+            let _ = error.print();
+            return exit_code;
+        }
+    };
+
+    let mut restore_target = cli.restore.or(cli.save_file);
+    if master_mode_enabled != 0 && restore_target.as_deref() == Some("") {
         wizard = 1;
         crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
-        argv.remove(1);
+        restore_target = None;
     }
-    let argc = argv.len();
 
     let mut home_dir = std::env::var("HOME").unwrap_or_default();
     if !home_dir.is_empty() && !home_dir.ends_with('/') {
@@ -274,32 +297,29 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
         return 1;
     }
 
-    if argc == 2 {
-        match argv[1].as_str() {
-            "-s" => {
-                noscore = 1;
-                score(0, -1, 0);
-                return 0;
-            }
-            "-d" => {
-                dnum = rnd(100);
-                while dnum > 1 {
-                    dnum -= 1;
-                    rnd(100);
-                }
-                purse = rnd(100) + 1;
-                crate::game::set_current_depth(rnd(100) + 1);
-                terminal::UI.ensure_terminal();
-                death(death_monst());
-                return 0;
-            }
-            _ => {}
+    if cli.scores {
+        noscore = 1;
+        score(0, -1, 0);
+        return 0;
+    }
+    if cli.debug_death {
+        dnum = rnd(100);
+        while dnum > 1 {
+            dnum -= 1;
+            rnd(100);
         }
+        purse = rnd(100) + 1;
+        crate::game::set_current_depth(rnd(100) + 1);
+        terminal::UI.ensure_terminal();
+        death(death_monst());
+        return 0;
     }
 
     init_check();
-    if argc == 2 && restore(&argv[1]) == 0 {
-        my_exit(1);
+    if let Some(save_file) = restore_target {
+        if restore(&save_file) == 0 {
+            my_exit(1);
+        }
     }
 
     if master_mode_enabled != 0 && wizard != 0 {
@@ -355,4 +375,28 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     start_daemon(Daemon::RingEffects, 0, AFTER);
     playit();
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::Parser;
+
+    #[test]
+    fn parses_startup_arguments() {
+        assert!(Cli::try_parse_from(["rogue", "-s"]).unwrap().scores);
+        assert!(Cli::try_parse_from(["rogue", "-d"]).unwrap().debug_death);
+
+        let default_restore = Cli::try_parse_from(["rogue", "-r"]).unwrap();
+        assert_eq!(default_restore.restore.as_deref(), Some("-r"));
+
+        let explicit_restore = Cli::try_parse_from(["rogue", "--restore", "save.dat"]).unwrap();
+        assert_eq!(explicit_restore.restore.as_deref(), Some("save.dat"));
+
+        let positional_restore = Cli::try_parse_from(["rogue", "save.dat"]).unwrap();
+        assert_eq!(positional_restore.save_file.as_deref(), Some("save.dat"));
+
+        let wizard_argument = Cli::try_parse_from(["rogue", ""]).unwrap();
+        assert_eq!(wizard_argument.save_file.as_deref(), Some(""));
+    }
 }
