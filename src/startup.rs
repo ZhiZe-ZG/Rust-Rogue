@@ -296,7 +296,6 @@ pub unsafe fn rogue_main(parameter: CommandLineParameter) -> ! {
 }
 
 unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupError> {
-
     // Init terminal
     terminal::UI.init_terminal();
     let mut restore_target = parameter.restore.or(parameter.save_file);
