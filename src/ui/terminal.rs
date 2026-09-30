@@ -115,7 +115,7 @@ impl UiState {
         }
     }
 
-    pub(crate) fn ensure_terminal(&self) {
+    pub(crate) fn init_terminal(&self) {
         let _terminal = lock(&self.terminal);
         if self.shutdown.load(Ordering::Relaxed) {
             let _ = crossterm::execute!(
@@ -298,7 +298,6 @@ impl UiState {
         use crossterm::event::{self, Event};
 
         if self.shutdown.load(Ordering::Relaxed) {
-            self.ensure_terminal();
         }
 
         let timeout = self.input_timeout.load(Ordering::Relaxed);
@@ -329,7 +328,6 @@ impl UiState {
 
     pub(crate) fn raw(&self) {
         self.input_timeout.store(-1, Ordering::Relaxed);
-        self.ensure_terminal();
     }
 }
 

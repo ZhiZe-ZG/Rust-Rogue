@@ -321,13 +321,15 @@ unsafe fn run_startup(args: &[String]) -> Result<i32, StartupError> {
         }
     };
 
+    // Init terminal
+    terminal::UI.init_terminal();
     let mut restore_target = cli.restore.or(cli.save_file);
     if master_mode_enabled != 0 && restore_target.as_deref() == Some("") {
         wizard = 1;
         crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
         restore_target = None;
     }
-
+    
     let mut home_dir = std::env::var("HOME").unwrap_or_default();
     if !home_dir.is_empty() && !home_dir.ends_with('/') {
         home_dir.push('/');
@@ -381,7 +383,6 @@ unsafe fn run_startup(args: &[String]) -> Result<i32, StartupError> {
         }
         purse = rnd(100) + 1;
         crate::game::set_current_depth(rnd(100) + 1);
-        terminal::UI.ensure_terminal();
         death(death_monst());
         return Ok(0);
     }
@@ -407,7 +408,6 @@ unsafe fn run_startup(args: &[String]) -> Result<i32, StartupError> {
     std::io::stdout()
         .flush()
         .map_err(StartupError::StartupOutput)?;
-    terminal::UI.ensure_terminal();
     // Reject terminals smaller than the fixed game grid. The physical size is
     // unavailable on some backends; in that case keep the legacy permissive
     // behaviour and continue.
