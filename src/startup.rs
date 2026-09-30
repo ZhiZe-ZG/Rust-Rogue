@@ -45,12 +45,6 @@ struct Cli {
     save_file: Option<String>,
 }
 
-/// Flushes the process stdout stream (replaces the C `fflush(stdout)` calls).
-#[inline]
-fn flush_stdout() {
-    let _ = std::io::stdout().flush();
-}
-
 fn install_signal_handlers() -> std::io::Result<()> {
     #[cfg(unix)]
     {
@@ -83,12 +77,12 @@ fn suspend_terminal() {
     let old_cursor = terminal::UI.cursor_pos();
     output::flush_now();
     terminal::UI.deinit_terminal();
-    flush_stdout();
+    let _ = std::io::stdout().flush();
     let _ = signal_hook::low_level::emulate_default_handler(SIGTSTP);
     input::enable_raw_mode();
     output::refresh();
     terminal::UI.move_cursor(old_cursor);
-    flush_stdout();
+    let _ = std::io::stdout().flush();
 }
 
 fn leave() -> ! {
@@ -221,7 +215,7 @@ pub unsafe fn shell() {
     let _ = std::io::stdout().write_all(b"\n");
     in_shell = true as u8;
     after = false as u8;
-    flush_stdout();
+    let _ = std::io::stdout().flush();
     /*
      * Fork and do a shell
      */
@@ -245,7 +239,7 @@ pub unsafe fn shell() {
 pub(crate) fn my_exit(st: i32) -> ! {
     output::flush_now();
     terminal::UI.deinit_terminal();
-    flush_stdout();
+    let _ = std::io::stdout().flush();
     let _ = std::io::stderr().flush();
     std::process::exit(st);
 }
