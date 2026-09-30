@@ -289,7 +289,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                     Command::Quit => {
                         after = false as u8;
                         q_comm = true as u8;
-                        quit(0);
+                        quit();
                         q_comm = false as u8;
                     }
                     Command::Inventory => {

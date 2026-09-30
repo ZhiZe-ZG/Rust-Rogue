@@ -70,7 +70,7 @@ pub fn readchar() -> i32 {
     crate::ui::output::render_pending();
     let key = read_legacy_key();
     if key == CTRL_C {
-        unsafe { crate::startup::quit(0) };
+        unsafe { crate::startup::quit() };
         return ESCAPE;
     }
     if key == ERR {
@@ -121,7 +121,7 @@ pub(crate) fn read_key_event() -> KeyEvent {
     if matches!(event.code, KeyCode::Char('c' | 'C'))
         && event.modifiers.contains(KeyModifiers::CONTROL)
     {
-        unsafe { crate::startup::quit(0) };
+        unsafe { crate::startup::quit() };
         return KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
     }
 

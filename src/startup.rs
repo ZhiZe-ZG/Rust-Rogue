@@ -7,6 +7,10 @@ use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
 use crate::entity::chase::roomin;
 use crate::entity::player::MonsterFlags;
+use crate::game::globals::{
+    after, count, dnum, get_dnum, get_purse, in_shell, inv_type, master_mode_enabled, mpos,
+    noscore, oldpos, oldrp, playing, purse, q_comm, seed, to_death, wizard,
+};
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
 use crate::machdep::{init_check, open_score, setup};
@@ -20,11 +24,9 @@ use crate::ui::terminal;
 use glam::IVec2;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const MAXSTR: usize = 1024;
 const AFTER: i32 = 2;
 const WANDERTIME: i32 = 70;
 const INV_CLEAR: i32 = 2;
-const SIGINT: i32 = 2;
 
 /// Flushes the process stdout stream (replaces the C `fflush(stdout)` calls).
 #[inline]
@@ -32,29 +34,7 @@ fn flush_stdout() {
     let _ = std::io::stdout().flush();
 }
 
-fn install_exit_signal_handlers() {
-    #[cfg(unix)]
-    unsafe {
-        let exit_handler = libc::exit as libc::sighandler_t;
-        libc::signal(libc::SIGHUP, libc::SIG_DFL);
-        for signal in [
-            libc::SIGQUIT,
-            libc::SIGILL,
-            libc::SIGTRAP,
-            libc::SIGABRT,
-            libc::SIGFPE,
-            libc::SIGBUS,
-            libc::SIGSEGV,
-            libc::SIGSYS,
-            libc::SIGTERM,
-            libc::SIGINT,
-        ] {
-            libc::signal(signal, exit_handler);
-        }
-    }
-}
-
-fn drop_privileges() {
+fn drop_privileges() -> Result<(), &'static str> {
     #[cfg(unix)]
     unsafe {
         let real_gid = libc::getgid();
@@ -65,8 +45,7 @@ fn drop_privileges() {
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         let group_error = libc::setregid(real_gid, real_gid) != 0;
         if group_error {
-            eprintln!("Could not drop setgid privileges.  Aborting.");
-            std::process::exit(1);
+            return Err("Could not drop setgid privileges.  Aborting.");
         }
 
         #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -74,34 +53,15 @@ fn drop_privileges() {
         #[cfg(not(any(target_os = "linux", target_os = "android")))]
         let user_error = libc::setreuid(real_uid, real_uid) != 0;
         if user_error {
-            eprintln!("Could not drop setuid privileges.  Aborting.");
-            std::process::exit(1);
+            return Err("Could not drop setuid privileges.  Aborting.");
         }
     }
+    Ok(())
 }
-
-use crate::game::globals::{
-    after, count, dnum, get_dnum, get_purse, in_shell, inv_type, jump, master_mode_enabled, mpos,
-    noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death,
-    wizard,
-};
 
 // ── Game control functions ported from src/c/main.c ─────────────────────────
 
-/// endit:
-/// Exit the program abnormally.
-///
-/// No globals used directly.
-pub unsafe extern "C" fn endit(sig: i32) {
-    let _ = sig;
-    fatal("Okay, bye bye!\n");
-}
-
-/// fatal:
-/// Exit the program, printing a message.
-///
-/// No globals used directly.
-pub unsafe fn fatal(s: &str) {
+fn fatal(s: &str) {
     crate::ui::terminal::UI.write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), s);
     output::refresh();
     output::flush_now();
@@ -109,11 +69,8 @@ pub unsafe fn fatal(s: &str) {
     my_exit(0);
 }
 
-/// roll:
 /// Roll a number of dice.
-///
-/// No globals used directly (uses rnd()).
-pub unsafe fn roll(mut number: i32, sides: i32) -> i32 {
+pub fn roll(mut number: i32, sides: i32) -> i32 {
     let mut dtotal = 0;
 
     while number > 0 {
@@ -125,9 +82,7 @@ pub unsafe fn roll(mut number: i32, sides: i32) -> i32 {
 
 /// tstp:
 /// Handle stop and start signals.
-pub unsafe extern "C" fn tstp(ignored: i32) {
-    let _ = ignored;
-
+pub unsafe extern "C" fn tstp(_ignored: libc::c_int) {
     /*
      * leave nicely
      */
@@ -142,7 +97,7 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
      * start back up again
      */
     #[cfg(unix)]
-    libc::signal(libc::SIGTSTP, tstp as libc::sighandler_t);
+    libc::signal(libc::SIGTSTP, tstp as *const () as libc::sighandler_t);
     input::enable_raw_mode();
     output::refresh();
     crate::ui::terminal::UI.move_cursor(old_cursor);
@@ -153,8 +108,7 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
 /// The main loop of the program.  Loop until the game is over,
 /// refreshing things and looking at the proper times.
 ///
-/// Uses globals: terse, jump, see_floor, inv_type, oldpos, oldrp,
-/// hero, playing, running.
+/// Uses globals: inv_type, oldpos, oldrp, playing.
 pub unsafe fn playit() {
     inv_type = INV_CLEAR;
 
@@ -175,16 +129,14 @@ pub unsafe fn playit() {
     while playing != false as u8 {
         do_command(&mut command_state); /* Command execution */
     }
-    endit(0);
+    fatal("Okay, bye bye!\n");
 }
 
 /// quit:
 /// Have player make certain, then exit.
 ///
 /// Uses globals: q_comm, mpos, purse, count, to_death.
-pub unsafe extern "C" fn quit(sig: i32) {
-    let _ = sig;
-
+pub unsafe fn quit() {
     /*
      * Reset the signal in case we got here via an interrupt
      */
@@ -194,7 +146,7 @@ pub unsafe extern "C" fn quit(sig: i32) {
     let old_cursor = crate::ui::terminal::UI.cursor_pos();
     msg_str("really quit?");
     if readchar() == b'y' as i32 {
-        libc::signal(libc::SIGINT, leave as libc::sighandler_t);
+        libc::signal(libc::SIGINT, leave as *const () as libc::sighandler_t);
         crate::ui::terminal::UI.clear();
         let line = format!("You quit with {} gold pieces", get_purse());
         crate::ui::terminal::UI.write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), &line);
@@ -216,9 +168,7 @@ pub unsafe extern "C" fn quit(sig: i32) {
 
 /// leave:
 /// Leave quickly, but curteously.
-pub unsafe extern "C" fn leave(sig: i32) {
-    let _ = sig;
-
+pub unsafe extern "C" fn leave(_sig: libc::c_int) {
     output::flush_now();
     terminal::UI.deinit_terminal();
 
@@ -262,7 +212,7 @@ pub unsafe fn shell() {
 /// Leave the process properly.
 ///
 /// No globals used directly.
-pub unsafe fn my_exit(st: i32) -> ! {
+pub(crate) fn my_exit(st: i32) -> ! {
     output::flush_now();
     terminal::UI.deinit_terminal();
     flush_stdout();
@@ -274,15 +224,13 @@ pub unsafe fn my_exit(st: i32) -> ! {
 /// program name at index 0); `src/bin/rogue.rs` calls this with
 /// `std::env::args()`.
 pub unsafe fn rogue_main(args: &[String]) -> i32 {
-    install_exit_signal_handlers();
-
     let mut argv: Vec<String> = args.to_vec();
     if master_mode_enabled != 0 && argv.len() >= 2 && argv[1].is_empty() {
         wizard = 1;
         crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
         argv.remove(1);
     }
-    let argc = argv.len() as i32;
+    let argc = argv.len();
 
     let mut home_dir = std::env::var("HOME").unwrap_or_default();
     if !home_dir.is_empty() && !home_dir.ends_with('/') {
@@ -321,26 +269,31 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     seed = dnum;
     set_seed(seed);
     open_score();
-    drop_privileges();
+    if let Err(error) = drop_privileges() {
+        eprintln!("{error}");
+        return 1;
+    }
 
     if argc == 2 {
-        let argument = argv[1].as_str();
-        if argument == "-s" {
-            noscore = 1;
-            score(0, -1, 0);
-            return 0;
-        }
-        if argument == "-d" {
-            dnum = rnd(100);
-            while dnum > 1 {
-                dnum -= 1;
-                rnd(100);
+        match argv[1].as_str() {
+            "-s" => {
+                noscore = 1;
+                score(0, -1, 0);
+                return 0;
             }
-            purse = rnd(100) + 1;
-            crate::game::set_current_depth(rnd(100) + 1);
-            terminal::UI.ensure_terminal();
-            death(death_monst());
-            return 0;
+            "-d" => {
+                dnum = rnd(100);
+                while dnum > 1 {
+                    dnum -= 1;
+                    rnd(100);
+                }
+                purse = rnd(100) + 1;
+                crate::game::set_current_depth(rnd(100) + 1);
+                terminal::UI.ensure_terminal();
+                death(death_monst());
+                return 0;
+            }
+            _ => {}
         }
     }
 
