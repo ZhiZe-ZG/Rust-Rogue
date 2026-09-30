@@ -441,7 +441,7 @@ impl Default for ThingObject {
 /// Read the actor's chase destination (a stable [`DestRef`] handle).
 #[inline]
 pub fn monster_dest(id: crate::game::MonsterId) -> DestRef {
-    crate::game::MONSTER_LIST
+    crate::game::DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_dest,
             Thing::Object { .. } => DestRef::None,
@@ -452,7 +452,7 @@ pub fn monster_dest(id: crate::game::MonsterId) -> DestRef {
 /// Set the actor's chase destination.
 #[inline]
 pub fn set_monster_dest(id: crate::game::MonsterId, value: DestRef) {
-    crate::game::MONSTER_LIST.with_mut(id, |t| {
+    crate::game::DUNGEON.monster_list.with_mut(id, |t| {
         if let Thing::Monster { data } = t {
             data.t_dest = value;
         }
@@ -474,7 +474,7 @@ pub fn set_monster_dest_hero(id: crate::game::MonsterId) {
 /// The actor's pack as arena handles, head first.
 #[inline]
 pub fn monster_pack(id: crate::game::MonsterId) -> Vec<ThingId> {
-    crate::game::MONSTER_LIST
+    crate::game::DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_pack.clone(),
             Thing::Object { .. } => Vec::new(),
@@ -485,7 +485,7 @@ pub fn monster_pack(id: crate::game::MonsterId) -> Vec<ThingId> {
 /// Replace the actor's pack with `pack`.
 #[inline]
 pub fn set_monster_pack(id: crate::game::MonsterId, pack: Vec<ThingId>) {
-    crate::game::MONSTER_LIST.with_mut(id, |t| {
+    crate::game::DUNGEON.monster_list.with_mut(id, |t| {
         if let Thing::Monster { data } = t {
             data.t_pack = pack;
         }
@@ -494,7 +494,7 @@ pub fn set_monster_pack(id: crate::game::MonsterId, pack: Vec<ThingId>) {
 
 /// Prepend the object `item` to the actor `owner`'s pack.
 pub fn attach_pack_id(owner: crate::game::MonsterId, item: ThingId) {
-    crate::game::MONSTER_LIST.with_mut(owner, |t| {
+    crate::game::DUNGEON.monster_list.with_mut(owner, |t| {
         if let Thing::Monster { data } = t {
             data.t_pack.insert(0, item);
         }
@@ -503,7 +503,7 @@ pub fn attach_pack_id(owner: crate::game::MonsterId, item: ThingId) {
 
 /// Unlink the object `item` from the actor `owner`'s pack.
 pub fn detach_pack_id(owner: crate::game::MonsterId, item: ThingId) {
-    crate::game::MONSTER_LIST.with_mut(owner, |t| {
+    crate::game::DUNGEON.monster_list.with_mut(owner, |t| {
         if let Thing::Monster { data } = t {
             data.t_pack.retain(|&x| x != item);
         }
@@ -512,7 +512,7 @@ pub fn detach_pack_id(owner: crate::game::MonsterId, item: ThingId) {
 
 /// Drop every item in the actor `owner`'s pack.
 pub fn free_pack_id(owner: crate::game::MonsterId) {
-    let pack = crate::game::MONSTER_LIST
+    let pack = crate::game::DUNGEON.monster_list
         .with_mut(owner, |t| match t {
             Thing::Monster { data } => std::mem::take(&mut data.t_pack),
             Thing::Object { .. } => Vec::new(),
@@ -525,7 +525,7 @@ pub fn free_pack_id(owner: crate::game::MonsterId) {
 
 /// Remove the monster `id` from the live monster list.
 pub fn discard_monster(id: crate::game::MonsterId) {
-    let _ = crate::game::MONSTER_LIST.remove(id);
+    let _ = crate::game::DUNGEON.monster_list.remove(id);
 }
 
 use crate::game::globals::{
@@ -884,7 +884,7 @@ mod tests {
     #[test]
     fn attach_detach_pack_preserves_order() {
         let _guard = serial();
-        let owner = crate::game::MONSTER_LIST.spawn_actor();
+        let owner = crate::game::DUNGEON.monster_list.spawn_actor();
         let a = new_object_id();
         let b = new_object_id();
 
@@ -897,7 +897,7 @@ mod tests {
 
         free_pack_id(owner);
         assert!(monster_pack(owner).is_empty());
-        let _ = crate::game::MONSTER_LIST.remove(owner);
+        let _ = crate::game::DUNGEON.monster_list.remove(owner);
     }
 
     /// Allocating and discarding objects keeps the tracked count balanced.

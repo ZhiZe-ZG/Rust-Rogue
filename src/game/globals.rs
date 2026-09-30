@@ -1423,7 +1423,7 @@ pub fn set_prbuf(value: String) {
 // These were previously C strings allocated with `malloc`/`free` and addressed
 // through `[*mut u8; N]` / `*mut u8` globals. They are now owned Rust
 // `String`s behind a `Mutex`, matching the container-owner style used elsewhere
-// (`MONSTER_LIST`, `OBJECTS`, `PLAYER`). Callers read/write through the small
+// (`DUNGEON.monster_list`, `OBJECTS`, `PLAYER`). Callers read/write through the small
 // accessors below.
 
 /// Generated scroll names (one per scroll kind), previously `char *s_names[]`.

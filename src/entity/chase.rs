@@ -1,9 +1,9 @@
 //! Port of `src/c/chase.c` — one creature chasing another.
 //!
 //! Monsters are addressed by [`MonsterId`] and reached through scoped
-//! [`MONSTER_LIST`] access, never raw pointers. Functions that need several
+//! `Dungeon::monster_list` access, never raw pointers. Functions that need several
 //! fields snapshot the monster into a small local value, compute with that,
-//! and write the result back through `MONSTER_LIST.with_mut` — which keeps the
+//! and write the result back through `DUNGEON.monster_list.with_mut` — which keeps the
 //! monster lock unheld while other locked state (e.g. the level) is read.
 
 use crate::config::GameConfig;
@@ -12,7 +12,8 @@ use crate::entity::monsters::MonsterType;
 use crate::entity::player::{DestRef, MonsterFlags, Thing};
 use crate::entity::rndmove::rndmove;
 use crate::game::globals::monsters;
-use crate::game::{MonsterId, MONSTER_LIST};
+use crate::dungeon::DUNGEON;
+use crate::game::MonsterId;
 use crate::item::item_type::ItemType;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
@@ -55,7 +56,7 @@ struct Mon {
 impl Mon {
     /// Read the monster `id` into a snapshot (or `None` when it is gone).
     fn get(id: MonsterId) -> Option<Mon> {
-        MONSTER_LIST
+        DUNGEON.monster_list
             .with(id, |t| match t {
                 Thing::Monster { data } => Some(Mon {
                     pos: data.t_pos,
@@ -79,7 +80,7 @@ impl Mon {
 
     /// Write the snapshot's mutable fields back onto the monster `id`.
     fn set(&self, id: MonsterId) {
-        MONSTER_LIST.with_mut(id, |t| {
+        DUNGEON.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_pos = self.pos;
                 data.t_turn = self.turn;
@@ -110,7 +111,7 @@ fn player_has(flag: MonsterFlags) -> bool {
 fn resolve_dest(dest: DestRef) -> IVec2 {
     match dest {
         DestRef::None | DestRef::Hero => hero_pos(),
-        DestRef::Monster(id) => MONSTER_LIST
+        DestRef::Monster(id) => DUNGEON.monster_list
             .with(id, |t| match t {
                 Thing::Monster { data, .. } => data.t_pos,
                 Thing::Object { .. } => hero_pos(),
@@ -143,7 +144,7 @@ unsafe fn flat_at(y: i32, x: i32) -> u8 {
 ///
 /// Uses globals: mlist, hero, to_death, has_hit.
 pub unsafe fn runners() {
-    for id in MONSTER_LIST.ids() {
+    for id in DUNGEON.monster_list.ids() {
         let Some(m) = Mon::get(id) else {
             continue;
         };
@@ -160,7 +161,7 @@ pub unsafe fn runners() {
             }
             let m = Mon::get(id).unwrap_or(m);
             if wastarget && !coord_eq(orig_pos, m.pos) {
-                MONSTER_LIST.with_mut(id, |t| {
+                DUNGEON.monster_list.with_mut(id, |t| {
                     if let Thing::Monster { data } = t {
                         data.t_flags.remove(MonsterFlags::TARGET);
                     }
@@ -194,7 +195,7 @@ pub unsafe fn move_monst(id: MonsterId) -> i32 {
             return -1;
         }
     }
-    MONSTER_LIST.with_mut(id, |t| {
+    DUNGEON.monster_list.with_mut(id, |t| {
         if let Thing::Monster { data } = t {
             data.t_turn = !data.t_turn;
         }
@@ -359,7 +360,7 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
     // And stop running if need be
     let m = Mon::get(id).unwrap_or(m);
     if stoprun && coord_eq(m.pos, resolve_dest(m.dest)) {
-        MONSTER_LIST.with_mut(id, |t| {
+        DUNGEON.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_flags.remove(MonsterFlags::RUN);
             }
@@ -389,7 +390,7 @@ pub unsafe fn set_oldch(id: MonsterId, cp: IVec2) {
             newch = crate::draw::cell_glyph(cp.y, cp.x) as u8;
         }
     }
-    MONSTER_LIST.with_mut(id, |t| {
+    DUNGEON.monster_list.with_mut(id, |t| {
         if let Thing::Monster { data } = t {
             data.t_oldch = newch;
         }
@@ -449,7 +450,7 @@ pub unsafe fn runto(runner: IVec2) {
         return;
     };
     // Start the beastie running
-    MONSTER_LIST.with_mut(id, |t| {
+    DUNGEON.monster_list.with_mut(id, |t| {
         if let Thing::Monster { data } = t {
             data.t_flags.insert(MonsterFlags::RUN);
             data.t_flags.remove(MonsterFlags::HELD);
@@ -490,7 +491,7 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> (u8, IVec2) {
         curdist = dist_cp(ch_ret, ee);
         // Small chance that it will become un-confused
         if rnd(20) == 0 {
-            MONSTER_LIST.with_mut(id, |t| {
+            DUNGEON.monster_list.with_mut(id, |t| {
                 if let Thing::Monster { data } = t {
                     data.t_flags.remove(MonsterFlags::HUH);
                 }
@@ -549,7 +550,7 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> (u8, IVec2) {
                         }
                         // It can also be a Xeroc, which we shouldn't step on.
                         let xeroc = crate::game::monster_id_at(y, x).is_some_and(|mid| {
-                            MONSTER_LIST
+                            DUNGEON.monster_list
                                 .with(mid, |t| match t {
                                     Thing::Monster { data } => {
                                         data.t_type == Some(MonsterType::Xeroc)
@@ -695,7 +696,7 @@ pub unsafe fn update_dest(id: MonsterId) {
         if roomin(opos) == m.room && rnd(100) < prob {
             let obj_dest = DestRef::Object(obj_id);
             let mut taken = false;
-            for mid in MONSTER_LIST.ids() {
+            for mid in DUNGEON.monster_list.ids() {
                 if crate::entity::player::monster_dest(mid) == obj_dest {
                     taken = true;
                     break;

@@ -18,7 +18,7 @@ use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
 use crate::entity::monsters::{wanderer, MonsterType};
 use crate::entity::player::{MonsterFlags, Thing};
-use crate::game::MONSTER_LIST;
+use crate::dungeon::DUNGEON;
 use crate::game::PLAYER;
 use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::rings::{ring_eat, RingType};
@@ -51,7 +51,7 @@ use crate::game::globals::{
 /// The `(position, disguise, oldch, flags)` of a monster `id`, if it exists.
 #[inline]
 fn monster_view(id: crate::game::MonsterId) -> Option<(IVec2, u8, u8, MonsterFlags)> {
-    MONSTER_LIST
+    DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => {
                 Some((data.t_pos, data.t_disguise, data.t_oldch, data.t_flags))
@@ -146,7 +146,7 @@ pub unsafe fn unconfuse() {
 /// unsee:
 /// Turn off the ability to see invisible.
 pub unsafe fn unsee() {
-    for id in MONSTER_LIST.ids() {
+    for id in DUNGEON.monster_list.ids() {
         if let Some((pos, _disguise, oldch, flags)) = monster_view(id) {
             if flags.contains(MonsterFlags::INVIS) && see_monst(id) != 0 {
                 crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), oldch as char);
@@ -269,7 +269,7 @@ pub unsafe fn come_down() {
     // Undo the monsters.
     let seemonst = PLAYER.has_flag(MonsterFlags::SEEMONST);
     let cansee_invis = PLAYER.has_flag(MonsterFlags::CANSEE);
-    for id in MONSTER_LIST.ids() {
+    for id in DUNGEON.monster_list.ids() {
         if let Some((pos, _disguise, _oldch, flags)) = monster_view(id) {
             if cansee(pos.y, pos.x) != 0 {
                 if !flags.contains(MonsterFlags::INVIS) || cansee_invis {
@@ -307,9 +307,9 @@ pub unsafe fn visuals() {
 
     // Change the monsters.
     let seemonst = PLAYER.has_flag(MonsterFlags::SEEMONST);
-    for id in MONSTER_LIST.ids() {
+    for id in DUNGEON.monster_list.ids() {
         if let Some((pos, disguise, _oldch, _flags)) = monster_view(id) {
-            let typ = MONSTER_LIST
+            let typ = DUNGEON.monster_list
                 .with(id, |t| match t {
                     Thing::Monster { data } => data.t_type,
                     Thing::Object { .. } => None,

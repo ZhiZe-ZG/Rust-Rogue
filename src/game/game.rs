@@ -7,8 +7,8 @@
 //!   passages, and floor items) for the live dungeon depth.
 //!
 //! The player actor and equipment live in [`crate::game::player`]; the live
-//! monster list in [`crate::game::MonsterList`]; and the per-cell monster
-//! occupancy grid in [`crate::game::MONSTER_MAP`].
+//! monster list and the per-cell monster occupancy grid are owned by the
+//! [`DUNGEON`](crate::dungeon::DUNGEON) singleton.
 //!
 //! Cell display glyphs and flat flags are no longer cached in a legacy per-cell
 //! grid (the `p_ch`/`p_flags` members were removed); every access goes through
@@ -16,44 +16,42 @@
 //! grids on the fly.
 
 use crate::config::GameConfig;
-use crate::dungeon::DUNGEON;
+use crate::dungeon::{MonsterId, DUNGEON};
 use crate::entity::player::Thing;
 use crate::level::Level;
 use crate::tile::Tile;
 use glam::IVec2;
-
-use crate::game::MONSTER_MAP;
 
 /// The [`MonsterId`] occupying `(y, x)`, or `None`.
 ///
 /// This is the pointer-free accessor preferred by new code; the per-cell map
 /// already stores a [`MonsterId`] and never a raw pointer.
 #[inline]
-pub fn monster_id_at(y: i32, x: i32) -> Option<crate::game::MonsterId> {
-    MONSTER_MAP.at(y as usize, x as usize)
+pub fn monster_id_at(y: i32, x: i32) -> Option<MonsterId> {
+    DUNGEON.monster_map.at(y as usize, x as usize)
 }
 
 /// Whether a live monster stands at `(y, x)`.
 #[inline]
 pub fn monster_here(y: i32, x: i32) -> bool {
-    MONSTER_MAP.at(y as usize, x as usize).is_some()
+    DUNGEON.monster_map.at(y as usize, x as usize).is_some()
 }
 
 /// Place the monster `id` (or clear the cell with `None`) at `(y, x)`.
 #[inline]
-pub fn set_monster_id(y: i32, x: i32, id: Option<crate::game::MonsterId>) {
-    MONSTER_MAP.set(y as usize, x as usize, id);
+pub fn set_monster_id(y: i32, x: i32, id: Option<MonsterId>) {
+    DUNGEON.monster_map.set(y as usize, x as usize, id);
 }
 
 /// Clear the monster occupancy at `(y, x)`.
 #[inline]
 pub fn clear_monster(y: i32, x: i32) {
-    MONSTER_MAP.set(y as usize, x as usize, None);
+    DUNGEON.monster_map.set(y as usize, x as usize, None);
 }
 
 /// Clear every cell's monster pointer for a fresh level.
 pub unsafe fn clear_level() {
-    MONSTER_MAP.clear();
+    DUNGEON.monster_map.clear();
 }
 
 /// Whether the cell at `(y, x)` can be entered: no monster stands there and the

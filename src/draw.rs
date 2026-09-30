@@ -20,7 +20,8 @@ use crate::entity::chase::{roomin, see_monst};
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::{MonsterFlags, Thing};
 use crate::game;
-use crate::game::{MonsterId, MONSTER_LIST};
+use crate::dungeon::DUNGEON;
+use crate::game::MonsterId;
 use crate::item::arena::ThingId;
 use crate::dungeon::door_open;
 use crate::level::{with_current_level, with_current_level_mut};
@@ -184,7 +185,7 @@ pub(crate) unsafe fn redraw_cell(y: i32, x: i32) {
 /// screen character; callers must not cast `t_type`/`t_disguise` themselves.
 #[inline]
 pub(crate) fn monster_glyph(id: MonsterId) -> char {
-    MONSTER_LIST
+    DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_disguise as char,
             Thing::Object { .. } => ' ',
@@ -196,7 +197,7 @@ pub(crate) fn monster_glyph(id: MonsterId) -> char {
 /// identity, or a random letter under hallucination.
 #[inline]
 pub(crate) fn monster_type_glyph(id: MonsterId) -> char {
-    MONSTER_LIST
+    DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_type.map_or(' ', |m| m.glyph() as char),
             Thing::Object { .. } => ' ',
@@ -234,7 +235,7 @@ pub(crate) fn write_reverse_video_cell_glyph(pos: IVec2, glyph: char) {
 pub(crate) unsafe fn winat(y: i32, x: i32) -> u8 {
     match game::monster_id_at(y, x) {
         None => cell_glyph(y, x),
-        Some(id) => MONSTER_LIST
+        Some(id) => DUNGEON.monster_list
             .with(id, |t| match t {
                 Thing::Monster { data } => data.t_disguise,
                 Thing::Object { .. } => cell_glyph(y, x),
@@ -377,7 +378,7 @@ pub unsafe fn add_pass() {
                 crate::ui::terminal::UI.move_cursor(IVec2::new(x, y));
                 let monst = game::monster_id_at(y, x);
                 if let Some(id) = monst {
-                    MONSTER_LIST.with_mut(id, |t| {
+                    DUNGEON.monster_list.with_mut(id, |t| {
                         if let Thing::Monster { data } = t {
                             data.t_oldch = ch as u8;
                         }
@@ -474,7 +475,7 @@ pub unsafe fn look(wakeup: u8) {
                     ch = trip_ch(y, x, ch);
                 }
                 Some(id) => {
-                    let invis = MONSTER_LIST
+                    let invis = DUNGEON.monster_list
                         .with(id, |t| match t {
                             Thing::Monster { data } => data.t_flags.contains(MonsterFlags::INVIS),
                             Thing::Object { .. } => false,
@@ -493,7 +494,7 @@ pub unsafe fn look(wakeup: u8) {
                         if player_has(MonsterFlags::HALU) {
                             ch = rnd(26) + b'A' as i32;
                         } else {
-                            ch = MONSTER_LIST
+                            ch = DUNGEON.monster_list
                                 .with(id, |t| match t {
                                     Thing::Monster { data } => data.t_disguise as i32,
                                     Thing::Object { .. } => ch,
@@ -679,7 +680,7 @@ pub unsafe fn enter_room(cp: IVec2) {
                     }
                 }
                 Some(id) => {
-                    MONSTER_LIST.with_mut(id, |t| {
+                    DUNGEON.monster_list.with_mut(id, |t| {
                         if let Thing::Monster { data } = t {
                             data.t_oldch = ch as u8;
                         }

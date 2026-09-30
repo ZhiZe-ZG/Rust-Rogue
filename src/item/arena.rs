@@ -9,7 +9,7 @@
 //! Access is *scoped*: [`ThingArena::with`] and [`ThingArena::with_mut`] lend a
 //! thing for the duration of a closure and release the lock afterwards, which
 //! lets the single-threaded gameplay code add or remove objects between calls
-//! (mirroring [`crate::game::MonsterList`]).
+//! (mirroring `Dungeon::monster_list`).
 //!
 //! Objects are owned outright by the arena and reached only through [`ThingId`]
 //! handles, so no raw pointer to a stored object ever escapes this module.

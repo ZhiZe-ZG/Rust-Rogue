@@ -47,7 +47,7 @@ pub struct MonsterList {
 }
 
 impl MonsterList {
-    const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             slots: Mutex::new(Vec::new()),
         }
@@ -139,6 +139,3 @@ impl MonsterList {
         self.ids().get(index).copied()
     }
 }
-
-/// The monster list for the live level.
-pub static MONSTER_LIST: MonsterList = MonsterList::new();

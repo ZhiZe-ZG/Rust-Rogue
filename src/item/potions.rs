@@ -11,7 +11,8 @@ use crate::entity::chase::see_monst;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game::globals::{pot_info, ObjInfo};
 use crate::game::PLAYER;
-use crate::game::{MonsterId, MONSTER_LIST};
+use crate::dungeon::DUNGEON;
+use crate::game::MonsterId;
 use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id};
@@ -131,7 +132,7 @@ fn player_has(flag: MonsterFlags) -> bool {
 
 #[inline]
 fn thing_has(id: MonsterId, flag: MonsterFlags) -> bool {
-    MONSTER_LIST
+    DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_flags.contains(flag),
             Thing::Object { .. } => false,
@@ -307,8 +308,8 @@ pub unsafe fn quaff() {
                         pot_info_at(PotionType::TrapFind.index()).oi_know = true;
                     }
                 }
-                for id in MONSTER_LIST.ids() {
-                    let (mp_pos, pack) = MONSTER_LIST
+                for id in DUNGEON.monster_list.ids() {
+                    let (mp_pos, pack) = DUNGEON.monster_list
                         .with(id, |t| match t {
                             Thing::Monster { data } => (Some(data.t_pos), data.t_pack.clone()),
                             Thing::Object { .. } => (None, Vec::new()),
@@ -456,12 +457,12 @@ pub fn is_magic_id(id: ThingId) -> bool {
 /// Turn on the ability to see invisible.
 pub unsafe fn invis_on() {
     crate::game::PLAYER.add_flag(MonsterFlags::CANSEE);
-    for id in MONSTER_LIST.ids() {
+    for id in DUNGEON.monster_list.ids() {
         if thing_has(id, MonsterFlags::INVIS)
             && see_monst(id) != 0
             && !player_has(MonsterFlags::HALU)
         {
-            if let Some(pos) = MONSTER_LIST
+            if let Some(pos) = DUNGEON.monster_list
                 .with(id, |t| match t {
                     Thing::Monster { data } => Some(data.t_pos),
                     Thing::Object { .. } => None,
@@ -479,8 +480,8 @@ pub unsafe fn invis_on() {
 pub unsafe fn turn_see(turn_off: u8) -> u8 {
     let mut add_new = 0;
 
-    for id in MONSTER_LIST.ids() {
-        if let Some((pos, oldch)) = MONSTER_LIST
+    for id in DUNGEON.monster_list.ids() {
+        if let Some((pos, oldch)) = DUNGEON.monster_list
             .with(id, |t| match t {
                 Thing::Monster { data } => Some((data.t_pos, data.t_oldch)),
                 Thing::Object { .. } => None,
@@ -537,7 +538,7 @@ pub unsafe fn seen_stairs() -> u8 {
         if see_monst(tp) != 0 && thing_has(tp, MonsterFlags::RUN) {
             return 1;
         }
-        let oldch = MONSTER_LIST
+        let oldch = DUNGEON.monster_list
             .with(tp, |t| match t {
                 Thing::Monster { data } => data.t_oldch as i32,
                 Thing::Object { .. } => 0,

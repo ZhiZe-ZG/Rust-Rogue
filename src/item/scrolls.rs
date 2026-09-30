@@ -9,7 +9,7 @@ use crate::entity::monsters::{new_monster_id, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game;
 use crate::game::globals::{scr_info, weap_info};
-use crate::game::MONSTER_LIST;
+use crate::dungeon::DUNGEON;
 use crate::game::PLAYER;
 use crate::init::pick_color;
 use crate::item::arena::{ThingId, OBJECTS};
@@ -185,7 +185,7 @@ pub unsafe fn read_scroll() {
                         continue;
                     }
                     if let Some(mid) = game::monster_id_at(y, x) {
-                        let running_held = game::MONSTER_LIST
+                        let running_held = game::DUNGEON.monster_list
                             .with_mut(mid, |t| {
                                 if let Thing::Monster { data } = t {
                                     if data.t_flags.contains(MonsterFlags::RUN) {
@@ -254,7 +254,7 @@ pub unsafe fn read_scroll() {
             if i == 0 {
                 msg_str("you hear a faint cry of anguish in the distance");
             } else {
-                let id = MONSTER_LIST.spawn_actor();
+                let id = DUNGEON.monster_list.spawn_actor();
                 new_monster_id(id, randmonster(false), mp);
             }
         }
@@ -292,7 +292,7 @@ pub unsafe fn read_scroll() {
                     if ch != SPACE {
                         let has_monster = game::monster_id_at(y, x);
                         if let Some(mid) = has_monster {
-                            game::MONSTER_LIST.with_mut(mid, |t| {
+                            game::DUNGEON.monster_list.with_mut(mid, |t| {
                                 if let Thing::Monster { data } = t {
                                     data.t_oldch = ch as u8;
                                 }

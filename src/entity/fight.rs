@@ -4,7 +4,7 @@
 //!
 //! Monsters are addressed by [`MonsterId`] and items by arena [`ThingId`];
 //! monster fields are read into small local snapshots and written back through
-//! scoped `MONSTER_LIST.with`/`with_mut`, so no raw `*mut Thing` is threaded
+//! scoped `DUNGEON.monster_list.with`/`with_mut`, so no raw `*mut Thing` is threaded
 //! through combat.
 
 use crate::rnd::{rnd, roll};
@@ -14,7 +14,8 @@ use crate::entity::monsters::save;
 use crate::entity::monsters::MonsterType;
 use crate::entity::player::MonsterFlags;
 use crate::game::globals::{monsters, weap_info};
-use crate::game::{MonsterId, MONSTER_LIST, PLAYER};
+use crate::dungeon::DUNGEON;
+use crate::game::{MonsterId, PLAYER};
 use crate::init::pick_color;
 use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::armor::rust_armor_id;
@@ -94,7 +95,7 @@ struct Mon {
 
 impl Mon {
     fn get(id: MonsterId) -> Option<Mon> {
-        MONSTER_LIST
+        DUNGEON.monster_list
             .with(id, |t| match t {
                 crate::entity::player::Thing::Monster { data } => Some(Mon {
                     pos: data.t_pos,
@@ -120,7 +121,7 @@ use crate::game::globals::{
 
 #[inline]
 fn on_p(id: MonsterId, flag: MonsterFlags) -> bool {
-    MONSTER_LIST
+    DUNGEON.monster_list
         .with(id, |t| match t {
             crate::entity::player::Thing::Monster { data } => data.t_flags.contains(flag),
             crate::entity::player::Thing::Object { .. } => false,
@@ -168,7 +169,7 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
             b'X'
         };
         let pos = mon.pos;
-        MONSTER_LIST.with_mut(tp, |t| {
+        DUNGEON.monster_list.with_mut(tp, |t| {
             if let crate::entity::player::Thing::Monster { data } = t {
                 data.t_disguise = new_disguise;
             }
@@ -203,7 +204,7 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
         }
         if player_has(MonsterFlags::CANHUH) {
             did_hit = true as u8;
-            MONSTER_LIST.with_mut(tp, |t| {
+            DUNGEON.monster_list.with_mut(tp, |t| {
                 if let crate::entity::player::Thing::Monster { data } = t {
                     data.t_flags.insert(MonsterFlags::HUH);
                 }
@@ -213,7 +214,7 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
             has_hit = false as u8;
             msg_str(&format!("your hands stop glowing {}", pick_color("red")));
         }
-        let hp = MONSTER_LIST
+        let hp = DUNGEON.monster_list
             .with(tp, |t| match t {
                 crate::entity::player::Thing::Monster { data } => data.t_stats.hit_points,
                 crate::entity::player::Thing::Object { .. } => 0,
@@ -255,7 +256,7 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
         && !player_has(MonsterFlags::BLIND)
     {
         let pos = mon.pos;
-        MONSTER_LIST.with_mut(tp, |t| {
+        DUNGEON.monster_list.with_mut(tp, |t| {
             if let crate::entity::player::Thing::Monster { data } = t {
                 data.t_disguise = b'X';
             }
@@ -498,7 +499,7 @@ pub unsafe fn set_mname(tp: MonsterId) -> String {
 
     let mname: &'static str;
     if player_has(MonsterFlags::HALU) {
-        let pos = MONSTER_LIST
+        let pos = DUNGEON.monster_list
             .with(tp, |t| match t {
                 crate::entity::player::Thing::Monster { data } => Some(data.t_pos),
                 crate::entity::player::Thing::Object { .. } => None,
@@ -515,7 +516,7 @@ pub unsafe fn set_mname(tp: MonsterId) -> String {
         };
         mname = monsters[idx].m_name;
     } else {
-        let idx = MONSTER_LIST
+        let idx = DUNGEON.monster_list
             .with(tp, |t| match t {
                 crate::entity::player::Thing::Monster { data } => {
                     data.t_type.map_or(0, |m| m.index())
@@ -545,7 +546,7 @@ pub unsafe fn roll_em(
     weap: Option<ThingId>,
     hurl: u8,
 ) -> i32 {
-    let att_stats = MONSTER_LIST
+    let att_stats = DUNGEON.monster_list
         .with(thatt, |t| match t {
             crate::entity::player::Thing::Monster { data } => data.t_stats,
             crate::entity::player::Thing::Object { .. } => crate::entity::player::Stats::default(),
@@ -562,7 +563,7 @@ unsafe fn roll_em_hero_to(thdef: MonsterId, weap: Option<ThingId>, hurl: u8) -> 
 
 /// Monster `thatt` attacks the hero.
 unsafe fn roll_em_to_hero(thatt: MonsterId, weap: Option<ThingId>, hurl: u8) -> i32 {
-    let att_stats = MONSTER_LIST
+    let att_stats = DUNGEON.monster_list
         .with(thatt, |t| match t {
             crate::entity::player::Thing::Monster { data } => data.t_stats,
             crate::entity::player::Thing::Object { .. } => crate::entity::player::Stats::default(),
@@ -693,7 +694,7 @@ unsafe fn roll_em_inner(
     } else {
         thdef
             .and_then(|id| {
-                MONSTER_LIST.with(id, |t| match t {
+                DUNGEON.monster_list.with(id, |t| match t {
                     crate::entity::player::Thing::Monster { data } => Some(data.t_stats.armor),
                     crate::entity::player::Thing::Object { .. } => None,
                 })
@@ -732,7 +733,7 @@ unsafe fn roll_em_inner(
         if def_is_hero {
             PLAYER.with_stats_mut(|stats| stats.hit_points -= total_damage);
         } else if let Some(id) = thdef {
-            MONSTER_LIST.with_mut(id, |t| {
+            DUNGEON.monster_list.with_mut(id, |t| {
                 if let crate::entity::player::Thing::Monster { data } = t {
                     data.t_stats.hit_points -= total_damage;
                 }

@@ -11,19 +11,25 @@ use std::sync::RwLock;
 use glam::IVec2;
 
 use crate::level::Level;
+use crate::tile::Tile;
 
 mod generation;
+mod monster_list;
+mod monster_map;
 mod presence;
 
 pub use generation::{door_open, new_level};
+pub use monster_list::{MonsterId, MonsterList};
+pub use monster_map::MonsterMap;
 pub(crate) use presence::find_floor;
 
-/// Process-wide owner of the live dungeon level and its counters.
+/// Process-wide owner of the live dungeon level, its counters, and the live
+/// monsters.
 ///
 /// Replaces the scattered process-wide globals of the legacy engine (the
-/// `CURRENT_LEVEL` singleton plus the `max_level` and `no_food` counters) with
-/// one owner, keeping the same scoped-closure access pattern (see
-/// [`Dungeon::with_level`]).
+/// `CURRENT_LEVEL` singleton, the `max_level`/`no_food` counters, and the
+/// `mlist`/`DUNGEON.monster_map` monster owners) with one owner, keeping the same
+/// scoped-closure access pattern (see [`Dungeon::with_level`]).
 pub struct Dungeon {
     /// The live [`Level`], created lazily on first access.
     level: RwLock<Option<Level>>,
@@ -31,6 +37,10 @@ pub struct Dungeon {
     max_level: AtomicI32,
     /// Whether food generation is disabled.
     no_food: AtomicI32,
+    /// The live monsters for the current level.
+    pub monster_list: MonsterList,
+    /// The per-cell monster occupancy grid for the current level.
+    pub monster_map: MonsterMap,
 }
 
 impl Dungeon {
@@ -40,6 +50,8 @@ impl Dungeon {
             level: RwLock::new(None),
             max_level: AtomicI32::new(0),
             no_food: AtomicI32::new(0),
+            monster_list: MonsterList::new(),
+            monster_map: MonsterMap::new(),
         }
     }
 
@@ -135,6 +147,65 @@ impl Dungeon {
     #[inline]
     pub fn bump_no_food(&self) -> i32 {
         self.no_food.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// Find a floor cell in the live level to place something, optionally
+    /// avoiding monsters.
+    ///
+    /// If `room_idx` is `None` a random room slot is tried each iteration via
+    /// [`Level::rnd_room`]; otherwise the cell is chosen inside that room. The
+    /// candidate cell is validated against the level's tile map and the
+    /// per-cell monster occupancy grid. Returns the chosen cell, or `None` when
+    /// `limit` (if nonzero) attempts are exhausted.
+    pub(crate) fn find_floor(
+        &self,
+        room_idx: Option<usize>,
+        limit: i32,
+        monst: bool,
+    ) -> Option<IVec2> {
+        self.with_level(|level| {
+            let mut cnt = limit;
+            // Safety bound: unlimited scans must eventually give up rather than
+            // hang level generation on a packed level.
+            let mut guard = 0u32;
+            loop {
+                if limit != 0 {
+                    if cnt == 0 {
+                        return None;
+                    }
+                    cnt -= 1;
+                }
+                guard += 1;
+                if guard > 1_000_000 {
+                    return None;
+                }
+
+                let idx = room_idx.unwrap_or_else(|| level.rnd_room());
+                let room = &level.rooms[idx];
+                let expected_tile = if room.is_maze() {
+                    Tile::Passage
+                } else {
+                    Tile::Floor
+                };
+                let pos = level.rnd_pos(room);
+
+                // The candidate cell is validated against the map tile
+                // directly; an object overlay does not count as a free cell.
+                let tile = level.tile_at(pos.y as usize, pos.x as usize);
+
+                if monst {
+                    let occupied = self
+                        .monster_map
+                        .at(pos.y as usize, pos.x as usize)
+                        .is_some();
+                    if !occupied && tile.is_walkable() {
+                        return Some(pos);
+                    }
+                } else if tile == expected_tile {
+                    return Some(pos);
+                }
+            }
+        })
     }
 }
 

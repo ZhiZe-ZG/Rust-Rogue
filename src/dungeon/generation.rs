@@ -11,7 +11,7 @@ use crate::config::GameConfig;
 use crate::draw::winat;
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::MonsterFlags;
-use crate::game::MONSTER_LIST;
+use crate::dungeon::DUNGEON;
 use crate::game::{self, clear_level, with_current_level_mut};
 use crate::dungeon::{bump_no_food, record_max_depth};
 use crate::structure::Room;
@@ -28,10 +28,10 @@ unsafe fn reset_level() {
 }
 
 unsafe fn clear_previous_level_items() {
-    for id in MONSTER_LIST.ids() {
+    for id in DUNGEON.monster_list.ids() {
         crate::entity::player::free_pack_id(id);
     }
-    MONSTER_LIST.clear();
+    DUNGEON.monster_list.clear();
     with_current_level_mut(|current| current.clear_items());
 }
 

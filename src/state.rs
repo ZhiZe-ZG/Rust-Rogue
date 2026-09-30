@@ -6,8 +6,8 @@
 //! as [RON] (Rust Object Notation), a human-readable self-describing format.
 //!
 //! The engine's live state is still held in process-wide safe owners
-//! ([`crate::game::PLAYER`], [`crate::game::MONSTER_LIST`],
-//! [`crate::game::MONSTER_MAP`], [`crate::dungeon::DUNGEON`], the item
+//! ([`crate::game::PLAYER`], `Dungeon::monster_list`,
+//! `Dungeon::monster_map`, [`crate::dungeon::DUNGEON`], the item
 //! arena and the many `static mut` globals). This module only *snapshots* that
 //! state into plain value types, and rebuilds it on restore. Pointers between
 //! things (intrusive list links, chase targets, equipment slots) are encoded as
@@ -24,7 +24,8 @@ use std::io::{Read, Write};
 use crate::daemon::CDelayedAction;
 use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingObject};
-use crate::game::{MonsterId, MONSTER_LIST, MONSTER_MAP, PLAYER};
+use crate::dungeon::DUNGEON;
+use crate::game::{MonsterId, PLAYER};
 use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::level::{LevelFlags, PassageLinks, RoomGraph};
 use crate::structure::{Passage, Room, Structure};
@@ -276,7 +277,7 @@ fn snapshot_actor(
         crate::entity::player::DestRef::None => DestRef::None,
         crate::entity::player::DestRef::Hero => DestRef::Hero,
         crate::entity::player::DestRef::Monster(id) => {
-            DestRef::Monster(MONSTER_LIST.position(id).unwrap_or(usize::MAX))
+            DestRef::Monster(DUNGEON.monster_list.position(id).unwrap_or(usize::MAX))
         }
         crate::entity::player::DestRef::Object(id) => DestRef::Object(
             level_items
@@ -304,7 +305,7 @@ fn snapshot_actor(
 
 /// Snapshot a live monster `id` into a pointer-free [`MonsterSnapshot`].
 fn snapshot_monster(id: MonsterId, level_items: &[ThingId]) -> Option<MonsterSnapshot> {
-    MONSTER_LIST
+    DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => Some(snapshot_actor(
                 data.t_pos,
@@ -353,7 +354,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
     });
     player.t_pack = Vec::new();
 
-    let monster_snaps: Vec<MonsterSnapshot> = MONSTER_LIST
+    let monster_snaps: Vec<MonsterSnapshot> = DUNGEON.monster_list
         .ids()
         .into_iter()
         .filter_map(|id| snapshot_monster(id, &level_items))
@@ -375,8 +376,8 @@ unsafe fn build_snapshot() -> GameSnapshot {
         let mut monster_cells = Vec::new();
         for y in 0..crate::config::GameConfig::LEVEL_HEIGHT {
             for x in 0..crate::config::GameConfig::LEVEL_WIDTH {
-                if let Some(id) = MONSTER_MAP.at(y, x) {
-                    if let Some(pos) = MONSTER_LIST.position(id) {
+                if let Some(id) = DUNGEON.monster_map.at(y, x) {
+                    if let Some(pos) = DUNGEON.monster_list.position(id) {
                         monster_cells.push((y, x, pos));
                     }
                 }
@@ -725,8 +726,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     }
 
     // ── level ───────────────────────────────────────────────────────────
-    MONSTER_LIST.clear();
-    MONSTER_MAP.clear();
+    DUNGEON.monster_list.clear();
+    DUNGEON.monster_map.clear();
 
     let room_gold = s.level.room_gold.clone();
     crate::game::with_current_level_mut(|lvl| {
@@ -765,8 +766,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     // ── monsters ────────────────────────────────────────────────────────
     let mut monster_ids: Vec<MonsterId> = Vec::new();
     for snap in &s.monsters {
-        let id = MONSTER_LIST.spawn_actor();
-        MONSTER_LIST.with_mut(id, |t| {
+        let id = DUNGEON.monster_list.spawn_actor();
+        DUNGEON.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_pos = snap.t_pos;
                 data.t_turn = snap.t_turn;

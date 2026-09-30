@@ -8,7 +8,7 @@
 //! algorithm of the C original.
 
 use crate::entity::player::{MonsterFlags, ObjectFlags};
-use crate::game::MONSTER_LIST;
+use crate::dungeon::DUNGEON;
 use crate::item::arena::{with_object, with_object_mut, ThingId, OBJECTS};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::scrolls::ScrollType;
@@ -228,7 +228,7 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
     crate::game::PLAYER.set_pack(pack);
 
     let item_dest = crate::entity::player::DestRef::Object(item_id);
-    for id in MONSTER_LIST.ids() {
+    for id in DUNGEON.monster_list.ids() {
         if crate::entity::player::monster_dest(id) == item_dest {
             crate::entity::player::set_monster_dest_hero(id);
         }

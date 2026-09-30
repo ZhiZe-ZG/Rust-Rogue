@@ -8,7 +8,8 @@ use crate::entity::fight::set_mname;
 use crate::entity::player::DestRef;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
-use crate::game::{MonsterId, MONSTER_LIST};
+use crate::dungeon::DUNGEON;
+use crate::game::MonsterId;
 use crate::item::rings::RingType;
 use crate::item::things::new_thing_id;
 use crate::dungeon::find_floor;
@@ -201,7 +202,7 @@ use crate::game::globals::wizard;
 
 #[inline]
 fn has_flag(id: MonsterId, flag: MonsterFlags) -> bool {
-    MONSTER_LIST
+    DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_flags.contains(flag),
             Thing::Object { .. } => false,
@@ -249,7 +250,7 @@ pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2
         lev_add = 0;
     }
 
-    // `id` was already allocated into `MONSTER_LIST` by `spawn_actor`.
+    // `id` was already allocated into `DUNGEON.monster_list` by `spawn_actor`.
 
     let oldch = crate::draw::cell_glyph(cp.y, cp.x) as u8;
     let room = roomin(cp);
@@ -257,7 +258,7 @@ pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2
     crate::game::set_monster_id(cp.y, cp.x, Some(id));
 
     let mp = &monsters[monster_type.index()];
-    MONSTER_LIST.with_mut(id, |t| {
+    DUNGEON.monster_list.with_mut(id, |t| {
         let Thing::Monster { data } = t else {
             return;
         };
@@ -293,7 +294,7 @@ pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2
 
 /// Computes bonus experience from a monster's level and max HP.
 pub fn exp_add(id: MonsterId) -> i32 {
-    let (level, max_hp) = MONSTER_LIST
+    let (level, max_hp) = DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => (data.t_stats.level, data.t_stats.max_hit_points),
             Thing::Object { .. } => (0, 0),
@@ -316,7 +317,7 @@ fn exp_add_for(level: i32, max_hp: i32) -> i32 {
 
 /// Spawns a wandering monster in a different room and sets it running toward the hero.
 pub unsafe fn wanderer() {
-    let id = MONSTER_LIST.spawn_actor();
+    let id = DUNGEON.monster_list.spawn_actor();
     let mut cp;
 
     loop {
@@ -337,7 +338,7 @@ pub unsafe fn wanderer() {
         crate::draw::write_reverse_video_cell_glyph(cp, glyph);
     }
 
-    let pos = MONSTER_LIST
+    let pos = DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_pos,
             Thing::Object { .. } => IVec2::ZERO,
@@ -346,7 +347,7 @@ pub unsafe fn wanderer() {
     runto(pos);
 
     if wizard != 0 {
-        let name = MONSTER_LIST
+        let name = DUNGEON.monster_list
             .with(id, |t| match t {
                 Thing::Monster { data } => data.t_type.map_or("", |m| m.name()).to_string(),
                 Thing::Object { .. } => String::new(),
@@ -363,7 +364,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
         std::process::abort();
     };
 
-    let ch = MONSTER_LIST
+    let ch = DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_type,
             Thing::Object { .. } => None,
@@ -378,7 +379,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
         && !player_has(MonsterFlags::LEVIT)
     {
         crate::entity::player::set_monster_dest_hero(id);
-        MONSTER_LIST.with_mut(id, |t| {
+        DUNGEON.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_flags.insert(MonsterFlags::RUN);
             }
@@ -395,7 +396,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
         let rp = crate::game::PLAYER.room();
         let hero = crate::game::PLAYER.pos();
         if (rp.is_some() && !crate::game::room_dark(rp)) || dist(y, x, hero.y, hero.x) < LAMPDIST {
-            MONSTER_LIST.with_mut(id, |t| {
+            DUNGEON.monster_list.with_mut(id, |t| {
                 if let Thing::Monster { data } = t {
                     data.t_flags.insert(MonsterFlags::FOUND);
                 }
@@ -418,7 +419,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
     }
 
     if has_flag(id, MonsterFlags::GREED) && !has_flag(id, MonsterFlags::RUN) {
-        MONSTER_LIST.with_mut(id, |t| {
+        DUNGEON.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_flags.insert(MonsterFlags::RUN);
             }
@@ -440,7 +441,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
 
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
 pub unsafe fn give_pack_id(id: MonsterId) {
-    let kind = MONSTER_LIST
+    let kind = DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_type,
             Thing::Object { .. } => None,
@@ -449,7 +450,7 @@ pub unsafe fn give_pack_id(id: MonsterId) {
     let carry = monsters[kind.map_or(0, |m| m.index())].m_carry;
     if crate::game::current_depth() >= crate::dungeon::max_depth() && rnd(100) < carry {
         let item = new_thing_id();
-        MONSTER_LIST.with_mut(id, |t| {
+        DUNGEON.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_pack.insert(0, item);
             }
@@ -459,7 +460,7 @@ pub unsafe fn give_pack_id(id: MonsterId) {
 
 /// Roll a saving throw for the monster behind `id` (pointer-free variant).
 pub fn save_throw_id(which: i32, id: crate::game::MonsterId) -> i32 {
-    let level = crate::game::MONSTER_LIST
+    let level = crate::game::DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_stats.level,
             Thing::Object { .. } => 0,

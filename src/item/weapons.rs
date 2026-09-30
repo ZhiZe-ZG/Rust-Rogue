@@ -189,7 +189,7 @@ pub unsafe fn fall(id: ThingId, pr: bool) {
                 .with_object(id, |o| crate::draw::item_glyph(o.o_type))
                 .unwrap_or(')');
             if let Some(mid) = crate::game::monster_id_at(newpos.y, newpos.x) {
-                crate::game::MONSTER_LIST.with_mut(mid, |t| {
+                crate::game::DUNGEON.monster_list.with_mut(mid, |t| {
                     if let crate::entity::player::Thing::Monster { data } = t {
                         data.t_oldch = glyph as u8;
                     }

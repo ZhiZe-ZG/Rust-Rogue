@@ -2,8 +2,9 @@
 //! the hero spawn.
 //!
 //! Room selection, geometry, and candidate-cell validation go through the Rust
-//! `Level` model (`Level::find_floor`, `Level::rnd_room`, `Level::rnd_pos`) and
-//! the safe per-cell monster occupancy grid. Items are addressed by arena
+//! `Level` model (`rnd_room`, `rnd_pos`) and the [`Dungeon`](super::Dungeon)
+//! `find_floor`, plus the safe per-cell monster occupancy grid. Items are
+//! addressed by arena
 //! [`ThingId`] handles and monsters by [`MonsterId`] handles; the remaining
 //! `unsafe` comes only from the process-wide `static mut` game globals
 //! (`amulet`, `ntraps`, `seenstairs`) and the item/monster stores, which
@@ -17,7 +18,7 @@ use crate::entity::chase::roomin;
 use crate::entity::monsters::{give_pack_id, new_monster_id, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game::globals::{amulet, ntraps, seenstairs};
-use crate::game::MONSTER_LIST;
+use crate::dungeon::DUNGEON;
 use crate::game::{self, with_current_level, with_current_level_mut};
 use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::item::item_type::ItemType;
@@ -30,9 +31,9 @@ use crate::tile::{Tile, TrapType};
 // -- Glyphs --
 const GOLDGRP: i32 = 1;
 
-/// Find a floor cell on the live level (see [`crate::level::Level::find_floor`]).
+/// Find a floor cell on the live level (see [`Dungeon::find_floor`](super::Dungeon::find_floor)).
 pub(crate) fn find_floor(room_idx: Option<usize>, limit: i32, monst: bool) -> Option<IVec2> {
-    with_current_level(|current| current.find_floor(room_idx, limit, monst))
+    super::DUNGEON.find_floor(room_idx, limit, monst)
 }
 
 /// Link an already-allocated floor object into the level's item list.
@@ -85,9 +86,9 @@ unsafe fn treas_room() {
     game::set_current_depth(depth + 1);
     while nm > 0 {
         if let Some(pos) = find_floor(Some(idx), GameConfig::MAX_PLACEMENT_ATTEMPTS, true) {
-            let id = MONSTER_LIST.spawn_actor();
+            let id = DUNGEON.monster_list.spawn_actor();
             new_monster_id(id, randmonster(false), pos);
-            MONSTER_LIST.with_mut(id, |t| {
+            DUNGEON.monster_list.with_mut(id, |t| {
                 if let Thing::Monster { data } = t {
                     data.t_flags.insert(MonsterFlags::MEAN);
                 }
@@ -133,7 +134,7 @@ unsafe fn place_room_contents() {
 
         let goldval = with_current_level(|current| current.rooms[i].goldval);
         if rnd(100) < if goldval > 0 { 80 } else { 25 } {
-            let id = MONSTER_LIST.spawn_actor();
+            let id = DUNGEON.monster_list.spawn_actor();
             if let Some(pos) = find_floor(Some(i), 0, true) {
                 new_monster_id(id, randmonster(false), pos);
                 give_pack_id(id);
@@ -237,8 +238,8 @@ unsafe fn place_stairs() {
 
 /// Link every monster on the level to the room its position falls in.
 unsafe fn link_monsters_to_rooms() {
-    for id in MONSTER_LIST.ids() {
-        MONSTER_LIST.with_mut(id, |t| {
+    for id in DUNGEON.monster_list.ids() {
+        DUNGEON.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_room = unsafe { roomin(data.t_pos) };
             }

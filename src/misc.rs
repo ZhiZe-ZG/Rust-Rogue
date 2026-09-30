@@ -17,7 +17,7 @@ use glam::IVec2;
 
 use crate::command::Command;
 use crate::entity::player::{MonsterFlags, Thing};
-use crate::game::MONSTER_LIST;
+use crate::dungeon::DUNGEON;
 use crate::rnd::roll;
 
 const PASSAGE: u8 = b'#' as u8;
@@ -208,8 +208,8 @@ pub unsafe fn add_haste(potion: bool) -> bool {
 }
 
 pub unsafe fn aggravate() {
-    for id in MONSTER_LIST.ids() {
-        if let Some(pos) = MONSTER_LIST
+    for id in DUNGEON.monster_list.ids() {
+        if let Some(pos) = DUNGEON.monster_list
             .with(id, |t| match t {
                 Thing::Monster { data } => Some(data.t_pos),
                 Thing::Object { .. } => None,

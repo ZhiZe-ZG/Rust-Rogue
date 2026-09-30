@@ -262,7 +262,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 to_death = true as u8;
                                 max_hit = 0;
                                 if let Some(id) = mp {
-                                    crate::game::MONSTER_LIST.with_mut(id, |t| {
+                                    crate::game::DUNGEON.monster_list.with_mut(id, |t| {
                                         if let Thing::Monster { data } = t {
                                             data.t_flags.insert(MonsterFlags::TARGET);
                                         }
