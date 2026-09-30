@@ -191,7 +191,6 @@ pub unsafe fn save_game() {
 pub unsafe fn save_file(savef: &mut File) -> io::Result<()> {
     let _ = std::io::stdout().write_all(b"\n");
     output::flush_now();
-    terminal::UI.deinit_terminal();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(
         crate::game::globals::file_name(),
@@ -238,7 +237,6 @@ pub unsafe fn restore(file: &str) -> Result<(), RestoreError> {
     setup();
     if let Err(source) = rs_restore_file(&mut inf) {
         output::flush_now();
-        terminal::UI.deinit_terminal();
         return Err(RestoreError::ReadState {
             path: path.clone(),
             source,
@@ -248,7 +246,6 @@ pub unsafe fn restore(file: &str) -> Result<(), RestoreError> {
     if master_mode_enabled == 0 || wizard == 0 {
         if let Err(source) = std::fs::remove_file(&path) {
             output::flush_now();
-            terminal::UI.deinit_terminal();
             return Err(RestoreError::RemoveFile {
                 path: path.clone(),
                 source,
@@ -260,7 +257,6 @@ pub unsafe fn restore(file: &str) -> Result<(), RestoreError> {
 
     if restore_player_dead() {
         output::flush_now();
-        terminal::UI.deinit_terminal();
         return Err(RestoreError::DeadPlayer { path });
     }
 

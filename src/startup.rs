@@ -141,7 +141,6 @@ fn suspend_terminal() {
 
     let old_cursor = terminal::UI.cursor_pos();
     output::flush_now();
-    terminal::UI.deinit_terminal();
     let _ = std::io::stdout().flush();
     let _ = signal_hook::low_level::emulate_default_handler(SIGTSTP);
     input::enable_raw_mode();
@@ -264,7 +263,6 @@ pub unsafe fn shell() {
     crate::ui::terminal::UI.move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
     output::refresh();
     output::flush_now();
-    terminal::UI.deinit_terminal();
     let _ = std::io::stdout().write_all(b"\n");
     in_shell = true as u8;
     after = false as u8;
@@ -414,7 +412,6 @@ unsafe fn run_startup(args: &[String]) -> Result<i32, StartupError> {
     if let Some(size) = terminal::physical_size() {
         if size.y < GameConfig::SCREEN_LINES || size.x < GameConfig::SCREEN_COLS {
             output::flush_now();
-            terminal::UI.deinit_terminal();
             return Err(StartupError::TerminalTooSmall {
                 actual: size,
                 required: IVec2::new(GameConfig::SCREEN_COLS, GameConfig::SCREEN_LINES),

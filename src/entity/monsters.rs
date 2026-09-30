@@ -360,7 +360,6 @@ pub unsafe fn wanderer() {
 pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
     let Some(id) = crate::game::monster_id_at(y, x) else {
         flush_now();
-        terminal::UI.deinit_terminal();
         std::process::abort();
     };
 
