@@ -292,8 +292,6 @@ pub(crate) fn get_key_event() -> Option<crossterm::event::KeyEvent> {
     }
 }
 
-pub(crate) fn set_escape_delay(_milliseconds: i32) {}
-
 pub(crate) fn raw() {
     UI.input_timeout.store(-1, Ordering::Relaxed);
     ensure_terminal();

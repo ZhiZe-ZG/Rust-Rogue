@@ -9,11 +9,7 @@ use crate::entity::chase::roomin;
 use crate::entity::player::MonsterFlags;
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
 use crate::level::new_level;
-use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
-use crate::mdport::{
-    md_gethomedir, md_getpid, md_getusername, md_hasclreol, md_init, md_normaluser, md_shellescape,
-    md_tstpresume, md_tstpsignal,
-};
+use crate::machdep::{init_check, open_score, setup};
 use crate::options::parse_opts;
 use crate::rip::{death, death_monst, score};
 use crate::rnd::{rnd, set_seed};
@@ -34,6 +30,54 @@ const SIGINT: i32 = 2;
 #[inline]
 fn flush_stdout() {
     let _ = std::io::stdout().flush();
+}
+
+fn install_exit_signal_handlers() {
+    #[cfg(unix)]
+    unsafe {
+        let exit_handler = libc::exit as libc::sighandler_t;
+        libc::signal(libc::SIGHUP, libc::SIG_DFL);
+        for signal in [
+            libc::SIGQUIT,
+            libc::SIGILL,
+            libc::SIGTRAP,
+            libc::SIGABRT,
+            libc::SIGFPE,
+            libc::SIGBUS,
+            libc::SIGSEGV,
+            libc::SIGSYS,
+            libc::SIGTERM,
+            libc::SIGINT,
+        ] {
+            libc::signal(signal, exit_handler);
+        }
+    }
+}
+
+fn drop_privileges() {
+    #[cfg(unix)]
+    unsafe {
+        let real_gid = libc::getgid();
+        let real_uid = libc::getuid();
+
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        let group_error = libc::setresgid((-1i32) as libc::gid_t, real_gid, real_gid) != 0;
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        let group_error = libc::setregid(real_gid, real_gid) != 0;
+        if group_error {
+            eprintln!("Could not drop setgid privileges.  Aborting.");
+            std::process::exit(1);
+        }
+
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        let user_error = libc::setresuid((-1i32) as libc::uid_t, real_uid, real_uid) != 0;
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        let user_error = libc::setreuid(real_uid, real_uid) != 0;
+        if user_error {
+            eprintln!("Could not drop setuid privileges.  Aborting.");
+            std::process::exit(1);
+        }
+    }
 }
 
 use crate::game::globals::{
@@ -92,18 +136,18 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
         IVec2::new(0, GameConfig::SCREEN_LINES - 1),
     );
     runtime::shutdown();
-    resetltchars();
     flush_stdout();
-    md_tstpsignal();
+    #[cfg(unix)]
+    libc::kill(0, libc::SIGTSTP);
 
     /*
      * start back up again
      */
-    md_tstpresume();
+    #[cfg(unix)]
+    libc::signal(libc::SIGTSTP, tstp as libc::sighandler_t);
     input::set_raw_mode(true);
     input::set_echo(false);
     input::set_keypad(true);
-    playltchars();
     output::set_clear_on_refresh(true);
     output::refresh_window();
     runtime::move_physical_cursor(output::window_cursor(), old_cursor);
@@ -127,9 +171,7 @@ pub unsafe fn playit() {
         see_floor = false as u8;
     }
 
-    if md_hasclreol() != 0 {
-        inv_type = INV_CLEAR;
-    }
+    inv_type = INV_CLEAR;
 
     /*
      * parse environment declaration of options
@@ -215,7 +257,6 @@ pub unsafe fn shell() {
     output::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
     output::refresh();
     runtime::shutdown();
-    resetltchars();
     let _ = std::io::stdout().write_all(b"\n");
     in_shell = true as u8;
     after = false as u8;
@@ -223,14 +264,17 @@ pub unsafe fn shell() {
     /*
      * Fork and do a shell
      */
-    md_shellescape();
+    #[cfg(unix)]
+    {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_owned());
+        let _ = std::process::Command::new(shell).arg("-i").status();
+    }
 
     print!("\n[Press return to continue]");
     let _ = std::io::stdout().flush();
     input::set_echo(false);
     input::set_raw_mode(true);
     input::set_keypad(true);
-    playltchars();
     in_shell = false as u8;
     wait_for('\n');
     output::set_clear_on_refresh(true);
@@ -241,7 +285,6 @@ pub unsafe fn shell() {
 ///
 /// No globals used directly.
 pub unsafe fn my_exit(st: i32) -> ! {
-    resetltchars();
     if !runtime::is_shutdown() {
         input::set_echo(true);
         runtime::shutdown();
@@ -255,7 +298,7 @@ pub unsafe fn my_exit(st: i32) -> ! {
 /// program name at index 0); `src/bin/rogue.rs` calls this with
 /// `std::env::args()`.
 pub unsafe fn rogue_main(args: &[String]) -> i32 {
-    md_init();
+    install_exit_signal_handlers();
 
     let mut argv: Vec<String> = args.to_vec();
     if master_mode_enabled != 0 && argv.len() >= 2 && argv[1].is_empty() {
@@ -265,7 +308,10 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     }
     let argc = argv.len() as i32;
 
-    let home_dir = md_gethomedir();
+    let mut home_dir = std::env::var("HOME").unwrap_or_default();
+    if !home_dir.is_empty() && !home_dir.ends_with('/') {
+        home_dir.push('/');
+    }
     crate::game::globals::set_home(home_dir.clone());
     // Default save file: "<home>rogue.save".
     let save_name = format!("{}rogue.save", home_dir);
@@ -276,7 +322,10 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
         parse_opts(options);
     }
     if options.is_none() || crate::game::globals::whoami().is_empty() {
-        let username = md_getusername();
+        let username = std::env::var("USER")
+            .or_else(|_| std::env::var("LOGNAME"))
+            .or_else(|_| std::env::var("USERNAME"))
+            .unwrap_or_else(|_| "nobody".to_owned());
         crate::game::globals::set_whoami(crate::options::filter_printable(&username));
     }
 
@@ -284,7 +333,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i32)
         .unwrap_or(0);
-    let clock_seed = now_secs + md_getpid();
+    let clock_seed = now_secs + std::process::id() as i32;
     dnum = if master_mode_enabled != 0 && wizard != 0 {
         std::env::var("SEED")
             .ok()
@@ -296,7 +345,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     seed = dnum;
     set_seed(seed);
     open_score();
-    md_normaluser();
+    drop_privileges();
 
     if argc == 2 {
         let argument = argv[1].as_str();
@@ -314,7 +363,6 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
             purse = rnd(100) + 1;
             crate::game::set_current_depth(rnd(100) + 1);
             runtime::initialize();
-            getltchars();
             death(death_monst());
             return 0;
         }

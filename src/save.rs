@@ -2,11 +2,7 @@
 //!
 //! Ported from `src/c/save.c` to Rust. Save/restore files are read and written
 //! with the Rust standard library (`std::fs`, `std::io`) rather than C stdio.
-use crate::machdep::{resetltchars, setup};
-use crate::mdport::{
-    md_chmod, md_getpid, md_ignoreallsignals, md_tstphold, md_tstpresume, md_unlink,
-    md_unlink_open_file,
-};
+use crate::machdep::setup;
 use crate::options::read_line;
 use crate::rnd::set_seed;
 use crate::startup::playit;
@@ -101,7 +97,7 @@ pub unsafe fn save_game() {
                     msg_str("Please answer Y or N");
                 }
                 msg_str(&format!("file name: {}", buf));
-                md_unlink(&buf);
+                let _ = std::fs::remove_file(&buf);
             }
 
             crate::game::globals::set_file_name(buf.clone());
@@ -126,8 +122,11 @@ pub unsafe fn save_file(savef: &mut File) {
     runtime::move_physical_cursor(IVec2::new(cols - 1, 0), IVec2::new(0, lines - 1));
     let _ = std::io::stdout().write_all(b"\n");
     runtime::shutdown();
-    resetltchars();
-    md_chmod(&crate::game::globals::file_name(), 0o400);
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(
+        crate::game::globals::file_name(),
+        std::fs::Permissions::from_mode(0o400),
+    );
 
     let _ = savef.write_all(RON_MAGIC);
 
@@ -149,7 +148,8 @@ pub unsafe fn restore(file: &str) -> u8 {
         file_name = crate::game::globals::file_name();
     }
 
-    md_tstphold();
+    #[cfg(unix)]
+    libc::signal(libc::SIGTSTP, libc::SIG_IGN);
 
     let mut inf = match File::open(&file_name) {
         Ok(f) => f,
@@ -178,7 +178,7 @@ pub unsafe fn restore(file: &str) -> u8 {
         return 0;
     }
 
-    if (master_mode_enabled == 0 || wizard == 0) && md_unlink_open_file(&file_name) < 0 {
+    if (master_mode_enabled == 0 || wizard == 0) && std::fs::remove_file(&file_name).is_err() {
         msg_str("Cannot unlink file\n");
         return 0;
     }
@@ -192,10 +192,11 @@ pub unsafe fn restore(file: &str) -> u8 {
         return 0;
     }
 
-    md_tstpresume();
+    #[cfg(unix)]
+    libc::signal(libc::SIGTSTP, crate::startup::tstp as libc::sighandler_t);
     crate::game::globals::set_file_name(file_name.clone());
     output::set_clear_on_refresh(true);
-    set_seed(md_getpid());
+    set_seed(std::process::id() as i32);
     msg_str(&format!("file name: {}", file_name));
     playit();
     0
@@ -205,13 +206,16 @@ pub unsafe fn restore(file: &str) -> u8 {
 pub unsafe extern "C" fn auto_save(sig: i32) {
     let _ = sig;
 
-    md_ignoreallsignals();
+    #[cfg(unix)]
+    for signal in 0..32 {
+        libc::signal(signal, libc::SIG_IGN);
+    }
     let file_name = crate::game::globals::file_name();
     if !file_name.is_empty() {
         match File::create(&file_name) {
             Ok(mut savef) => save_file(&mut savef),
             Err(_) => {
-                if md_unlink_open_file(&file_name) >= 0 {
+                if std::fs::remove_file(&file_name).is_ok() {
                     if let Ok(mut savef) = File::create(&file_name) {
                         save_file(&mut savef);
                     }

@@ -8,7 +8,6 @@ use crate::item::arena::{with_object, OBJECTS};
 use crate::item::item_type::ItemType;
 use crate::item::things::inv_name_id;
 use crate::machdep::{lock_sc, start_score, unlock_sc};
-use crate::mdport::md_getuid;
 use crate::score::{rd_score, wr_score, Score};
 use crate::startup::my_exit;
 use crate::ui::input::wait_for;
@@ -132,7 +131,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
 
     let mut sc2 = None;
     if noscore == 0 {
-        let uid = md_getuid();
+        let uid = libc::getuid() as u32;
         let mut insert_at = top_ten.len();
 
         for (idx, entry) in top_ten.iter().enumerate() {

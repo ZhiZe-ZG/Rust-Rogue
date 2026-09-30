@@ -19,7 +19,6 @@ pub mod init;
 pub mod item;
 pub mod level;
 pub mod machdep;
-pub mod mdport;
 pub mod misc;
 pub mod options;
 pub mod rip;

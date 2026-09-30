@@ -12,17 +12,12 @@ use std::fs::{File, OpenOptions};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::game::globals::{got_ltc, orig_dsusp, scoreboard};
-use crate::mdport::{
-    md_chmod, md_dsuspchar, md_onsignal_default, md_setdsuspchar, md_sleep, md_suspchar, md_unlink,
-};
+use crate::game::globals::scoreboard;
 use crate::ui::input;
 
 // Build-time feature flags mirroring config.h for the standard build.
 const SCOREFILE_ENABLED: bool = true; // config.h: #define SCOREFILE "rogue.scr"
 const LOCKFILE_ENABLED: bool = true; // config.h: #define LOCKFILE "rogue.lck"
-const CHECKTIME: bool = false; // config.h: /* #undef CHECKTIME */
-const DUMP: bool = false; // not set in the standard build
 
 const SCOREFILE: &str = "rogue.scr";
 const LOCKFILE: &str = "rogue.lck";
@@ -92,7 +87,11 @@ pub unsafe fn open_score() {
                     .open(SCOREFILE);
                 match created {
                     Ok(file) => {
-                        md_chmod(SCOREFILE, 0o664);
+                        use std::os::unix::fs::PermissionsExt;
+                        let _ = std::fs::set_permissions(
+                            SCOREFILE,
+                            std::fs::Permissions::from_mode(0o664),
+                        );
                         Some(file)
                     }
                     Err(err) => {
@@ -111,60 +110,32 @@ pub unsafe fn open_score() {
 /// setup:
 /// Get starting setup for all games.
 pub unsafe fn setup() {
-    if DUMP {
-        // md_onsignal_autosave();
-    } else {
-        md_onsignal_default();
-    }
-
-    if CHECKTIME {
-        // md_start_checkout_timer(CHECKTIME * 60);
+    #[cfg(unix)]
+    for signal in [
+        libc::SIGHUP,
+        libc::SIGQUIT,
+        libc::SIGILL,
+        libc::SIGTRAP,
+        libc::SIGABRT,
+        libc::SIGFPE,
+        libc::SIGBUS,
+        libc::SIGSEGV,
+        libc::SIGSYS,
+        libc::SIGTERM,
+    ] {
+        libc::signal(signal, libc::SIG_DFL);
     }
 
     input::set_raw_mode(true);
     input::set_echo(false);
     input::set_keypad(true);
-    getltchars(); /* get the local tty chars */
-}
-
-/// getltchars:
-/// Get the local tty chars for later use.
-///
-/// Uses globals: got_ltc, orig_dsusp.
-pub unsafe fn getltchars() {
-    got_ltc = 1;
-    orig_dsusp = md_dsuspchar();
-    md_setdsuspchar(md_suspchar());
-}
-
-/// resetltchars:
-/// Reset the local tty chars to original values.
-///
-/// Uses globals: got_ltc, orig_dsusp.
-pub unsafe fn resetltchars() {
-    if got_ltc != 0 {
-        md_setdsuspchar(orig_dsusp);
-    }
-}
-
-/// playltchars:
-/// Set local tty chars to the values we use when playing.
-///
-/// Uses globals: got_ltc.
-pub unsafe fn playltchars() {
-    if got_ltc != 0 {
-        md_setdsuspchar(md_suspchar());
-    }
 }
 
 /// start_score:
 /// Start the scoring sequence.
 ///
-/// The CHECKTIME feature is not enabled in the standard build, so
-/// md_stop_checkout_timer() is never needed.
-pub unsafe fn start_score() {
-    // CHECKTIME is not defined in the standard build.
-}
+/// The CHECKTIME feature is not enabled in the standard build.
+pub unsafe fn start_score() {}
 
 /// is_symlink:
 /// See if the file is not a regular file (i.e. a symbolic link or
@@ -203,7 +174,7 @@ pub unsafe fn lock_sc() -> i32 {
         }
 
         for _ in 0..5 {
-            md_sleep(1);
+            std::thread::sleep(std::time::Duration::from_secs(1));
             LFD = try_open();
             if LFD.is_some() {
                 return true as u8 as i32;
@@ -218,7 +189,7 @@ pub unsafe fn lock_sc() -> i32 {
             }
             Some(mtime) => {
                 if now_secs() - mtime > 10 {
-                    if md_unlink(LOCKFILE) < 0 {
+                    if std::fs::remove_file(LOCKFILE).is_err() {
                         return false as u8 as i32;
                     }
                     continue 'over;
@@ -237,7 +208,7 @@ pub unsafe fn lock_sc() -> i32 {
                         }
                         if let Some(mtime2) = lockfile_mtime(LOCKFILE) {
                             if now_secs() - mtime2 > 10 {
-                                if md_unlink(LOCKFILE) < 0 {
+                                if std::fs::remove_file(LOCKFILE).is_err() {
                                     return false as u8 as i32;
                                 }
                             }
@@ -245,7 +216,7 @@ pub unsafe fn lock_sc() -> i32 {
                             LFD = try_open();
                             return true as u8 as i32;
                         }
-                        md_sleep(1);
+                        std::thread::sleep(std::time::Duration::from_secs(1));
                     }
                 }
                 return false as u8 as i32;
@@ -263,7 +234,7 @@ pub unsafe fn unlock_sc() {
         return;
     }
     LFD = None;
-    md_unlink(LOCKFILE);
+    let _ = std::fs::remove_file(LOCKFILE);
 }
 
 /// flush_type:

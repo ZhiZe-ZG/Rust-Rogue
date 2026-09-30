@@ -1,7 +1,7 @@
 //! Keyboard input policy for the terminal UI.
 //!
 //! Crossterm decodes terminal escape sequences into [`KeyCode`] values. This
-//! module keeps the small legacy integer adapter used by prompts and `mdport`,
+//! module keeps the small legacy integer adapter used by prompts and helpers,
 //! while the command loop consumes complete [`KeyEvent`] values directly.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -122,10 +122,6 @@ pub(crate) fn read_key_event() -> KeyEvent {
     }
 
     event
-}
-
-pub(crate) fn set_escape_delay(milliseconds: i32) {
-    terminal::set_escape_delay(milliseconds);
 }
 
 pub(crate) fn set_raw_mode(enabled: bool) {
