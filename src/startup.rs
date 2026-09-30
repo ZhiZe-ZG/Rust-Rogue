@@ -5,8 +5,7 @@ use std::fmt;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
-use clap::Parser;
-
+use crate::command_line::CommandLineParameter;
 use crate::command_dispatch::{do_command, CommandState};
 use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
@@ -48,19 +47,6 @@ fn requested_exit_code() -> Option<i32> {
         -1 => None,
         code => Some(code),
     }
-}
-
-#[derive(Parser)]
-#[command(name = "rogue", version)]
-struct Cli {
-    #[arg(short = 's', long = "scores", conflicts_with_all = ["debug_death", "restore", "save_file"])]
-    scores: bool,
-    #[arg(short = 'd', long = "debug-death", conflicts_with_all = ["scores", "restore", "save_file"])]
-    debug_death: bool,
-    #[arg(short = 'r', long = "restore", num_args = 0..=1, default_missing_value = "-r", conflicts_with_all = ["scores", "debug_death", "save_file"], value_name = "FILE")]
-    restore: Option<String>,
-    #[arg(value_name = "SAVE_FILE", allow_hyphen_values = true, conflicts_with_all = ["scores", "debug_death", "restore"])]
-    save_file: Option<String>,
 }
 
 #[derive(Debug)]
@@ -298,8 +284,8 @@ fn my_exit(st: i32) -> ! {
 /// The game entry point. `args` mirrors the process `argv` (including the
 /// program name at index 0); `src/bin/rogue.rs` calls this with
 /// `std::env::args()`.
-pub unsafe fn rogue_main(args: &[String]) -> ! {
-    let exit_code = match run_startup(args) {
+pub unsafe fn rogue_main(parameter: CommandLineParameter) -> ! {
+    let exit_code = match run_startup(parameter) {
         Ok(exit_code) => exit_code,
         Err(error) => {
             eprintln!("rogue: {error}");
@@ -309,19 +295,11 @@ pub unsafe fn rogue_main(args: &[String]) -> ! {
     my_exit(exit_code);
 }
 
-unsafe fn run_startup(args: &[String]) -> Result<i32, StartupError> {
-    let cli = match Cli::try_parse_from(args) {
-        Ok(cli) => cli,
-        Err(error) => {
-            let exit_code = error.exit_code();
-            let _ = error.print();
-            return Ok(exit_code);
-        }
-    };
+unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupError> {
 
     // Init terminal
     terminal::UI.init_terminal();
-    let mut restore_target = cli.restore.or(cli.save_file);
+    let mut restore_target = parameter.restore.or(parameter.save_file);
     if master_mode_enabled != 0 && restore_target.as_deref() == Some("") {
         wizard = 1;
         crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
@@ -354,26 +332,18 @@ unsafe fn run_startup(args: &[String]) -> Result<i32, StartupError> {
         .map(|d| d.as_secs() as i32)
         .unwrap_or(0);
     let clock_seed = now_secs + std::process::id() as i32;
-    dnum = if master_mode_enabled != 0 && wizard != 0 {
-        std::env::var("SEED")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(clock_seed)
-    } else {
-        clock_seed
-    };
-    seed = dnum;
+    seed = parameter.seed.unwrap_or(clock_seed);
     set_seed(seed);
     open_score();
     drop_privileges()?;
     install_signal_handlers().map_err(StartupError::SignalHandlers)?;
 
-    if cli.scores {
+    if parameter.scores {
         noscore = 1;
         score(0, -1, 0);
         return Ok(0);
     }
-    if cli.debug_death {
+    if parameter.debug_death {
         dnum = rnd(100);
         while dnum > 1 {
             dnum -= 1;
@@ -441,26 +411,3 @@ unsafe fn run_startup(args: &[String]) -> Result<i32, StartupError> {
     Ok(requested_exit_code().unwrap_or(0))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::Cli;
-    use clap::Parser;
-
-    #[test]
-    fn parses_startup_arguments() {
-        assert!(Cli::try_parse_from(["rogue", "-s"]).unwrap().scores);
-        assert!(Cli::try_parse_from(["rogue", "-d"]).unwrap().debug_death);
-
-        let default_restore = Cli::try_parse_from(["rogue", "-r"]).unwrap();
-        assert_eq!(default_restore.restore.as_deref(), Some("-r"));
-
-        let explicit_restore = Cli::try_parse_from(["rogue", "--restore", "save.dat"]).unwrap();
-        assert_eq!(explicit_restore.restore.as_deref(), Some("save.dat"));
-
-        let positional_restore = Cli::try_parse_from(["rogue", "save.dat"]).unwrap();
-        assert_eq!(positional_restore.save_file.as_deref(), Some("save.dat"));
-
-        let wizard_argument = Cli::try_parse_from(["rogue", ""]).unwrap();
-        assert_eq!(wizard_argument.save_file.as_deref(), Some(""));
-    }
-}
