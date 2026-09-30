@@ -332,7 +332,8 @@ unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupErr
         .map(|d| d.as_secs() as i32)
         .unwrap_or(0);
     let clock_seed = now_secs + std::process::id() as i32;
-    seed = parameter.seed.unwrap_or(clock_seed);
+    dnum = parameter.seed.unwrap_or(clock_seed);
+    seed = dnum;
     set_seed(seed);
     open_score();
     drop_privileges()?;
