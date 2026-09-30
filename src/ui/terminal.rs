@@ -15,7 +15,7 @@ use std::io::Write;
 #[cfg(not(test))]
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 use glam::IVec2;
 
@@ -55,7 +55,7 @@ pub(crate) struct UiState {
     reverse_video: AtomicBool,
     input_timeout: AtomicI32,
     shutdown: AtomicBool,
-    terminal: Mutex<Option<Terminal<Backend>>>,
+    terminal: LazyLock<Mutex<Terminal<Backend>>>,
     #[cfg(not(test))]
     pub(super) message: Mutex<MessageState>,
     pub(super) render_pending: AtomicBool,
@@ -85,7 +85,11 @@ impl UiState {
             reverse_video: AtomicBool::new(false),
             input_timeout: AtomicI32::new(-1),
             shutdown: AtomicBool::new(true),
-            terminal: Mutex::new(None),
+            terminal: LazyLock::new(|| {
+                let stdout: Box<dyn Write + Send> = Box::new(std::io::stdout());
+                let backend = CrosstermBackend::new(stdout);
+                Mutex::new(Terminal::new(backend).expect("failed to initialize ratatui terminal"))
+            }),
             #[cfg(not(test))]
             message: Mutex::new(MessageState {
                 pending: String::new(),
@@ -112,11 +116,8 @@ impl UiState {
     }
 
     pub(crate) fn ensure_terminal(&self) {
-        let mut guard = lock(&self.terminal);
-        if guard.is_none() {
-            let stdout: Box<dyn Write + Send> = Box::new(std::io::stdout());
-            let backend = CrosstermBackend::new(stdout);
-            *guard = Some(Terminal::new(backend).expect("failed to initialize ratatui terminal"));
+        let _terminal = lock(&self.terminal);
+        if self.shutdown.load(Ordering::Relaxed) {
             let _ = crossterm::execute!(
                 std::io::stdout(),
                 crossterm::cursor::Hide,
@@ -128,10 +129,10 @@ impl UiState {
     }
 
     pub(crate) fn deinit_terminal(&self) {
-        let Some(mut terminal) = lock(&self.terminal).take() else {
-            self.shutdown.store(true, Ordering::Relaxed);
+        if self.shutdown.swap(true, Ordering::Relaxed) {
             return;
-        };
+        }
+        let mut terminal = lock(&self.terminal);
         let _ = terminal.show_cursor();
         let _ = crossterm::execute!(
             std::io::stdout(),
@@ -142,7 +143,6 @@ impl UiState {
             crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
         );
         let _ = crossterm::terminal::disable_raw_mode();
-        self.shutdown.store(true, Ordering::Relaxed);
     }
 
     pub(crate) fn render(&self) {
@@ -150,30 +150,28 @@ impl UiState {
             return;
         }
         let grid = lock(&self.grid);
-        let mut guard = lock(&self.terminal);
-        if let Some(terminal) = guard.as_mut() {
-            let _ = terminal.draw(|frame| {
-                let area = frame.area();
-                let buf = frame.buffer_mut();
-                for y in 0..NROWS {
-                    for x in 0..NCOLS {
-                        if (x as u16) >= area.width || (y as u16) >= area.height {
-                            continue;
-                        }
-                        let cell = grid[y][x];
-                        let symbol = (cell.ch as char).to_string();
-                        if let Some(target) = buf.cell_mut((x as u16, y as u16)) {
-                            target.set_symbol(&symbol);
-                            if cell.reverse_video {
-                                target.set_style(Style::default().add_modifier(Modifier::REVERSED));
-                            } else {
-                                target.set_style(Style::default());
-                            }
+        let mut terminal = lock(&self.terminal);
+        let _ = terminal.draw(|frame| {
+            let area = frame.area();
+            let buf = frame.buffer_mut();
+            for y in 0..NROWS {
+                for x in 0..NCOLS {
+                    if (x as u16) >= area.width || (y as u16) >= area.height {
+                        continue;
+                    }
+                    let cell = grid[y][x];
+                    let symbol = (cell.ch as char).to_string();
+                    if let Some(target) = buf.cell_mut((x as u16, y as u16)) {
+                        target.set_symbol(&symbol);
+                        if cell.reverse_video {
+                            target.set_style(Style::default().add_modifier(Modifier::REVERSED));
+                        } else {
+                            target.set_style(Style::default());
                         }
                     }
                 }
-            });
-        }
+            }
+        });
     }
 
     #[inline]
@@ -328,6 +326,12 @@ impl UiState {
     pub(crate) fn raw(&self) {
         self.input_timeout.store(-1, Ordering::Relaxed);
         self.ensure_terminal();
+    }
+}
+
+impl Drop for UiState {
+    fn drop(&mut self) {
+        self.deinit_terminal();
     }
 }
 
