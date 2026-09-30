@@ -81,7 +81,9 @@ pub fn readchar() -> i32 {
 
 #[cfg(not(test))]
 fn read_legacy_key() -> i32 {
-    terminal::get_key_event().map_or(ERR, |event| curses_key_code(&event))
+    terminal::UI
+        .get_key_event()
+        .map_or(ERR, |event| curses_key_code(&event))
 }
 
 #[cfg(test)]
@@ -112,7 +114,7 @@ pub fn wait_for(_ch: char) {}
 /// Read a Crossterm event without flattening its key code or modifiers.
 pub(crate) fn read_key_event() -> KeyEvent {
     crate::ui::output::render_pending();
-    let Some(event) = terminal::get_key_event() else {
+    let Some(event) = terminal::UI.get_key_event() else {
         return KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
     };
 
@@ -127,7 +129,7 @@ pub(crate) fn read_key_event() -> KeyEvent {
 }
 
 pub(crate) fn enable_raw_mode() {
-    terminal::raw();
+    terminal::UI.raw();
 }
 
 pub(crate) fn flush_pending() {

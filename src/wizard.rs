@@ -267,7 +267,7 @@ pub unsafe fn show_map() {
         return;
     }
 
-    crate::ui::terminal::clear();
+    crate::ui::terminal::UI.clear();
     for y in 1..(GameConfig::SCREEN_LINES - 1) {
         for x in 0..GameConfig::SCREEN_COLS {
             let real = flat(y, x);

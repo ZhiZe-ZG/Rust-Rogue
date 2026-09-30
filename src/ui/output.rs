@@ -13,7 +13,6 @@ use crate::game::globals::{
 use crate::game::PLAYER;
 #[cfg(not(test))]
 use crate::ui::input::{readchar, wait_for};
-use crate::ui::terminal as cur;
 use crate::ui::terminal::UI;
 #[cfg(not(test))]
 use glam::IVec2;
@@ -56,7 +55,7 @@ pub(crate) fn refresh() {
 /// Render a pending frame, returning whether a frame was flushed.
 pub(crate) fn render_pending() -> bool {
     if UI.render_pending.swap(false, Ordering::AcqRel) {
-        cur::render();
+        UI.render();
         true
     } else {
         false
@@ -118,8 +117,8 @@ fn append_message(text: &str) {
 #[cfg(not(test))]
 fn display_message(text: &str) -> MessageResult {
     if text.is_empty() {
-        cur::move_cursor(IVec2::new(0, 0));
-        cur::clear_to_end_of_line();
+        UI.move_cursor(IVec2::new(0, 0));
+        UI.clear_to_end_of_line();
         set_mpos(0);
         return MessageResult::Displayed;
     }
@@ -170,7 +169,7 @@ pub(crate) fn endmsg() -> MessageResult {
 
     let mpos = get_mpos();
     if mpos != 0 {
-        cur::write_text_at(IVec2::new(mpos, 0), "--More--");
+        UI.write_text_at(IVec2::new(mpos, 0), "--More--");
         refresh();
 
         if !msg_esc_enabled() {
@@ -198,8 +197,8 @@ pub(crate) fn endmsg() -> MessageResult {
         }
     }
 
-    cur::write_text_at(IVec2::new(0, 0), &pending);
-    cur::clear_to_end_of_line();
+    UI.write_text_at(IVec2::new(0, 0), &pending);
+    UI.clear_to_end_of_line();
     set_mpos(next_position);
     let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
     state.next_position = 0;
@@ -236,7 +235,7 @@ pub(crate) fn status() {
     }
 
     UI.status_armor.store(temp, Ordering::Relaxed);
-    let old_cursor = cur::cursor_pos();
+    let old_cursor = UI.cursor_pos();
     if UI.status_hp.load(Ordering::Relaxed) != max_hp {
         let mut temp_hp = max_hp;
         UI.status_hp.store(max_hp, Ordering::Relaxed);
@@ -265,7 +264,7 @@ pub(crate) fn status() {
         .unwrap_or("");
 
     if stat_msg {
-        cur::move_cursor(IVec2::new(0, 0));
+        UI.move_cursor(IVec2::new(0, 0));
         msg_str(&format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -281,7 +280,7 @@ pub(crate) fn status() {
             w = hpwidth as usize,
         ));
     } else {
-        cur::move_cursor(IVec2::new(0, STATLINE));
+        UI.move_cursor(IVec2::new(0, STATLINE));
         let line = format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -296,19 +295,19 @@ pub(crate) fn status() {
             state_name,
             w = hpwidth as usize,
         );
-        cur::write_text(&line);
+        UI.write_text(&line);
     }
 
-    cur::clear_to_end_of_line();
-    cur::move_cursor(old_cursor);
+    UI.clear_to_end_of_line();
+    UI.move_cursor(old_cursor);
 }
 
 #[cfg(not(test))]
 pub(crate) fn show_win(message: &str) {
-    cur::move_cursor(IVec2::new(0, 0));
-    cur::write_text(message);
+    UI.move_cursor(IVec2::new(0, 0));
+    UI.write_text(message);
     let hero = PLAYER.pos();
-    cur::move_cursor(IVec2::new(hero.x, hero.y));
+    UI.move_cursor(IVec2::new(hero.x, hero.y));
     refresh();
     wait_for(' ');
 }

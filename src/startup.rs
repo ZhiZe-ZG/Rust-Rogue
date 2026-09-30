@@ -102,10 +102,10 @@ pub unsafe extern "C" fn endit(sig: i32) {
 ///
 /// No globals used directly.
 pub unsafe fn fatal(s: &str) {
-    crate::ui::terminal::write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), s);
+    crate::ui::terminal::UI.write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), s);
     output::refresh();
     output::flush_now();
-    terminal::shutdown();
+    terminal::UI.deinit_terminal();
     my_exit(0);
 }
 
@@ -131,9 +131,9 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
     /*
      * leave nicely
      */
-    let old_cursor = crate::ui::terminal::cursor_pos();
+    let old_cursor = crate::ui::terminal::UI.cursor_pos();
     output::flush_now();
-    terminal::shutdown();
+    terminal::UI.deinit_terminal();
     flush_stdout();
     #[cfg(unix)]
     libc::kill(0, libc::SIGTSTP);
@@ -145,7 +145,7 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
     libc::signal(libc::SIGTSTP, tstp as libc::sighandler_t);
     input::enable_raw_mode();
     output::refresh();
-    crate::ui::terminal::move_cursor(old_cursor);
+    crate::ui::terminal::UI.move_cursor(old_cursor);
     flush_stdout();
 }
 
@@ -191,22 +191,22 @@ pub unsafe extern "C" fn quit(sig: i32) {
     if q_comm == false as u8 {
         mpos = 0;
     }
-    let old_cursor = crate::ui::terminal::cursor_pos();
+    let old_cursor = crate::ui::terminal::UI.cursor_pos();
     msg_str("really quit?");
     if readchar() == b'y' as i32 {
         libc::signal(libc::SIGINT, leave as libc::sighandler_t);
-        crate::ui::terminal::clear();
+        crate::ui::terminal::UI.clear();
         let line = format!("You quit with {} gold pieces", get_purse());
-        crate::ui::terminal::write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), &line);
-        crate::ui::terminal::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
+        crate::ui::terminal::UI.write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), &line);
+        crate::ui::terminal::UI.move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
         output::refresh();
         score(purse, 1, 0);
         my_exit(0);
     } else {
-        crate::ui::terminal::move_cursor(IVec2::new(0, 0));
-        crate::ui::terminal::clear_to_end_of_line();
+        crate::ui::terminal::UI.move_cursor(IVec2::new(0, 0));
+        crate::ui::terminal::UI.clear_to_end_of_line();
         status();
-        crate::ui::terminal::move_cursor(old_cursor);
+        crate::ui::terminal::UI.move_cursor(old_cursor);
         output::refresh();
         mpos = 0;
         count = 0;
@@ -219,10 +219,8 @@ pub unsafe extern "C" fn quit(sig: i32) {
 pub unsafe extern "C" fn leave(sig: i32) {
     let _ = sig;
 
-    if !terminal::is_shutdown() {
-        output::flush_now();
-        terminal::shutdown();
-    }
+    output::flush_now();
+    terminal::UI.deinit_terminal();
 
     let _ = std::io::stdout().write_all(b"\n");
     my_exit(0);
@@ -236,10 +234,10 @@ pub unsafe fn shell() {
     /*
      * Set the terminal back to original mode
      */
-    crate::ui::terminal::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
+    crate::ui::terminal::UI.move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
     output::refresh();
     output::flush_now();
-    terminal::shutdown();
+    terminal::UI.deinit_terminal();
     let _ = std::io::stdout().write_all(b"\n");
     in_shell = true as u8;
     after = false as u8;
@@ -265,10 +263,8 @@ pub unsafe fn shell() {
 ///
 /// No globals used directly.
 pub unsafe fn my_exit(st: i32) -> ! {
-    if !terminal::is_shutdown() {
-        output::flush_now();
-        terminal::shutdown();
-    }
+    output::flush_now();
+    terminal::UI.deinit_terminal();
     flush_stdout();
     let _ = std::io::stderr().flush();
     std::process::exit(st);
@@ -342,7 +338,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
             }
             purse = rnd(100) + 1;
             crate::game::set_current_depth(rnd(100) + 1);
-            terminal::init();
+            terminal::UI.ensure_terminal();
             death(death_monst());
             return 0;
         }
@@ -368,14 +364,14 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     std::io::stdout()
         .flush()
         .expect("failed to flush startup message");
-    terminal::init();
+    terminal::UI.ensure_terminal();
     // Reject terminals smaller than the fixed game grid. The physical size is
     // unavailable on some backends; in that case keep the legacy permissive
     // behaviour and continue.
     if let Some(size) = terminal::physical_size() {
         if size.y < GameConfig::SCREEN_LINES || size.x < GameConfig::SCREEN_COLS {
             output::flush_now();
-            terminal::shutdown();
+            terminal::UI.deinit_terminal();
             eprintln!(
                 "Sorry, the screen must be at least {}x{}",
                 GameConfig::SCREEN_LINES,

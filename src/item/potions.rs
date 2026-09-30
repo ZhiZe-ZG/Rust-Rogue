@@ -296,12 +296,12 @@ pub unsafe fn quaff() {
         PotionType::TrapFind => {
             let floor = crate::game::item_ids();
             if !floor.is_empty() {
-                crate::ui::terminal::clear();
+                crate::ui::terminal::UI.clear();
                 for id in floor {
                     if is_magic_id(id) {
                         show = true;
                         if let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) {
-                            crate::ui::terminal::move_cursor(IVec2::new(pos.x, pos.y));
+                            crate::ui::terminal::UI.move_cursor(IVec2::new(pos.x, pos.y));
                             crate::draw::write_cell_glyph(pos, MAGIC as u8 as char);
                         }
                         pot_info_at(PotionType::TrapFind.index()).oi_know = true;
@@ -320,7 +320,7 @@ pub unsafe fn quaff() {
                     for pack_id in pack {
                         if is_magic_id(pack_id) {
                             show = true;
-                            crate::ui::terminal::move_cursor(IVec2::new(mp_pos.x, mp_pos.y));
+                            crate::ui::terminal::UI.move_cursor(IVec2::new(mp_pos.x, mp_pos.y));
                             crate::draw::write_cell_glyph(mp_pos, MAGIC as u8 as char);
                         }
                     }

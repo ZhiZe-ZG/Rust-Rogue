@@ -49,7 +49,7 @@ pub(super) struct MessageState {
 
 type Backend = CrosstermBackend<Box<dyn Write + Send>>;
 
-pub(super) struct UiState {
+pub(crate) struct UiState {
     grid: Mutex<[[ScreenCell; NCOLS]; NROWS]>,
     cursor: Mutex<IVec2>,
     reverse_video: AtomicBool,
@@ -110,9 +110,228 @@ impl UiState {
             status_experience: AtomicI32::new(0),
         }
     }
+
+    pub(crate) fn ensure_terminal(&self) {
+        let mut guard = lock(&self.terminal);
+        if guard.is_none() {
+            let stdout: Box<dyn Write + Send> = Box::new(std::io::stdout());
+            let backend = CrosstermBackend::new(stdout);
+            *guard = Some(Terminal::new(backend).expect("failed to initialize ratatui terminal"));
+            let _ = crossterm::execute!(
+                std::io::stdout(),
+                crossterm::cursor::Hide,
+                crossterm::terminal::EnterAlternateScreen
+            );
+        }
+        let _ = crossterm::terminal::enable_raw_mode();
+        self.shutdown.store(false, Ordering::Relaxed);
+    }
+
+    pub(crate) fn deinit_terminal(&self) {
+        let Some(mut terminal) = lock(&self.terminal).take() else {
+            self.shutdown.store(true, Ordering::Relaxed);
+            return;
+        };
+        let _ = terminal.show_cursor();
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::cursor::Show,
+            crossterm::terminal::LeaveAlternateScreen,
+            crossterm::style::ResetColor,
+            crossterm::style::SetAttribute(crossterm::style::Attribute::Reset),
+            crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
+        );
+        let _ = crossterm::terminal::disable_raw_mode();
+        self.shutdown.store(true, Ordering::Relaxed);
+    }
+
+    pub(crate) fn render(&self) {
+        if self.shutdown.load(Ordering::Relaxed) {
+            return;
+        }
+        let grid = lock(&self.grid);
+        let mut guard = lock(&self.terminal);
+        if let Some(terminal) = guard.as_mut() {
+            let _ = terminal.draw(|frame| {
+                let area = frame.area();
+                let buf = frame.buffer_mut();
+                for y in 0..NROWS {
+                    for x in 0..NCOLS {
+                        if (x as u16) >= area.width || (y as u16) >= area.height {
+                            continue;
+                        }
+                        let cell = grid[y][x];
+                        let symbol = (cell.ch as char).to_string();
+                        if let Some(target) = buf.cell_mut((x as u16, y as u16)) {
+                            target.set_symbol(&symbol);
+                            if cell.reverse_video {
+                                target.set_style(Style::default().add_modifier(Modifier::REVERSED));
+                            } else {
+                                target.set_style(Style::default());
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    #[inline]
+    fn set_cell(&self, y: i32, x: i32, ch: u8, reverse_video: bool) {
+        if in_bounds(y, x) {
+            lock(&self.grid)[y as usize][x as usize] = ScreenCell { ch, reverse_video };
+        }
+    }
+
+    #[inline]
+    fn cell_at(&self, y: i32, x: i32) -> u8 {
+        if in_bounds(y, x) {
+            lock(&self.grid)[y as usize][x as usize].ch
+        } else {
+            b' '
+        }
+    }
+
+    #[inline]
+    fn advance_cursor(&self) {
+        let mut cursor = lock(&self.cursor);
+        cursor.x += 1;
+        if cursor.x >= NCOLS as i32 {
+            cursor.x = 0;
+            cursor.y += 1;
+            if cursor.y >= NROWS as i32 {
+                cursor.y = 0;
+            }
+        }
+    }
+
+    pub(crate) fn clear(&self) {
+        for row in lock(&self.grid).iter_mut() {
+            for cell in row.iter_mut() {
+                *cell = ScreenCell::BLANK;
+            }
+        }
+        *lock(&self.cursor) = IVec2::ZERO;
+    }
+
+    pub(crate) fn clear_to_end_of_line(&self) {
+        let cursor = *lock(&self.cursor);
+        if in_bounds(cursor.y, 0) {
+            let mut grid = lock(&self.grid);
+            for x in cursor.x.max(0) as usize..NCOLS {
+                grid[cursor.y as usize][x] = ScreenCell::BLANK;
+            }
+        }
+    }
+
+    pub(crate) fn set_reverse_video(&self, enabled: bool) {
+        self.reverse_video.store(enabled, Ordering::Relaxed);
+    }
+
+    pub(crate) fn move_cursor(&self, pos: IVec2) {
+        *lock(&self.cursor) = pos;
+    }
+
+    pub(crate) fn cursor_pos(&self) -> IVec2 {
+        *lock(&self.cursor)
+    }
+
+    pub(crate) fn write_glyph(&self, ch: char) {
+        let cursor = *lock(&self.cursor);
+        self.set_cell(
+            cursor.y,
+            cursor.x,
+            ch as u8,
+            self.reverse_video.load(Ordering::Relaxed),
+        );
+        self.advance_cursor();
+    }
+
+    pub(crate) fn write_glyph_at(&self, pos: IVec2, ch: char) {
+        self.move_cursor(pos);
+        self.write_glyph(ch);
+    }
+
+    pub(crate) fn glyph_at_cursor(&self) -> char {
+        let cursor = *lock(&self.cursor);
+        self.cell_at(cursor.y, cursor.x) as char
+    }
+
+    pub(crate) fn glyph_at(&self, pos: IVec2) -> char {
+        self.cell_at(pos.y, pos.x) as char
+    }
+
+    pub(crate) fn write_text(&self, text: &str) {
+        let reverse_video = self.reverse_video.load(Ordering::Relaxed);
+        let mut cursor = lock(&self.cursor);
+        for byte in text.bytes() {
+            match byte {
+                b'\n' => {
+                    cursor.x = 0;
+                    cursor.y += 1;
+                    if cursor.y >= NROWS as i32 {
+                        cursor.y = 0;
+                    }
+                }
+                ch => {
+                    if in_bounds(cursor.y, cursor.x) {
+                        lock(&self.grid)[cursor.y as usize][cursor.x as usize] =
+                            ScreenCell { ch, reverse_video };
+                    }
+                    cursor.x += 1;
+                    if cursor.x >= NCOLS as i32 {
+                        cursor.x = 0;
+                        cursor.y += 1;
+                        if cursor.y >= NROWS as i32 {
+                            cursor.y = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn write_text_at(&self, pos: IVec2, text: &str) {
+        self.move_cursor(pos);
+        self.write_text(text);
+    }
+
+    pub(crate) fn get_key_event(&self) -> Option<crossterm::event::KeyEvent> {
+        use crossterm::event::{self, Event};
+
+        if self.shutdown.load(Ordering::Relaxed) {
+            self.ensure_terminal();
+        }
+
+        let timeout = self.input_timeout.load(Ordering::Relaxed);
+        let wait = if timeout <= 0 {
+            None
+        } else {
+            Some(std::time::Duration::from_millis((timeout as u64) * 100))
+        };
+
+        loop {
+            if let Some(duration) = wait {
+                if !event::poll(duration).unwrap_or(false) {
+                    return None;
+                }
+            }
+
+            match event::read() {
+                Ok(Event::Key(key)) => return Some(key),
+                Ok(Event::Resize(_, _)) | Ok(_) => continue,
+                Err(_) => continue,
+            }
+        }
+    }
+
+    pub(crate) fn raw(&self) {
+        self.input_timeout.store(-1, Ordering::Relaxed);
+        self.ensure_terminal();
+    }
 }
 
-pub(super) static UI: UiState = UiState::new();
+pub(crate) static UI: UiState = UiState::new();
 
 /// Lock a `Mutex`, recovering from poisoning instead of panicking.
 #[inline]
@@ -134,246 +353,6 @@ pub(crate) fn physical_size() -> Option<IVec2> {
 #[inline]
 fn in_bounds(y: i32, x: i32) -> bool {
     y >= 0 && x >= 0 && (y as usize) < NROWS && (x as usize) < NCOLS
-}
-
-/// Create the crossterm terminal if it does not exist yet, and enable raw mode.
-///
-/// The alternate screen is entered exactly once (when the terminal is first
-/// created / recreated after a suspension). Raw mode toggling is idempotent.
-fn ensure_terminal() {
-    let mut guard = lock(&UI.terminal);
-    if guard.is_none() {
-        let stdout: Box<dyn Write + Send> = Box::new(std::io::stdout());
-        let backend = CrosstermBackend::new(stdout);
-        *guard = Some(Terminal::new(backend).expect("failed to initialize ratatui terminal"));
-        let _ = crossterm::execute!(
-            std::io::stdout(),
-            crossterm::cursor::Hide,
-            crossterm::terminal::EnterAlternateScreen
-        );
-    }
-    let _ = crossterm::terminal::enable_raw_mode();
-    UI.shutdown.store(false, Ordering::Relaxed);
-}
-
-/// Drop back to the host terminal.
-fn deinit_terminal() {
-    if let Some(mut terminal) = lock(&UI.terminal).take() {
-        let _ = terminal.show_cursor();
-    }
-    let _ = crossterm::execute!(
-        std::io::stdout(),
-        crossterm::cursor::Show,
-        crossterm::terminal::LeaveAlternateScreen,
-        crossterm::style::ResetColor,
-        crossterm::style::SetAttribute(crossterm::style::Attribute::Reset),
-        crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
-    );
-    let _ = crossterm::terminal::disable_raw_mode();
-    UI.shutdown.store(true, Ordering::Relaxed);
-}
-
-/// Render the retained grid to the real terminal as one frame.
-pub(super) fn render() {
-    if UI.shutdown.load(Ordering::Relaxed) {
-        return;
-    }
-    let grid = lock(&UI.grid);
-    let mut guard = lock(&UI.terminal);
-    if let Some(terminal) = guard.as_mut() {
-        let _ = terminal.draw(|frame| {
-            let area = frame.area();
-            let buf = frame.buffer_mut();
-            for y in 0..NROWS {
-                for x in 0..NCOLS {
-                    if (x as u16) >= area.width || (y as u16) >= area.height {
-                        continue;
-                    }
-                    let cell = grid[y][x];
-                    let symbol = (cell.ch as char).to_string();
-                    if let Some(target) = buf.cell_mut((x as u16, y as u16)) {
-                        target.set_symbol(&symbol);
-                        if cell.reverse_video {
-                            target.set_style(Style::default().add_modifier(Modifier::REVERSED));
-                        } else {
-                            target.set_style(Style::default());
-                        }
-                    }
-                }
-            }
-        });
-    }
-}
-
-#[inline]
-fn set_cell(y: i32, x: i32, ch: u8, reverse_video: bool) {
-    if in_bounds(y, x) {
-        lock(&UI.grid)[y as usize][x as usize] = ScreenCell { ch, reverse_video };
-    }
-}
-
-#[inline]
-fn cell_at(y: i32, x: i32) -> u8 {
-    if in_bounds(y, x) {
-        lock(&UI.grid)[y as usize][x as usize].ch
-    } else {
-        b' '
-    }
-}
-
-#[inline]
-fn advance_cursor() {
-    let mut cursor = lock(&UI.cursor);
-    cursor.x += 1;
-    if cursor.x >= NCOLS as i32 {
-        cursor.x = 0;
-        cursor.y += 1;
-        if cursor.y >= NROWS as i32 {
-            cursor.y = 0;
-        }
-    }
-}
-
-// ─── Screen functions ────────────────────────────────────────────────────────
-
-pub(crate) fn init() {
-    ensure_terminal();
-}
-
-pub(crate) fn shutdown() {
-    deinit_terminal();
-}
-
-pub(crate) fn is_shutdown() -> bool {
-    UI.shutdown.load(Ordering::Relaxed)
-}
-
-pub(crate) fn clear() {
-    for row in lock(&UI.grid).iter_mut() {
-        for cell in row.iter_mut() {
-            *cell = ScreenCell::BLANK;
-        }
-    }
-    *lock(&UI.cursor) = IVec2::ZERO;
-}
-
-pub(crate) fn clear_to_end_of_line() {
-    let cursor = *lock(&UI.cursor);
-    if in_bounds(cursor.y, 0) {
-        let mut grid = lock(&UI.grid);
-        for x in cursor.x.max(0) as usize..NCOLS {
-            grid[cursor.y as usize][x] = ScreenCell::BLANK;
-        }
-    }
-}
-
-/// Set the reverse-video mode captured by subsequent cell writes.
-pub(crate) fn set_reverse_video(enabled: bool) {
-    UI.reverse_video.store(enabled, Ordering::Relaxed);
-}
-
-pub(crate) fn move_cursor(pos: IVec2) {
-    *lock(&UI.cursor) = pos;
-}
-
-pub(crate) fn cursor_pos() -> IVec2 {
-    *lock(&UI.cursor)
-}
-
-pub(crate) fn write_glyph(ch: char) {
-    let cursor = *lock(&UI.cursor);
-    set_cell(
-        cursor.y,
-        cursor.x,
-        ch as u8,
-        UI.reverse_video.load(Ordering::Relaxed),
-    );
-    advance_cursor();
-}
-
-pub(crate) fn write_glyph_at(pos: IVec2, ch: char) {
-    move_cursor(pos);
-    write_glyph(ch);
-}
-
-pub(crate) fn glyph_at_cursor() -> char {
-    let cursor = *lock(&UI.cursor);
-    cell_at(cursor.y, cursor.x) as char
-}
-
-pub(crate) fn glyph_at(pos: IVec2) -> char {
-    cell_at(pos.y, pos.x) as char
-}
-
-pub(crate) fn write_text(text: &str) {
-    let reverse_video = UI.reverse_video.load(Ordering::Relaxed);
-    let mut cursor = lock(&UI.cursor);
-    for byte in text.bytes() {
-        match byte {
-            b'\n' => {
-                cursor.x = 0;
-                cursor.y += 1;
-                if cursor.y >= NROWS as i32 {
-                    cursor.y = 0;
-                }
-            }
-            ch => {
-                if in_bounds(cursor.y, cursor.x) {
-                    lock(&UI.grid)[cursor.y as usize][cursor.x as usize] =
-                        ScreenCell { ch, reverse_video };
-                }
-                cursor.x += 1;
-                if cursor.x >= NCOLS as i32 {
-                    cursor.x = 0;
-                    cursor.y += 1;
-                    if cursor.y >= NROWS as i32 {
-                        cursor.y = 0;
-                    }
-                }
-            }
-        }
-    }
-}
-
-pub(crate) fn write_text_at(pos: IVec2, text: &str) {
-    move_cursor(pos);
-    write_text(text);
-}
-
-// ─── Input / terminal-mode controls ─────────────────────────────────────────
-
-pub(crate) fn get_key_event() -> Option<crossterm::event::KeyEvent> {
-    use crossterm::event::{self, Event};
-
-    if UI.shutdown.load(Ordering::Relaxed) {
-        ensure_terminal();
-    }
-
-    let timeout = UI.input_timeout.load(Ordering::Relaxed);
-    let wait = if timeout <= 0 {
-        None
-    } else {
-        Some(std::time::Duration::from_millis((timeout as u64) * 100))
-    };
-
-    loop {
-        if let Some(duration) = wait {
-            if !event::poll(duration).unwrap_or(false) {
-                return None;
-            }
-        }
-
-        match event::read() {
-            Ok(Event::Key(key)) => return Some(key),
-            Ok(Event::Resize(_, _)) | Ok(_) => continue,
-            Err(_) => continue,
-        }
-    }
-}
-
-pub(crate) fn raw() {
-    UI.input_timeout.store(-1, Ordering::Relaxed);
-    ensure_terminal();
 }
 
 pub(crate) fn flushinp() {

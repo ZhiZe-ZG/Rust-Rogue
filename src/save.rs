@@ -54,7 +54,7 @@ pub unsafe fn save_game() {
             }
 
             if c == 'y' as i32 || c == 'Y' as i32 {
-                crate::ui::terminal::write_text("Yes\n");
+                crate::ui::terminal::UI.write_text("Yes\n");
                 output::refresh();
                 buf = crate::game::globals::file_name();
             } else {
@@ -116,7 +116,7 @@ pub unsafe fn save_game() {
 pub unsafe fn save_file(savef: &mut File) {
     let _ = std::io::stdout().write_all(b"\n");
     output::flush_now();
-    terminal::shutdown();
+    terminal::UI.deinit_terminal();
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(
         crate::game::globals::file_name(),
@@ -161,13 +161,10 @@ pub unsafe fn restore(file: &str) -> u8 {
         return 0;
     }
 
-    if terminal::is_shutdown() {
-        terminal::init();
-    }
     setup();
     if let Err(err) = rs_restore_file(&mut inf) {
         output::flush_now();
-        terminal::shutdown();
+        terminal::UI.deinit_terminal();
         msg_str(&format!("Sorry, saved game could not be read: {}", err));
         return 0;
     }
@@ -181,7 +178,7 @@ pub unsafe fn restore(file: &str) -> u8 {
 
     if restore_player_dead() {
         output::flush_now();
-        terminal::shutdown();
+        terminal::UI.deinit_terminal();
         msg_str("\n\"He's dead, Jim\"\n");
         return 0;
     }

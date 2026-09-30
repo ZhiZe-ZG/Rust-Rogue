@@ -27,7 +27,7 @@ static LAST_RENDERED_LEVEL: AtomicU64 = AtomicU64::new(u64::MAX);
 unsafe fn render_current_level() {
     let generation = crate::level::with_current_level(|level| level.generation());
     if LAST_RENDERED_LEVEL.swap(generation, Ordering::Relaxed) != generation {
-        crate::ui::terminal::clear();
+        crate::ui::terminal::UI.clear();
         let hero = crate::game::PLAYER.pos();
         crate::draw::enter_room(hero);
         if crate::game::PLAYER.has_flag(crate::entity::player::MonsterFlags::SEEMONST) {

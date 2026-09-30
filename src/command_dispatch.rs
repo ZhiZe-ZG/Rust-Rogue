@@ -137,7 +137,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
         crate::daemon::Daemon::UiRender.run(0);
         lastscore = purse;
         let hero = hero_pos();
-        crate::ui::terminal::move_cursor(IVec2::new(hero.x, hero.y));
+        crate::ui::terminal::UI.move_cursor(IVec2::new(hero.x, hero.y));
         if !((running != 0 || count != 0) && jump != 0) {
             output::refresh(); // Draw screen
         }
