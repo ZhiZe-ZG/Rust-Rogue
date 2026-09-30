@@ -298,7 +298,3 @@ pub(crate) fn flushinp() {
         let _ = event::read();
     }
 }
-
-pub(crate) fn baudrate() -> i32 {
-    9600
-}

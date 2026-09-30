@@ -154,15 +154,6 @@ pub unsafe extern "C" fn tstp(ignored: i32) {
 /// Uses globals: terse, jump, see_floor, inv_type, oldpos, oldrp,
 /// hero, playing, running.
 pub unsafe fn playit() {
-    /*
-     * set up defaults for slow terminals
-     */
-    if runtime::baud_rate() <= 1200 {
-        terse = true as u8;
-        jump = true as u8;
-        see_floor = false as u8;
-    }
-
     inv_type = INV_CLEAR;
 
     /*

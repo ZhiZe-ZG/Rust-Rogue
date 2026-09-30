@@ -13,7 +13,3 @@ pub(crate) fn shutdown() {
 pub(crate) fn is_shutdown() -> bool {
     terminal::is_shutdown()
 }
-
-pub(crate) fn baud_rate() -> i32 {
-    terminal::baudrate()
-}
