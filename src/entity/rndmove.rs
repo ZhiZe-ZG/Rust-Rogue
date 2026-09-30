@@ -10,9 +10,6 @@ use crate::rnd::rnd;
 
 const SCROLL: u8 = b'?' as u8;
 
-/// Persistent return coordinate, mirroring C's `static coord ret`.
-static mut RET: IVec2 = IVec2 { x: 0, y: 0 };
-
 /// rndmove:
 /// Pick a random move for a confused actor starting from `pos`.
 ///
@@ -65,6 +62,5 @@ pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
 /// rndmove:
 /// Move in a random direction if the monster/person is confused.
 pub unsafe fn rndmove(pos: IVec2) -> IVec2 {
-    RET = rndmove_from(pos);
-    RET
+    rndmove_from(pos)
 }

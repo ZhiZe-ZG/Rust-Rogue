@@ -38,15 +38,6 @@ const LAMPDIST: i32 = 3;
 /// enable the wizard/debug diagnostics.
 const MASTER: bool = false;
 
-/// Where chasing takes you (persistent return slot, mirrors C's `static coord ch_ret`).
-static mut CH_RET: IVec2 = IVec2 { x: 0, y: 0 };
-/// Temporary destination for chaser (mirrors C's `static coord this`).
-static mut THIS: IVec2 = IVec2 { x: 0, y: 0 };
-/// Temporary try position (mirrors C's `static coord tryp`).
-static mut TRYP: IVec2 = IVec2 { x: 0, y: 0 };
-/// Temporary coord for cansee (mirrors C's `static coord tp`).
-static mut CANSEE_TP: IVec2 = IVec2 { x: 0, y: 0 };
-
 use crate::game::globals::{count, delta, has_hit, kamikaze, quiet, running, see_floor, to_death};
 
 /// A snapshot of the actor fields `chase.c` reads and writes.
@@ -276,6 +267,8 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
     let mut loop_rer = rer;
     let mut loop_door = door;
     let loop_ree = ree;
+    // The chosen destination for the chaser this turn (C's `static coord this`).
+    let mut this = IVec2::ZERO;
     loop {
         if loop_rer != loop_ree {
             let dest = resolve_dest(m.dest);
@@ -283,7 +276,7 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
             for cp in exits.iter() {
                 curdist = dist(dest.y, dest.x, cp.y, cp.x);
                 if curdist < mindist {
-                    THIS = *cp;
+                    this = *cp;
                     mindist = curdist;
                 }
             }
@@ -293,7 +286,7 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
                 for cp in passage_exits.iter() {
                     curdist = dist(dest.y, dest.x, cp.y, cp.x);
                     if curdist < mindist {
-                        THIS = *cp;
+                        this = *cp;
                         mindist = curdist;
                     }
                 }
@@ -302,7 +295,7 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
                 continue;
             }
         } else {
-            THIS = resolve_dest(m.dest);
+            this = resolve_dest(m.dest);
             // For dragons check and see if (a) the hero is on a straight
             // line from it, and (b) that it is within shooting distance,
             // but outside of striking range.
@@ -339,10 +332,11 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
     // This now contains what we want to run to this time
     // so we run to it.  If we hit it we either want to fight it
     // or stop running.
-    if chase(id, THIS) == false as u8 {
-        if coord_eq(THIS, hero_pos()) {
+    let (keep_chasing, ch_ret) = chase(id, this);
+    if keep_chasing == false as u8 {
+        if coord_eq(this, hero_pos()) {
             return attack(id);
-        } else if coord_eq(THIS, resolve_dest(m.dest)) {
+        } else if coord_eq(this, resolve_dest(m.dest)) {
             for obj_id in crate::game::item_ids() {
                 if m.dest == DestRef::Object(obj_id) {
                     crate::game::with_current_level_mut(|level| level.remove_item(obj_id));
@@ -361,7 +355,7 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
     } else if m.typ == Some(MonsterType::VenusFlytrap) {
         return 0;
     }
-    relocate(id, CH_RET);
+    relocate(id, ch_ret);
     // And stop running if need be
     let m = Mon::get(id).unwrap_or(m);
     if stoprun && coord_eq(m.pos, resolve_dest(m.dest)) {
@@ -466,18 +460,23 @@ pub unsafe fn runto(runner: IVec2) {
 
 /// chase:
 /// Find the spot for the chaser(er) to move closer to the
-/// chasee(ee).  Returns true as u8 if we want to keep on chasing later
-/// false as u8 if we reach the goal.
+/// chasee(ee).  Returns `(keep_chasing, new_position)` where the first value is
+/// true if we want to keep on chasing later and false if we reach the goal, and
+/// the second is the coordinate the chaser should relocate to (C's `ch_ret`).
 ///
 /// Uses globals: hero, lvl_obj, places (via moat/chat/winat).
-pub unsafe fn chase(id: MonsterId, ee: IVec2) -> u8 {
+pub unsafe fn chase(id: MonsterId, ee: IVec2) -> (u8, IVec2) {
     let Some(m) = Mon::get(id) else {
-        return false as u8;
+        return (false as u8, IVec2::ZERO);
     };
     let mut curdist: i32;
     let mut thisdist: i32;
     let mut er = m.pos;
     let mut plcnt = 1;
+    // The new coordinate for the chaser (C's `static coord ch_ret`).
+    let mut ch_ret = IVec2::ZERO;
+    // The trial position being tested (C's `static coord tryp`).
+    let mut tryp = IVec2::ZERO;
 
     // If the thing is confused, let it move randomly. Invisible
     // Stalkers are slightly confused all of the time, and bats are
@@ -487,8 +486,8 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> u8 {
         || (m.typ == Some(MonsterType::Bat) && rnd(2) == 0)
     {
         // get a valid random move
-        CH_RET = rndmove(m.pos);
-        curdist = dist_cp(CH_RET, ee);
+        ch_ret = rndmove(m.pos);
+        curdist = dist_cp(ch_ret, ee);
         // Small chance that it will become un-confused
         if rnd(20) == 0 {
             MONSTER_LIST.with_mut(id, |t| {
@@ -504,7 +503,7 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> u8 {
         // This will eventually hold where we move to get closer.
         // If we can't find an empty spot, we stay where we are.
         curdist = dist_cp(er, ee);
-        CH_RET = er;
+        ch_ret = er;
 
         let mut ey = er.y + 1;
         if ey >= GameConfig::SCREEN_LINES - 1 {
@@ -518,11 +517,11 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> u8 {
         let mut x = er.x - 1;
         while x <= ex {
             if x >= 0 {
-                TRYP.x = x;
+                tryp.x = x;
                 let mut y = er.y - 1;
                 while y <= ey {
-                    TRYP.y = y;
-                    if diag_ok(er, TRYP) == false as u8 {
+                    tryp.y = y;
+                    if diag_ok(er, tryp) == false as u8 {
                         y += 1;
                         continue;
                     }
@@ -568,12 +567,12 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> u8 {
                         thisdist = dist(y, x, ee.y, ee.x);
                         if thisdist < curdist {
                             plcnt = 1;
-                            CH_RET = TRYP;
+                            ch_ret = tryp;
                             curdist = thisdist;
                         } else if thisdist == curdist && rnd(plcnt + 1) == 0 {
                             // C's rnd(++plcnt) bumps plcnt then draws in [0, plcnt).
                             plcnt += 1;
-                            CH_RET = TRYP;
+                            ch_ret = tryp;
                             curdist = thisdist;
                         }
                     }
@@ -583,10 +582,10 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> u8 {
             x += 1;
         }
     }
-    if curdist != 0 && !coord_eq(CH_RET, hero_pos()) {
-        true as u8
+    if curdist != 0 && !coord_eq(ch_ret, hero_pos()) {
+        (true as u8, ch_ret)
     } else {
-        false as u8
+        (false as u8, ch_ret)
     }
 }
 
@@ -659,9 +658,8 @@ pub unsafe fn cansee(y: i32, x: i32) -> u8 {
     }
     // We can only see if the hero in the same room as
     // the coordinate and the room is lit or if it is close.
-    CANSEE_TP.y = y;
-    CANSEE_TP.x = x;
-    let rer = roomin(CANSEE_TP);
+    let tp = IVec2 { x, y };
+    let rer = roomin(tp);
     if rer == crate::game::PLAYER.room() && !crate::game::room_dark(rer) {
         true as u8
     } else {

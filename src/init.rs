@@ -162,7 +162,7 @@ pub static stones: [Stone; NSTONES] = [
 ];
 
 /// Count of entries in `stones`.  Exported as `int cNSTONES` for C.
-pub static mut cNSTONES: i32 = NSTONES as i32;
+pub const C_NSTONES: i32 = NSTONES as i32;
 
 /// Wand / staff wood materials.  Exported as `char *wood[]` for C.
 pub static wood: [&'static str; NWOOD] = [
@@ -202,7 +202,7 @@ pub static wood: [&'static str; NWOOD] = [
 ];
 
 /// Count of entries in `wood`.  Exported as `int cNWOOD` for C.
-pub static mut cNWOOD: i32 = NWOOD as i32;
+pub const C_NWOOD: i32 = NWOOD as i32;
 
 /// Wand metal materials.  Exported as `char *metal[]` for C.
 pub static metal: [&'static str; NMETAL] = [
@@ -231,7 +231,7 @@ pub static metal: [&'static str; NMETAL] = [
 ];
 
 /// Count of entries in `metal`.  Exported as `int cNMETAL` for C.
-pub static mut cNMETAL: i32 = NMETAL as i32;
+pub const C_NMETAL: i32 = NMETAL as i32;
 
 // ─── Private static data ─────────────────────────────────────────────────────
 
@@ -249,11 +249,6 @@ const SYLLS: &[&str] = &[
     "un", "uni", "ur", "val", "viv", "vly", "vom", "wah", "wed", "werg", "wex", "whon", "wun",
     "xo", "y", "yot", "yu", "zant", "zeb", "zim", "zok", "zon", "zum",
 ];
-
-// Size = max(potion colours 27, stones 26, wood 33) = 33.
-/// Shared boolean scratch array used by init_colors, init_stones,
-/// and init_materials (mirrors the C-side `static bool used[]`).
-static mut USED: [u8; 33] = [0; 33];
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
@@ -318,17 +313,18 @@ pub unsafe fn init_player() {
 
 /// Assign a random colour from [`crate::colors::POTION_COLORS`] to each potion.
 pub unsafe fn init_colors() {
-    for i in 0..crate::colors::POTION_COLOR_COUNT {
-        USED[i] = 0;
-    }
+    // Local `used[]` scratch array (mirrors the C-side `static bool used[]`,
+    // which was reset at the start of every init routine anyway; the Rust local
+    // is zero-initialised for free).
+    let mut used = [0u8; crate::colors::POTION_COLOR_COUNT];
     for i in 0..MAXPOTIONS {
         let j = loop {
             let j = rnd(crate::colors::POTION_COLOR_COUNT as i32) as usize;
-            if USED[j] == 0 {
+            if used[j] == 0 {
                 break j;
             }
         };
-        USED[j] = 1;
+        used[j] = 1;
         crate::game::globals::p_colors[i] = crate::colors::POTION_COLORS[j];
     }
 }
@@ -363,17 +359,15 @@ pub unsafe fn init_names() {
 
 /// Assign a random stone setting to each ring type.
 pub unsafe fn init_stones() {
-    for i in 0..NSTONES {
-        USED[i] = 0;
-    }
+    let mut used = [0u8; NSTONES];
     for i in 0..MAXRINGS {
         let j = loop {
             let j = rnd(NSTONES as i32) as usize;
-            if USED[j] == 0 {
+            if used[j] == 0 {
                 break j;
             }
         };
-        USED[j] = 1;
+        used[j] = 1;
         crate::game::globals::r_stones[i] = stones[j].st_name;
         ring_info[i].oi_worth += stones[j].st_value;
     }
@@ -381,9 +375,7 @@ pub unsafe fn init_stones() {
 
 /// Assign random wood / metal materials to wands and staves.
 pub unsafe fn init_materials() {
-    for i in 0..NWOOD {
-        USED[i] = 0;
-    }
+    let mut used = [0u8; NWOOD];
     let mut metused: [u8; NMETAL] = [0; NMETAL];
     for i in 0..MAXSTICKS {
         loop {
@@ -397,10 +389,10 @@ pub unsafe fn init_materials() {
                 }
             } else {
                 let j = rnd(NWOOD as i32) as usize;
-                if USED[j] == 0 {
+                if used[j] == 0 {
                     crate::game::globals::ws_type[i] = "staff";
                     crate::game::globals::ws_made[i] = wood[j];
-                    USED[j] = 1;
+                    used[j] = 1;
                     break;
                 }
             }

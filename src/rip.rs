@@ -3,7 +3,7 @@
 //! Ported from `src/c/rip.c` to Rust.
 use std::io::Write;
 
-use crate::game::globals::{allscore, get_purse, monster_info, numscores, NUMNAME};
+use crate::game::globals::{get_purse, monster_info, ALLSCORE, NUMSCORES, NUMNAME};
 use crate::item::arena::{with_object, OBJECTS};
 use crate::item::item_type::ItemType;
 use crate::item::things::inv_name_id;
@@ -30,8 +30,6 @@ pub const RIP_ART: &[&str] = &[
     "                 *|     *  *  *      | *\n",
     "         ________)/\\\\_//(\\/(/\\)/\\//\\/|_)_______\n",
 ];
-
-static mut KILLNAME_BUFFER: [u8; MAXSTR] = [0; MAXSTR];
 
 use crate::game::globals::{amulet, max_level, noscore, purse, tombstone, wizard};
 
@@ -104,8 +102,8 @@ pub unsafe fn death_monst() -> u8 {
 }
 
 pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
-    let mut top_ten = Vec::with_capacity(numscores as usize);
-    for _ in 0..numscores as usize {
+    let mut top_ten = Vec::with_capacity(NUMSCORES as usize);
+    for _ in 0..NUMSCORES as usize {
         top_ten.push(Score {
             sc_uid: 0,
             sc_score: 0,
@@ -136,14 +134,14 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
                 insert_at = idx;
                 break;
             }
-            if allscore == 0 && flags != 2 && entry.sc_uid == uid && entry.sc_flags != 2 {
+            if ALLSCORE == 0 && flags != 2 && entry.sc_uid == uid && entry.sc_flags != 2 {
                 insert_at = top_ten.len();
                 break;
             }
         }
 
         if insert_at < top_ten.len() {
-            if flags != 2 && allscore == 0 {
+            if flags != 2 && ALLSCORE == 0 {
                 let mut candidate = insert_at;
                 while candidate < top_ten.len() {
                     if top_ten[candidate].sc_uid == uid && top_ten[candidate].sc_flags != 2 {
@@ -193,7 +191,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
         }
     }
 
-    let mode = if allscore != 0 { "Scores" } else { "Rogueists" };
+    let mode = if ALLSCORE != 0 { "Scores" } else { "Rogueists" };
     println!("Top {} {}:", NUMNAME, mode);
     println!("   Score Name");
 

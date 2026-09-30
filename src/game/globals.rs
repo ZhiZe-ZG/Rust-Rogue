@@ -58,7 +58,10 @@ pub struct ObjInfo {
 }
 
 /// Whether the score table uses the all-scores display mode.
-pub static mut allscore: u8 = 1;
+///
+/// Immutable: this is a build-time configuration constant in the original
+/// (`allscore` was only ever read).
+pub const ALLSCORE: u8 = 1;
 /// Daemon scheduling phase flag.
 pub static mut after: u8 = 0;
 /// Requests that the current command be repeated.
@@ -145,7 +148,9 @@ pub static mut last_comm: Command = Command::UnknownKey;
 /// Last direction processed by the game.
 pub static mut last_dir: Direction = Direction::None;
 /// Maximum number of scores retained in the score table.
-pub static mut numscores: u32 = 10;
+///
+/// Immutable: the original never reassigned `numscores` at runtime.
+pub const NUMSCORES: u32 = 10;
 /// The number label for the scoreboard (`NUMNAME` from config.h).
 pub const NUMNAME: &str = "Ten";
 /// Number of objects initialized in the object tables.

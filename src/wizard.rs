@@ -25,9 +25,6 @@ const GOLD: i32 = b'*' as i32;
 
 const F_REAL: u8 = 0x10u8 as u8;
 
-static mut master_mode_enabled: u8 = 1;
-static mut wizard: i32 = 0;
-
 #[inline]
 fn hero() -> IVec2 {
     crate::game::PLAYER.pos()
@@ -63,8 +60,8 @@ unsafe fn get_num() -> i32 {
 }
 
 #[inline]
-unsafe fn master_enabled() -> bool {
-    master_mode_enabled != 0
+fn master_enabled() -> bool {
+    crate::game::globals::master_mode_enabled != 0
 }
 
 use crate::game::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hit};

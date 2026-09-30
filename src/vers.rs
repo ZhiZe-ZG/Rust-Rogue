@@ -50,7 +50,9 @@ pub fn set_release(value: String) {
 
 /// Encryption/obfuscation bytes (`char encstr[]` in vers.c) used by the
 /// legacy save-game identity.  Bytes match the C octal escapes exactly.
-pub static mut encstr: [u8; 40] = [
+///
+/// Immutable: these are constant obfuscation tables, never written at runtime.
+pub const ENCSTR: [u8; 40] = [
     0xC0, b'k', b'|', b'|', b'`', 0xA9, b'Y', b'.', b'\'', 0xC5, 0xD1, 0x81, b'+', 0xBF, b'~',
     b'r', b'"', b']', 0xA0, b'_', 0x93, b'=', b'1', 0xE1, b')', 0x92, 0x8A, 0xA1, b't', b';',
     b'\t', b'$', 0xB8, 0xCC, b'/', b'<', b'#', 0x81, 0xAC, 0,
@@ -58,7 +60,9 @@ pub static mut encstr: [u8; 40] = [
 
 /// Status-list obfuscation bytes (`char statlist[]` in vers.c).  Bytes match
 /// the C octal escapes exactly.
-pub static mut statlist: [u8; 38] = [
+///
+/// Immutable: this is a constant obfuscation table, never written at runtime.
+pub const STATLIST: [u8; 38] = [
     0xED, b'k', b'l', b'{', b'+', 0x84, 0xAD, 0xCB, b'i', b'd', b'J', 0xF1, 0x8C, b'=', b'4', b':',
     0xC9, 0xB9, 0xE1, b'w', b'K', b'<', 0xCA, 0xD1, 0x8B, b',', b',', b'7', 0xB9, b'/', b'R', b'k',
     b'%', 0x08, 0xCA, 0x0C, 0xA6, 0,
@@ -66,4 +70,6 @@ pub static mut statlist: [u8; 38] = [
 
 /// The version banner (`char version[]` in vers.c), written as the header
 /// of saved games and shown by the `?v` command.
-pub static mut version: [u8; 28] = *b"rogue (rogueforge) 09/05/07\0";
+///
+/// Immutable: this is a fixed banner, never written at runtime.
+pub const VERSION: [u8; 28] = *b"rogue (rogueforge) 09/05/07\0";
