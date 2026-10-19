@@ -416,7 +416,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         terse: terse != 0,
         to_death: to_death != 0,
         tombstone: tombstone != 0,
-        wizard,
+        wizard: crate::wizard::wizard_mode(),
         pack_used,
         dir_ch,
         runch,
@@ -570,7 +570,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     set_flag!(terse);
     set_flag!(to_death);
     set_flag!(tombstone);
-    wizard = s.wizard;
+    crate::wizard::set_wizard_mode(s.wizard);
     pack_used = s.pack_used;
     dir_ch = s.dir_ch;
     runch = s.runch;

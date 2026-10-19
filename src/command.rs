@@ -116,7 +116,7 @@ static mut NEWCOUNT: u8 = false as u8;
 
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
-use crate::game::globals::{after, again, amulet, count, delta, dir_ch, dnum, door_stop, firstmove, food_left, has_hit, inpack, inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm, r_stones, runch, running, save_msg, seenstairs, stat_msg, take, terse, to_death, wizard, ws_made};
+use crate::game::globals::{after, again, amulet, count, delta, dir_ch, dnum, door_stop, firstmove, food_left, has_hit, inpack, inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm, r_stones, runch, running, save_msg, seenstairs, stat_msg, take, terse, to_death, ws_made};
 
 
 // ─── Extern C functions called from this module ───────────────────────────────
@@ -228,7 +228,7 @@ pub unsafe fn command() {
         /*
          * Read command or continue run
          */
-        if MASTER && wizard != 0 {
+        if MASTER && crate::wizard::is_wizard() {
             noscore = 1;
         }
 
@@ -566,12 +566,12 @@ pub unsafe fn command() {
                         // Wizard toggle (was the `when '+'` arm under `#ifdef MASTER`)
                         after = false as u8;
                         if MASTER {
-                            if wizard != 0 {
-                                wizard = 0;
+                            if crate::wizard::is_wizard() {
+                                crate::wizard::set_wizard_mode(0);
                                 turn_see(true as u8);
                                 msg_str("not wizard any more");
                             } else {
-                                wizard = 1;
+                                crate::wizard::set_wizard_mode(1);
                                 noscore = 1;
                                 turn_see(false as u8);
                                 msg_str(&format!(
@@ -631,7 +631,7 @@ pub unsafe fn command() {
                     }
                     _ => {
                         after = false as u8;
-                        if MASTER && wizard != 0 {
+                        if MASTER && crate::wizard::is_wizard() {
                             match ch {
                                 b'|' => {
                                     let hero = hero_pos();

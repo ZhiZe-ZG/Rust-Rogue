@@ -3,6 +3,7 @@
 //! Ported from `src/c/wizard.c` to Rust.
 use crate::rnd::rnd;
 use std::ptr;
+use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::config::GameConfig;
 use crate::draw::{self, enter_room, leave_room, look};
@@ -28,7 +29,19 @@ const GOLD: i32 = b'*' as i32;
 const F_REAL: u8 = 0x10u8 as u8;
 
 static mut master_mode_enabled: u8 = 1;
-static mut wizard: i32 = 0;
+static WIZARD: AtomicI32 = AtomicI32::new(0);
+
+pub fn wizard_mode() -> i32 {
+    WIZARD.load(Ordering::Relaxed)
+}
+
+pub fn set_wizard_mode(value: i32) {
+    WIZARD.store(value, Ordering::Relaxed);
+}
+
+pub fn is_wizard() -> bool {
+    wizard_mode() != 0
+}
 
 #[inline]
 unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {

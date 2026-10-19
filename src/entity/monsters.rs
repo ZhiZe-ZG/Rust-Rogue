@@ -199,7 +199,7 @@ static WAND_MONS: [Option<MonsterType>; 26] = [
     None,
 ];
 
-use crate::game::globals::{max_level, wizard};
+use crate::game::globals::max_level;
 
 
 #[inline]
@@ -336,7 +336,7 @@ pub unsafe fn wanderer() {
 
     runto((*thing_t(tp)).t_pos);
 
-    if wizard != 0 {
+    if crate::wizard::is_wizard() {
         msg_str(&format!(
             "started a wandering {}",
             (*thing_t(tp)).t_type.map_or("", |m| m.name())

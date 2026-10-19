@@ -27,7 +27,7 @@ const ESCAPE: i32 = 27;
 /// Magic header that identifies a RON save file written by this version.
 pub const RON_MAGIC: &[u8] = b"ROGUE-RON 1\n";
 
-use crate::game::globals::{master_mode_enabled, mpos, wizard};
+use crate::game::globals::{master_mode_enabled, mpos};
 
 
 /// Checks the restored player state and reports whether the saved game is already dead.
@@ -178,7 +178,7 @@ pub unsafe fn restore(file: &str) -> u8 {
         return 0;
     }
 
-    if (master_mode_enabled == 0 || wizard == 0)
+    if (master_mode_enabled == 0 || crate::wizard::wizard_mode() == 0)
         && md_unlink_open_file(&file_name, std::ptr::null_mut()) < 0
     {
         msg_str("Cannot unlink file\n");

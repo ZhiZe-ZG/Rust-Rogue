@@ -89,7 +89,6 @@ pub static mut terse: u8 = 0;
 pub static mut to_death: u8 = 0;
 pub static mut tombstone: u8 = 1;
 pub static master_mode_enabled: u8 = 1;
-pub static mut wizard: i32 = 0;
 pub static mut pack_used: [u8; 26] = [0; 26];
 
 pub static mut dir_ch: u8 = 0;

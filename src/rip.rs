@@ -34,7 +34,7 @@ pub const RIP_ART: &[&str] = &[
 
 static mut KILLNAME_BUFFER: [u8; MAXSTR] = [0; MAXSTR];
 
-use crate::game::globals::{amulet, max_level, noscore, purse, tombstone, wizard};
+use crate::game::globals::{amulet, max_level, noscore, purse, tombstone};
 
 
 #[inline]
@@ -165,7 +165,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
 
     start_score();
 
-    if flags >= 0 || wizard != 0 {
+    if flags >= 0 || crate::wizard::is_wizard() {
         // Keep the legacy interactive flow behavior close to the C version without
         // requiring the full curses backend to be reimplemented in Rust here.
         output::write_text_at(IVec2::new(0, 23), "[Press return to continue]");

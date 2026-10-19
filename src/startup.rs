@@ -37,7 +37,7 @@ fn flush_stdout() {
     let _ = std::io::stdout().flush();
 }
 
-use crate::game::globals::{after, count, dnum, in_shell, inv_type, jump, master_mode_enabled, mpos, noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death, wizard};
+use crate::game::globals::{after, count, dnum, in_shell, inv_type, jump, master_mode_enabled, mpos, noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death};
 
 
 #[inline]
@@ -265,7 +265,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
 
     let mut argv: Vec<String> = args.to_vec();
     if master_mode_enabled != 0 && argv.len() >= 2 && argv[1].is_empty() {
-        wizard = 1;
+        crate::wizard::set_wizard_mode(1);
         crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
         argv.remove(1);
     }
@@ -288,7 +288,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
 
     let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i32).unwrap_or(0);
     let clock_seed = now_secs + md_getpid();
-    dnum = if master_mode_enabled != 0 && wizard != 0 {
+    dnum = if master_mode_enabled != 0 && crate::wizard::is_wizard() {
         std::env::var("SEED")
             .ok()
             .and_then(|value| value.parse().ok())
@@ -328,7 +328,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
         my_exit(1);
     }
 
-    if master_mode_enabled != 0 && wizard != 0 {
+    if master_mode_enabled != 0 && crate::wizard::is_wizard() {
         print!(
             "Hello {}, welcome to dungeon #{}",
             crate::game::globals::whoami(),
@@ -371,7 +371,7 @@ pub unsafe fn rogue_main(args: &[String]) -> i32 {
     setup();
     output::set_line_optimization(Window::Stdscr, true);
     if master_mode_enabled != 0 {
-        noscore = wizard;
+        noscore = crate::wizard::wizard_mode();
     }
     new_level();
     start_daemon(Daemon::Runners, 0, AFTER);

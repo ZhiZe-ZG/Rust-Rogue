@@ -50,14 +50,6 @@ pub fn set_release(value: String) {
     *release_lock() = value;
 }
 
-/// Encryption/obfuscation bytes (`char encstr[]` in vers.c) used by the
-/// legacy save-game identity.  Bytes match the C octal escapes exactly.
-pub static mut encstr: [u8; 40] = [
-    0xC0, b'k', b'|', b'|', b'`', 0xA9, b'Y', b'.', b'\'', 0xC5, 0xD1, 0x81, b'+', 0xBF, b'~', b'r',
-    b'"', b']', 0xA0, b'_', 0x93, b'=', b'1', 0xE1, b')', 0x92, 0x8A, 0xA1, b't', b';', b'\t', b'$',
-    0xB8, 0xCC, b'/', b'<', b'#', 0x81, 0xAC, 0,
-];
-
 /// Status-list obfuscation bytes (`char statlist[]` in vers.c).  Bytes match
 /// the C octal escapes exactly.
 pub static mut statlist: [u8; 38] = [

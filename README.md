@@ -58,7 +58,6 @@ The main mutable game-state bucket is in `src/game/globals.rs`. It currently con
 - `to_death`: ending-state flag used when the game is dying.
 - `tombstone`: whether the death screen / tombstone is enabled.
 - `master_mode_enabled`: wizard-mode gate for master-mode debugging.
-- `wizard`: runtime wizard/debug flag.
 - `dir_ch`: most-recent direction character input.
 - `runch`: current running direction.
 - `take`: last object-take command state.
@@ -144,7 +143,6 @@ These are process-wide singletons used outside the main globals table, and they 
 - `OBJECTS`: item arena / object storage.
 - `RNG`: random-number generator state.
 - `RELEASE`: release/version string.
-- `encstr`: encrypted save-game identity bytes.
 - `statlist`: obfuscated status-list bytes.
 - `version`: game version banner bytes.
 - `LFD`: last file descriptor / save-file handle.
@@ -188,7 +186,7 @@ This list is not meant to be permanent; it is a checklist for future reductions 
 - `src/lib.rs`: Rust module root.
 - `src/startup.rs`: Process startup sequence (`rogue_main`, `playit`, `quit`,
   `shell`, `my_exit`, signal handlers).
-- `src/vers.rs`: Version/identity strings (`release`, `version`, `encstr`,
+- `src/vers.rs`: Version/identity strings (`release`, `version`,
   `statlist`) ported byte-for-byte from the old `vers.c`.
 - `src/globals.rs`: Game-global variables, all exported with the legacy
   `#[no_mangle]` symbol names.
