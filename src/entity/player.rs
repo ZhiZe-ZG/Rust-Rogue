@@ -656,7 +656,11 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
             }
         }
         TrapType::Rust => {
-            if let Some(msg) = trap.msg(hit) {
+            let message = {
+                let mut random = RNG.lock().unwrap();
+                trap.msg(hit, &mut random)
+            };
+            if let Some(msg) = message {
                 msg_str(&msg);
             }
             rust_armor_id(PLAYER.equipment().armor_id());
@@ -666,7 +670,11 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
     // Send the message after the effect for every trap except `Rust`, which
     // prints its message before applying the effect above.
     if trap != TrapType::Rust {
-        if let Some(msg) = trap.msg(hit) {
+        let message = {
+            let mut random = RNG.lock().unwrap();
+            trap.msg(hit, &mut random)
+        };
+        if let Some(msg) = message {
             msg_str(&msg);
         }
     }
