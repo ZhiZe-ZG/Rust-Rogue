@@ -1,7 +1,7 @@
 //! Wizard (debug) mode commands.
 //!
 //! Ported from `src/c/wizard.c` to Rust.
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::config::GameConfig;
@@ -198,19 +198,39 @@ pub unsafe fn create_obj() {
                 let w = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
                 init_weapon(obj, w);
                 if bless == ('-' as u8) {
-                    OBJECTS.with_object_mut(obj, |o| o.o_hplus -= rnd(3) + 1);
+                    OBJECTS.with_object_mut(obj, |o| {
+                        o.o_hplus -= {
+                            let mut random = RNG.lock().unwrap();
+                            random.rnd(3)
+                        } + 1
+                    });
                 }
                 if bless == ('+' as u8) {
-                    OBJECTS.with_object_mut(obj, |o| o.o_hplus += rnd(3) + 1);
+                    OBJECTS.with_object_mut(obj, |o| {
+                        o.o_hplus += {
+                            let mut random = RNG.lock().unwrap();
+                            random.rnd(3)
+                        } + 1
+                    });
                 }
             } else {
                 let w = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
                 OBJECTS.with_object_mut(obj, |o| o.o_arm = a_class[w as usize]);
                 if bless == ('-' as u8) {
-                    OBJECTS.with_object_mut(obj, |o| o.o_arm += rnd(3) + 1);
+                    OBJECTS.with_object_mut(obj, |o| {
+                        o.o_arm += {
+                            let mut random = RNG.lock().unwrap();
+                            random.rnd(3)
+                        } + 1
+                    });
                 }
                 if bless == ('+' as u8) {
-                    OBJECTS.with_object_mut(obj, |o| o.o_arm -= rnd(3) + 1);
+                    OBJECTS.with_object_mut(obj, |o| {
+                        o.o_arm -= {
+                            let mut random = RNG.lock().unwrap();
+                            random.rnd(3)
+                        } + 1
+                    });
                 }
             }
         }
@@ -224,7 +244,14 @@ pub unsafe fn create_obj() {
                     if bless == ('-' as u8) {
                         OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
                     }
-                    let arm = if bless == ('-' as u8) { -1 } else { rnd(2) + 1 };
+                    let arm = if bless == ('-' as u8) {
+                        -1
+                    } else {
+                        ({
+                            let mut random = RNG.lock().unwrap();
+                            random.rnd(2)
+                        } + 1)
+                    };
                     OBJECTS.with_object_mut(obj, |o| o.o_arm = arm);
                 }
                 _ => {

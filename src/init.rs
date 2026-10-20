@@ -12,7 +12,7 @@ use crate::game::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, ObjInfo,
 };
 use crate::game::PLAYER;
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::item::arena::{new_item_id, OBJECTS};
@@ -305,7 +305,10 @@ pub unsafe fn init_player() {
     let arrow_id = new_item_id();
     init_weapon(arrow_id, ARROW);
     OBJECTS.with_object_mut(arrow_id, |o| {
-        o.o_count = rnd(15) + 25;
+        o.o_count = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(15)
+        } + 25;
         o.o_flags.insert(ObjectFlags::KNOW);
     });
     add_pack_id(Some(arrow_id), true);
@@ -319,7 +322,10 @@ pub unsafe fn init_colors() {
     let mut used = [0u8; crate::colors::POTION_COLOR_COUNT];
     for i in 0..MAXPOTIONS {
         let j = loop {
-            let j = rnd(crate::colors::POTION_COLOR_COUNT as i32) as usize;
+            let j = {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(crate::colors::POTION_COLOR_COUNT as i32)
+            } as usize;
             if used[j] == 0 {
                 break j;
             }
@@ -337,13 +343,22 @@ pub unsafe fn init_colors() {
 pub unsafe fn init_names() {
     crate::game::globals::set_scroll_names(MAXSCROLLS, |_| {
         let mut name = String::new();
-        let mut nwords = rnd(3) + 2;
+        let mut nwords = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(3)
+        } + 2;
         while nwords > 0 {
             nwords -= 1;
-            let mut nsyl = rnd(3) + 1;
+            let mut nsyl = {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(3)
+            } + 1;
             while nsyl > 0 {
                 nsyl -= 1;
-                let syllable = SYLLS[rnd(SYLLS.len() as i32) as usize];
+                let syllable = SYLLS[{
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(SYLLS.len() as i32)
+                } as usize];
                 if name.len() + syllable.len() > MAXNAME {
                     break;
                 }
@@ -362,7 +377,10 @@ pub unsafe fn init_stones() {
     let mut used = [0u8; NSTONES];
     for i in 0..MAXRINGS {
         let j = loop {
-            let j = rnd(NSTONES as i32) as usize;
+            let j = {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(NSTONES as i32)
+            } as usize;
             if used[j] == 0 {
                 break j;
             }
@@ -379,8 +397,15 @@ pub unsafe fn init_materials() {
     let mut metused: [u8; NMETAL] = [0; NMETAL];
     for i in 0..MAXSTICKS {
         loop {
-            if rnd(2) == 0 {
-                let j = rnd(NMETAL as i32) as usize;
+            if {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(2)
+            } == 0
+            {
+                let j = {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(NMETAL as i32)
+                } as usize;
                 if metused[j] == 0 {
                     crate::game::globals::ws_type[i] = "wand";
                     crate::game::globals::ws_made[i] = metal[j];
@@ -388,7 +413,10 @@ pub unsafe fn init_materials() {
                     break;
                 }
             } else {
-                let j = rnd(NWOOD as i32) as usize;
+                let j = {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(NWOOD as i32)
+                } as usize;
                 if used[j] == 0 {
                     crate::game::globals::ws_type[i] = "staff";
                     crate::game::globals::ws_made[i] = wood[j];

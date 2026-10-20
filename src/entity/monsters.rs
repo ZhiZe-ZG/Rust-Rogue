@@ -13,8 +13,7 @@ use crate::game::MonsterId;
 use crate::item::rings::RingType;
 use crate::item::things::new_thing_id;
 use crate::misc::{rnd_thing, spread};
-use crate::rnd::rnd;
-use crate::rnd::roll;
+use crate::rnd::RNG;
 use crate::ui::output::{addmsg_str, flush_now, msg_str};
 use crate::ui::terminal;
 use glam::IVec2;
@@ -221,12 +220,21 @@ fn iswearing(which: RingType) -> bool {
 pub unsafe fn randmonster(wander: bool) -> MonsterType {
     let level = crate::game::current_depth();
     loop {
-        let mut d = level + (rnd(10) - 6);
+        let mut d = level + ({
+            let mut random = RNG.lock().unwrap();
+            random.rnd(10)
+        } - 6);
         if d < 0 {
-            d = rnd(5);
+            d = {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(5)
+            };
         }
         if d > 25 {
-            d = rnd(5) + 21;
+            d = {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(5)
+            } + 21;
         }
         let m = if wander {
             WAND_MONS[d as usize]
@@ -265,7 +273,10 @@ pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2
         data.t_oldch = oldch;
         data.t_room = room;
         data.t_stats.level = mp.m_stats.level + lev_add;
-        data.t_stats.max_hit_points = roll(data.t_stats.level, 8);
+        data.t_stats.max_hit_points = {
+            let mut random = RNG.lock().unwrap();
+            random.roll(data.t_stats.level, 8)
+        };
         data.t_stats.hit_points = data.t_stats.max_hit_points;
         data.t_stats.armor = mp.m_stats.armor - lev_add;
         data.t_stats.damage = mp.m_stats.damage;
@@ -369,7 +380,10 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
         .flatten();
 
     if !has_flag(id, MonsterFlags::RUN)
-        && rnd(3) != 0
+        && {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(3)
+        } != 0
         && has_flag(id, MonsterFlags::MEAN)
         && !has_flag(id, MonsterFlags::HELD)
         && !iswearing(RingType::Stealth)
@@ -445,7 +459,12 @@ pub unsafe fn give_pack_id(id: MonsterId) {
         })
         .flatten();
     let carry = monsters[kind.map_or(0, |m| m.index())].m_carry;
-    if crate::game::current_depth() >= crate::dungeon::max_depth() && rnd(100) < carry {
+    if crate::game::current_depth() >= crate::dungeon::max_depth()
+        && {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(100)
+        } < carry
+    {
         let item = new_thing_id();
         DUNGEON.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
@@ -471,7 +490,13 @@ pub fn save_throw_id(which: i32, id: crate::game::MonsterId) -> i32 {
 #[inline]
 fn save_throw_for_level(which: i32, level: i32) -> i32 {
     let need = 14 + which - level / 2;
-    if unsafe { roll(1, 20) } >= need {
+    if unsafe {
+        {
+            let mut random = RNG.lock().unwrap();
+            random.roll(1, 20)
+        }
+    } >= need
+    {
         1
     } else {
         0

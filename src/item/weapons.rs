@@ -12,7 +12,7 @@ use crate::game::PLAYER;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::misc::{is_current_id, show_floor};
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use crate::ui::output;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
@@ -226,9 +226,15 @@ pub unsafe fn init_weapon(id: ThingId, which: i32) {
 
     let many = iwp.iw_flags.contains(ObjectFlags::MANY);
     let (count, grp) = if which == DAGGER {
-        (rnd(4) + 2, group)
+        ({
+            let mut random = RNG.lock().unwrap();
+            random.rnd(4)
+        } + 2, group)
     } else if many {
-        (rnd(8) + 8, group)
+        ({
+            let mut random = RNG.lock().unwrap();
+            random.rnd(8)
+        } + 8, group)
     } else {
         (1, 0)
     };
@@ -318,7 +324,11 @@ pub unsafe fn fallpos(pos: IVec2) -> Option<IVec2> {
             let ch = chat(y, x);
             if ch == FLOOR || ch == PASSAGE {
                 cnt += 1;
-                if rnd(cnt) == 0 {
+                if {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(cnt)
+                } == 0
+                {
                     newpos = Some(IVec2 { x, y });
                 }
             }

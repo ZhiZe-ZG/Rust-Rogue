@@ -10,8 +10,7 @@ use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
 use crate::item::weapons::{do_motion, hit_monster};
 use crate::rip::death;
-use crate::rnd::rnd;
-use crate::rnd::roll;
+use crate::rnd::RNG;
 use crate::ui::output;
 use crate::ui::output::msg_str;
 use glam::IVec2;
@@ -123,7 +122,17 @@ pub unsafe fn fix_stick_id(id: ThingId) {
             set_c_string(&mut o.o_damage, "1x1");
         }
         set_c_string(&mut o.o_hurldmg, "1x1");
-        o.o_arm = if light { rnd(10) + 10 } else { rnd(5) + 3 };
+        o.o_arm = if light {
+            ({
+                let mut random = RNG.lock().unwrap();
+                random.rnd(10)
+            } + 10)
+        } else {
+            ({
+                let mut random = RNG.lock().unwrap();
+                random.rnd(5)
+            } + 3)
+        };
     });
 }
 
@@ -273,7 +282,11 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
     pos.x += dir.x;
     if hit_hero && ce_coord(pos, hero) != 0 {
         if save(VS_MAGIC) == 0 {
-            if (crate::game::PLAYER.stats().hit_points - roll(6, 6)) <= 0 {
+            if (crate::game::PLAYER.stats().hit_points - {
+                let mut random = RNG.lock().unwrap();
+                random.roll(6, 6)
+            }) <= 0
+            {
                 death('b' as u8);
             }
             msg_str("the bolt hits");

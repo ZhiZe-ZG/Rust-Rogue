@@ -39,5 +39,8 @@ pub const POTION_COLOR_COUNT: usize = POTION_COLORS.len();
 
 /// A random potion colour, used for hallucination effects.
 pub fn random_color() -> &'static str {
-    POTION_COLORS[crate::rnd::rnd(POTION_COLOR_COUNT as i32) as usize]
+    POTION_COLORS[{
+        let mut random = crate::rnd::RNG.lock().unwrap();
+        random.rnd(POTION_COLOR_COUNT as i32)
+    } as usize]
 }

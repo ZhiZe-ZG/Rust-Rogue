@@ -8,7 +8,7 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use glam::IVec2;
 
 use crate::ui::output::{addmsg_str, msg_str};
@@ -24,7 +24,6 @@ use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
 use crate::rip::death;
-use crate::rnd::roll;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -73,7 +72,11 @@ pub unsafe fn ring_effects() {
         match equipment.ring_type(hand) {
             Some(RingType::Searching) => crate::command_dispatch::search(),
             Some(RingType::Teleport) => {
-                if rnd(50) == 0 {
+                if {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(50)
+                } == 0
+                {
                     crate::wizard::teleport();
                 }
             }
@@ -93,7 +96,12 @@ pub unsafe fn doctor() {
             PLAYER.with_stats_mut(|stats| stats.hit_points += 1);
         }
     } else if quiet >= 3 {
-        PLAYER.with_stats_mut(|stats| stats.hit_points += rnd(lv - 7) + 1);
+        PLAYER.with_stats_mut(|stats| {
+            stats.hit_points += {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(lv - 7)
+            } + 1
+        });
     }
     // A ring of regeneration adds an extra point on each hand it is worn.
     let regenerations = [0usize, 1]
@@ -123,7 +131,11 @@ pub unsafe fn swander() {
 pub unsafe fn rollwand() {
     between += 1;
     if between >= 4 {
-        if roll(1, 6) == 4 {
+        if {
+            let mut random = RNG.lock().unwrap();
+            random.roll(1, 6)
+        } == 4
+        {
             wanderer();
             kill_daemon(Daemon::Rollwand);
             fuse(Daemon::Swander, 0, spread(70), BEFORE);
@@ -196,10 +208,18 @@ pub unsafe fn stomach() {
             }
         }
         // The hero is fainting.
-        if no_command != 0 || rnd(5) != 0 {
+        if no_command != 0
+            || {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(5)
+            } != 0
+        {
             return;
         }
-        no_command += rnd(8) + 4;
+        no_command += {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(8)
+        } + 4;
         hungry_state = 3;
         if terse == 0 {
             addmsg_str(choose_str(

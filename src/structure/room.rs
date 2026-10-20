@@ -2,7 +2,7 @@
 //!
 //! Rust-side reimplementation of the room logic from `src/c/rooms.c` and
 //! `src/c/new_level.c`.
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use glam::IVec2;
 
 use super::super::tile::Tile;
@@ -130,7 +130,11 @@ impl Room {
                     }
 
                     cnt += 1;
-                    if rnd(cnt) == 0 {
+                    if {
+                        let mut random = RNG.lock().unwrap();
+                        random.rnd(cnt)
+                    } == 0
+                    {
                         next_y = new_y;
                         next_x = new_x;
                     }
@@ -156,12 +160,18 @@ impl Room {
         let max_y = height as i32 - 1;
         let max_x = width as i32 - 1;
         let start_y = if height > 1 {
-            (rnd(height as i32) / 2) * 2
+            ({
+                let mut random = RNG.lock().unwrap();
+                random.rnd(height as i32)
+            } / 2) * 2
         } else {
             0
         };
         let start_x = if width > 1 {
-            (rnd(width as i32) / 2) * 2
+            ({
+                let mut random = RNG.lock().unwrap();
+                random.rnd(width as i32)
+            } / 2) * 2
         } else {
             0
         };

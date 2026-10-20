@@ -3,7 +3,7 @@
 //! Ported from `src/c/rings.c` to Rust.
 use crate::entity::player::ObjectFlags;
 use crate::item::potions::invis_on;
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 
 use crate::game::PLAYER;
 use crate::item::arena::{ThingId, OBJECTS};
@@ -242,7 +242,15 @@ pub unsafe fn ring_eat(hand: i32) -> i32 {
 
     let mut eat = USES[ring_type.index()];
     if eat < 0 {
-        eat = if rnd(-eat) == 0 { 1 } else { 0 };
+        eat = if {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(-eat)
+        } == 0
+        {
+            1
+        } else {
+            0
+        };
     }
     if ring_type == RingType::Digest {
         eat = -eat;

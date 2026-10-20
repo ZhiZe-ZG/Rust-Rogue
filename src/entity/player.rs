@@ -22,7 +22,7 @@ use crate::dungeon::DUNGEON;
 use crate::machdep::flush_type;
 use crate::misc::{chg_str, spread};
 use crate::rip::death;
-use crate::rnd::{rnd, roll};
+use crate::rnd::RNG;
 use crate::tile::{TrapHit, TrapType};
 use crate::ui::output::msg_str;
 use crate::wizard::teleport;
@@ -609,7 +609,12 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
         TrapType::Arrow => {
             let stats = PLAYER.stats();
             if swing(stats.level - 1, stats.armor, 1) != 0 {
-                PLAYER.with_stats_mut(|stats| stats.hit_points -= roll(1, 6));
+                PLAYER.with_stats_mut(|stats| {
+                    stats.hit_points -= {
+                        let mut random = RNG.lock().unwrap();
+                        random.roll(1, 6)
+                    }
+                });
                 hit = if PLAYER.stats().hit_points <= 0 {
                     TrapHit::Kill
                 } else {
@@ -634,7 +639,12 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
             if swing(stats.level + 1, stats.armor, 1) == 0 {
                 hit = TrapHit::Miss;
             } else {
-                PLAYER.with_stats_mut(|stats| stats.hit_points -= roll(1, 4));
+                PLAYER.with_stats_mut(|stats| {
+                    stats.hit_points -= {
+                        let mut random = RNG.lock().unwrap();
+                        random.roll(1, 4)
+                    }
+                });
                 if PLAYER.stats().hit_points <= 0 {
                     hit = TrapHit::Kill;
                 } else {
@@ -759,7 +769,12 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
         return;
     }
 
-    if player_has(MonsterFlags::HUH) && rnd(5) != 0 {
+    if player_has(MonsterFlags::HUH)
+        && {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(5)
+        } != 0
+    {
         next_pos = crate::entity::rndmove::rndmove_from(hero);
         if coord_eq(next_pos, hero) {
             after = false as u8;

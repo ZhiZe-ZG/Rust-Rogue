@@ -10,7 +10,7 @@ use crate::game::PLAYER;
 use crate::item::arena::OBJECTS;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id, reset_last};
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use crate::ui::input::read_key_event;
 use crate::ui::output::{addmsg_str, msg_str};
 use glam::IVec2;
@@ -18,7 +18,6 @@ use glam::IVec2;
 use crate::command::Command;
 use crate::entity::player::{MonsterFlags, Thing};
 use crate::dungeon::DUNGEON;
-use crate::rnd::roll;
 
 const PASSAGE: u8 = b'#' as u8;
 const DOOR: u8 = b'+' as u8;
@@ -109,7 +108,10 @@ pub unsafe fn eat() {
     if food_left < 0 {
         food_left = 0;
     }
-    food_left += HUNGERTIME - 200 + rnd(400);
+    food_left += HUNGERTIME - 200 + {
+        let mut random = RNG.lock().unwrap();
+        random.rnd(400)
+    };
     if food_left > STOMACHSIZE {
         food_left = STOMACHSIZE;
     }
@@ -123,7 +125,11 @@ pub unsafe fn eat() {
             "my, that was a yummy {}",
             crate::game::globals::fruit()
         ));
-    } else if rnd(100) > 70 {
+    } else if {
+        let mut random = RNG.lock().unwrap();
+        random.rnd(100)
+    } > 70
+    {
         PLAYER.with_stats_mut(|stats| stats.experience += 1);
         msg_str("bummer, this food tastes awful");
     } else {
@@ -145,7 +151,10 @@ pub unsafe fn check_level() {
     let olevel = PLAYER.level();
     PLAYER.with_stats_mut(|stats| stats.level = i);
     if i > olevel {
-        let add = roll(i - olevel, 10);
+        let add = {
+            let mut random = RNG.lock().unwrap();
+            random.roll(i - olevel, 10)
+        };
         PLAYER.with_stats_mut(|stats| {
             stats.max_hit_points += add;
             stats.hit_points += add;
@@ -192,7 +201,10 @@ pub fn add_str(sp: &mut u32, amt: i32) {
 
 pub unsafe fn add_haste(potion: bool) -> bool {
     if player_has(MonsterFlags::HASTE) {
-        no_command += rnd(8);
+        no_command += {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(8)
+        };
         PLAYER.remove_flag(MonsterFlags::RUN | MonsterFlags::HASTE);
         extinguish(Daemon::Nohaste);
         msg_str("you faint from exhaustion");
@@ -201,7 +213,15 @@ pub unsafe fn add_haste(potion: bool) -> bool {
 
     PLAYER.add_flag(MonsterFlags::HASTE);
     if potion {
-        fuse(Daemon::Nohaste, 0, rnd(4) + 4, AFTER);
+        fuse(
+            Daemon::Nohaste,
+            0,
+            {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(4)
+            } + 4,
+            AFTER,
+        );
     }
     true
 }
@@ -283,10 +303,21 @@ pub unsafe fn get_dir() -> u8 {
         last_delt.x = delta.x;
     }
 
-    if player_has(MonsterFlags::HUH) && rnd(5) == 0 {
+    if player_has(MonsterFlags::HUH)
+        && {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(5)
+        } == 0
+    {
         loop {
-            delta.y = rnd(3) - 1;
-            delta.x = rnd(3) - 1;
+            delta.y = {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(3)
+            } - 1;
+            delta.x = {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(3)
+            } - 1;
             if !(delta.y == 0 && delta.x == 0) {
                 break;
             }
@@ -307,7 +338,10 @@ pub unsafe fn sign(nm: i32) -> i32 {
 }
 
 pub unsafe fn spread(nm: i32) -> i32 {
-    nm - nm / 20 + rnd(nm / 10)
+    nm - nm / 20 + {
+        let mut random = RNG.lock().unwrap();
+        random.rnd(nm / 10)
+    }
 }
 
 pub unsafe fn call_it(info: &mut ObjInfo) {
@@ -330,9 +364,15 @@ pub unsafe fn rnd_thing() -> u8 {
         POTION, SCROLL, RING, STICK, FOOD, WEAPON, ARMOR, STAIRS, GOLD, AMULET,
     ];
     let idx = if crate::game::current_depth() >= GameConfig::AMULET_LEVEL {
-        rnd(thing_list.len() as i32)
+        {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(thing_list.len() as i32)
+        }
     } else {
-        rnd((thing_list.len() - 1) as i32)
+        {
+            let mut random = RNG.lock().unwrap();
+            random.rnd((thing_list.len() - 1) as i32)
+        }
     };
     thing_list[idx as usize]
 }

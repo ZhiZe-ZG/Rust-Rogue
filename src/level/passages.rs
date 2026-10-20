@@ -11,7 +11,7 @@
 use glam::IVec2;
 
 use crate::config::GameConfig;
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 
 use super::level::LevelFlags;
 use crate::structure::{Passage, Room, Structure};
@@ -78,14 +78,20 @@ pub(crate) fn entry_point(
     if !room.is_gone() {
         loop {
             if direc == 'd' {
-                p.x = room.position.x + rnd(room.size.x - 2) + 1;
+                p.x = room.position.x + {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(room.size.x - 2)
+                } + 1;
                 p.y = if start {
                     room.position.y + room.size.y - 1
                 } else {
                     room.position.y
                 };
             } else {
-                p.y = room.position.y + rnd(room.size.y - 2) + 1;
+                p.y = room.position.y + {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(room.size.y - 2)
+                } + 1;
                 p.x = if start {
                     room.position.x + room.size.x - 1
                 } else {
@@ -144,7 +150,10 @@ pub(crate) fn plan_corridor(rooms: &[Room], map: &Structure, r1: usize, r2: usiz
     };
 
     let turn_spot = if distance > 1 {
-        rnd(distance - 1) + 1
+        ({
+            let mut random = RNG.lock().unwrap();
+            random.rnd(distance - 1)
+        } + 1)
     } else {
         1
     };
@@ -262,7 +271,15 @@ pub(crate) fn mark_passages(map: &Structure, flags: &mut LevelFlags, depth: i32)
             }
             let idx = y * GameConfig::LEVEL_WIDTH + x;
             flags.passage[idx] = true;
-            if rnd(10) + 1 < depth && rnd(40) == 0 {
+            if {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(10)
+            } + 1 < depth
+                && {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(40)
+                } == 0
+            {
                 flags.real[idx] = false;
             }
         }

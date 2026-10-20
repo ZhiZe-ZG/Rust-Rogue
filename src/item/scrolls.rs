@@ -1,7 +1,7 @@
 //! Scrolls and reading them.
 //!
 //! Ported from `src/c/scrolls.c` to Rust.
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 
 use crate::config::GameConfig;
 use crate::draw::{look, map_cell_reveal};
@@ -221,7 +221,10 @@ pub unsafe fn read_scroll() {
         }
         ScrollType::Sleep => {
             scr_info[ScrollType::Sleep.index()].oi_know = true;
-            no_command += rnd(SLEEPTIME) + 4;
+            no_command += {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(SLEEPTIME)
+            } + 4;
             crate::game::PLAYER.remove_flag(MonsterFlags::RUN);
             msg_str("you fall asleep");
         }
@@ -244,7 +247,11 @@ pub unsafe fn read_scroll() {
                         continue;
                     }
                     i += 1;
-                    if rnd(i) == 0 {
+                    if {
+                        let mut random = RNG.lock().unwrap();
+                        random.rnd(i)
+                    } == 0
+                    {
                         mp.y = y;
                         mp.x = x;
                     }
@@ -340,7 +347,11 @@ pub unsafe fn read_scroll() {
                         return None;
                     }
                     o.o_flags.remove(ObjectFlags::CURSED);
-                    if rnd(2) == 0 {
+                    if {
+                        let mut random = RNG.lock().unwrap();
+                        random.rnd(2)
+                    } == 0
+                    {
                         o.o_hplus += 1;
                     } else {
                         o.o_dplus += 1;

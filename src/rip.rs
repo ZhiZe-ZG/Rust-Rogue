@@ -98,7 +98,10 @@ pub unsafe fn death_monst() -> u8 {
         b'h' as u8, b'd' as u8, b's' as u8, b' ' as u8, 0,
     ];
 
-    let idx = (crate::rnd::rnd(33) as usize) % POSS.len();
+    let idx = ({
+        let mut random = crate::rnd::RNG.lock().unwrap();
+        random.rnd(33)
+    } as usize) % POSS.len();
     POSS[idx]
 }
 

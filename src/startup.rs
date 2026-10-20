@@ -20,7 +20,7 @@ use crate::init::{init_colors, init_materials, init_names, init_player, init_pro
 use crate::machdep::{init_check, open_score, setup};
 use crate::options::parse_opts;
 use crate::rip::score;
-use crate::rnd::set_seed;
+use crate::rnd::RNG;
 use crate::save::{restore, RestoreError};
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::output::{self, msg_str, status};
@@ -216,7 +216,7 @@ unsafe fn init_seed(seed_arg: Option<i32>) {
         .unwrap_or(0);
     let clock_seed = now_secs + std::process::id() as i32;
     seed = seed_arg.unwrap_or(clock_seed);
-    set_seed(seed);
+    RNG.lock().unwrap().set_seed(seed);
 }
 
 /// Build the object/trap/colour tables and the initial player.

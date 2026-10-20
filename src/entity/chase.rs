@@ -18,7 +18,7 @@ use crate::item::item_type::ItemType;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
 use crate::misc::sign;
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use crate::ui::output::{endmsg, msg_str};
 use glam::IVec2;
 
@@ -307,7 +307,10 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
                     || (m.pos.y - hero.y).abs() == (m.pos.x - hero.x).abs())
                 && dist(m.pos.y, m.pos.x, hero.y, hero.x) <= BOLT_LENGTH * BOLT_LENGTH
                 && !m.has(MonsterFlags::CANCELLED)
-                && rnd(DRAGONSHOT) == 0
+                && {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(DRAGONSHOT)
+                } == 0
             {
                 let dy = hero.y - m.pos.y;
                 let dx = hero.x - m.pos.x;
@@ -482,15 +485,31 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> (u8, IVec2) {
     // If the thing is confused, let it move randomly. Invisible
     // Stalkers are slightly confused all of the time, and bats are
     // quite confused all the time.
-    if (m.has(MonsterFlags::HUH) && rnd(5) != 0)
-        || (m.typ == Some(MonsterType::Phantom) && rnd(5) == 0)
-        || (m.typ == Some(MonsterType::Bat) && rnd(2) == 0)
+    if (m.has(MonsterFlags::HUH)
+        && {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(5)
+        } != 0)
+        || (m.typ == Some(MonsterType::Phantom)
+            && {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(5)
+            } == 0)
+        || (m.typ == Some(MonsterType::Bat)
+            && {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(2)
+            } == 0)
     {
         // get a valid random move
         ch_ret = rndmove(m.pos);
         curdist = dist_cp(ch_ret, ee);
         // Small chance that it will become un-confused
-        if rnd(20) == 0 {
+        if {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(20)
+        } == 0
+        {
             DUNGEON.monster_list.with_mut(id, |t| {
                 if let Thing::Monster { data } = t {
                     data.t_flags.remove(MonsterFlags::HUH);
@@ -570,7 +589,12 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> (u8, IVec2) {
                             plcnt = 1;
                             ch_ret = tryp;
                             curdist = thisdist;
-                        } else if thisdist == curdist && rnd(plcnt + 1) == 0 {
+                        } else if thisdist == curdist
+                            && {
+                                let mut random = RNG.lock().unwrap();
+                                random.rnd(plcnt + 1)
+                            } == 0
+                        {
                             // C's rnd(++plcnt) bumps plcnt then draws in [0, plcnt).
                             plcnt += 1;
                             ch_ret = tryp;
@@ -693,7 +717,12 @@ pub unsafe fn update_dest(id: MonsterId) {
         if matches!(otype, ItemType::Scroll(ScrollType::Scare)) {
             continue;
         }
-        if roomin(opos) == m.room && rnd(100) < prob {
+        if roomin(opos) == m.room
+            && {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(100)
+            } < prob
+        {
             let obj_dest = DestRef::Object(obj_id);
             let mut taken = false;
             for mid in DUNGEON.monster_list.ids() {

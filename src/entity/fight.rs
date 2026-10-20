@@ -7,7 +7,7 @@
 //! scoped `DUNGEON.monster_list.with`/`with_mut`, so no raw `*mut Thing` is threaded
 //! through combat.
 
-use crate::rnd::{rnd, roll};
+use crate::rnd::RNG;
 
 use crate::entity::chase::{runto, see_monst};
 use crate::entity::monsters::save;
@@ -163,7 +163,10 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
         && !player_has(MonsterFlags::BLIND)
     {
         let new_disguise = if player_has(MonsterFlags::HALU) {
-            ch = (rnd(26) + b'A' as i32) as u8;
+            ch = ({
+                let mut random = RNG.lock().unwrap();
+                random.rnd(26)
+            } + b'A' as i32) as u8;
             ch
         } else {
             b'X'
@@ -311,7 +314,10 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                     }
                     endmsg();
                 }
-                no_command += rnd(2) + 2;
+                no_command += {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(2)
+                } + 2;
                 if no_command > BORE_LEVEL {
                     death(b'h' as u8);
                     if crate::startup::exit_requested() {
@@ -343,7 +349,11 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                 } else {
                     30
                 };
-                if rnd(100) < threshold {
+                if {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(100)
+                } < threshold
+                {
                     let fewer;
                     if mtype == Some(MonsterType::Wraith) {
                         if PLAYER.stats().experience == 0 {
@@ -361,9 +371,15 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                                 pstats.experience = e_levels[(pstats.level - 1) as usize] + 1;
                             }
                         });
-                        fewer = roll(1, 10);
+                        fewer = {
+                            let mut random = RNG.lock().unwrap();
+                            random.roll(1, 10)
+                        };
                     } else {
-                        fewer = roll(1, 3);
+                        fewer = {
+                            let mut random = RNG.lock().unwrap();
+                            random.roll(1, 3)
+                        };
                     }
                     {
                         let mut dead = false;
@@ -407,9 +423,15 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                 // Leprechaun: steals gold
                 let level = crate::game::current_depth();
                 let lastpurse = purse;
-                purse -= rnd(50 + 10 * level) + 2; // GOLDCALC
+                purse -= {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(50 + 10 * level)
+                } + 2; // GOLDCALC
                 if save(VS_MAGIC) == 0 {
-                    let g = rnd(50 + 10 * level) + 2;
+                    let g = {
+                        let mut random = RNG.lock().unwrap();
+                        random.rnd(50 + 10 * level)
+                    } + 2;
                     purse -= g + g + g + g;
                 }
                 if purse < 0 {
@@ -436,7 +458,11 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                     }
                     if is_magic_id(id) {
                         nobj += 1;
-                        if rnd(nobj) == 0 {
+                        if {
+                            let mut random = RNG.lock().unwrap();
+                            random.rnd(nobj)
+                        } == 0
+                        {
                             steal = Some(id);
                         }
                     }
@@ -512,7 +538,10 @@ pub unsafe fn set_mname(tp: MonsterId) -> String {
         let idx = if (ch as u8).is_ascii_uppercase() {
             (ch - b'A' as i32) as usize
         } else {
-            rnd(26) as usize
+            ({
+                let mut random = RNG.lock().unwrap();
+                random.rnd(26)
+            } as usize)
         };
         mname = monsters[idx].m_name;
     } else {
@@ -533,7 +562,10 @@ pub unsafe fn set_mname(tp: MonsterId) -> String {
 /// swing:
 /// Returns true (1) if the swing hits.
 pub unsafe fn swing(at_lvl: i32, op_arm: i32, wplus: i32) -> i32 {
-    let res = rnd(20);
+    let res = {
+        let mut random = RNG.lock().unwrap();
+        random.rnd(20)
+    };
     let need = (20 - at_lvl) - op_arm;
     (res + wplus >= need) as i32
 }
@@ -722,7 +754,10 @@ unsafe fn roll_em_inner(
 
     for (ndice, nsides) in parse_damage(damage_spec) {
         if swing(att_lvl, def_arm, hplus + STR_PLUS[str_idx]) != 0 {
-            let proll = roll(ndice, nsides);
+            let proll = {
+                let mut random = RNG.lock().unwrap();
+                random.roll(ndice, nsides)
+            };
             let damage = dplus + proll + ADD_DAM[str_idx];
             total_damage += if damage > 0 { damage } else { 0 };
             did_hit = 1;
@@ -788,7 +823,10 @@ pub unsafe fn hit(er: Option<&str>, ee: Option<&str>, noend: u8) {
     let s: &str = if terse != 0 {
         " hit"
     } else {
-        let mut i = rnd(4) as usize;
+        let mut i = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(4)
+        } as usize;
         if er.is_some() {
             i += 4;
         }
@@ -817,7 +855,10 @@ pub unsafe fn miss(er: Option<&str>, ee: Option<&str>, noend: u8) {
             0
         }
     } else {
-        let base = rnd(4) as usize;
+        let base = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(4)
+        } as usize;
         if er.is_some() {
             base + 4
         } else {
@@ -915,9 +956,15 @@ pub unsafe fn killed(tp: MonsterId, pr: u8) {
             OBJECTS.with_object_mut(gold, |o| {
                 o.o_type = ItemType::Gold;
                 // o_goldval is #define'd to o_arm
-                let mut value = rnd(50 + 10 * level) + 2; // GOLDCALC
+                let mut value = {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(50 + 10 * level)
+                } + 2; // GOLDCALC
                 if save(VS_MAGIC) != 0 {
-                    let extra = rnd(50 + 10 * level) + 2;
+                    let extra = {
+                        let mut random = RNG.lock().unwrap();
+                        random.rnd(50 + 10 * level)
+                    } + 2;
                     value += extra + extra + extra + extra;
                 }
                 o.o_arm = value;

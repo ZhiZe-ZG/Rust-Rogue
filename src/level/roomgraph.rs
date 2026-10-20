@@ -9,7 +9,7 @@
 //! loopiness.
 
 use crate::config::GameConfig;
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 
 /// Planned room-to-room passage connections for one generation pass.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -71,7 +71,10 @@ fn add_extra_connections(
     gone: &[bool],
     mut connections: Vec<(usize, usize)>,
 ) -> Vec<(usize, usize)> {
-    let mut extra = rnd(GameConfig::EXTRA_CONNECTION_ROLLS);
+    let mut extra = {
+        let mut random = RNG.lock().unwrap();
+        random.rnd(GameConfig::EXTRA_CONNECTION_ROLLS)
+    };
     while extra > 0 {
         let from = pick_random(|idx| !gone[idx]);
         // Random adjacent room with no dug connection to `from` yet.
@@ -98,7 +101,11 @@ fn pick_unconnected(
             continue;
         }
         count += 1;
-        if rnd(count) == 0 {
+        if {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(count)
+        } == 0
+        {
             pick = Some(room);
         }
     }
@@ -108,7 +115,10 @@ fn pick_unconnected(
 /// Pick a uniformly random room index satisfying `predicate`.
 fn pick_random(predicate: impl Fn(usize) -> bool) -> usize {
     loop {
-        let idx = rnd(GameConfig::MAX_ROOMS as i32) as usize;
+        let idx = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(GameConfig::MAX_ROOMS as i32)
+        } as usize;
         if predicate(idx) {
             return idx;
         }

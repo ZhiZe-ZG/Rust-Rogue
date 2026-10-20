@@ -4,7 +4,7 @@
 //! for the current dungeon level, plus the process-wide singleton holding
 //! the live level.
 
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use glam::IVec2;
 
 use super::passages::{
@@ -267,7 +267,14 @@ impl Level {
             return;
         }
 
-        let secret = rnd(10) + 1 < self.depth && rnd(5) == 0;
+        let secret = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(10)
+        } + 1 < self.depth
+            && {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(5)
+            } == 0;
 
         let local = pos - position;
         if let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) {
@@ -421,7 +428,10 @@ impl Level {
     /// found. Returns the room's index into [`Level::rooms`].
     pub fn rnd_room(&self) -> usize {
         loop {
-            let rm = rnd(GameConfig::MAX_ROOMS as i32) as usize;
+            let rm = {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(GameConfig::MAX_ROOMS as i32)
+            } as usize;
             if !self.rooms[rm].is_gone() {
                 return rm;
             }
@@ -435,8 +445,14 @@ impl Level {
     /// C `rnd_pos` math but using the Rust room geometry.
     pub fn rnd_pos(&self, room: &Room) -> IVec2 {
         IVec2::new(
-            room.position.x + rnd(room.size.x - 2) + 1,
-            room.position.y + rnd(room.size.y - 2) + 1,
+            room.position.x + {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(room.size.x - 2)
+            } + 1,
+            room.position.y + {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(room.size.y - 2)
+            } + 1,
         )
     }
 
@@ -501,7 +517,10 @@ fn reset_rooms(rooms: &mut [Room]) {
 /// Pick a uniformly random room slot that has not been removed for the level.
 fn pick_non_gone(rooms: &[Room]) -> usize {
     loop {
-        let idx = rnd(GameConfig::MAX_ROOMS as i32) as usize;
+        let idx = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(GameConfig::MAX_ROOMS as i32)
+        } as usize;
         if !rooms[idx].is_gone() {
             return idx;
         }
@@ -510,7 +529,8 @@ fn pick_non_gone(rooms: &[Room]) -> usize {
 
 /// Randomly mark a few room slots as removed for this level.
 fn mark_random_rooms_gone(rooms: &mut [Room]) {
-    for _ in 0..rnd(GONE_ROOM_ROLLS) {
+    let count = RNG.lock().unwrap().rnd(GONE_ROOM_ROLLS);
+    for _ in 0..count {
         rooms[pick_non_gone(rooms)].mark_gone();
     }
 }
@@ -524,9 +544,17 @@ fn layout_room(room: &mut Room, slot: usize, bsze: IVec2, depth: i32) {
         return;
     }
 
-    if rnd(DARK_ROOM_ROLL) < depth - 1 {
+    if {
+        let mut random = RNG.lock().unwrap();
+        random.rnd(DARK_ROOM_ROLL)
+    } < depth - 1
+    {
         room.mark_dark();
-        if rnd(MAZE_ROOM_CHANCE) == 0 {
+        if {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(MAZE_ROOM_CHANCE)
+        } == 0
+        {
             room.set_maze();
         }
     }
@@ -542,8 +570,14 @@ fn layout_room(room: &mut Room, slot: usize, bsze: IVec2, depth: i32) {
 fn place_off_map_room(room: &mut Room, top: IVec2, bsze: IVec2) {
     // Keep rerolling until the off-map placeholder position is valid.
     loop {
-        room.position.x = top.x + rnd(bsze.x - 2) + 1;
-        room.position.y = top.y + rnd(bsze.y - 2) + 1;
+        room.position.x = top.x + {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(bsze.x - 2)
+        } + 1;
+        room.position.y = top.y + {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(bsze.y - 2)
+        } + 1;
         room.size = IVec2::new(-GameConfig::SCREEN_COLS, -GameConfig::SCREEN_LINES);
         if room.position.y > 0 && room.position.y < GameConfig::SCREEN_LINES - 1 {
             break;
@@ -570,10 +604,22 @@ fn place_maze_room(room: &mut Room, top: IVec2, bsze: IVec2) {
 /// lands on a valid (non-top-row) position.
 fn place_regular_room(room: &mut Room, top: IVec2, bsze: IVec2) {
     for _ in 0..GameConfig::MAX_ROOM_PLACEMENT_ATTEMPTS {
-        room.size.x = rnd(bsze.x - 4) + 4;
-        room.size.y = rnd(bsze.y - 4) + 4;
-        room.position.x = top.x + rnd(bsze.x - room.size.x);
-        room.position.y = top.y + rnd(bsze.y - room.size.y);
+        room.size.x = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(bsze.x - 4)
+        } + 4;
+        room.size.y = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(bsze.y - 4)
+        } + 4;
+        room.position.x = top.x + {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(bsze.x - room.size.x)
+        };
+        room.position.y = top.y + {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(bsze.y - room.size.y)
+        };
         if room.position.y != 0 {
             return;
         }

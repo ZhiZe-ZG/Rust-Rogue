@@ -19,7 +19,7 @@ use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::item::item_type::ItemType;
 use crate::item::things::new_thing_id;
 use crate::level::LevelFlags;
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use crate::tile::{Tile, TrapType};
 
 use super::Dungeon;
@@ -53,7 +53,10 @@ impl Dungeon {
             spots = GameConfig::MAX_TREASURES - GameConfig::MIN_TREASURES;
         }
 
-        let mut nm = rnd(spots) + GameConfig::MIN_TREASURES;
+        let mut nm = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(spots)
+        } + GameConfig::MIN_TREASURES;
         let num_monst = nm;
         while nm > 0 {
             if let Some(pos) = self.find_floor(Some(idx), 2 * GameConfig::MAX_PLACEMENT_ATTEMPTS, false)
@@ -63,7 +66,10 @@ impl Dungeon {
             nm -= 1;
         }
 
-        nm = rnd(spots) + GameConfig::MIN_TREASURES;
+        nm = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(spots)
+        } + GameConfig::MIN_TREASURES;
         if nm < num_monst + 2 {
             nm = num_monst + 2;
         }
@@ -108,9 +114,17 @@ impl Dungeon {
                 continue;
             }
 
-            if rnd(2) == 0 && (!has_amulet || level >= max_level) {
+            if {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(2)
+            } == 0
+                && (!has_amulet || level >= max_level)
+            {
                 let gold = new_item_id();
-                let goldval = rnd(50 + 10 * level) + 2;
+                let goldval = {
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(50 + 10 * level)
+                } + 2;
                 let gold_pos = self.find_floor(Some(i), 0, false).unwrap_or(IVec2::ZERO);
                 OBJECTS.with_object_mut(gold, |og| {
                     og.o_arm = goldval;
@@ -127,7 +141,11 @@ impl Dungeon {
             }
 
             let goldval = self.with_level(|current| current.rooms[i].goldval);
-            if rnd(100) < if goldval > 0 { 80 } else { 25 } {
+            if {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(100)
+            } < if goldval > 0 { 80 } else { 25 }
+            {
                 let id = self.monster_list.spawn_actor();
                 if let Some(pos) = self.find_floor(Some(i), 0, true) {
                     new_monster_id(id, randmonster(false), pos);
@@ -149,13 +167,21 @@ impl Dungeon {
         }
 
         // Check for treasure rooms, and if so, put it in.
-        if rnd(GameConfig::TREASURE_ROOM_CHANCE) == 0 {
+        if {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(GameConfig::TREASURE_ROOM_CHANCE)
+        } == 0
+        {
             self.treas_room();
         }
 
         // Do MAXOBJ attempts to put things on a level.
         for _ in 0..GameConfig::MAX_OBJECTS {
-            if rnd(100) < 36 {
+            if {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(100)
+            } < 36
+            {
                 // Pick a new object and link it in the list.
                 if let Some(pos) = self.find_floor(None, 0, false) {
                     self.spawn_object_at(pos);
@@ -186,11 +212,18 @@ impl Dungeon {
     unsafe fn place_traps(&self) {
         let level = self.current_depth();
 
-        if rnd(10) >= level {
+        if {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(10)
+        } >= level
+        {
             return;
         }
 
-        let mut ntraps = rnd(level / 4) + 1;
+        let mut ntraps = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(level / 4)
+        } + 1;
         if ntraps > GameConfig::MAX_TRAPS {
             ntraps = GameConfig::MAX_TRAPS;
         }
@@ -214,7 +247,10 @@ impl Dungeon {
 
             self.with_level_mut(|current| {
                 let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
-                let trap = TrapType::from_raw(rnd(GameConfig::TRAP_KIND_COUNT) as u8);
+                let trap = TrapType::from_raw({
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(GameConfig::TRAP_KIND_COUNT)
+                } as u8);
                 current.map.set(stairs, Tile::Trap(trap));
                 current.flags.real[idx] = false;
             });

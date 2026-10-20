@@ -26,7 +26,7 @@ use crate::dungeon::DUNGEON;
 use crate::misc::{eat, get_dir};
 use crate::options::{option, read_line};
 use crate::rip::total_winner;
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use crate::save::save_game;
 use crate::startup::{quit, shell};
 use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
@@ -380,10 +380,12 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             if !crate::draw::is_trap_cell(delta.y, delta.x) {
                                 msg_str("no trap there");
                             } else if player_has(MonsterFlags::HALU) {
-                                let name = crate::game::globals::trap_name(rnd(
-                                    GameConfig::TRAP_KIND_COUNT,
-                                )
-                                    as usize);
+                                let name = crate::game::globals::trap_name(
+                                    {
+                                        let mut random = RNG.lock().unwrap();
+                                        random.rnd(GameConfig::TRAP_KIND_COUNT)
+                                    } as usize,
+                                );
                                 msg_str(&name);
                             } else {
                                 let name = crate::game::globals::trap_name(
@@ -680,7 +682,11 @@ pub unsafe fn search() {
             if (flags as u8 & F_REAL as u8) == 0 {
                 match crate::game::tile_at(y, x) {
                     crate::tile::Tile::Wall | crate::tile::Tile::HiddenDoor => {
-                        if rnd(5 + probinc) == 0 {
+                        if {
+                            let mut random = RNG.lock().unwrap();
+                            random.rnd(5 + probinc)
+                        } == 0
+                        {
                             crate::draw::reveal_secret_at(y, x);
                             msg_str("a secret door");
                             found = true;
@@ -689,7 +695,11 @@ pub unsafe fn search() {
                         }
                     }
                     crate::tile::Tile::Trap(_) => {
-                        if rnd(2 + probinc) == 0 {
+                        if {
+                            let mut random = RNG.lock().unwrap();
+                            random.rnd(2 + probinc)
+                        } == 0
+                        {
                             crate::level::with_current_level_mut(|current| {
                                 current.reveal_trap(y as usize, x as usize);
                             });
@@ -697,10 +707,12 @@ pub unsafe fn search() {
                                 addmsg_str("you found ");
                             }
                             if player_has(MonsterFlags::HALU) {
-                                let name = crate::game::globals::trap_name(rnd(
-                                    GameConfig::TRAP_KIND_COUNT,
-                                )
-                                    as usize);
+                                let name = crate::game::globals::trap_name(
+                                    {
+                                        let mut random = RNG.lock().unwrap();
+                                        random.rnd(GameConfig::TRAP_KIND_COUNT)
+                                    } as usize,
+                                );
                                 msg_str(&name);
                             } else {
                                 let name = crate::game::globals::trap_name(
@@ -714,7 +726,11 @@ pub unsafe fn search() {
                         }
                     }
                     crate::tile::Tile::Empty => {
-                        if rnd(3 + probinc) == 0 {
+                        if {
+                            let mut random = RNG.lock().unwrap();
+                            random.rnd(3 + probinc)
+                        } == 0
+                        {
                             crate::draw::reveal_secret_at(y, x);
                             found = true;
                             count = false as u8 as i32;

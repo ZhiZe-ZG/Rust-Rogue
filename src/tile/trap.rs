@@ -5,7 +5,7 @@
 //! trap effect itself is applied by the movement code in
 //! [`crate::entity::player`].
 
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -58,29 +58,33 @@ impl TrapType {
                 Some("a strange white mist envelops you and you fall asleep".to_string())
             }
             TrapType::Rust => Some("a gush of water hits you on the head".to_string()),
-            TrapType::Mystery => match rnd(11) {
-                0 => Some("you are suddenly in a parallel dimension".to_string()),
-                1 => Some(format!(
-                    "the light in here suddenly seems {}",
-                    crate::colors::random_color()
-                )),
-                2 => Some("you feel a sting in the side of your neck".to_string()),
-                3 => Some("multi-colored lines swirl around you, then fade".to_string()),
-                4 => Some(format!(
-                    "a {} light flashes in your eyes",
-                    crate::colors::random_color()
-                )),
-                5 => Some("a spike shoots past your ear!".to_string()),
-                6 => Some(format!(
-                    "{} sparks dance across your armor",
-                    crate::colors::random_color()
-                )),
-                7 => Some("you suddenly feel very thirsty".to_string()),
-                8 => Some("you feel time speed up suddenly".to_string()),
-                9 => Some("time now seems to be going slower".to_string()),
-                10 => Some(format!("you pack turns {}!", crate::colors::random_color())),
-                _ => None,
-            },
+            TrapType::Mystery => {
+                // Release the RNG before a message draws a random color.
+                let choice = RNG.lock().unwrap().rnd(11);
+                match choice {
+                    0 => Some("you are suddenly in a parallel dimension".to_string()),
+                    1 => Some(format!(
+                        "the light in here suddenly seems {}",
+                        crate::colors::random_color()
+                    )),
+                    2 => Some("you feel a sting in the side of your neck".to_string()),
+                    3 => Some("multi-colored lines swirl around you, then fade".to_string()),
+                    4 => Some(format!(
+                        "a {} light flashes in your eyes",
+                        crate::colors::random_color()
+                    )),
+                    5 => Some("a spike shoots past your ear!".to_string()),
+                    6 => Some(format!(
+                        "{} sparks dance across your armor",
+                        crate::colors::random_color()
+                    )),
+                    7 => Some("you suddenly feel very thirsty".to_string()),
+                    8 => Some("you feel time speed up suddenly".to_string()),
+                    9 => Some("time now seems to be going slower".to_string()),
+                    10 => Some(format!("you pack turns {}!", crate::colors::random_color())),
+                    _ => None,
+                }
+            }
             TrapType::Arrow => Some(match hit {
                 TrapHit::Miss => "an arrow shoots past you".to_string(),
                 TrapHit::Hit => "oh no! An arrow shot you".to_string(),

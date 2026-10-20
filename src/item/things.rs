@@ -5,7 +5,7 @@ use crate::game::PLAYER;
 use crate::item::armor::waste_time;
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::misc::chg_str;
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use crate::ui::output::msg_str;
 
 use crate::entity::player::ObjectFlags;
@@ -80,7 +80,10 @@ fn adjust_inventory_case(name: &mut String, drop: u8) {
 
 #[inline]
 fn pick_one(info: &[ObjInfo], nitems: usize) -> i32 {
-    let idx = rnd(100);
+    let idx = {
+        let mut random = RNG.lock().unwrap();
+        random.rnd(100)
+    };
     let mut i = 0usize;
     while i < nitems {
         if idx < info[i].oi_prob {
@@ -259,7 +262,15 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
         }
         2 => {
             crate::dungeon::set_no_food(0);
-            let which = if rnd(10) != 0 { 0 } else { 1 };
+            let which = if {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(10)
+            } != 0
+            {
+                0
+            } else {
+                1
+            };
             crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
                 o.o_type = ItemType::Food;
                 o.o_which = which;
@@ -267,28 +278,46 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
         }
         3 => {
             init_weapon(cur_id, pick_one(&weap_info[..], MAXWEAPONS));
-            let r = rnd(100);
+            let r = {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(100)
+            };
             crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
                 if r < 10 {
                     o.o_flags.insert(ObjectFlags::CURSED);
-                    o.o_hplus -= rnd(3) + 1;
+                    o.o_hplus -= {
+                        let mut random = RNG.lock().unwrap();
+                        random.rnd(3)
+                    } + 1;
                 } else if r < 15 {
-                    o.o_hplus += rnd(3) + 1;
+                    o.o_hplus += {
+                        let mut random = RNG.lock().unwrap();
+                        random.rnd(3)
+                    } + 1;
                 }
             });
         }
         4 => {
             let which = pick_one(&arm_info[..], MAXARMORS);
-            let r = rnd(100);
+            let r = {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(100)
+            };
             crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
                 o.o_which = which;
                 o.o_type = ItemType::Armor(which);
                 o.o_arm = a_class[which as usize];
                 if r < 20 {
                     o.o_flags.insert(ObjectFlags::CURSED);
-                    o.o_arm += rnd(3) + 1;
+                    o.o_arm += {
+                        let mut random = RNG.lock().unwrap();
+                        random.rnd(3)
+                    } + 1;
                 } else if r < 28 {
-                    o.o_arm -= rnd(3) + 1;
+                    o.o_arm -= {
+                        let mut random = RNG.lock().unwrap();
+                        random.rnd(3)
+                    } + 1;
                 }
             });
         }
@@ -303,7 +332,10 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
                     | RingType::SustainStrength
                     | RingType::AddHit
                     | RingType::AddDamage => {
-                        let mut arm = rnd(3);
+                        let mut arm = {
+                            let mut random = RNG.lock().unwrap();
+                            random.rnd(3)
+                        };
                         if arm == 0 {
                             arm = -1;
                             o.o_flags.insert(ObjectFlags::CURSED);
@@ -370,7 +402,10 @@ fn set_order(order: &mut [i32]) {
         order[i as usize] = i;
     }
     for i in (1..=numthings).rev() {
-        let r = rnd(i);
+        let r = {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(i)
+        };
         order.swap((i - 1) as usize, r as usize);
     }
 }

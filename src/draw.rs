@@ -24,7 +24,7 @@ use crate::dungeon::DUNGEON;
 use crate::game::MonsterId;
 use crate::item::arena::ThingId;
 use crate::level::{with_current_level, with_current_level_mut};
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 use crate::tile::Tile;
 use crate::tile::TrapType;
 use crate::ui::output;
@@ -207,7 +207,10 @@ pub(crate) fn monster_type_glyph(id: MonsterId) -> char {
 /// A random `'A'..='Z'` glyph used when the hero is hallucinating.
 #[inline]
 pub(crate) fn hallucination_glyph() -> char {
-    ((rnd(26) + b'A' as i32) as u8) as char
+    (({
+        let mut random = RNG.lock().unwrap();
+        random.rnd(26)
+    } + b'A' as i32) as u8) as char
 }
 
 /// Write a world-cell glyph through the drawing layer.
@@ -491,7 +494,10 @@ pub unsafe fn look(wakeup: u8) {
                     }
                     if see_monst(id) != 0 {
                         if player_has(MonsterFlags::HALU) {
-                            ch = rnd(26) + b'A' as i32;
+                            ch = {
+                                let mut random = RNG.lock().unwrap();
+                                random.rnd(26)
+                            } + b'A' as i32;
                         } else {
                             ch = DUNGEON.monster_list
                                 .with(id, |t| match t {
@@ -592,7 +598,10 @@ pub unsafe fn trip_ch(y: i32, x: i32, ch: i32) -> i32 {
             && tile != b'|' as u8
             && !(y == game::stairs().y && x == game::stairs().x && DUNGEON.seen_stairs())
         {
-            return rnd(26) as u8 as i32;
+            return {
+                let mut random = RNG.lock().unwrap();
+                random.rnd(26)
+            } as u8 as i32;
         }
     }
     ch

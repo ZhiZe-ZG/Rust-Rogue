@@ -6,7 +6,7 @@ use glam::IVec2;
 use crate::entity::chase::diag_ok;
 use crate::entity::player::Thing;
 use crate::item::scrolls::ScrollType;
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 
 const SCROLL: u8 = b'?' as u8;
 
@@ -17,8 +17,14 @@ const SCROLL: u8 = b'?' as u8;
 /// owns it, so no pointer is stored in a shared slot.
 pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
     let mut chosen = IVec2 {
-        y: pos.y + rnd(3) - 1,
-        x: pos.x + rnd(3) - 1,
+        y: pos.y + {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(3)
+        } - 1,
+        x: pos.x + {
+            let mut random = RNG.lock().unwrap();
+            random.rnd(3)
+        } - 1,
     };
 
     // Standing still is a valid outcome

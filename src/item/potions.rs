@@ -1,7 +1,7 @@
 //! Potions and quaffing.
 //!
 //! Ported from `src/c/potions.c` to Rust.
-use crate::rnd::rnd;
+use crate::rnd::RNG;
 
 use crate::daemon::{fuse, lengthen, start_daemon, Daemon};
 use crate::daemons::{come_down, sight};
@@ -18,7 +18,6 @@ use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::item::rings::RingType;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
-use crate::rnd::roll;
 use crate::ui::output::{msg_str, show_win};
 use glam::IVec2;
 
@@ -262,7 +261,10 @@ pub unsafe fn quaff() {
             if PLAYER.wearing_ring(RingType::SustainStrength) {
                 msg_str("you feel momentarily sick");
             } else {
-                chg_str(-(rnd(3) + 1));
+                chg_str(-({
+                    let mut random = RNG.lock().unwrap();
+                    random.rnd(3)
+                } + 1));
                 msg_str("you feel very sick now");
                 come_down();
             }
@@ -270,7 +272,10 @@ pub unsafe fn quaff() {
         PotionType::Healing => {
             pot_info_at(PotionType::Healing.index()).oi_know = true;
             crate::game::PLAYER.with_stats_mut(|stats| {
-                stats.hit_points += roll(stats.level, 4);
+                stats.hit_points += {
+                    let mut random = RNG.lock().unwrap();
+                    random.roll(stats.level, 4)
+                };
                 if stats.hit_points > stats.max_hit_points {
                     stats.max_hit_points += 1;
                     stats.hit_points = stats.max_hit_points;
@@ -363,7 +368,10 @@ pub unsafe fn quaff() {
         PotionType::ExtraHealing => {
             pot_info_at(PotionType::ExtraHealing.index()).oi_know = true;
             crate::game::PLAYER.with_stats_mut(|stats| {
-                stats.hit_points += roll(stats.level, 8);
+                stats.hit_points += {
+                    let mut random = RNG.lock().unwrap();
+                    random.roll(stats.level, 8)
+                };
                 if stats.hit_points > stats.max_hit_points {
                     if stats.hit_points > stats.max_hit_points + stats.level + 1 {
                         stats.max_hit_points += 1;
