@@ -2,7 +2,7 @@
 //!
 //! Rust-side reimplementation of the room logic from `src/c/rooms.c` and
 //! `src/c/new_level.c`.
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use glam::IVec2;
 
 use super::super::tile::Tile;
@@ -51,10 +51,10 @@ impl Room {
         Self::with_structure(position, size, structure)
     }
 
-    /// Create a maze room with a procedurally carved corridor structure.
-    pub fn new_maze(position: IVec2, size: IVec2) -> Self {
+    /// Create a maze room using the supplied generator to carve corridors.
+    pub fn new_maze(position: IVec2, size: IVec2, random: &mut Random) -> Self {
         let structure = if size.x > 0 && size.y > 0 {
-            Self::build_maze_structure(size.y as usize, size.x as usize)
+            Self::build_maze_structure(size.y as usize, size.x as usize, random)
         } else {
             Structure::new(0, 0, Tile::Empty)
         };
@@ -97,7 +97,7 @@ impl Room {
     }
 
     /// Build a maze structure by carving corridors into a passage grid.
-    fn build_maze_structure(height: usize, width: usize) -> Structure {
+    fn build_maze_structure(height: usize, width: usize, random: &mut Random) -> Structure {
         let mut structure = Structure::new(height, width, Tile::Empty);
 
         if height == 0 || width == 0 {
@@ -111,7 +111,14 @@ impl Room {
             }
         }
 
-        fn dig_local(structure: &mut Structure, y: i32, x: i32, max_y: i32, max_x: i32) {
+        fn dig_local(
+            structure: &mut Structure,
+            y: i32,
+            x: i32,
+            max_y: i32,
+            max_x: i32,
+            random: &mut Random,
+        ) {
             let deltas: [(i32, i32); 4] = [(2, 0), (-2, 0), (0, 2), (0, -2)];
 
             loop {
@@ -130,11 +137,7 @@ impl Room {
                     }
 
                     cnt += 1;
-                    if {
-                        let mut random = RNG.lock().unwrap();
-                        random.rnd(cnt)
-                    } == 0
-                    {
+                    if random.rnd(cnt) == 0 {
                         next_y = new_y;
                         next_x = new_x;
                     }
@@ -153,31 +156,25 @@ impl Room {
                 }
 
                 let _ = structure.set(IVec2::new(next_x, next_y), Tile::Passage);
-                dig_local(structure, next_y, next_x, max_y, max_x);
+                dig_local(structure, next_y, next_x, max_y, max_x, random);
             }
         }
 
         let max_y = height as i32 - 1;
         let max_x = width as i32 - 1;
         let start_y = if height > 1 {
-            ({
-                let mut random = RNG.lock().unwrap();
-                random.rnd(height as i32)
-            } / 2) * 2
+            (random.rnd(height as i32) / 2) * 2
         } else {
             0
         };
         let start_x = if width > 1 {
-            ({
-                let mut random = RNG.lock().unwrap();
-                random.rnd(width as i32)
-            } / 2) * 2
+            (random.rnd(width as i32) / 2) * 2
         } else {
             0
         };
 
         let _ = structure.set(IVec2::new(start_x, start_y), Tile::Passage);
-        dig_local(&mut structure, start_y, start_x, max_y, max_x);
+        dig_local(&mut structure, start_y, start_x, max_y, max_x, random);
         structure
     }
 

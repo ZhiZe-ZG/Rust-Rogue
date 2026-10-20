@@ -662,7 +662,8 @@ fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room>
     }
 
     if is_maze {
-        Some(Room::new_maze(position, size))
+        let mut random = RNG.lock().unwrap();
+        Some(Room::new_maze(position, size, &mut random))
     } else {
         Some(Room::new(position, size))
     }

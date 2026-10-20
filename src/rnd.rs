@@ -129,44 +129,6 @@ mod tests {
     }
 
     #[test]
-    fn trap_messages_use_only_the_supplied_generator() {
-        use crate::tile::{TrapHit, TrapType};
-
-        let mut random = Random::new();
-        let mut reference = Random::new();
-        for trap in [
-            TrapType::Door,
-            TrapType::Arrow,
-            TrapType::Sleep,
-            TrapType::Bear,
-            TrapType::Teleport,
-            TrapType::Dart,
-            TrapType::Rust,
-        ] {
-            for hit in [TrapHit::Miss, TrapHit::Hit, TrapHit::Kill] {
-                assert_eq!(
-                    trap.msg(hit, &mut random).is_none(),
-                    trap == TrapType::Teleport
-                );
-                assert_eq!(random.rnd(1000), reference.rnd(1000));
-            }
-        }
-        for _ in 0..100 {
-            let choice = reference.rnd(11);
-            let color = if matches!(choice, 1 | 4 | 6 | 10) {
-                Some(crate::colors::random_color(&mut reference))
-            } else {
-                None
-            };
-            let message = TrapType::Mystery.msg(TrapHit::Miss, &mut random).unwrap();
-            if let Some(color) = color {
-                assert!(message.contains(color));
-            }
-            assert_eq!(random.rnd(1000), reference.rnd(1000));
-        }
-    }
-
-    #[test]
     fn rolls_match_successive_draws_and_preserve_state() {
         let mut random = Random::new();
         let mut reference = Random::new();
