@@ -66,8 +66,6 @@ pub const ALLSCORE: u8 = 1;
 pub static mut after: u8 = 0;
 /// Requests that the current command be repeated.
 pub static mut again: u8 = 0;
-/// Suppresses score recording when nonzero.
-pub static mut noscore: i32 = 0;
 /// Stops automatic movement at the next door.
 pub static mut door_stop: u8 = 0;
 /// Flushes pending input during combat.

@@ -72,7 +72,7 @@ impl Default for CommandState {
 use crate::game::globals::{
     after, again, count, delta, dir_ch, door_stop, firstmove, get_food_left, get_inpack, has_hit,
     inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
-    last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm,
+    last_pick, lastscore, max_hit, move_on, mpos, no_command, p_colors, purse, q_comm,
     r_stones, runch, running, save_msg, stat_msg, take, terse, to_death, ws_made,
 };
 
@@ -102,7 +102,7 @@ fn cstr_at(s: &str) -> String {
 /// Process the user commands.
 ///
 /// Uses globals: player, has_hit, running, door_stop, lastscore,
-/// purse, hero, jump, take, after, noscore, no_command,
+/// purse, hero, jump, take, after, no_command,
 /// count, move_on, mpos, runch, to_death, countch, l_last_comm /
 /// last_comm / last_dir / last_pick (via reset_last/last_*), lvl_obj,
 /// terse, mlist (via moat), max_hit, mp/t_flags (via to_death),
@@ -150,10 +150,6 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
         /*
          * Read command or continue run
          */
-        if MASTER && crate::wizard::is_wizard() {
-            noscore = 1;
-        }
-
         let (mut command, can_dispatch) = read_command(command_state);
         if crate::startup::exit_requested() {
             return;
@@ -408,7 +404,6 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 msg_str("not wizard any more");
                             } else {
                                 crate::wizard::set_wizard_mode(1);
-                                noscore = 1;
                                 turn_see(false as u8);
                                 msg_str(&format!(
                                     "you are suddenly as smart as Ken Arnold in dungeon #{}",

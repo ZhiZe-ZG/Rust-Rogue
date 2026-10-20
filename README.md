@@ -78,7 +78,6 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 #### Player / inventory / progress state
 
 - `pack_used`: record of used pack slots.
-- `noscore`: suppresses score recording when nonzero.
 - `orig_dsusp`: original terminal delayed-suspend character.
 - `l_last_comm`: previous last command value.
 - `l_last_dir`: previous last direction value.
@@ -195,5 +194,7 @@ Former chase-coordinate, name-buffer, random-move return, and material-use scrat
 [src/save.rs](src/save.rs) writes the header `ROGUE-RON 1\n`, followed by a Serde/RON `GameSnapshot` defined in [src/state.rs](src/state.rs). This is a Rust snapshot format, not the original C binary save format. Item references and chase targets are encoded as indices or explicit reference variants rather than serialized memory addresses.
 
 The snapshot adapts runtime ownership to saved fields: `seenstairs`, `amulet`, `ntraps`, `max_level`, and `no_food` are saved from `DUNGEON`, while depth is stored in the level snapshot. Daemons and the `between`/`group` counters are also persisted. Terminal resources, rendering caches, open file handles, and command-loop-local bookkeeping are not. Some output-related globals, including message flags and `mpos`, are persisted; not all UI-related state is transient.
+
+Score recording is no longer suppressed by wizard-mode use. The former score-suppression field is omitted from new snapshots; its presence in older saves is ignored during deserialization.
 
 Parts of the engine still use `unsafe`, raw item pointers, and legacy-shaped helpers. These are implementation details of the port, not a requirement to link against the original C sources or a promise of C save-file compatibility.

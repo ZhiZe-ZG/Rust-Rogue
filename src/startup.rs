@@ -13,7 +13,7 @@ use crate::dungeon::DUNGEON;
 use crate::entity::chase::roomin;
 use crate::entity::player::MonsterFlags;
 use crate::game::globals::{
-    after, count, get_purse, in_shell, inv_type, mpos, noscore, oldpos, oldrp, playing, purse,
+    after, count, get_purse, in_shell, inv_type, mpos, oldpos, oldrp, playing, purse,
     q_comm, seed, to_death,
 };
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
@@ -25,7 +25,7 @@ use crate::save::{restore, RestoreError};
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::output::{self, msg_str, status};
 use crate::ui::terminal;
-use crate::wizard::{set_wizard_mode, wizard_mode};
+use crate::wizard::set_wizard_mode;
 use glam::IVec2;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -396,7 +396,6 @@ unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupErr
     }
 
     init_game_tables();
-    noscore = wizard_mode();
     DUNGEON.new_level();
     start_game_daemons();
     main_loop_step();

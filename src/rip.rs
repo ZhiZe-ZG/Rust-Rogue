@@ -32,7 +32,7 @@ pub const RIP_ART: &[&str] = &[
 ];
 
 use crate::dungeon::DUNGEON;
-use crate::game::globals::{noscore, purse, tombstone};
+use crate::game::globals::{purse, tombstone};
 
 #[inline]
 fn vowelstr(s: &str) -> &'static str {
@@ -126,7 +126,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
     rd_score(top_ten.as_mut_slice());
 
     let mut sc2 = None;
-    if noscore == 0 {
+    {
         let uid = libc::getuid() as u32;
         let mut insert_at = top_ten.len();
 

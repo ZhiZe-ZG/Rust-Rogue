@@ -114,7 +114,6 @@ pub struct GameSnapshot {
     // ── boolean/char flags ──────────────────────────────────────────────
     pub after: bool,
     pub again: bool,
-    pub noscore: i32,
     pub seenstairs: bool,
     pub amulet: bool,
     pub door_stop: bool,
@@ -430,7 +429,6 @@ unsafe fn build_snapshot() -> GameSnapshot {
     GameSnapshot {
         after: after != 0,
         again: again != 0,
-        noscore,
         seenstairs: DUNGEON.seen_stairs(),
         amulet: DUNGEON.has_amulet(),
         door_stop: door_stop != 0,
@@ -575,7 +573,6 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     }
     set_flag!(after);
     set_flag!(again);
-    noscore = s.noscore;
     DUNGEON.set_seen_stairs(s.seenstairs);
     DUNGEON.set_amulet(s.amulet);
     set_flag!(door_stop);
@@ -857,7 +854,6 @@ mod tests {
         let snapshot = GameSnapshot {
             after: true,
             again: false,
-            noscore: 3,
             seenstairs: true,
             amulet: false,
             door_stop: true,
@@ -992,5 +988,15 @@ mod tests {
         assert_eq!(back.player.t_pos, IVec2::new(3, 4));
         assert_eq!(back.pot_info[0].guess.as_deref(), Some("fizzy"));
         assert!(back.pot_info[0].know);
+
+        // Older saves include the removed score-suppression field. Serde
+        // ignores it, and newly written snapshots must not reintroduce it.
+        assert!(!text.contains("noscore:"));
+        let legacy_text = text.replacen('(', "(noscore: 3,", 1);
+        let legacy: GameSnapshot = ron::de::from_str(&legacy_text)
+            .expect("deserialize save with removed score-suppression field");
+        let migrated = ron::ser::to_string_pretty(&legacy, ron::ser::PrettyConfig::default())
+            .expect("reserialize legacy save");
+        assert_eq!(migrated, text);
     }
 }
