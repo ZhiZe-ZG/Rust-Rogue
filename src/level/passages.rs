@@ -11,7 +11,7 @@
 use glam::IVec2;
 
 use crate::config::GameConfig;
-use crate::rnd::RNG;
+use crate::rnd::Random;
 
 use super::level::LevelFlags;
 use crate::structure::{Passage, Room, Structure};
@@ -72,26 +72,21 @@ pub(crate) fn entry_point(
     room_index: usize,
     direc: char,
     start: bool,
+    random: &mut Random,
 ) -> IVec2 {
     let room = &rooms[room_index];
     let mut p = room.position;
     if !room.is_gone() {
         loop {
             if direc == 'd' {
-                p.x = room.position.x + {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(room.size.x - 2)
-                } + 1;
+                p.x = room.position.x + random.rnd(room.size.x - 2) + 1;
                 p.y = if start {
                     room.position.y + room.size.y - 1
                 } else {
                     room.position.y
                 };
             } else {
-                p.y = room.position.y + {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(room.size.y - 2)
-                } + 1;
+                p.y = room.position.y + random.rnd(room.size.y - 2) + 1;
                 p.x = if start {
                     room.position.x + room.size.x - 1
                 } else {
@@ -111,7 +106,13 @@ pub(crate) fn entry_point(
 /// Determines the corridor direction from the room indices, picks random
 /// entry points on both room boundaries, and derives the straight run, the
 /// perpendicular turn, and the random position of the turn.
-pub(crate) fn plan_corridor(rooms: &[Room], map: &Structure, r1: usize, r2: usize) -> CorridorPlan {
+pub(crate) fn plan_corridor(
+    rooms: &[Room],
+    map: &Structure,
+    r1: usize,
+    r2: usize,
+    random: &mut Random,
+) -> CorridorPlan {
     // Rooms side by side (indices differing by one) are joined by a horizontal
     // corridor (`'r'`); rooms stacked (any other pair) by a vertical one (`'d'`).
     // The smaller index anchors the corridor's start.
@@ -132,8 +133,8 @@ pub(crate) fn plan_corridor(rooms: &[Room], map: &Structure, r1: usize, r2: usiz
         IVec2::new(1, 0)
     };
 
-    let start = entry_point(rooms, map, base_room, direc, true);
-    let end = entry_point(rooms, map, partner_room, direc, false);
+    let start = entry_point(rooms, map, base_room, direc, true, random);
+    let end = entry_point(rooms, map, partner_room, direc, false, random);
 
     let (distance, turn_step, turn_distance) = if direc == 'd' {
         (
@@ -150,10 +151,7 @@ pub(crate) fn plan_corridor(rooms: &[Room], map: &Structure, r1: usize, r2: usiz
     };
 
     let turn_spot = if distance > 1 {
-        ({
-            let mut random = RNG.lock().unwrap();
-            random.rnd(distance - 1)
-        } + 1)
+        random.rnd(distance - 1) + 1
     } else {
         1
     };
@@ -263,7 +261,12 @@ pub(crate) fn build_passage(tiles: Vec<IVec2>, entry_points: Vec<IVec2>) -> Opti
 /// redraw can find it. Matching the legacy `putpass`, a cell is occasionally
 /// hidden by clearing `real` so it renders as a wall glyph (`-`/`|`) instead
 /// of `#`. Pure Rust: only the level's own flag grids are touched.
-pub(crate) fn mark_passages(map: &Structure, flags: &mut LevelFlags, depth: i32) {
+pub(crate) fn mark_passages(
+    map: &Structure,
+    flags: &mut LevelFlags,
+    depth: i32,
+    random: &mut Random,
+) {
     for y in 0..map.height() {
         for x in 0..map.width() {
             if !matches!(map.get(IVec2::new(x as i32, y as i32)), Some(Tile::Passage)) {
@@ -271,15 +274,7 @@ pub(crate) fn mark_passages(map: &Structure, flags: &mut LevelFlags, depth: i32)
             }
             let idx = y * GameConfig::LEVEL_WIDTH + x;
             flags.passage[idx] = true;
-            if {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(10)
-            } + 1 < depth
-                && {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(40)
-                } == 0
-            {
+            if random.rnd(10) + 1 < depth && random.rnd(40) == 0 {
                 flags.real[idx] = false;
             }
         }

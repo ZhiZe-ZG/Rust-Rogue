@@ -11,7 +11,9 @@ use std::sync::RwLock;
 
 use glam::IVec2;
 
+use crate::item::arena::OBJECTS;
 use crate::level::Level;
+use crate::rnd::RNG;
 use crate::tile::Tile;
 
 mod generation;
@@ -50,6 +52,15 @@ pub struct Dungeon {
 }
 
 impl Dungeon {
+    /// Unlink all floor items, then discard them from the object arena.
+    /// The level lock is released before acquiring any arena lock.
+    pub fn clear_items(&self) {
+        let items = self.with_level_mut(|level| std::mem::take(&mut level.items));
+        for id in items {
+            let _ = OBJECTS.remove(id);
+        }
+    }
+
     /// Build an empty dungeon, ready for lazy initialization.
     pub const fn empty() -> Self {
         Self {
@@ -209,6 +220,7 @@ impl Dungeon {
         monst: bool,
     ) -> Option<IVec2> {
         self.with_level(|level| {
+            let mut random = RNG.lock().unwrap();
             let mut cnt = limit;
             // Safety bound: unlimited scans must eventually give up rather than
             // hang level generation on a packed level.
@@ -225,14 +237,14 @@ impl Dungeon {
                     return None;
                 }
 
-                let idx = room_idx.unwrap_or_else(|| level.rnd_room());
+                let idx = room_idx.unwrap_or_else(|| level.rnd_room(&mut random));
                 let room = &level.rooms[idx];
                 let expected_tile = if room.is_maze() {
                     Tile::Passage
                 } else {
                     Tile::Floor
                 };
-                let pos = level.rnd_pos(room);
+                let pos = level.rnd_pos(room, &mut random);
 
                 // The candidate cell is validated against the map tile
                 // directly; an object overlay does not count as a free cell.
@@ -297,6 +309,31 @@ pub(crate) fn bump_no_food() {
 #[cfg(test)]
 mod tests {
     use super::Dungeon;
+
+    #[test]
+    fn clear_items_removes_only_floor_objects_and_is_repeatable() {
+        use crate::entity::player::{Thing, ThingObject};
+        use crate::item::arena::OBJECTS;
+
+        let dungeon = Dungeon::empty();
+        let floor = OBJECTS.insert(Thing::object(ThingObject::default()));
+        let stale = OBJECTS.insert(Thing::object(ThingObject::default()));
+        OBJECTS.remove(stale);
+        let unrelated = OBJECTS.insert(Thing::object(ThingObject::default()));
+        dungeon.with_level_mut(|level| {
+            level.add_item(floor);
+            level.add_item(stale);
+            level.add_item(floor);
+        });
+
+        dungeon.clear_items();
+        assert!(dungeon.with_level(|level| level.item_ids().is_empty()));
+        assert!(!OBJECTS.contains(floor));
+        assert!(OBJECTS.contains(unrelated));
+        dungeon.clear_items();
+        assert!(OBJECTS.contains(unrelated));
+        OBJECTS.remove(unrelated);
+    }
 
     #[test]
     fn level_initializes_once_and_shares_scoped_views() {

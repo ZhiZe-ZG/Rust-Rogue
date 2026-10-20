@@ -43,7 +43,10 @@ impl Dungeon {
 
     /// Fill one treasure room with `MIN..MAX` objects and monsters.
     unsafe fn treas_room(&self) {
-        let idx = self.with_level(|current| current.rnd_room());
+        let idx = self.with_level(|current| {
+            let mut random = RNG.lock().unwrap();
+            current.rnd_room(&mut random)
+        });
         let mut spots = self.with_level(|current| {
             let room = &current.rooms[idx];
             (room.size.y - 2) * (room.size.x - 2) - GameConfig::MIN_TREASURES

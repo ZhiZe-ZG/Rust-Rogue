@@ -4,7 +4,7 @@
 //! for the current dungeon level, plus the process-wide singleton holding
 //! the live level.
 
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use glam::IVec2;
 
 use super::passages::{
@@ -13,7 +13,7 @@ use super::passages::{
 };
 use super::roomgraph::RoomGraph;
 use crate::config::GameConfig;
-use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::arena::ThingId;
 use crate::structure::{Passage, Room, Structure};
 use crate::tile::{Tile, TrapType};
 
@@ -125,13 +125,6 @@ impl Level {
         &self.items
     }
 
-    /// Drop every floor item, discarding each from the arena.
-    pub fn clear_items(&mut self) {
-        for id in self.items.drain(..) {
-            let _ = OBJECTS.remove(id);
-        }
-    }
-
     /// Reset every flag grid to a fresh-level state.
     fn reset_flags(&mut self) {
         self.flags = LevelFlags::cleared();
@@ -204,8 +197,8 @@ impl Level {
     /// (see [`plan_corridor`] and [`corridor_tiles`]) and modelled as a
     /// [`Passage`] (see [`build_passage`]); only then is the model copied into
     /// this level's room records and tile map (see [`Level::apply_passage`]).
-    fn conn(&mut self, r1: usize, r2: usize) {
-        let plan = plan_corridor(&self.rooms, &self.map, r1, r2);
+    fn conn(&mut self, r1: usize, r2: usize, random: &mut Random) {
+        let plan = plan_corridor(&self.rooms, &self.map, r1, r2, random);
 
         // Phase 1 — generate the corridor geometry purely, without touching
         // the level map or room records. Each corridor end contributes a tile
@@ -227,7 +220,7 @@ impl Level {
         };
 
         // Phase 3 — copy the model into the level map and room records.
-        self.apply_passage(&passage, &plan);
+        self.apply_passage(&passage, &plan, random);
         self.passages.push(passage);
     }
 
@@ -256,7 +249,7 @@ impl Level {
     /// places a door on the room itself (see [`Room::place_door`]). Whether the
     /// door is secret (a hidden wall segment instead of an open `+`, chosen by
     /// depth and randomness) is decided here.
-    fn stamp_door(&mut self, room_index: usize, pos: IVec2) {
+    fn stamp_door(&mut self, room_index: usize, pos: IVec2, random: &mut Random) {
         let (is_maze, position) = {
             let room = &self.rooms[room_index];
             (room.is_maze(), room.position)
@@ -267,14 +260,7 @@ impl Level {
             return;
         }
 
-        let secret = {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(10)
-        } + 1 < self.depth
-            && {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(5)
-            } == 0;
+        let secret = random.rnd(10) + 1 < self.depth && random.rnd(5) == 0;
 
         let local = pos - position;
         if let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) {
@@ -302,7 +288,7 @@ impl Level {
     /// Registers a door on the owning room for every entry point (see
     /// [`Level::stamp_door`]) and stamps the remaining corridor cells as
     /// passages (see [`Level::stamp_passage`]).
-    fn apply_passage(&mut self, passage: &Passage, plan: &CorridorPlan) {
+    fn apply_passage(&mut self, passage: &Passage, plan: &CorridorPlan, random: &mut Random) {
         // Doors at the corridor's ends (only entry points reach here — ends on
         // gone rooms were never recorded as entry points).
         for rel in &passage.entry_points {
@@ -312,7 +298,7 @@ impl Level {
             } else {
                 plan.partner_room
             };
-            self.stamp_door(room_index, abs);
+            self.stamp_door(room_index, abs, random);
         }
 
         // The remaining corridor cells become plain passage tiles.
@@ -330,13 +316,13 @@ impl Level {
     /// map. The level then flags and numbers the passage network on the Rust
     /// side; the C `rooms`/`passages`/`places` globals are only written later
     /// by `write_rust_data_back_to_c_and_ncurses`.
-    pub fn do_passages(&mut self) {
+    pub fn do_passages(&mut self, random: &mut Random) {
         let connections = self.room_graph.connections().to_vec();
         for (r1, r2) in &connections {
-            self.conn(*r1, *r2);
+            self.conn(*r1, *r2, random);
         }
 
-        mark_passages(&self.map, &mut self.flags, self.depth);
+        mark_passages(&self.map, &mut self.flags, self.depth, random);
         number_passages(
             &self.map,
             &mut self.flags,
@@ -426,12 +412,9 @@ impl Level {
     /// Reads the `self.rooms` member (the Rust room model) instead of the C
     /// `rooms` global, checking each slot's `gone` flag until a live slot is
     /// found. Returns the room's index into [`Level::rooms`].
-    pub fn rnd_room(&self) -> usize {
+    pub fn rnd_room(&self, random: &mut Random) -> usize {
         loop {
-            let rm = {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(GameConfig::MAX_ROOMS as i32)
-            } as usize;
+            let rm = random.rnd(GameConfig::MAX_ROOMS as i32) as usize;
             if !self.rooms[rm].is_gone() {
                 return rm;
             }
@@ -443,16 +426,10 @@ impl Level {
     /// Returns a cell one tile inside the room's walls: `room.position`
     /// offset by `rnd(room.size - 2) + 1` on each axis, matching the legacy
     /// C `rnd_pos` math but using the Rust room geometry.
-    pub fn rnd_pos(&self, room: &Room) -> IVec2 {
+    pub fn rnd_pos(&self, room: &Room, random: &mut Random) -> IVec2 {
         IVec2::new(
-            room.position.x + {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(room.size.x - 2)
-            } + 1,
-            room.position.y + {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(room.size.y - 2)
-            } + 1,
+            room.position.x + random.rnd(room.size.x - 2) + 1,
+            room.position.y + random.rnd(room.size.y - 2) + 1,
         )
     }
 
@@ -460,12 +437,13 @@ impl Level {
         &mut self,
         mut rooms: [Room; GameConfig::MAX_ROOMS],
         bsze: IVec2,
+        random: &mut Random,
     ) -> [Room; GameConfig::MAX_ROOMS] {
-        generate_rooms(&mut rooms, bsze, self.depth);
+        generate_rooms(&mut rooms, bsze, self.depth, random);
         let gone: [bool; GameConfig::MAX_ROOMS] = std::array::from_fn(|i| rooms[i].is_gone());
-        self.room_graph = RoomGraph::plan_connections(&gone);
+        self.room_graph = RoomGraph::plan_connections(&gone, random);
 
-        let generated_rooms = build_generated_rooms(rooms);
+        let generated_rooms = build_generated_rooms(rooms, random);
         self.rooms = generated_rooms.to_vec();
 
         // Stamp every active room's tile model onto the level map.
@@ -489,19 +467,20 @@ impl Level {
         &mut self,
         rooms: [Room; GameConfig::MAX_ROOMS],
         bsze: IVec2,
+        random: &mut Random,
     ) -> [Room; GameConfig::MAX_ROOMS] {
-        let generated = self.generate_rooms_and_connections(rooms, bsze);
-        self.do_passages();
+        let generated = self.generate_rooms_and_connections(rooms, bsze, random);
+        self.do_passages(random);
         generated
     }
 }
 
 /// Generate the room geometry, sizes, and flags for one level in place.
-fn generate_rooms(rooms: &mut [Room], bsze: IVec2, depth: i32) {
+fn generate_rooms(rooms: &mut [Room], bsze: IVec2, depth: i32, random: &mut Random) {
     reset_rooms(rooms);
-    mark_random_rooms_gone(rooms);
+    mark_random_rooms_gone(rooms, random);
     for slot in 0..GameConfig::MAX_ROOMS {
-        layout_room(&mut rooms[slot], slot, bsze, depth);
+        layout_room(&mut rooms[slot], slot, bsze, depth, random);
     }
 }
 
@@ -515,12 +494,9 @@ fn reset_rooms(rooms: &mut [Room]) {
 }
 
 /// Pick a uniformly random room slot that has not been removed for the level.
-fn pick_non_gone(rooms: &[Room]) -> usize {
+fn pick_non_gone(rooms: &[Room], random: &mut Random) -> usize {
     loop {
-        let idx = {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(GameConfig::MAX_ROOMS as i32)
-        } as usize;
+        let idx = random.rnd(GameConfig::MAX_ROOMS as i32) as usize;
         if !rooms[idx].is_gone() {
             return idx;
         }
@@ -528,33 +504,25 @@ fn pick_non_gone(rooms: &[Room]) -> usize {
 }
 
 /// Randomly mark a few room slots as removed for this level.
-fn mark_random_rooms_gone(rooms: &mut [Room]) {
-    let count = RNG.lock().unwrap().rnd(GONE_ROOM_ROLLS);
+fn mark_random_rooms_gone(rooms: &mut [Room], random: &mut Random) {
+    let count = random.rnd(GONE_ROOM_ROLLS);
     for _ in 0..count {
-        rooms[pick_non_gone(rooms)].mark_gone();
+        rooms[pick_non_gone(rooms, random)].mark_gone();
     }
 }
 
 /// Compute the geometry, size, and flags for one room slot.
-fn layout_room(room: &mut Room, slot: usize, bsze: IVec2, depth: i32) {
+fn layout_room(room: &mut Room, slot: usize, bsze: IVec2, depth: i32, random: &mut Random) {
     let top = grid_top_left(slot, bsze);
 
     if room.is_gone() {
-        place_off_map_room(room, top, bsze);
+        place_off_map_room(room, top, bsze, random);
         return;
     }
 
-    if {
-        let mut random = RNG.lock().unwrap();
-        random.rnd(DARK_ROOM_ROLL)
-    } < depth - 1
-    {
+    if random.rnd(DARK_ROOM_ROLL) < depth - 1 {
         room.mark_dark();
-        if {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(MAZE_ROOM_CHANCE)
-        } == 0
-        {
+        if random.rnd(MAZE_ROOM_CHANCE) == 0 {
             room.set_maze();
         }
     }
@@ -562,22 +530,16 @@ fn layout_room(room: &mut Room, slot: usize, bsze: IVec2, depth: i32) {
     if room.is_maze() {
         place_maze_room(room, top, bsze);
     } else {
-        place_regular_room(room, top, bsze);
+        place_regular_room(room, top, bsze, random);
     }
 }
 
 /// Randomly move a removed room's top-left corner off the visible map.
-fn place_off_map_room(room: &mut Room, top: IVec2, bsze: IVec2) {
+fn place_off_map_room(room: &mut Room, top: IVec2, bsze: IVec2, random: &mut Random) {
     // Keep rerolling until the off-map placeholder position is valid.
     loop {
-        room.position.x = top.x + {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(bsze.x - 2)
-        } + 1;
-        room.position.y = top.y + {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(bsze.y - 2)
-        } + 1;
+        room.position.x = top.x + random.rnd(bsze.x - 2) + 1;
+        room.position.y = top.y + random.rnd(bsze.y - 2) + 1;
         room.size = IVec2::new(-GameConfig::SCREEN_COLS, -GameConfig::SCREEN_LINES);
         if room.position.y > 0 && room.position.y < GameConfig::SCREEN_LINES - 1 {
             break;
@@ -602,24 +564,12 @@ fn place_maze_room(room: &mut Room, top: IVec2, bsze: IVec2) {
 
 /// Try to fit a plain room in its grid cell, marking it `gone` if it never
 /// lands on a valid (non-top-row) position.
-fn place_regular_room(room: &mut Room, top: IVec2, bsze: IVec2) {
+fn place_regular_room(room: &mut Room, top: IVec2, bsze: IVec2, random: &mut Random) {
     for _ in 0..GameConfig::MAX_ROOM_PLACEMENT_ATTEMPTS {
-        room.size.x = {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(bsze.x - 4)
-        } + 4;
-        room.size.y = {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(bsze.y - 4)
-        } + 4;
-        room.position.x = top.x + {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(bsze.x - room.size.x)
-        };
-        room.position.y = top.y + {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(bsze.y - room.size.y)
-        };
+        room.size.x = random.rnd(bsze.x - 4) + 4;
+        room.size.y = random.rnd(bsze.y - 4) + 4;
+        room.position.x = top.x + random.rnd(bsze.x - room.size.x);
+        room.position.y = top.y + random.rnd(bsze.y - room.size.y);
         if room.position.y != 0 {
             return;
         }
@@ -638,13 +588,14 @@ fn grid_top_left(slot: usize, bsze: IVec2) -> IVec2 {
 /// Fill each active room's tile structure from its geometry/flags.
 fn build_generated_rooms(
     mut rooms: [Room; GameConfig::MAX_ROOMS],
+    random: &mut Random,
 ) -> [Room; GameConfig::MAX_ROOMS] {
     for room in &mut rooms {
         if room.is_gone() {
             continue;
         }
 
-        if let Some(model) = build_room_model(room.position, room.size, room.maze) {
+        if let Some(model) = build_room_model(room.position, room.size, room.maze, random) {
             room.structure = model.structure;
         }
     }
@@ -656,14 +607,18 @@ fn build_generated_rooms(
 ///
 /// Given a room's position, size, and whether it is a maze, construct the
 /// tile structure and wrap everything in a [`Room`].
-fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room> {
+fn build_room_model(
+    position: IVec2,
+    size: IVec2,
+    is_maze: bool,
+    random: &mut Random,
+) -> Option<Room> {
     if size.x <= 0 || size.y <= 0 {
         return None;
     }
 
     if is_maze {
-        let mut random = RNG.lock().unwrap();
-        Some(Room::new_maze(position, size, &mut random))
+        Some(Room::new_maze(position, size, random))
     } else {
         Some(Room::new(position, size))
     }
@@ -672,6 +627,7 @@ fn build_room_model(position: IVec2, size: IVec2, is_maze: bool) -> Option<Room>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rnd::RNG;
 
     #[test]
     fn resetting_level_advances_generation_revision() {
@@ -692,7 +648,7 @@ mod tests {
 
         // `stamp_door` decides whether the door is secret randomly
         // (depth 1 → always open).
-        level.stamp_door(0, IVec2::new(15, 11));
+        level.stamp_door(0, IVec2::new(15, 11), &mut RNG.lock().unwrap());
 
         let room = &level.rooms[0];
         assert_eq!(room.entry_points.len(), 1);
@@ -724,7 +680,7 @@ mod tests {
         let rooms = std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO));
         let bsze = IVec2::new(26, 8);
 
-        let generated = level.generate_rooms_and_connections(rooms, bsze);
+        let generated = level.generate_rooms_and_connections(rooms, bsze, &mut RNG.lock().unwrap());
 
         // Every non-gone room must appear in the map at its position.
         for room in generated.iter().filter(|r| !r.is_gone()) {
@@ -820,7 +776,7 @@ mod tests {
         level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
         level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4));
 
-        level.conn(0, 1);
+        level.conn(0, 1, &mut RNG.lock().unwrap());
 
         // Exactly one passage model exists and matches the stamped map: each
         // relative tile appears as `Tile::Passage` (or a `Tile::Door` entry
@@ -849,7 +805,7 @@ mod tests {
         level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
         level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4));
 
-        let plan = super::plan_corridor(&level.rooms, &level.map, 0, 1);
+        let plan = super::plan_corridor(&level.rooms, &level.map, 0, 1, &mut RNG.lock().unwrap());
 
         assert_eq!(plan.base_room, 0);
         assert_eq!(plan.partner_room, 1);
@@ -872,8 +828,13 @@ mod tests {
         level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4));
 
         // Dig the corridor first so the map/flags are populated.
-        level.conn(0, 1);
-        super::mark_passages(&level.map, &mut level.flags, level.depth);
+        level.conn(0, 1, &mut RNG.lock().unwrap());
+        super::mark_passages(
+            &level.map,
+            &mut level.flags,
+            level.depth,
+            &mut RNG.lock().unwrap(),
+        );
         super::number_passages(
             &level.map,
             &mut level.flags,
@@ -915,7 +876,7 @@ mod tests {
         level.rooms[0] = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
         level.rooms[1] = Room::new(IVec2::new(18, 10), IVec2::new(6, 4));
 
-        level.conn(0, 1);
+        level.conn(0, 1, &mut RNG.lock().unwrap());
 
         // A passage was recorded.
         assert_eq!(level.passages.len(), 1);
@@ -974,7 +935,7 @@ mod tests {
             }
         }
         for _ in 0..100 {
-            assert_eq!(level.rnd_room(), 3);
+            assert_eq!(level.rnd_room(&mut RNG.lock().unwrap()), 3);
         }
     }
 
@@ -984,7 +945,7 @@ mod tests {
         let level = Level::new();
         let room = Room::new(IVec2::new(10, 10), IVec2::new(6, 4));
         for _ in 0..100 {
-            let pos = level.rnd_pos(&room);
+            let pos = level.rnd_pos(&room, &mut RNG.lock().unwrap());
             assert!(
                 (11..15).contains(&pos.x),
                 "x {0} outside room interior",

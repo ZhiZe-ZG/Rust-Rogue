@@ -12,6 +12,7 @@ use crate::draw::winat;
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::MonsterFlags;
 use crate::game;
+use crate::rnd::RNG;
 use crate::structure::Room;
 
 use super::Dungeon;
@@ -33,7 +34,7 @@ impl Dungeon {
             crate::entity::player::free_pack_id(id);
         }
         self.monster_list.clear();
-        self.with_level_mut(|current| current.clear_items());
+        self.clear_items();
     }
 
     /// Wake monsters in a room when it becomes visible.
@@ -67,7 +68,8 @@ impl Dungeon {
         let rooms = std::array::from_fn(|_| Room::new(IVec2::ZERO, IVec2::ZERO));
         let room_size = IVec2::new(GameConfig::SCREEN_COLS / 3, GameConfig::SCREEN_LINES / 3);
         self.with_level_mut(|current| {
-            let _ = current.rebuild_rooms_and_passages(rooms, room_size);
+            let mut random = RNG.lock().unwrap();
+            let _ = current.rebuild_rooms_and_passages(rooms, room_size, &mut random);
         });
 
         self.bump_no_food();
