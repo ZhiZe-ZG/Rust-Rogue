@@ -10,7 +10,7 @@ use crate::game::PLAYER;
 use crate::item::arena::OBJECTS;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id, reset_last};
-use crate::rnd::RNG;
+use crate::rnd::{Random, RNG};
 use crate::ui::input::read_key_event;
 use crate::ui::output::{addmsg_str, msg_str};
 use glam::IVec2;
@@ -138,7 +138,7 @@ pub unsafe fn eat() {
     leave_pack_id(obj, false, false);
 }
 
-pub unsafe fn check_level() {
+pub unsafe fn check_level(random: &mut Random) {
     let experience = PLAYER.stats().experience;
     let mut i: i32 = 0;
     while e_levels[i as usize] != 0 {
@@ -151,10 +151,7 @@ pub unsafe fn check_level() {
     let olevel = PLAYER.level();
     PLAYER.with_stats_mut(|stats| stats.level = i);
     if i > olevel {
-        let add = {
-            let mut random = RNG.lock().unwrap();
-            random.roll(i - olevel, 10)
-        };
+        let add = random.roll(i - olevel, 10);
         PLAYER.with_stats_mut(|stats| {
             stats.max_hit_points += add;
             stats.hit_points += add;
@@ -199,12 +196,9 @@ pub fn add_str(sp: &mut u32, amt: i32) {
     }
 }
 
-pub unsafe fn add_haste(potion: bool) -> bool {
+pub unsafe fn add_haste(potion: bool, random: &mut Random) -> bool {
     if player_has(MonsterFlags::HASTE) {
-        no_command += {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(8)
-        };
+        no_command += random.rnd(8);
         PLAYER.remove_flag(MonsterFlags::RUN | MonsterFlags::HASTE);
         extinguish(Daemon::Nohaste);
         msg_str("you faint from exhaustion");
@@ -216,17 +210,14 @@ pub unsafe fn add_haste(potion: bool) -> bool {
         fuse(
             Daemon::Nohaste,
             0,
-            {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(4)
-            } + 4,
+            random.rnd(4) + 4,
             AFTER,
         );
     }
     true
 }
 
-pub unsafe fn aggravate() {
+pub unsafe fn aggravate(random: &mut Random) {
     for id in DUNGEON.monster_list.ids() {
         if let Some(pos) = DUNGEON.monster_list
             .with(id, |t| match t {
@@ -235,7 +226,7 @@ pub unsafe fn aggravate() {
             })
             .flatten()
         {
-            runto(pos);
+            runto(pos, random);
         }
     }
 }
@@ -337,11 +328,8 @@ pub unsafe fn sign(nm: i32) -> i32 {
     }
 }
 
-pub unsafe fn spread(nm: i32) -> i32 {
-    nm - nm / 20 + {
-        let mut random = RNG.lock().unwrap();
-        random.rnd(nm / 10)
-    }
+pub unsafe fn spread(nm: i32, random: &mut Random) -> i32 {
+    nm - nm / 20 + random.rnd(nm / 10)
 }
 
 pub unsafe fn call_it(info: &mut ObjInfo) {
@@ -359,18 +347,16 @@ pub unsafe fn call_it(info: &mut ObjInfo) {
     }
 }
 
-pub unsafe fn rnd_thing() -> u8 {
+pub unsafe fn rnd_thing(random: &mut Random) -> u8 {
     let thing_list = [
         POTION, SCROLL, RING, STICK, FOOD, WEAPON, ARMOR, STAIRS, GOLD, AMULET,
     ];
     let idx = if crate::game::current_depth() >= GameConfig::AMULET_LEVEL {
         {
-            let mut random = RNG.lock().unwrap();
             random.rnd(thing_list.len() as i32)
         }
     } else {
         {
-            let mut random = RNG.lock().unwrap();
             random.rnd((thing_list.len() - 1) as i32)
         }
     };

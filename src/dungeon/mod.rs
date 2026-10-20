@@ -13,7 +13,7 @@ use glam::IVec2;
 
 use crate::item::arena::OBJECTS;
 use crate::level::Level;
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use crate::tile::Tile;
 
 mod generation;
@@ -218,9 +218,9 @@ impl Dungeon {
         room_idx: Option<usize>,
         limit: i32,
         monst: bool,
+        random: &mut Random,
     ) -> Option<IVec2> {
         self.with_level(|level| {
-            let mut random = RNG.lock().unwrap();
             let mut cnt = limit;
             // Safety bound: unlimited scans must eventually give up rather than
             // hang level generation on a packed level.
@@ -237,14 +237,14 @@ impl Dungeon {
                     return None;
                 }
 
-                let idx = room_idx.unwrap_or_else(|| level.rnd_room(&mut random));
+                let idx = room_idx.unwrap_or_else(|| level.rnd_room(random));
                 let room = &level.rooms[idx];
                 let expected_tile = if room.is_maze() {
                     Tile::Passage
                 } else {
                     Tile::Floor
                 };
-                let pos = level.rnd_pos(room, &mut random);
+                let pos = level.rnd_pos(room, random);
 
                 // The candidate cell is validated against the map tile
                 // directly; an object overlay does not count as a free cell.

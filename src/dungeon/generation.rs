@@ -12,7 +12,7 @@ use crate::draw::winat;
 use crate::entity::monsters::wake_monster;
 use crate::entity::player::MonsterFlags;
 use crate::game;
-use crate::rnd::RNG;
+use crate::rnd::{Random, RNG};
 use crate::structure::Room;
 
 use super::Dungeon;
@@ -38,7 +38,7 @@ impl Dungeon {
     }
 
     /// Wake monsters in a room when it becomes visible.
-    pub unsafe fn door_open(&self, room: Option<usize>) {
+    pub unsafe fn door_open(&self, room: Option<usize>, random: &mut Random) {
         if game::room_gone(room) {
             return;
         }
@@ -52,7 +52,7 @@ impl Dungeon {
         for y in pos.y..y_end {
             for x in pos.x..x_end {
                 if winat(y, x).is_ascii_uppercase() {
-                    wake_monster(y, x);
+                    wake_monster(y, x, random);
                 }
             }
         }
@@ -73,6 +73,6 @@ impl Dungeon {
         });
 
         self.bump_no_food();
-        self.populate_level();
+        self.populate_level(&mut RNG.lock().unwrap());
     }
 }

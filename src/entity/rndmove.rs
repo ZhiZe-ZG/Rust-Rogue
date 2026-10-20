@@ -6,7 +6,7 @@ use glam::IVec2;
 use crate::entity::chase::diag_ok;
 use crate::entity::player::Thing;
 use crate::item::scrolls::ScrollType;
-use crate::rnd::RNG;
+use crate::rnd::Random;
 
 const SCROLL: u8 = b'?' as u8;
 
@@ -15,16 +15,10 @@ const SCROLL: u8 = b'?' as u8;
 ///
 /// Standing still is a valid outcome. Returns the chosen coordinate; the caller
 /// owns it, so no pointer is stored in a shared slot.
-pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
+pub unsafe fn rndmove_from(pos: IVec2, random: &mut Random) -> IVec2 {
     let mut chosen = IVec2 {
-        y: pos.y + {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(3)
-        } - 1,
-        x: pos.x + {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(3)
-        } - 1,
+        y: pos.y + random.rnd(3) - 1,
+        x: pos.x + random.rnd(3) - 1,
     };
 
     // Standing still is a valid outcome
@@ -67,6 +61,6 @@ pub unsafe fn rndmove_from(pos: IVec2) -> IVec2 {
 
 /// rndmove:
 /// Move in a random direction if the monster/person is confused.
-pub unsafe fn rndmove(pos: IVec2) -> IVec2 {
-    rndmove_from(pos)
+pub unsafe fn rndmove(pos: IVec2, random: &mut Random) -> IVec2 {
+    rndmove_from(pos, random)
 }

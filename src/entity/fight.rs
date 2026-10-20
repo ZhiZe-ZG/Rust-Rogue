@@ -7,7 +7,7 @@
 //! scoped `DUNGEON.monster_list.with`/`with_mut`, so no raw `*mut Thing` is threaded
 //! through combat.
 
-use crate::rnd::RNG;
+use crate::rnd::Random;
 
 use crate::entity::chase::{runto, see_monst};
 use crate::entity::monsters::save;
@@ -143,7 +143,7 @@ fn player_has(flag: MonsterFlags) -> bool {
 
 /// fight:
 /// The player attacks the monster.
-pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
+pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8, random: &mut Random) -> i32 {
     let Some(tp) = crate::game::monster_id_at(mp.y, mp.x) else {
         return 0;
     };
@@ -154,7 +154,7 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
     // Since we are fighting, things are not quiet — no healing.
     count = 0;
     quiet = 0;
-    runto(mp);
+    runto(mp, random);
 
     // Let him know it was really a xeroc (if it was one).
     let mut ch: u8 = b'\0' as u8;
@@ -163,10 +163,7 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
         && !player_has(MonsterFlags::BLIND)
     {
         let new_disguise = if player_has(MonsterFlags::HALU) {
-            ch = ({
-                let mut random = RNG.lock().unwrap();
-                random.rnd(26)
-            } + b'A' as i32) as u8;
+            ch = (random.rnd(26) + b'A' as i32) as u8;
             ch
         } else {
             b'X'
@@ -190,7 +187,7 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
         }
     }
 
-    let mname = set_mname(tp);
+    let mname = set_mname(tp, random);
     let mut did_hit = false as u8;
     has_hit = if terse != 0 && to_death == 0 {
         true as u8
@@ -198,12 +195,12 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
         false as u8
     };
 
-    if roll_em_hero_to(tp, weap, thrown) != 0 {
+    if roll_em_hero_to(tp, weap, thrown, random) != 0 {
         did_hit = false as u8;
         if thrown != 0 {
             thunk(weap, Some(&mname), terse);
         } else {
-            hit(None, Some(&mname), terse);
+            hit(None, Some(&mname), terse, random);
         }
         if player_has(MonsterFlags::CANHUH) {
             did_hit = true as u8;
@@ -215,7 +212,7 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
             PLAYER.remove_flag(MonsterFlags::CANHUH);
             endmsg();
             has_hit = false as u8;
-            msg_str(&format!("your hands stop glowing {}", pick_color("red")));
+            msg_str(&format!("your hands stop glowing {}", pick_color("red", random)));
         }
         let hp = DUNGEON.monster_list
             .with(tp, |t| match t {
@@ -224,7 +221,7 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
             })
             .unwrap_or(0);
         if hp <= 0 {
-            killed(tp, true as u8);
+            killed(tp, true as u8, random);
         } else if did_hit != 0 && !player_has(MonsterFlags::BLIND) {
             msg_str(&format!("{mname} appears confused"));
         }
@@ -232,14 +229,14 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8) -> i32 {
     } else if thrown != 0 {
         bounce(weap, Some(&mname), terse);
     } else {
-        miss(None, Some(&mname), terse);
+        miss(None, Some(&mname), terse, random);
     }
     did_hit as i32
 }
 
 /// attack:
 /// The monster attacks the player.
-pub unsafe fn attack(tp: MonsterId) -> i32 {
+pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
     // Stop running / healing.
     running = false as u8;
     count = 0;
@@ -266,19 +263,19 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
         });
         mon.disguise = b'X';
         if player_has(MonsterFlags::HALU) {
-            crate::draw::write_cell_glyph(pos, crate::draw::hallucination_glyph());
+            crate::draw::write_cell_glyph(pos, crate::draw::hallucination_glyph(random));
         }
     }
 
-    let mname = set_mname(tp);
+    let mname = set_mname(tp, random);
     let oldhp = PLAYER.stats().hit_points;
 
-    if roll_em_to_hero(tp, None, false as u8) != 0 {
+    if roll_em_to_hero(tp, None, false as u8, random) != 0 {
         if mon.typ != Some(MonsterType::IceMonster) {
             if has_hit != 0 {
                 addmsg_str(".  ");
             }
-            hit(Some(&mname), None, false as u8);
+            hit(Some(&mname), None, false as u8, random);
         } else if has_hit != 0 {
             endmsg();
         }
@@ -314,10 +311,7 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                     }
                     endmsg();
                 }
-                no_command += {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(2)
-                } + 2;
+                no_command += random.rnd(2) + 2;
                 if no_command > BORE_LEVEL {
                     death(b'h' as u8);
                     if crate::startup::exit_requested() {
@@ -326,7 +320,7 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                 }
             } else if mtype == Some(MonsterType::Rattlesnake) {
                 // Rattlesnake: poisonous bite
-                if save(VS_POISON) == 0 {
+                if save(VS_POISON, random) == 0 {
                     if !iswearing(RingType::SustainStrength) {
                         chg_str(-1);
                         if terse == 0 {
@@ -349,10 +343,7 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                 } else {
                     30
                 };
-                if {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(100)
-                } < threshold
+                if random.rnd(100) < threshold
                 {
                     let fewer;
                     if mtype == Some(MonsterType::Wraith) {
@@ -371,15 +362,9 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                                 pstats.experience = e_levels[(pstats.level - 1) as usize] + 1;
                             }
                         });
-                        fewer = {
-                            let mut random = RNG.lock().unwrap();
-                            random.roll(1, 10)
-                        };
+                        fewer = random.roll(1, 10);
                     } else {
-                        fewer = {
-                            let mut random = RNG.lock().unwrap();
-                            random.roll(1, 3)
-                        };
+                        fewer = random.roll(1, 3);
                     }
                     {
                         let mut dead = false;
@@ -423,21 +408,15 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                 // Leprechaun: steals gold
                 let level = crate::game::current_depth();
                 let lastpurse = purse;
-                purse -= {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(50 + 10 * level)
-                } + 2; // GOLDCALC
-                if save(VS_MAGIC) == 0 {
-                    let g = {
-                        let mut random = RNG.lock().unwrap();
-                        random.rnd(50 + 10 * level)
-                    } + 2;
+                purse -= random.rnd(50 + 10 * level) + 2; // GOLDCALC
+                if save(VS_MAGIC, random) == 0 {
+                    let g = random.rnd(50 + 10 * level) + 2;
                     purse -= g + g + g + g;
                 }
                 if purse < 0 {
                     purse = 0;
                 }
-                remove_mon(mon.pos, tp, false as u8);
+                remove_mon(mon.pos, tp, false as u8, random);
                 if purse != lastpurse {
                     msg_str("your purse feels lighter");
                 }
@@ -458,17 +437,14 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                     }
                     if is_magic_id(id) {
                         nobj += 1;
-                        if {
-                            let mut random = RNG.lock().unwrap();
-                            random.rnd(nobj)
-                        } == 0
+                        if random.rnd(nobj) == 0
                         {
                             steal = Some(id);
                         }
                     }
                 }
                 if let Some(steal) = steal {
-                    remove_mon(mon.pos, tp, false as u8);
+                    remove_mon(mon.pos, tp, false as u8, random);
                     leave_pack_id(steal, false, false);
                     msg_str(&format!("she stole {}!", inv_name_id(steal, true)));
                     let _ = OBJECTS.remove(steal);
@@ -492,7 +468,7 @@ pub unsafe fn attack(tp: MonsterId) -> i32 {
                 }
             }
         }
-        miss(Some(&mname), None, false as u8);
+        miss(Some(&mname), None, false as u8, random);
     }
 
     if fight_flush != 0 && to_death == 0 {
@@ -514,7 +490,7 @@ unsafe fn rust_armor_id_from_player() {
 
 /// set_mname:
 /// Return the monster name for the given monster.
-pub unsafe fn set_mname(tp: MonsterId) -> String {
+pub unsafe fn set_mname(tp: MonsterId, random: &mut Random) -> String {
     if see_monst(tp) == 0 && !player_has(MonsterFlags::SEEMONST) {
         return if terse != 0 {
             "it".to_string()
@@ -538,10 +514,7 @@ pub unsafe fn set_mname(tp: MonsterId) -> String {
         let idx = if (ch as u8).is_ascii_uppercase() {
             (ch - b'A' as i32) as usize
         } else {
-            ({
-                let mut random = RNG.lock().unwrap();
-                random.rnd(26)
-            } as usize)
+            random.rnd(26) as usize
         };
         mname = monsters[idx].m_name;
     } else {
@@ -561,11 +534,8 @@ pub unsafe fn set_mname(tp: MonsterId) -> String {
 
 /// swing:
 /// Returns true (1) if the swing hits.
-pub unsafe fn swing(at_lvl: i32, op_arm: i32, wplus: i32) -> i32 {
-    let res = {
-        let mut random = RNG.lock().unwrap();
-        random.rnd(20)
-    };
+pub unsafe fn swing(at_lvl: i32, op_arm: i32, wplus: i32, random: &mut Random) -> i32 {
+    let res = random.rnd(20);
     let need = (20 - at_lvl) - op_arm;
     (res + wplus >= need) as i32
 }
@@ -577,6 +547,7 @@ pub unsafe fn roll_em(
     thdef: Option<MonsterId>,
     weap: Option<ThingId>,
     hurl: u8,
+    random: &mut Random,
 ) -> i32 {
     let att_stats = DUNGEON.monster_list
         .with(thatt, |t| match t {
@@ -584,24 +555,24 @@ pub unsafe fn roll_em(
             crate::entity::player::Thing::Object { .. } => crate::entity::player::Stats::default(),
         })
         .unwrap_or_default();
-    roll_em_impl(&att_stats, thdef, false, weap, hurl)
+    roll_em_impl(&att_stats, thdef, false, weap, hurl, random)
 }
 
 /// The hero attacks monster `thdef`.
-unsafe fn roll_em_hero_to(thdef: MonsterId, weap: Option<ThingId>, hurl: u8) -> i32 {
+unsafe fn roll_em_hero_to(thdef: MonsterId, weap: Option<ThingId>, hurl: u8, random: &mut Random) -> i32 {
     let att_stats = PLAYER.stats();
-    roll_em_impl(&att_stats, Some(thdef), false, weap, hurl)
+    roll_em_impl(&att_stats, Some(thdef), false, weap, hurl, random)
 }
 
 /// Monster `thatt` attacks the hero.
-unsafe fn roll_em_to_hero(thatt: MonsterId, weap: Option<ThingId>, hurl: u8) -> i32 {
+unsafe fn roll_em_to_hero(thatt: MonsterId, weap: Option<ThingId>, hurl: u8, random: &mut Random) -> i32 {
     let att_stats = DUNGEON.monster_list
         .with(thatt, |t| match t {
             crate::entity::player::Thing::Monster { data } => data.t_stats,
             crate::entity::player::Thing::Object { .. } => crate::entity::player::Stats::default(),
         })
         .unwrap_or_default();
-    roll_em_impl(&att_stats, None, true, weap, hurl)
+    roll_em_impl(&att_stats, None, true, weap, hurl, random)
 }
 
 /// The weapon fields needed by the damage roll, read in one arena access.
@@ -621,6 +592,7 @@ unsafe fn roll_em_impl(
     def_is_hero: bool,
     weap: Option<ThingId>,
     hurl: u8,
+    random: &mut Random,
 ) -> i32 {
     let damage: [u8; 8];
     let hplus: i32;
@@ -640,7 +612,7 @@ unsafe fn roll_em_impl(
         let mut buf = [0u8; 8];
         let n = src.len().min(8);
         buf[..n].copy_from_slice(&src[..n]);
-        return roll_em_inner(att_stats, thdef, def_is_hero, &buf, 0, 0);
+        return roll_em_inner(att_stats, thdef, def_is_hero, &buf, 0, 0, random);
     };
 
     let mut hp = wr.hplus;
@@ -671,16 +643,17 @@ unsafe fn roll_em_impl(
                 &wr.hurldmg,
                 hp + whp,
                 dp + wdp,
+                random,
             );
         } else if wr.launch < 0 {
-            return roll_em_inner(att_stats, thdef, def_is_hero, &wr.hurldmg, hp, dp);
+            return roll_em_inner(att_stats, thdef, def_is_hero, &wr.hurldmg, hp, dp, random);
         }
     }
     damage = wr.damage;
     hplus = hp;
     dplus = dp;
 
-    roll_em_inner(att_stats, thdef, def_is_hero, &damage, hplus, dplus)
+    roll_em_inner(att_stats, thdef, def_is_hero, &damage, hplus, dplus, random)
 }
 
 /// Parses a legacy damage specification like `"2x4"` or `"1x8/1x8/3x10"`
@@ -711,6 +684,7 @@ unsafe fn roll_em_inner(
     damage_spec: &[u8],
     hplus: i32,
     dplus: i32,
+    random: &mut Random,
 ) -> i32 {
     // If the defender is not running (asleep or held), attacker gets +4 to hit.
     let def_running = if def_is_hero {
@@ -753,11 +727,8 @@ unsafe fn roll_em_inner(
     let mut total_damage = 0i32;
 
     for (ndice, nsides) in parse_damage(damage_spec) {
-        if swing(att_lvl, def_arm, hplus + STR_PLUS[str_idx]) != 0 {
-            let proll = {
-                let mut random = RNG.lock().unwrap();
-                random.roll(ndice, nsides)
-            };
+        if swing(att_lvl, def_arm, hplus + STR_PLUS[str_idx], random) != 0 {
+            let proll = random.roll(ndice, nsides);
             let damage = dplus + proll + ADD_DAM[str_idx];
             total_damage += if damage > 0 { damage } else { 0 };
             did_hit = 1;
@@ -815,7 +786,7 @@ pub unsafe fn thunk(weap: Option<ThingId>, mname: Option<&str>, noend: u8) {
 
 /// hit:
 /// Print a message to indicate a successful hit.
-pub unsafe fn hit(er: Option<&str>, ee: Option<&str>, noend: u8) {
+pub unsafe fn hit(er: Option<&str>, ee: Option<&str>, noend: u8, random: &mut Random) {
     if to_death != 0 {
         return;
     }
@@ -823,10 +794,7 @@ pub unsafe fn hit(er: Option<&str>, ee: Option<&str>, noend: u8) {
     let s: &str = if terse != 0 {
         " hit"
     } else {
-        let mut i = {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(4)
-        } as usize;
+        let mut i = random.rnd(4) as usize;
         if er.is_some() {
             i += 4;
         }
@@ -843,7 +811,7 @@ pub unsafe fn hit(er: Option<&str>, ee: Option<&str>, noend: u8) {
 
 /// miss:
 /// Print a message to indicate a poor swing.
-pub unsafe fn miss(er: Option<&str>, ee: Option<&str>, noend: u8) {
+pub unsafe fn miss(er: Option<&str>, ee: Option<&str>, noend: u8, random: &mut Random) {
     if to_death != 0 {
         return;
     }
@@ -855,10 +823,7 @@ pub unsafe fn miss(er: Option<&str>, ee: Option<&str>, noend: u8) {
             0
         }
     } else {
-        let base = {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(4)
-        } as usize;
+        let base = random.rnd(4) as usize;
         if er.is_some() {
             base + 4
         } else {
@@ -900,7 +865,7 @@ pub unsafe fn bounce(weap: Option<ThingId>, mname: Option<&str>, noend: u8) {
 
 /// remove_mon:
 /// Remove a monster from the screen.
-pub unsafe fn remove_mon(mp: IVec2, tp: MonsterId, waskill: u8) {
+pub unsafe fn remove_mon(mp: IVec2, tp: MonsterId, waskill: u8, random: &mut Random) {
     let Some(mon) = Mon::get(tp) else {
         return;
     };
@@ -912,7 +877,7 @@ pub unsafe fn remove_mon(mp: IVec2, tp: MonsterId, waskill: u8) {
             continue;
         }
         if waskill != 0 {
-            fall(id, false);
+            fall(id, false, random);
         } else {
             let _ = crate::item::arena::OBJECTS.remove(id);
         }
@@ -933,7 +898,7 @@ pub unsafe fn remove_mon(mp: IVec2, tp: MonsterId, waskill: u8) {
 
 /// killed:
 /// Called to put a monster to death.
-pub unsafe fn killed(tp: MonsterId, pr: u8) {
+pub unsafe fn killed(tp: MonsterId, pr: u8, random: &mut Random) {
     let Some(mon) = Mon::get(tp) else {
         return;
     };
@@ -951,20 +916,14 @@ pub unsafe fn killed(tp: MonsterId, pr: u8) {
     } else if mtype == Some(MonsterType::Leprechaun) {
         let tp_room = mon.room;
         let level = crate::game::current_depth();
-        if tp_room.is_some() && fallpos(mon.pos).is_some() && level >= crate::dungeon::max_depth() {
+        if tp_room.is_some() && fallpos(mon.pos, random).is_some() && level >= crate::dungeon::max_depth() {
             let gold = crate::item::arena::new_item_id();
             OBJECTS.with_object_mut(gold, |o| {
                 o.o_type = ItemType::Gold;
                 // o_goldval is #define'd to o_arm
-                let mut value = {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(50 + 10 * level)
-                } + 2; // GOLDCALC
-                if save(VS_MAGIC) != 0 {
-                    let extra = {
-                        let mut random = RNG.lock().unwrap();
-                        random.rnd(50 + 10 * level)
-                    } + 2;
+                let mut value = random.rnd(50 + 10 * level) + 2; // GOLDCALC
+                if save(VS_MAGIC, random) != 0 {
+                    let extra = random.rnd(50 + 10 * level) + 2;
                     value += extra + extra + extra + extra;
                 }
                 o.o_arm = value;
@@ -973,8 +932,8 @@ pub unsafe fn killed(tp: MonsterId, pr: u8) {
         }
     }
 
-    let mname = set_mname(tp);
-    remove_mon(mon.pos, tp, true as u8);
+    let mname = set_mname(tp, random);
+    remove_mon(mon.pos, tp, true as u8, random);
 
     if pr != 0 {
         if has_hit != 0 {
@@ -989,7 +948,7 @@ pub unsafe fn killed(tp: MonsterId, pr: u8) {
         msg_str(&mname);
     }
 
-    check_level();
+    check_level(random);
     if fight_flush != 0 {
         flush_type();
     }

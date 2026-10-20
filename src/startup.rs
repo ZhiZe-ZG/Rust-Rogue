@@ -260,7 +260,7 @@ pub unsafe fn main_loop_step() {
     oldpos = hero_pos;
     oldrp = roomin(hero_pos);
     start_daemon(Daemon::UiRender, 0, AFTER);
-    Daemon::UiRender.run(0);
+    Daemon::UiRender.run(0, &mut RNG.lock().unwrap());
     let mut command_state = CommandState::default();
     while playing != 0 && !exit_requested() {
         do_command(&mut command_state); /* Command execution */

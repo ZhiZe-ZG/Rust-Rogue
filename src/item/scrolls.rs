@@ -1,7 +1,7 @@
 //! Scrolls and reading them.
 //!
 //! Ported from `src/c/scrolls.c` to Rust.
-use crate::rnd::RNG;
+use crate::rnd::Random;
 
 use crate::config::GameConfig;
 use crate::draw::{look, map_cell_reveal};
@@ -124,7 +124,7 @@ fn player_has(flag: MonsterFlags) -> bool {
 
 /// read_scroll:
 /// Read a scroll from the pack and apply its effect.
-pub unsafe fn read_scroll() {
+pub unsafe fn read_scroll(random: &mut Random) {
     let Some(obj) = get_item_id("read", ItemFilter::Category(ItemType::SCROLL)) else {
         return;
     };
@@ -156,7 +156,7 @@ pub unsafe fn read_scroll() {
     match scroll_type {
         ScrollType::Confuse => {
             crate::game::PLAYER.add_flag(MonsterFlags::CANHUH);
-            msg_str(&format!("your hands begin to glow {}", pick_color("red")));
+            msg_str(&format!("your hands begin to glow {}", pick_color("red", random)));
         }
         ScrollType::Armor => {
             // Enchant the worn armor (pointer-free mutation via the arena).
@@ -169,7 +169,7 @@ pub unsafe fn read_scroll() {
             if enchanted {
                 msg_str(&format!(
                     "your armor glows {} for a moment",
-                    pick_color("silver")
+                    pick_color("silver", random)
                 ));
             }
         }
@@ -221,10 +221,7 @@ pub unsafe fn read_scroll() {
         }
         ScrollType::Sleep => {
             scr_info[ScrollType::Sleep.index()].oi_know = true;
-            no_command += {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(SLEEPTIME)
-            } + 4;
+            no_command += random.rnd(SLEEPTIME) + 4;
             crate::game::PLAYER.remove_flag(MonsterFlags::RUN);
             msg_str("you fall asleep");
         }
@@ -247,10 +244,7 @@ pub unsafe fn read_scroll() {
                         continue;
                     }
                     i += 1;
-                    if {
-                        let mut random = RNG.lock().unwrap();
-                        random.rnd(i)
-                    } == 0
+                    if random.rnd(i) == 0
                     {
                         mp.y = y;
                         mp.x = x;
@@ -262,7 +256,7 @@ pub unsafe fn read_scroll() {
                 msg_str("you hear a faint cry of anguish in the distance");
             } else {
                 let id = DUNGEON.monster_list.spawn_actor();
-                new_monster_id(id, randmonster(false), mp);
+                new_monster_id(id, randmonster(false, random), mp, random);
             }
         }
         ScrollType::IdentifyPotion
@@ -334,7 +328,7 @@ pub unsafe fn read_scroll() {
         }
         ScrollType::Teleport => {
             let cur_room = proom();
-            teleport();
+            teleport(random);
             if cur_room != proom() {
                 scr_info[ScrollType::Teleport.index()].oi_know = true;
             }
@@ -347,10 +341,7 @@ pub unsafe fn read_scroll() {
                         return None;
                     }
                     o.o_flags.remove(ObjectFlags::CURSED);
-                    if {
-                        let mut random = RNG.lock().unwrap();
-                        random.rnd(2)
-                    } == 0
+                    if random.rnd(2) == 0
                     {
                         o.o_hplus += 1;
                     } else {
@@ -363,7 +354,7 @@ pub unsafe fn read_scroll() {
                 Some(name) => msg_str(&format!(
                     "your {} glows {} for a moment",
                     name,
-                    pick_color("blue")
+                    pick_color("blue", random)
                 )),
                 None => msg_str("you feel a strange sense of loss"),
             };
@@ -383,7 +374,7 @@ pub unsafe fn read_scroll() {
             ));
         }
         ScrollType::Aggravate => {
-            aggravate();
+            aggravate(random);
             msg_str("you hear a high pitched humming noise");
         }
         ScrollType::Protect => {
@@ -394,7 +385,7 @@ pub unsafe fn read_scroll() {
             if protected {
                 msg_str(&format!(
                     "your armor is covered by a shimmering {} shield",
-                    pick_color("gold")
+                    pick_color("gold", random)
                 ));
             } else {
                 msg_str("you feel a strange sense of loss");
@@ -404,7 +395,7 @@ pub unsafe fn read_scroll() {
     }
 
     let _ = orig_obj;
-    look(true as u8);
+    look(true as u8, random);
     call_it(&mut scr_info[o_which as usize]);
     if discardit {
         let _ = OBJECTS.remove(obj);

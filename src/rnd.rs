@@ -129,6 +129,33 @@ mod tests {
     }
 
     #[test]
+    fn stick_initialization_uses_the_supplied_generator() {
+        use crate::entity::player::{Thing, ThingObject};
+        use crate::item::arena::OBJECTS;
+        use crate::item::item_type::ItemType;
+        use crate::item::sticks::{fix_stick_id, StickType};
+
+        let mut random = Random::new();
+        let mut reference = Random::new();
+        for kind in [StickType::Light, StickType::Missile] {
+            let mut object = ThingObject::default();
+            object.o_type = ItemType::Stick(kind);
+            object.o_which = kind as i32;
+            let id = OBJECTS.insert(Thing::object(object));
+            let expected = if kind == StickType::Light {
+                reference.rnd(10) + 10
+            } else {
+                reference.rnd(5) + 3
+            };
+            unsafe { fix_stick_id(id, &mut random) };
+            let charges = OBJECTS.with_object(id, |o| o.o_arm);
+            OBJECTS.remove(id);
+            assert_eq!(charges, Some(expected));
+            assert_eq!(random.rnd(1000), reference.rnd(1000));
+        }
+    }
+
+    #[test]
     fn rolls_match_successive_draws_and_preserve_state() {
         let mut random = Random::new();
         let mut reference = Random::new();

@@ -335,7 +335,7 @@ unsafe fn get_sf(op: &OPTION) -> i32 {
             erase_lamp(hero, proom_ptr());
             see_floor = false as u8;
         } else {
-            look(false as u8);
+            look(false as u8, &mut crate::rnd::RNG.lock().unwrap());
         }
     }
     NORM

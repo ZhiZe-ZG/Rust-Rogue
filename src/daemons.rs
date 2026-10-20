@@ -8,7 +8,7 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use glam::IVec2;
 
 use crate::ui::output::{addmsg_str, msg_str};
@@ -66,18 +66,15 @@ use crate::game::globals::between;
 // ─── Daemon / fuse callbacks ──────────────────────────────────────────────────
 
 /// Apply the effects of searching and teleportation rings.
-pub unsafe fn ring_effects() {
+pub unsafe fn ring_effects(random: &mut Random) {
     let equipment = PLAYER.equipment();
     for hand in 0..2usize {
         match equipment.ring_type(hand) {
-            Some(RingType::Searching) => crate::command_dispatch::search(),
+            Some(RingType::Searching) => crate::command_dispatch::search(random),
             Some(RingType::Teleport) => {
-                if {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(50)
-                } == 0
+                if random.rnd(50) == 0
                 {
-                    crate::wizard::teleport();
+                    crate::wizard::teleport(random);
                 }
             }
             _ => {}
@@ -87,7 +84,7 @@ pub unsafe fn ring_effects() {
 
 /// doctor:
 /// A healing daemon that restores hit points after rest.
-pub unsafe fn doctor() {
+pub unsafe fn doctor(random: &mut Random) {
     let lv = PLAYER.level();
     let ohp = PLAYER.stats().hit_points;
     quiet += 1;
@@ -97,10 +94,7 @@ pub unsafe fn doctor() {
         }
     } else if quiet >= 3 {
         PLAYER.with_stats_mut(|stats| {
-            stats.hit_points += {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(lv - 7)
-            } + 1
+            stats.hit_points += random.rnd(lv - 7) + 1
         });
     }
     // A ring of regeneration adds an extra point on each hand it is worn.
@@ -128,17 +122,14 @@ pub unsafe fn swander() {
 
 /// rollwand:
 /// Called to roll to see if a wandering monster starts up.
-pub unsafe fn rollwand() {
+pub unsafe fn rollwand(random: &mut Random) {
     between += 1;
     if between >= 4 {
-        if {
-            let mut random = RNG.lock().unwrap();
-            random.roll(1, 6)
-        } == 4
+        if random.roll(1, 6) == 4
         {
-            wanderer();
+            wanderer(random);
             kill_daemon(Daemon::Rollwand);
-            fuse(Daemon::Swander, 0, spread(70), BEFORE);
+            fuse(Daemon::Swander, 0, spread(70, random), BEFORE);
         }
         between = 0;
     }
@@ -169,14 +160,14 @@ pub unsafe fn unsee() {
 
 /// sight:
 /// He gets his sight back.
-pub unsafe fn sight() {
+pub unsafe fn sight(random: &mut Random) {
     if PLAYER.has_flag(MonsterFlags::BLIND) {
         extinguish(Daemon::Sight);
         PLAYER.remove_flag(MonsterFlags::BLIND);
         let proom = PLAYER.room();
         if !crate::game::room_gone(proom) {
             let pos = PLAYER.pos();
-            enter_room(pos);
+            enter_room(pos, random);
         }
         msg_str(choose_str(
             "far out!  Everything is all cosmic again",
@@ -194,7 +185,7 @@ pub unsafe fn nohaste() {
 
 /// stomach:
 /// Digest the hero's food.
-pub unsafe fn stomach() {
+pub unsafe fn stomach(random: &mut Random) {
     let orig_hungry = hungry_state;
 
     if food_left <= 0 {
@@ -209,17 +200,11 @@ pub unsafe fn stomach() {
         }
         // The hero is fainting.
         if no_command != 0
-            || {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(5)
-            } != 0
+            || random.rnd(5) != 0
         {
             return;
         }
-        no_command += {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(8)
-        } + 4;
+        no_command += random.rnd(8) + 4;
         hungry_state = 3;
         if terse == 0 {
             addmsg_str(choose_str(
@@ -230,7 +215,7 @@ pub unsafe fn stomach() {
         msg_str(choose_str("You freak out", "You faint"));
     } else {
         let oldfood = food_left;
-        food_left -= ring_eat(LEFT as i32) + ring_eat(RIGHT as i32) + 1 - DUNGEON.has_amulet() as i32;
+        food_left -= ring_eat(LEFT as i32, random) + ring_eat(RIGHT as i32, random) + 1 - DUNGEON.has_amulet() as i32;
 
         if food_left < MORETIME && oldfood >= MORETIME {
             hungry_state = 2;
@@ -304,7 +289,7 @@ pub unsafe fn come_down() {
 
 /// visuals:
 /// Change the displayed characters for the hallucinating player.
-pub unsafe fn visuals() {
+pub unsafe fn visuals(random: &mut Random) {
     if after == 0 || (running != 0 && jump != 0) {
         return;
     }
@@ -313,7 +298,7 @@ pub unsafe fn visuals() {
     for id in crate::game::item_ids() {
         if let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) {
             if cansee(pos.y, pos.x) != 0 {
-                crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), rnd_thing() as char);
+                crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), rnd_thing(random) as char);
             }
         }
     }
@@ -321,7 +306,7 @@ pub unsafe fn visuals() {
     // Change the stairs.
     let stairs = crate::game::stairs();
     if !DUNGEON.seen_stairs() && cansee(stairs.y, stairs.x) != 0 {
-        crate::draw::write_cell_glyph(stairs, rnd_thing() as char);
+        crate::draw::write_cell_glyph(stairs, rnd_thing(random) as char);
     }
 
     // Change the monsters.
@@ -336,12 +321,12 @@ pub unsafe fn visuals() {
                 .flatten();
             if see_monst(id) != 0 {
                 if typ == Some(MonsterType::Xeroc) && disguise != b'X' {
-                    crate::draw::write_cell_glyph(pos, rnd_thing() as char);
+                    crate::draw::write_cell_glyph(pos, rnd_thing(random) as char);
                 } else {
-                    crate::draw::write_cell_glyph(pos, crate::draw::hallucination_glyph());
+                    crate::draw::write_cell_glyph(pos, crate::draw::hallucination_glyph(random));
                 }
             } else if seemonst {
-                crate::draw::write_reverse_video_cell_glyph(pos, crate::draw::hallucination_glyph());
+                crate::draw::write_reverse_video_cell_glyph(pos, crate::draw::hallucination_glyph(random));
             }
         }
     }

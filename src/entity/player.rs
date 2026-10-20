@@ -566,7 +566,7 @@ unsafe fn move_stuff(next_pos: &mut IVec2, fl: u8) {
     let hero = PLAYER.pos();
     crate::draw::write_cell_glyph(hero, floor_at() as char);
     if (fl as u8 & F_PASS as u8) != 0 && crate::game::is_door_at(oldpos.y, oldpos.x) {
-        draw_leave_room(*next_pos);
+        draw_leave_room(*next_pos, &mut RNG.lock().unwrap());
     }
     PLAYER.set_pos(*next_pos);
 }
@@ -599,16 +599,17 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
             DUNGEON.new_level();
         }
         TrapType::Bear => {
-            no_move += spread(3);
+            no_move += spread(3, &mut RNG.lock().unwrap());
         }
         TrapType::Mystery => {}
         TrapType::Sleep => {
-            no_command += spread(5);
+            no_command += spread(5, &mut RNG.lock().unwrap());
             PLAYER.remove_flag(MonsterFlags::RUN);
         }
         TrapType::Arrow => {
             let stats = PLAYER.stats();
-            if swing(stats.level - 1, stats.armor, 1) != 0 {
+            let hit_roll = swing(stats.level - 1, stats.armor, 1, &mut RNG.lock().unwrap());
+            if hit_roll != 0 {
                 PLAYER.with_stats_mut(|stats| {
                     stats.hit_points -= {
                         let mut random = RNG.lock().unwrap();
@@ -622,21 +623,22 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
                 };
             } else {
                 let arrow = new_item_id();
-                init_weapon(arrow, ARROW);
+                init_weapon(arrow, ARROW, &mut RNG.lock().unwrap());
                 crate::item::arena::OBJECTS.with_object_mut(arrow, |o| {
                     o.o_count = 1;
                     o.o_pos = PLAYER.pos();
                 });
-                fall(arrow, false);
+                fall(arrow, false, &mut RNG.lock().unwrap());
                 hit = TrapHit::Miss;
             }
         }
         TrapType::Teleport => {
-            teleport();
+            teleport(&mut RNG.lock().unwrap());
         }
         TrapType::Dart => {
             let stats = PLAYER.stats();
-            if swing(stats.level + 1, stats.armor, 1) == 0 {
+            let hit_roll = swing(stats.level + 1, stats.armor, 1, &mut RNG.lock().unwrap());
+            if hit_roll == 0 {
                 hit = TrapHit::Miss;
             } else {
                 PLAYER.with_stats_mut(|stats| {
@@ -648,7 +650,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
                 if PLAYER.stats().hit_points <= 0 {
                     hit = TrapHit::Kill;
                 } else {
-                    if !PLAYER.wearing_ring(RingType::SustainStrength) && save(VS_POISON) == 0 {
+                    if !PLAYER.wearing_ring(RingType::SustainStrength) && save(VS_POISON, &mut RNG.lock().unwrap()) == 0 {
                         chg_str(-1);
                     }
                     hit = TrapHit::Hit;
@@ -783,7 +785,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
             random.rnd(5)
         } != 0
     {
-        next_pos = crate::entity::rndmove::rndmove_from(hero);
+        next_pos = crate::entity::rndmove::rndmove_from(hero, &mut RNG.lock().unwrap());
         if coord_eq(next_pos, hero) {
             after = false as u8;
             running = false as u8;
@@ -845,7 +847,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
         DOOR => {
             running = false as u8;
             if (flat_at(hero.y, hero.x) as u8 & F_PASS as u8) != 0 {
-                draw_enter_room(next_pos);
+                draw_enter_room(next_pos, &mut RNG.lock().unwrap());
             }
             move_stuff(&mut next_pos, fl);
         }
@@ -870,7 +872,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
             DUNGEON.set_seen_stairs(true);
             running = false as u8;
             if is_upper(ch) || game::monster_here(next_pos.y, next_pos.x) {
-                fight(next_pos, game::PLAYER.weapon_id(), false as u8);
+                fight(next_pos, game::PLAYER.weapon_id(), false as u8, &mut RNG.lock().unwrap());
             } else {
                 take = ch;
                 move_stuff(&mut next_pos, fl);
@@ -879,7 +881,7 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
         _ => {
             running = false as u8;
             if is_upper(ch) || game::monster_here(next_pos.y, next_pos.x) {
-                fight(next_pos, game::PLAYER.weapon_id(), false as u8);
+                fight(next_pos, game::PLAYER.weapon_id(), false as u8, &mut RNG.lock().unwrap());
             } else {
                 if ch != STAIRS {
                     take = ch;

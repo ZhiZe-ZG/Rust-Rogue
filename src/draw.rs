@@ -24,7 +24,7 @@ use crate::dungeon::DUNGEON;
 use crate::game::MonsterId;
 use crate::item::arena::ThingId;
 use crate::level::{with_current_level, with_current_level_mut};
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use crate::tile::Tile;
 use crate::tile::TrapType;
 use crate::ui::output;
@@ -206,11 +206,8 @@ pub(crate) fn monster_type_glyph(id: MonsterId) -> char {
 
 /// A random `'A'..='Z'` glyph used when the hero is hallucinating.
 #[inline]
-pub(crate) fn hallucination_glyph() -> char {
-    (({
-        let mut random = RNG.lock().unwrap();
-        random.rnd(26)
-    } + b'A' as i32) as u8) as char
+pub(crate) fn hallucination_glyph(random: &mut Random) -> char {
+    ((random.rnd(26) + b'A' as i32) as u8) as char
 }
 
 /// Write a world-cell glyph through the drawing layer.
@@ -404,7 +401,7 @@ pub unsafe fn add_pass() {
 /// look:
 /// This routine actually draws the screen. Called with `wakeup` true to
 /// wake monsters that the hero can now see.
-pub unsafe fn look(wakeup: u8) {
+pub unsafe fn look(wakeup: u8, random: &mut Random) {
     let mut ch: i32;
     let mut ey: i32;
     let mut ex: i32;
@@ -474,7 +471,7 @@ pub unsafe fn look(wakeup: u8) {
             let tp = game::monster_id_at(y, x);
             match tp {
                 None => {
-                    ch = trip_ch(y, x, ch);
+                    ch = trip_ch(y, x, ch, random);
                 }
                 Some(id) => {
                     let invis = DUNGEON.monster_list
@@ -490,14 +487,11 @@ pub unsafe fn look(wakeup: u8) {
                         continue;
                     }
                     if wakeup != 0 {
-                        wake_monster(y, x);
+                        wake_monster(y, x, random);
                     }
                     if see_monst(id) != 0 {
                         if player_has(MonsterFlags::HALU) {
-                            ch = {
-                                let mut random = RNG.lock().unwrap();
-                                random.rnd(26)
-                            } + b'A' as i32;
+                            ch = random.rnd(26) + b'A' as i32;
                         } else {
                             ch = DUNGEON.monster_list
                                 .with(id, |t| match t {
@@ -586,7 +580,7 @@ pub unsafe fn look(wakeup: u8) {
 
 /// trip_ch:
 /// Maybe trip on a hallucination — randomize a visible glyph.
-pub unsafe fn trip_ch(y: i32, x: i32, ch: i32) -> i32 {
+pub unsafe fn trip_ch(y: i32, x: i32, ch: i32, random: &mut Random) -> i32 {
     if player_has(MonsterFlags::HALU) && after != 0 {
         let tile = ch as u8;
         if tile != FLOOR
@@ -598,10 +592,7 @@ pub unsafe fn trip_ch(y: i32, x: i32, ch: i32) -> i32 {
             && tile != b'|' as u8
             && !(y == game::stairs().y && x == game::stairs().x && DUNGEON.seen_stairs())
         {
-            return {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(26)
-            } as u8 as i32;
+            return random.rnd(26) as u8 as i32;
         }
     }
     ch
@@ -650,14 +641,14 @@ unsafe fn cchar_at_cursor() -> u8 {
 
 /// enter_room:
 /// Code that is executed whenever the hero appears in a room.
-pub unsafe fn enter_room(cp: IVec2) {
+pub unsafe fn enter_room(cp: IVec2, random: &mut Random) {
     let rp = roomin(cp);
     if rp.is_none() {
         return;
     }
 
     crate::game::PLAYER.set_room(rp);
-    DUNGEON.door_open(rp);
+    DUNGEON.door_open(rp, random);
 
     if crate::game::room_dark(rp) || player_has(MonsterFlags::BLIND) {
         return;
@@ -714,7 +705,7 @@ pub unsafe fn enter_room(cp: IVec2) {
 
 /// leave_room:
 /// Code for when the hero exits a room.
-pub unsafe fn leave_room(cp: IVec2) {
+pub unsafe fn leave_room(cp: IVec2, random: &mut Random) {
     let rp = crate::game::PLAYER.room();
     if rp.is_none() {
         return;
@@ -770,7 +761,7 @@ pub unsafe fn leave_room(cp: IVec2) {
         y += 1;
     }
 
-    DUNGEON.door_open(rp);
+    DUNGEON.door_open(rp, random);
 }
 
 /// turnref:

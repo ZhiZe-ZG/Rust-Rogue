@@ -18,7 +18,7 @@ use crate::item::item_type::ItemType;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
 use crate::misc::sign;
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use crate::ui::output::{endmsg, msg_str};
 use glam::IVec2;
 
@@ -143,7 +143,7 @@ unsafe fn flat_at(y: i32, x: i32) -> u8 {
 /// Make all the running monsters move.
 ///
 /// Uses globals: mlist, hero, to_death, has_hit.
-pub unsafe fn runners() {
+pub unsafe fn runners(random: &mut Random) {
     for id in DUNGEON.monster_list.ids() {
         let Some(m) = Mon::get(id) else {
             continue;
@@ -151,13 +151,13 @@ pub unsafe fn runners() {
         if !m.has(MonsterFlags::HELD) && m.has(MonsterFlags::RUN) {
             let orig_pos = m.pos;
             let wastarget = m.has(MonsterFlags::TARGET);
-            if move_monst(id) == -1 {
+            if move_monst(id, random) == -1 {
                 continue;
             }
             let m = Mon::get(id).unwrap_or(m);
             let hero = hero_pos();
             if m.has(MonsterFlags::FLY) && dist(hero.y, hero.x, m.pos.y, m.pos.x) >= 3 {
-                move_monst(id);
+                move_monst(id, random);
             }
             let m = Mon::get(id).unwrap_or(m);
             if wastarget && !coord_eq(orig_pos, m.pos) {
@@ -178,12 +178,12 @@ pub unsafe fn runners() {
 
 /// move_monst:
 /// Execute a single turn of running for a monster
-pub unsafe fn move_monst(id: MonsterId) -> i32 {
+pub unsafe fn move_monst(id: MonsterId, random: &mut Random) -> i32 {
     let Some(m) = Mon::get(id) else {
         return 0;
     };
     if !m.has(MonsterFlags::SLOW) || m.turn {
-        if do_chase(id) == -1 {
+        if do_chase(id, random) == -1 {
             return -1;
         }
     }
@@ -191,7 +191,7 @@ pub unsafe fn move_monst(id: MonsterId) -> i32 {
         return 0;
     };
     if m.has(MonsterFlags::HASTE) {
-        if do_chase(id) == -1 {
+        if do_chase(id, random) == -1 {
             return -1;
         }
     }
@@ -208,7 +208,7 @@ pub unsafe fn move_monst(id: MonsterId) -> i32 {
 /// all the relevant state.
 ///
 /// Uses globals: places (via moat), player, see_monst (function).
-pub unsafe fn relocate(id: MonsterId, new_loc: IVec2) {
+pub unsafe fn relocate(id: MonsterId, new_loc: IVec2, random: &mut Random) {
     let Some(mut m) = Mon::get(id) else {
         return;
     };
@@ -221,7 +221,7 @@ pub unsafe fn relocate(id: MonsterId, new_loc: IVec2) {
         crate::game::clear_monster(m.pos.y, m.pos.x);
 
         if oroom != m.room {
-            update_dest(id);
+            update_dest(id, random);
             m.dest = Mon::get(id).map(|x| x.dest).unwrap_or(m.dest);
         }
         m.pos = new_loc;
@@ -240,7 +240,7 @@ pub unsafe fn relocate(id: MonsterId, new_loc: IVec2) {
 ///
 /// Uses globals: hero, proom, passages, places (via flat/chat/moat),
 /// delta, running, count, quiet, to_death, kamikaze, lvl_obj.
-pub unsafe fn do_chase(id: MonsterId) -> i32 {
+pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
     let Some(mut m) = Mon::get(id) else {
         return 0;
     };
@@ -307,10 +307,7 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
                     || (m.pos.y - hero.y).abs() == (m.pos.x - hero.x).abs())
                 && dist(m.pos.y, m.pos.x, hero.y, hero.x) <= BOLT_LENGTH * BOLT_LENGTH
                 && !m.has(MonsterFlags::CANCELLED)
-                && {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(DRAGONSHOT)
-                } == 0
+                && random.rnd(DRAGONSHOT) == 0
             {
                 let dy = hero.y - m.pos.y;
                 let dx = hero.x - m.pos.x;
@@ -319,7 +316,7 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
                 if has_hit != 0 {
                     endmsg();
                 }
-                fire_bolt(m.pos, delta, "flame");
+                fire_bolt(m.pos, delta, "flame", random);
                 running = false as u8;
                 count = 0;
                 quiet = 0;
@@ -336,10 +333,10 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
     // This now contains what we want to run to this time
     // so we run to it.  If we hit it we either want to fight it
     // or stop running.
-    let (keep_chasing, ch_ret) = chase(id, this);
+    let (keep_chasing, ch_ret) = chase(id, this, random);
     if keep_chasing == false as u8 {
         if coord_eq(this, hero_pos()) {
-            return attack(id);
+            return attack(id, random);
         } else if coord_eq(this, resolve_dest(m.dest)) {
             for obj_id in crate::game::item_ids() {
                 if m.dest == DestRef::Object(obj_id) {
@@ -347,7 +344,7 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
                     crate::entity::player::attach_pack_id(id, obj_id);
                     // Objects render from the level item list; the floor glyph
                     // under a picked-up object is then the terrain char.
-                    update_dest(id);
+                    update_dest(id, random);
                     m.dest = Mon::get(id).map(|x| x.dest).unwrap_or(m.dest);
                     break;
                 }
@@ -359,7 +356,7 @@ pub unsafe fn do_chase(id: MonsterId) -> i32 {
     } else if m.typ == Some(MonsterType::VenusFlytrap) {
         return 0;
     }
-    relocate(id, ch_ret);
+    relocate(id, ch_ret, random);
     // And stop running if need be
     let m = Mon::get(id).unwrap_or(m);
     if stoprun && coord_eq(m.pos, resolve_dest(m.dest)) {
@@ -440,7 +437,7 @@ pub unsafe fn see_monst(id: MonsterId) -> u8 {
 /// Set a monster running after the hero.
 ///
 /// Uses globals: places (via moat).
-pub unsafe fn runto(runner: IVec2) {
+pub unsafe fn runto(runner: IVec2, random: &mut Random) {
     // If we couldn't find him, something is funny.
     // (C guarded this with `#ifdef MASTER`; always report in the Rust port.)
     let Some(id) = crate::game::monster_id_at(runner.y, runner.x) else {
@@ -459,7 +456,7 @@ pub unsafe fn runto(runner: IVec2) {
             data.t_flags.remove(MonsterFlags::HELD);
         }
     });
-    update_dest(id);
+    update_dest(id, random);
 }
 
 /// chase:
@@ -469,7 +466,7 @@ pub unsafe fn runto(runner: IVec2) {
 /// the second is the coordinate the chaser should relocate to (C's `ch_ret`).
 ///
 /// Uses globals: hero, lvl_obj, places (via moat/chat/winat).
-pub unsafe fn chase(id: MonsterId, ee: IVec2) -> (u8, IVec2) {
+pub unsafe fn chase(id: MonsterId, ee: IVec2, random: &mut Random) -> (u8, IVec2) {
     let Some(m) = Mon::get(id) else {
         return (false as u8, IVec2::ZERO);
     };
@@ -486,29 +483,17 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> (u8, IVec2) {
     // Stalkers are slightly confused all of the time, and bats are
     // quite confused all the time.
     if (m.has(MonsterFlags::HUH)
-        && {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(5)
-        } != 0)
+        && random.rnd(5) != 0)
         || (m.typ == Some(MonsterType::Phantom)
-            && {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(5)
-            } == 0)
+            && random.rnd(5) == 0)
         || (m.typ == Some(MonsterType::Bat)
-            && {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(2)
-            } == 0)
+            && random.rnd(2) == 0)
     {
         // get a valid random move
-        ch_ret = rndmove(m.pos);
+        ch_ret = rndmove(m.pos, random);
         curdist = dist_cp(ch_ret, ee);
         // Small chance that it will become un-confused
-        if {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(20)
-        } == 0
+        if random.rnd(20) == 0
         {
             DUNGEON.monster_list.with_mut(id, |t| {
                 if let Thing::Monster { data } = t {
@@ -590,10 +575,7 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2) -> (u8, IVec2) {
                             ch_ret = tryp;
                             curdist = thisdist;
                         } else if thisdist == curdist
-                            && {
-                                let mut random = RNG.lock().unwrap();
-                                random.rnd(plcnt + 1)
-                            } == 0
+                            && random.rnd(plcnt + 1) == 0
                         {
                             // C's rnd(++plcnt) bumps plcnt then draws in [0, plcnt).
                             plcnt += 1;
@@ -700,7 +682,7 @@ pub unsafe fn cansee(y: i32, x: i32) -> u8 {
 /// otherwise it may target a nearby floor object it wants to pick up.
 ///
 /// Uses globals: monsters, hero, proom, lvl_obj, mlist.
-pub unsafe fn update_dest(id: MonsterId) {
+pub unsafe fn update_dest(id: MonsterId, random: &mut Random) {
     let Some(m) = Mon::get(id) else {
         return;
     };
@@ -718,10 +700,7 @@ pub unsafe fn update_dest(id: MonsterId) {
             continue;
         }
         if roomin(opos) == m.room
-            && {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(100)
-            } < prob
+            && random.rnd(100) < prob
         {
             let obj_dest = DestRef::Object(obj_id);
             let mut taken = false;

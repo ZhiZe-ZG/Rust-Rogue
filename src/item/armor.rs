@@ -10,6 +10,7 @@ use crate::item::pack::get_item_id;
 use crate::item::rings::RingType;
 use crate::item::things::{dropcheck_id, inv_name_id};
 use crate::misc::spread;
+use crate::rnd::Random;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 
 use crate::game::globals::{after, terse, to_death};
@@ -17,7 +18,7 @@ use crate::game::globals::{after, terse, to_death};
 const ARMOR: i32 = ']' as i32;
 
 /// Equips selected armor if valid and no armor is already worn.
-pub unsafe fn wear() {
+pub unsafe fn wear(random: &mut Random) {
     let Some(obj) = get_item_id("wear", ItemFilter::Category(ItemType::ARMOR)) else {
         return;
     };
@@ -40,7 +41,7 @@ pub unsafe fn wear() {
         return;
     }
 
-    waste_time();
+    waste_time(random);
     OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::KNOW));
     let sp = inv_name_id(obj, true);
     PLAYER.set_armor_id(Some(obj));
@@ -51,7 +52,7 @@ pub unsafe fn wear() {
 }
 
 /// Removes currently worn armor after curse/drop checks.
-pub unsafe fn take_off() {
+pub unsafe fn take_off(random: &mut Random) {
     let Some(obj) = PLAYER.equipment().armor_id() else {
         after = false as u8;
         if terse != 0 {
@@ -62,7 +63,7 @@ pub unsafe fn take_off() {
         return;
     };
 
-    if !dropcheck_id(obj) {
+    if !dropcheck_id(obj, random) {
         return;
     }
 
@@ -81,11 +82,11 @@ pub unsafe fn take_off() {
 }
 
 /// Advances daemon and fuse queues as a deliberate no-op turn.
-pub unsafe fn waste_time() {
-    do_daemons(spread(1));
-    do_fuses(spread(1));
-    do_daemons(spread(2));
-    do_fuses(spread(2));
+pub unsafe fn waste_time(random: &mut Random) {
+    do_daemons(spread(1, random), random);
+    do_fuses(spread(1, random), random);
+    do_daemons(spread(2, random), random);
+    do_fuses(spread(2, random), random);
 }
 
 /// Rust the given armor if it is a legal kind to rust.

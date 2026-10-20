@@ -1,7 +1,7 @@
 //! Wizard (debug) mode commands.
 //!
 //! Ported from `src/c/wizard.c` to Rust.
-use crate::rnd::RNG;
+use crate::rnd::{Random, RNG};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::config::GameConfig;
@@ -196,7 +196,7 @@ pub unsafe fn create_obj() {
             }
             if matches!(otype, ItemType::Weapon(_)) {
                 let w = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
-                init_weapon(obj, w);
+                init_weapon(obj, w, &mut RNG.lock().unwrap());
                 if bless == ('-' as u8) {
                     OBJECTS.with_object_mut(obj, |o| {
                         o.o_hplus -= {
@@ -260,7 +260,7 @@ pub unsafe fn create_obj() {
             }
         }
         ItemType::Stick(_) => {
-            fix_stick_id(obj);
+            fix_stick_id(obj, &mut RNG.lock().unwrap());
         }
         ItemType::Gold => {
             msg_str("how much?");
@@ -272,18 +272,18 @@ pub unsafe fn create_obj() {
     add_pack_id(Some(obj), false);
 }
 
-pub unsafe fn teleport() {
-    let mut c = DUNGEON.find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
+pub unsafe fn teleport(random: &mut Random) {
+    let mut c = DUNGEON.find_floor(None, 0, true, random).unwrap_or(IVec2::ZERO);
     let mut hero = hero();
 
     crate::draw::write_cell_glyph(hero, floor_at() as char);
     if roomin(c) != proom() {
-        leave_room(hero);
+        leave_room(hero, random);
         hero = c;
-        enter_room(hero);
+        enter_room(hero, random);
     } else {
         hero = c;
-        look(true as u8);
+        look(true as u8, random);
     }
     crate::game::PLAYER.set_pos(hero);
     crate::draw::write_cell_glyph(hero, '@');

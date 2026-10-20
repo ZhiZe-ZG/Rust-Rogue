@@ -5,7 +5,7 @@ use crate::game::PLAYER;
 use crate::item::armor::waste_time;
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::misc::chg_str;
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use crate::ui::output::msg_str;
 
 use crate::entity::player::ObjectFlags;
@@ -79,11 +79,8 @@ fn adjust_inventory_case(name: &mut String, drop: u8) {
 }
 
 #[inline]
-fn pick_one(info: &[ObjInfo], nitems: usize) -> i32 {
-    let idx = {
-        let mut random = RNG.lock().unwrap();
-        random.rnd(100)
-    };
+fn pick_one(info: &[ObjInfo], nitems: usize, random: &mut Random) -> i32 {
+    let idx = random.rnd(100);
     let mut i = 0usize;
     while i < nitems {
         if idx < info[i].oi_prob {
@@ -188,7 +185,7 @@ pub unsafe fn inv_name_id(id: crate::item::arena::ThingId, drop: bool) -> String
 }
 
 /// Pointer-free version of `dropcheck`: works on an arena [`ThingId`].
-pub unsafe fn dropcheck_id(id: crate::item::arena::ThingId) -> bool {
+pub unsafe fn dropcheck_id(id: crate::item::arena::ThingId, random: &mut Random) -> bool {
     let eq = PLAYER.equipment();
     let is_weapon = eq.weapon_id() == Some(id);
     let is_armor = eq.armor_id() == Some(id);
@@ -207,7 +204,7 @@ pub unsafe fn dropcheck_id(id: crate::item::arena::ThingId) -> bool {
     if is_weapon {
         PLAYER.set_weapon_id(None);
     } else if is_armor {
-        waste_time();
+        waste_time(random);
         PLAYER.set_armor_id(None);
     } else {
         if is_left {
@@ -225,7 +222,7 @@ pub unsafe fn dropcheck_id(id: crate::item::arena::ThingId) -> bool {
 }
 
 /// Allocate and initialize a random object, returning its arena handle.
-pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
+pub unsafe fn new_thing_id(random: &mut Random) -> crate::item::arena::ThingId {
     let cur_id = new_item_id();
 
     // Baseline weapon/armor fields, shared by every generated object.
@@ -243,18 +240,18 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
     let choice = if crate::dungeon::no_food() > 3 {
         2
     } else {
-        pick_one(&things[..], NUMTHINGS)
+        pick_one(&things[..], NUMTHINGS, random)
     };
     match choice {
         0 => {
-            let which = pick_one(&pot_info[..], MAXPOTIONS);
+            let which = pick_one(&pot_info[..], MAXPOTIONS, random);
             crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
                 o.o_which = which;
                 o.o_type = ItemType::potion(which);
             });
         }
         1 => {
-            let which = pick_one(&scr_info[..], MAXSCROLLS);
+            let which = pick_one(&scr_info[..], MAXSCROLLS, random);
             crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
                 o.o_which = which;
                 o.o_type = ItemType::scroll(which);
@@ -262,10 +259,7 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
         }
         2 => {
             crate::dungeon::set_no_food(0);
-            let which = if {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(10)
-            } != 0
+            let which = if random.rnd(10) != 0
             {
                 0
             } else {
@@ -277,52 +271,34 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
             });
         }
         3 => {
-            init_weapon(cur_id, pick_one(&weap_info[..], MAXWEAPONS));
-            let r = {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(100)
-            };
+            init_weapon(cur_id, pick_one(&weap_info[..], MAXWEAPONS, random), random);
+            let r = random.rnd(100);
             crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
                 if r < 10 {
                     o.o_flags.insert(ObjectFlags::CURSED);
-                    o.o_hplus -= {
-                        let mut random = RNG.lock().unwrap();
-                        random.rnd(3)
-                    } + 1;
+                    o.o_hplus -= random.rnd(3) + 1;
                 } else if r < 15 {
-                    o.o_hplus += {
-                        let mut random = RNG.lock().unwrap();
-                        random.rnd(3)
-                    } + 1;
+                    o.o_hplus += random.rnd(3) + 1;
                 }
             });
         }
         4 => {
-            let which = pick_one(&arm_info[..], MAXARMORS);
-            let r = {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(100)
-            };
+            let which = pick_one(&arm_info[..], MAXARMORS, random);
+            let r = random.rnd(100);
             crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
                 o.o_which = which;
                 o.o_type = ItemType::Armor(which);
                 o.o_arm = a_class[which as usize];
                 if r < 20 {
                     o.o_flags.insert(ObjectFlags::CURSED);
-                    o.o_arm += {
-                        let mut random = RNG.lock().unwrap();
-                        random.rnd(3)
-                    } + 1;
+                    o.o_arm += random.rnd(3) + 1;
                 } else if r < 28 {
-                    o.o_arm -= {
-                        let mut random = RNG.lock().unwrap();
-                        random.rnd(3)
-                    } + 1;
+                    o.o_arm -= random.rnd(3) + 1;
                 }
             });
         }
         5 => {
-            let ring_type = RingType::from_raw(pick_one(&ring_info[..], MAXRINGS))
+            let ring_type = RingType::from_raw(pick_one(&ring_info[..], MAXRINGS, random))
                 .expect("ring metadata produced an invalid ring type");
             crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
                 o.o_which = ring_type as i32;
@@ -332,10 +308,7 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
                     | RingType::SustainStrength
                     | RingType::AddHit
                     | RingType::AddDamage => {
-                        let mut arm = {
-                            let mut random = RNG.lock().unwrap();
-                            random.rnd(3)
-                        };
+                        let mut arm = random.rnd(3);
                         if arm == 0 {
                             arm = -1;
                             o.o_flags.insert(ObjectFlags::CURSED);
@@ -350,12 +323,12 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
             });
         }
         6 => {
-            let which = pick_one(&ws_info[..], MAXSTICKS);
+            let which = pick_one(&ws_info[..], MAXSTICKS, random);
             crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
                 o.o_which = which;
                 o.o_type = ItemType::stick(which);
             });
-            fix_stick_id(cur_id);
+            fix_stick_id(cur_id, random);
         }
         _ => {}
     }
@@ -363,11 +336,11 @@ pub unsafe fn new_thing_id() -> crate::item::arena::ThingId {
     cur_id
 }
 
-pub unsafe fn drop() {
+pub unsafe fn drop(random: &mut Random) {
     let Some(id) = get_item_id("drop", ItemFilter::Any) else {
         return;
     };
-    if !dropcheck_id(id) {
+    if !dropcheck_id(id, random) {
         return;
     }
     let all = crate::item::arena::with_object(id, |o| o.o_type.drop_whole_stack_by_default())
@@ -391,21 +364,18 @@ unsafe fn nothing(_type: u8) -> String {
 }
 
 #[allow(dead_code)]
-fn pick_one_ex(info: &[ObjInfo], nitems: usize) -> i32 {
-    pick_one(info, nitems)
+fn pick_one_ex(info: &[ObjInfo], nitems: usize, random: &mut Random) -> i32 {
+    pick_one(info, nitems, random)
 }
 
 #[allow(dead_code)]
-fn set_order(order: &mut [i32]) {
+fn set_order(order: &mut [i32], random: &mut Random) {
     let numthings = order.len() as i32;
     for i in 0..numthings {
         order[i as usize] = i;
     }
     for i in (1..=numthings).rev() {
-        let r = {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(i)
-        };
+        let r = random.rnd(i);
         order.swap((i - 1) as usize, r as usize);
     }
 }

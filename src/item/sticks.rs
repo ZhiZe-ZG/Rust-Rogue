@@ -10,7 +10,7 @@ use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
 use crate::item::weapons::{do_motion, hit_monster};
 use crate::rip::death;
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use crate::ui::output;
 use crate::ui::output::msg_str;
 use glam::IVec2;
@@ -106,7 +106,7 @@ fn stick_type(id: ThingId) -> Option<StickType> {
 }
 
 /// Set up a new stick with the expected damage and charge values.
-pub unsafe fn fix_stick_id(id: ThingId) {
+pub unsafe fn fix_stick_id(id: ThingId, random: &mut Random) {
     if !matches!(
         OBJECTS.with_object(id, |o| o.o_type),
         Some(ItemType::Stick(_))
@@ -123,22 +123,16 @@ pub unsafe fn fix_stick_id(id: ThingId) {
         }
         set_c_string(&mut o.o_hurldmg, "1x1");
         o.o_arm = if light {
-            ({
-                let mut random = RNG.lock().unwrap();
-                random.rnd(10)
-            } + 10)
+            random.rnd(10) + 10
         } else {
-            ({
-                let mut random = RNG.lock().unwrap();
-                random.rnd(5)
-            } + 3)
+            random.rnd(5) + 3
         };
     });
 }
 
 /// do_zap:
 /// Perform a zap with a wand or staff and apply a simplified effect.
-pub unsafe fn do_zap() {
+pub unsafe fn do_zap(random: &mut Random) {
     let Some(obj) = get_item_id("zap with", ItemFilter::Category(ItemType::STICK)) else {
         return;
     };
@@ -204,8 +198,8 @@ pub unsafe fn do_zap() {
             let bolt_pos =
                 crate::item::arena::with_object(bolt, |o| o.o_pos).unwrap_or(IVec2::ZERO);
             if let Some(mid) = crate::game::monster_id_at(bolt_pos.y, bolt_pos.x) {
-                if save_throw_id(VS_MAGIC, mid) == 0 {
-                    hit_monster(bolt_pos.y, bolt_pos.x, bolt);
+                if save_throw_id(VS_MAGIC, mid, random) == 0 {
+                    hit_monster(bolt_pos.y, bolt_pos.x, bolt, random);
                 } else if terse != 0 {
                     msg_str("missle vanishes");
                 } else {
@@ -237,7 +231,7 @@ pub unsafe fn do_zap() {
                 _ => "ice",
             };
             let hero = hero_pos();
-            fire_bolt(hero, delta, name);
+            fire_bolt(hero, delta, name, random);
             if let Some(kind) = kind {
                 ws_info[kind.index()].oi_know = true;
             }
@@ -264,7 +258,7 @@ pub unsafe fn drain() {
 
 /// fire_bolt:
 /// Fire a bolt in a given direction from a specific starting place.
-pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
+pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str, random: &mut Random) {
     let mut pos = start;
     let hero = hero_pos();
     let hit_hero = start != hero;
@@ -281,11 +275,8 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
     pos.y += dir.y;
     pos.x += dir.x;
     if hit_hero && ce_coord(pos, hero) != 0 {
-        if save(VS_MAGIC) == 0 {
-            if (crate::game::PLAYER.stats().hit_points - {
-                let mut random = RNG.lock().unwrap();
-                random.roll(6, 6)
-            }) <= 0
+        if save(VS_MAGIC, random) == 0 {
+            if (crate::game::PLAYER.stats().hit_points - random.roll(6, 6)) <= 0
             {
                 death('b' as u8);
             }
@@ -295,8 +286,8 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str) {
         }
     } else {
         if let Some(mid) = crate::game::monster_id_at(pos.y, pos.x) {
-            if save_throw_id(VS_MAGIC, mid) == 0 {
-                hit_monster(pos.y, pos.x, bolt);
+            if save_throw_id(VS_MAGIC, mid, random) == 0 {
+                hit_monster(pos.y, pos.x, bolt, random);
             } else {
                 msg_str("the bolt misses");
             }

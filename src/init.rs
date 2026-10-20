@@ -12,7 +12,7 @@ use crate::game::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, ObjInfo,
 };
 use crate::game::PLAYER;
-use crate::rnd::RNG;
+use crate::rnd::{Random, RNG};
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::item::arena::{new_item_id, OBJECTS};
@@ -283,7 +283,7 @@ pub unsafe fn init_player() {
 
     // A +1 mace
     let mace_id = new_item_id();
-    init_weapon(mace_id, MACE);
+    init_weapon(mace_id, MACE, &mut RNG.lock().unwrap());
     OBJECTS.with_object_mut(mace_id, |o| {
         o.o_hplus = 1;
         o.o_dplus = 1;
@@ -294,7 +294,7 @@ pub unsafe fn init_player() {
 
     // A +1 bow
     let bow_id = new_item_id();
-    init_weapon(bow_id, BOW);
+    init_weapon(bow_id, BOW, &mut RNG.lock().unwrap());
     OBJECTS.with_object_mut(bow_id, |o| {
         o.o_hplus = 1;
         o.o_flags.insert(ObjectFlags::KNOW);
@@ -303,7 +303,7 @@ pub unsafe fn init_player() {
 
     // Arrows
     let arrow_id = new_item_id();
-    init_weapon(arrow_id, ARROW);
+    init_weapon(arrow_id, ARROW, &mut RNG.lock().unwrap());
     OBJECTS.with_object_mut(arrow_id, |o| {
         o.o_count = {
             let mut random = RNG.lock().unwrap();
@@ -452,10 +452,9 @@ pub unsafe fn init_probs() {
 
 /// Return a random colour if the player is hallucinating, otherwise
 /// return the supplied colour unchanged.
-pub unsafe fn pick_color(col: &'static str) -> &'static str {
+pub unsafe fn pick_color(col: &'static str, random: &mut Random) -> &'static str {
     if crate::game::PLAYER.has_flag(MonsterFlags::HALU) {
-        let mut random = RNG.lock().unwrap();
-        crate::colors::random_color(&mut random)
+        crate::colors::random_color(random)
     } else {
         col
     }

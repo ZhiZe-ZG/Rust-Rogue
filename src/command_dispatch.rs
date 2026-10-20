@@ -26,7 +26,7 @@ use crate::dungeon::DUNGEON;
 use crate::misc::{eat, get_dir};
 use crate::options::{option, read_line};
 use crate::rip::total_winner;
-use crate::rnd::RNG;
+use crate::rnd::{Random, RNG};
 use crate::save::save_game;
 use crate::startup::{quit, shell};
 use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
@@ -115,8 +115,8 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
     /*
      * Let the daemons start up
      */
-    do_daemons(BEFORE);
-    do_fuses(BEFORE);
+    do_daemons(BEFORE, &mut RNG.lock().unwrap());
+    do_fuses(BEFORE, &mut RNG.lock().unwrap());
     if crate::startup::exit_requested() {
         return;
     }
@@ -126,18 +126,18 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
         again = false as u8;
         // Level transitions can retry this command before the AFTER daemon
         // phase, so let the UI repaint a changed level before look/input.
-        crate::daemon::Daemon::UiRender.run(0);
+        crate::daemon::Daemon::UiRender.run(0, &mut RNG.lock().unwrap());
         if has_hit != 0 {
-            look(false as u8);
+            look(false as u8, &mut RNG.lock().unwrap());
             endmsg();
             has_hit = false as u8;
         }
 
-        look(true as u8);
+        look(true as u8, &mut RNG.lock().unwrap());
         if running == 0 {
             door_stop = false as u8;
         }
-        crate::daemon::Daemon::UiRender.run(0);
+        crate::daemon::Daemon::UiRender.run(0, &mut RNG.lock().unwrap());
         lastscore = purse;
         let hero = hero_pos();
         crate::ui::terminal::UI.move_cursor(IVec2::new(hero.x, hero.y));
@@ -274,7 +274,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         if get_dir() == 0 {
                             after = false as u8;
                         } else {
-                            missile(delta.y, delta.x);
+                            missile(delta.y, delta.x, &mut RNG.lock().unwrap());
                         }
                     }
                     Command::Again => {
@@ -287,7 +287,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             continue 'dispatch;
                         }
                     }
-                    Command::Quaff => quaff(),
+                    Command::Quaff => quaff(&mut RNG.lock().unwrap()),
                     Command::Quit => {
                         after = false as u8;
                         q_comm = true as u8;
@@ -302,14 +302,14 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         after = false as u8;
                         picky_inven();
                     }
-                    Command::Drop => drop(),
-                    Command::ReadScroll => read_scroll(),
+                    Command::Drop => drop(&mut RNG.lock().unwrap()),
+                    Command::ReadScroll => read_scroll(&mut RNG.lock().unwrap()),
                     Command::Eat => eat(),
-                    Command::Wield => wield(),
-                    Command::Wear => wear(),
-                    Command::TakeOff => take_off(),
-                    Command::RingOn => ring_on(),
-                    Command::RingOff => ring_off(),
+                    Command::Wield => wield(&mut RNG.lock().unwrap()),
+                    Command::Wear => wear(&mut RNG.lock().unwrap()),
+                    Command::TakeOff => take_off(&mut RNG.lock().unwrap()),
+                    Command::RingOn => ring_on(&mut RNG.lock().unwrap()),
+                    Command::RingOff => ring_off(&mut RNG.lock().unwrap()),
                     Command::Options => {
                         option();
                         after = false as u8;
@@ -334,10 +334,10 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         after = false as u8;
                         identify();
                     }
-                    Command::Search => search(),
+                    Command::Search => search(&mut RNG.lock().unwrap()),
                     Command::Zap => {
                         if get_dir() != 0 {
-                            do_zap();
+                            do_zap(&mut RNG.lock().unwrap());
                         } else {
                             after = false as u8;
                         }
@@ -402,11 +402,11 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         if MASTER {
                             if crate::wizard::is_wizard() {
                                 crate::wizard::set_wizard_mode(0);
-                                turn_see(true as u8);
+                                turn_see(true as u8, &mut RNG.lock().unwrap());
                                 msg_str("not wizard any more");
                             } else {
                                 crate::wizard::set_wizard_mode(1);
-                                turn_see(false as u8);
+                                turn_see(false as u8, &mut RNG.lock().unwrap());
                                 msg_str(&format!(
                                     "you are suddenly as smart as Ken Arnold in dungeon #{}",
                                     1234
@@ -486,7 +486,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                     DUNGEON.new_level();
                                 }
                                 Command::WizardMap => show_map(),
-                                Command::WizardTeleport => teleport(),
+                                Command::WizardTeleport => teleport(&mut RNG.lock().unwrap()),
                                 Command::WizardFood => {
                                     msg_str(&format!("food left: {}", get_food_left()));
                                 }
@@ -496,7 +496,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                         true as u8
                                     } else {
                                         false as u8
-                                    });
+                                    }, &mut RNG.lock().unwrap());
                                 }
                                 Command::WizardCharge => {
                                     let item = get_item_id(
@@ -509,13 +509,13 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 }
                                 Command::WizardGear => {
                                     for _ in 0..9 {
-                                        raise_level();
+                                        raise_level(&mut RNG.lock().unwrap());
                                     }
                                     /*
                                      * Give him a sword (+1,+1)
                                      */
                                     let sword = new_item_id();
-                                    init_weapon(sword, TWOSWORD);
+                                    init_weapon(sword, TWOSWORD, &mut RNG.lock().unwrap());
                                     OBJECTS.with_object_mut(sword, |o| {
                                         o.o_hplus = 1;
                                         o.o_dplus = 1;
@@ -567,8 +567,8 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
         }
     }
 
-    do_daemons(AFTER);
-    do_fuses(AFTER);
+    do_daemons(AFTER, &mut RNG.lock().unwrap());
+    do_fuses(AFTER, &mut RNG.lock().unwrap());
 }
 
 /// Read the next command, consume any repeat-count prefix, and report whether
@@ -656,7 +656,7 @@ pub unsafe fn illcom(command: Command) {
 ///
 /// Uses globals: hero, player, places (via chat/flat), count, running,
 /// terse, tr_name.
-pub unsafe fn search() {
+pub unsafe fn search(random: &mut Random) {
     let hero = hero_pos();
     let ey = hero.y + 1;
     let ex = hero.x + 1;
@@ -682,10 +682,7 @@ pub unsafe fn search() {
             if (flags as u8 & F_REAL as u8) == 0 {
                 match crate::game::tile_at(y, x) {
                     crate::tile::Tile::Wall | crate::tile::Tile::HiddenDoor => {
-                        if {
-                            let mut random = RNG.lock().unwrap();
-                            random.rnd(5 + probinc)
-                        } == 0
+                        if random.rnd(5 + probinc) == 0
                         {
                             crate::draw::reveal_secret_at(y, x);
                             msg_str("a secret door");
@@ -695,10 +692,7 @@ pub unsafe fn search() {
                         }
                     }
                     crate::tile::Tile::Trap(_) => {
-                        if {
-                            let mut random = RNG.lock().unwrap();
-                            random.rnd(2 + probinc)
-                        } == 0
+                        if random.rnd(2 + probinc) == 0
                         {
                             crate::level::with_current_level_mut(|current| {
                                 current.reveal_trap(y as usize, x as usize);
@@ -708,10 +702,7 @@ pub unsafe fn search() {
                             }
                             if player_has(MonsterFlags::HALU) {
                                 let name = crate::game::globals::trap_name(
-                                    {
-                                        let mut random = RNG.lock().unwrap();
-                                        random.rnd(GameConfig::TRAP_KIND_COUNT)
-                                    } as usize,
+                                    random.rnd(GameConfig::TRAP_KIND_COUNT) as usize,
                                 );
                                 msg_str(&name);
                             } else {
@@ -726,10 +717,7 @@ pub unsafe fn search() {
                         }
                     }
                     crate::tile::Tile::Empty => {
-                        if {
-                            let mut random = RNG.lock().unwrap();
-                            random.rnd(3 + probinc)
-                        } == 0
+                        if random.rnd(3 + probinc) == 0
                         {
                             crate::draw::reveal_secret_at(y, x);
                             found = true;
@@ -746,7 +734,7 @@ pub unsafe fn search() {
     }
 
     if found {
-        look(false as u8);
+        look(false as u8, random);
     }
 }
 

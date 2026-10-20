@@ -17,6 +17,7 @@
 //! `turn_see`).
 
 use crate::game::globals::D_LIST;
+use crate::rnd::Random;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const EMPTY: i32 = 0;
@@ -24,14 +25,14 @@ const DAEMON: i32 = -1;
 const MAXDAEMONS: usize = 20;
 static LAST_RENDERED_LEVEL: AtomicU64 = AtomicU64::new(u64::MAX);
 
-unsafe fn render_current_level() {
+unsafe fn render_current_level(random: &mut Random) {
     let generation = crate::level::with_current_level(|level| level.generation());
     if LAST_RENDERED_LEVEL.swap(generation, Ordering::Relaxed) != generation {
         crate::ui::terminal::UI.clear();
         let hero = crate::game::PLAYER.pos();
-        crate::draw::enter_room(hero);
+        crate::draw::enter_room(hero, random);
         if crate::game::PLAYER.has_flag(crate::entity::player::MonsterFlags::SEEMONST) {
-            crate::item::potions::turn_see(false as u8);
+            crate::item::potions::turn_see(false as u8, random);
         }
         crate::draw::write_cell_glyph(hero, '@');
         crate::ui::output::refresh();
@@ -72,25 +73,25 @@ impl Daemon {
     /// Every callback mutates process-wide game state through the global owners
     /// (`PLAYER`, `DUNGEON.monster_list`, `DUNGEON`, ...); the game is
     /// single-threaded, so callers must not invoke this concurrently.
-    pub unsafe fn run(self, arg: i32) {
+    pub unsafe fn run(self, arg: i32, random: &mut Random) {
         match self {
-            Daemon::Rollwand => crate::daemons::rollwand(),
-            Daemon::Doctor => crate::daemons::doctor(),
-            Daemon::Stomach => crate::daemons::stomach(),
-            Daemon::Runners => crate::entity::chase::runners(),
+            Daemon::Rollwand => crate::daemons::rollwand(random),
+            Daemon::Doctor => crate::daemons::doctor(random),
+            Daemon::Stomach => crate::daemons::stomach(random),
+            Daemon::Runners => crate::entity::chase::runners(random),
             Daemon::Swander => crate::daemons::swander(),
             Daemon::Nohaste => crate::daemons::nohaste(),
             Daemon::Unconfuse => crate::daemons::unconfuse(),
             Daemon::Unsee => crate::daemons::unsee(),
-            Daemon::Sight => crate::daemons::sight(),
-            Daemon::Visuals => crate::daemons::visuals(),
-            Daemon::UiRender => render_current_level(),
+            Daemon::Sight => crate::daemons::sight(random),
+            Daemon::Visuals => crate::daemons::visuals(random),
+            Daemon::UiRender => render_current_level(random),
             Daemon::TurnSee => {
-                let _ = crate::item::potions::turn_see(arg as u8);
+                let _ = crate::item::potions::turn_see(arg as u8, random);
             }
             Daemon::ComeDown => crate::daemons::come_down(),
             Daemon::Land => crate::daemons::land(),
-            Daemon::RingEffects => crate::daemons::ring_effects(),
+            Daemon::RingEffects => crate::daemons::ring_effects(random),
         }
     }
 
@@ -196,13 +197,13 @@ pub unsafe fn kill_daemon(func: Daemon) {
 ///
 /// # Safety
 /// Runs game-state callbacks; single-threaded use only.
-pub unsafe fn do_daemons(flag: i32) {
+pub unsafe fn do_daemons(flag: i32, random: &mut Random) {
     for i in 0..MAXDAEMONS {
         if D_LIST[i].d_type == flag && D_LIST[i].d_time == DAEMON {
             // Capture the callback and its argument before the call, which may
             // modify the table.
             if let Some(f) = D_LIST[i].d_func {
-                f.run(D_LIST[i].d_arg);
+                f.run(D_LIST[i].d_arg, random);
             }
         }
     }
@@ -246,7 +247,7 @@ pub unsafe fn extinguish(func: Daemon) {
 ///
 /// # Safety
 /// Runs game-state callbacks; single-threaded use only.
-pub unsafe fn do_fuses(flag: i32) {
+pub unsafe fn do_fuses(flag: i32, random: &mut Random) {
     for i in 0..MAXDAEMONS {
         if D_LIST[i].d_type == flag && D_LIST[i].d_time > 0 {
             D_LIST[i].d_time -= 1;
@@ -254,7 +255,7 @@ pub unsafe fn do_fuses(flag: i32) {
                 D_LIST[i].d_type = EMPTY;
                 // Capture the callback and its argument before the call.
                 if let Some(f) = D_LIST[i].d_func {
-                    f.run(D_LIST[i].d_arg);
+                    f.run(D_LIST[i].d_arg, random);
                 }
             }
         }
@@ -308,7 +309,7 @@ mod tests {
     fn ui_render_daemon_flushes_pending_frame() {
         crate::ui::output::refresh();
 
-        unsafe { Daemon::UiRender.run(0) };
+        unsafe { Daemon::UiRender.run(0, &mut crate::rnd::RNG.lock().unwrap()) };
 
         assert!(!crate::ui::output::render_pending());
     }

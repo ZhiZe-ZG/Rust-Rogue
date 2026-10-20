@@ -1,7 +1,7 @@
 //! Potions and quaffing.
 //!
 //! Ported from `src/c/potions.c` to Rust.
-use crate::rnd::RNG;
+use crate::rnd::Random;
 
 use crate::daemon::{fuse, lengthen, start_daemon, Daemon};
 use crate::daemons::{come_down, sight};
@@ -146,7 +146,7 @@ fn moat(y: i32, x: i32) -> Option<MonsterId> {
 
 /// Shared implementation for potion effects that need the normal fuse/flag
 /// setup and knowledge tracking used by the C version.
-unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
+unsafe fn do_pot_impl(potion: PotionType, knowit: bool, random: &mut Random) {
     let (flags, daemon, base_time, high_msg, straight_msg): (
         MonsterFlags,
         Option<Daemon>,
@@ -207,11 +207,11 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
         return;
     }
 
-    let t = spread(base_time);
+    let t = spread(base_time, random);
     if !player_has(flags) {
         crate::game::PLAYER.add_flag(flags);
         fuse(daemon, 0, t, AFTER);
-        look(false as u8);
+        look(false as u8, random);
     } else {
         lengthen(daemon, t);
     }
@@ -225,7 +225,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool) {
 
 /// quaff:
 /// Quaff a potion from the pack.
-pub unsafe fn quaff() {
+pub unsafe fn quaff(random: &mut Random) {
     let Some(obj) = get_item_id("quaff", ItemFilter::Category(ItemType::POTION)) else {
         return;
     };
@@ -255,16 +255,13 @@ pub unsafe fn quaff() {
 
     let potion = PotionType::from_raw(o_which);
     match potion {
-        PotionType::Confuse => do_pot_impl(PotionType::Confuse, if trip { false } else { true }),
+        PotionType::Confuse => do_pot_impl(PotionType::Confuse, if trip { false } else { true }, random),
         PotionType::Poison => {
             pot_info_at(PotionType::Poison.index()).oi_know = true;
             if PLAYER.wearing_ring(RingType::SustainStrength) {
                 msg_str("you feel momentarily sick");
             } else {
-                chg_str(-({
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(3)
-                } + 1));
+                chg_str(-(random.rnd(3) + 1));
                 msg_str("you feel very sick now");
                 come_down();
             }
@@ -272,16 +269,13 @@ pub unsafe fn quaff() {
         PotionType::Healing => {
             pot_info_at(PotionType::Healing.index()).oi_know = true;
             crate::game::PLAYER.with_stats_mut(|stats| {
-                stats.hit_points += {
-                    let mut random = RNG.lock().unwrap();
-                    random.roll(stats.level, 4)
-                };
+                stats.hit_points += random.roll(stats.level, 4);
                 if stats.hit_points > stats.max_hit_points {
                     stats.max_hit_points += 1;
                     stats.hit_points = stats.max_hit_points;
                 }
             });
-            sight();
+            sight(random);
             msg_str("you begin to feel better");
         }
         PotionType::Strength => {
@@ -292,7 +286,7 @@ pub unsafe fn quaff() {
         PotionType::MonsterFind => {
             crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
             fuse(Daemon::TurnSee, true as u8 as i32, HUHDURATION, AFTER);
-            if turn_see(false as u8) == 0 {
+            if turn_see(false as u8, random) == 0 {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
                     choose_str("normal", "strange")
@@ -345,33 +339,30 @@ pub unsafe fn quaff() {
         PotionType::Lsd => {
             if !trip {
                 if player_has(MonsterFlags::SEEMONST) {
-                    turn_see(false as u8);
+                    turn_see(false as u8, random);
                 }
                 start_daemon(Daemon::Visuals, 0, BEFORE);
                 DUNGEON.set_seen_stairs(seen_stairs() != 0);
             }
-            do_pot_impl(PotionType::Lsd, true);
+            do_pot_impl(PotionType::Lsd, true, random);
         }
         PotionType::SeeInvisible => {
             show = player_has(MonsterFlags::CANSEE);
-            do_pot_impl(PotionType::SeeInvisible, false);
+            do_pot_impl(PotionType::SeeInvisible, false, random);
             if !show {
                 invis_on();
             }
-            sight();
+            sight(random);
         }
         PotionType::Raise => {
             pot_info_at(PotionType::Raise.index()).oi_know = true;
             msg_str("you suddenly feel much more skillful");
-            raise_level();
+            raise_level(random);
         }
         PotionType::ExtraHealing => {
             pot_info_at(PotionType::ExtraHealing.index()).oi_know = true;
             crate::game::PLAYER.with_stats_mut(|stats| {
-                stats.hit_points += {
-                    let mut random = RNG.lock().unwrap();
-                    random.roll(stats.level, 8)
-                };
+                stats.hit_points += random.roll(stats.level, 8);
                 if stats.hit_points > stats.max_hit_points {
                     if stats.hit_points > stats.max_hit_points + stats.level + 1 {
                         stats.max_hit_points += 1;
@@ -380,14 +371,14 @@ pub unsafe fn quaff() {
                     stats.hit_points = stats.max_hit_points;
                 }
             });
-            sight();
+            sight(random);
             come_down();
             msg_str("you begin to feel much better");
         }
         PotionType::Haste => {
             pot_info_at(PotionType::Haste.index()).oi_know = true;
             after = false as u8;
-            if add_haste(true) {
+            if add_haste(true, random) {
                 msg_str("you feel yourself moving much faster");
             }
         }
@@ -422,8 +413,8 @@ pub unsafe fn quaff() {
             });
             msg_str("hey, this tastes great.  It make you feel warm all over");
         }
-        PotionType::Blind => do_pot_impl(PotionType::Blind, true),
-        PotionType::Levitate => do_pot_impl(PotionType::Levitate, true),
+        PotionType::Blind => do_pot_impl(PotionType::Blind, true, random),
+        PotionType::Levitate => do_pot_impl(PotionType::Levitate, true, random),
         _ => {
             msg_str("what an odd tasting potion!");
             return;
@@ -485,7 +476,7 @@ pub unsafe fn invis_on() {
 
 /// turn_see:
 /// Put on or off seeing monsters on this level.
-pub unsafe fn turn_see(turn_off: u8) -> u8 {
+pub unsafe fn turn_see(turn_off: u8, random: &mut Random) -> u8 {
     let mut add_new = 0;
 
     for id in DUNGEON.monster_list.ids() {
@@ -505,7 +496,7 @@ pub unsafe fn turn_see(turn_off: u8) -> u8 {
                 let glyph = if !player_has(MonsterFlags::HALU) {
                     crate::draw::monster_type_glyph(id)
                 } else {
-                    crate::draw::hallucination_glyph()
+                    crate::draw::hallucination_glyph(random)
                 };
                 if can_see {
                     crate::draw::write_cell_glyph(pos, glyph);
@@ -562,14 +553,14 @@ pub unsafe fn seen_stairs() -> u8 {
 
 /// raise_level:
 /// The player just magically went up a level.
-pub unsafe fn raise_level() {
+pub unsafe fn raise_level(random: &mut Random) {
     let level = crate::game::PLAYER.level();
     crate::game::PLAYER.with_stats_mut(|stats| stats.experience = e_levels[level as usize - 1] + 1);
-    check_level();
+    check_level(random);
 }
 
 /// do_pot:
 /// Do a potion with the standard fuse/flag setup.
-unsafe fn do_pot(type_id: i32, knowit: bool) {
-    do_pot_impl(PotionType::from_raw(type_id), knowit);
+unsafe fn do_pot(type_id: i32, knowit: bool, random: &mut Random) {
+    do_pot_impl(PotionType::from_raw(type_id), knowit, random);
 }

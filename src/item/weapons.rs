@@ -12,7 +12,7 @@ use crate::game::PLAYER;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::misc::{is_current_id, show_floor};
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use crate::ui::output;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
@@ -121,11 +121,11 @@ fn set_damage(dst: &mut [u8; 8], src: &[u8]) {
 }
 
 /// Throws a selected weapon in the provided direction and resolves impact/fall behavior.
-pub unsafe fn missile(ydelta: i32, xdelta: i32) {
+pub unsafe fn missile(ydelta: i32, xdelta: i32, random: &mut Random) {
     let Some(id) = get_item_id("throw", ItemFilter::Category(ItemType::WEAPON)) else {
         return;
     };
-    if !dropcheck_id(id) || is_current_id(id) {
+    if !dropcheck_id(id, random) || is_current_id(id) {
         return;
     }
 
@@ -135,8 +135,8 @@ pub unsafe fn missile(ydelta: i32, xdelta: i32) {
     do_motion(obj, ydelta, xdelta);
 
     let pos = OBJECTS.with_object(obj, |o| o.o_pos).unwrap_or(IVec2::ZERO);
-    if !crate::game::monster_here(pos.y, pos.x) || hit_monster(pos.y, pos.x, obj) == 0 {
-        fall(obj, true);
+    if !crate::game::monster_here(pos.y, pos.x) || hit_monster(pos.y, pos.x, obj, random) == 0 {
+        fall(obj, true, random);
     }
 }
 
@@ -175,12 +175,12 @@ pub unsafe fn do_motion(id: ThingId, ydelta: i32, xdelta: i32) -> IVec2 {
 }
 
 /// Drops an item near its current position or discards it if no floor slot is available.
-pub unsafe fn fall(id: ThingId, pr: bool) {
+pub unsafe fn fall(id: ThingId, pr: bool, random: &mut Random) {
     let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) else {
         return;
     };
 
-    if let Some(newpos) = fallpos(pos) {
+    if let Some(newpos) = fallpos(pos, random) {
         // Objects render from the `lvl_obj` list; no glyph write needed.
         OBJECTS.with_object_mut(id, |o| o.o_pos = newpos);
 
@@ -219,22 +219,16 @@ pub unsafe fn fall(id: ThingId, pr: bool) {
 }
 
 /// Initializes a weapon object with baseline damage, flags, and stack counts.
-pub unsafe fn init_weapon(id: ThingId, which: i32) {
+pub unsafe fn init_weapon(id: ThingId, which: i32, random: &mut Random) {
     let Some(iwp) = INIT_DAM.get(which as usize).copied() else {
         return;
     };
 
     let many = iwp.iw_flags.contains(ObjectFlags::MANY);
     let (count, grp) = if which == DAGGER {
-        ({
-            let mut random = RNG.lock().unwrap();
-            random.rnd(4)
-        } + 2, group)
+        (random.rnd(4) + 2, group)
     } else if many {
-        ({
-            let mut random = RNG.lock().unwrap();
-            random.rnd(8)
-        } + 8, group)
+        (random.rnd(8) + 8, group)
     } else {
         (1, 0)
     };
@@ -257,9 +251,9 @@ pub unsafe fn init_weapon(id: ThingId, which: i32) {
 }
 
 /// Resolves thrown-weapon combat against the target tile.
-pub unsafe fn hit_monster(y: i32, x: i32, id: ThingId) -> i32 {
+pub unsafe fn hit_monster(y: i32, x: i32, id: ThingId, random: &mut Random) -> i32 {
     let mp = IVec2 { x, y };
-    fight(mp, Some(id), true as u8)
+    fight(mp, Some(id), true as u8, random)
 }
 
 /// Formats signed enchantment numbers for armor and weapons.
@@ -272,11 +266,11 @@ pub fn num(n1: i32, n2: i32, obj_type: u8) -> String {
 }
 
 /// Equips a selected weapon after validating curses and item type constraints.
-pub unsafe fn wield() {
+pub unsafe fn wield(random: &mut Random) {
     // Track the previously wielded weapon by arena handle (pointer-free).
     let oweapon = PLAYER.equipment().weapon_id();
     if let Some(id) = oweapon {
-        if !dropcheck_id(id) {
+        if !dropcheck_id(id, random) {
             PLAYER.set_weapon_id(oweapon);
             return;
         }
@@ -312,7 +306,7 @@ pub unsafe fn wield() {
 
 /// Chooses a nearby floor/passage cell to drop an item into, returning it (or
 /// `None` when every neighbour is occupied or blocked).
-pub unsafe fn fallpos(pos: IVec2) -> Option<IVec2> {
+pub unsafe fn fallpos(pos: IVec2, random: &mut Random) -> Option<IVec2> {
     let mut cnt = 0;
     let mut newpos = None;
     for y in (pos.y - 1)..=(pos.y + 1) {
@@ -324,10 +318,7 @@ pub unsafe fn fallpos(pos: IVec2) -> Option<IVec2> {
             let ch = chat(y, x);
             if ch == FLOOR || ch == PASSAGE {
                 cnt += 1;
-                if {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(cnt)
-                } == 0
+                if random.rnd(cnt) == 0
                 {
                     newpos = Some(IVec2 { x, y });
                 }

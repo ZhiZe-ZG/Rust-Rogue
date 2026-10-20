@@ -13,7 +13,7 @@ use crate::game::MonsterId;
 use crate::item::rings::RingType;
 use crate::item::things::new_thing_id;
 use crate::misc::{rnd_thing, spread};
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use crate::ui::output::{addmsg_str, flush_now, msg_str};
 use crate::ui::terminal;
 use glam::IVec2;
@@ -217,24 +217,15 @@ fn iswearing(which: RingType) -> bool {
 }
 
 /// Picks an appropriate monster kind for the current depth.
-pub unsafe fn randmonster(wander: bool) -> MonsterType {
+pub unsafe fn randmonster(wander: bool, random: &mut Random) -> MonsterType {
     let level = crate::game::current_depth();
     loop {
-        let mut d = level + ({
-            let mut random = RNG.lock().unwrap();
-            random.rnd(10)
-        } - 6);
+        let mut d = level + (random.rnd(10) - 6);
         if d < 0 {
-            d = {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(5)
-            };
+            d = random.rnd(5);
         }
         if d > 25 {
-            d = {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(5)
-            } + 21;
+            d = random.rnd(5) + 21;
         }
         let m = if wander {
             WAND_MONS[d as usize]
@@ -248,7 +239,7 @@ pub unsafe fn randmonster(wander: bool) -> MonsterType {
 }
 
 /// Initializes the already-spawned monster `id` and places it on the map.
-pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2) {
+pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2, random: &mut Random) {
     let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
@@ -273,10 +264,7 @@ pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2
         data.t_oldch = oldch;
         data.t_room = room;
         data.t_stats.level = mp.m_stats.level + lev_add;
-        data.t_stats.max_hit_points = {
-            let mut random = RNG.lock().unwrap();
-            random.roll(data.t_stats.level, 8)
-        };
+        data.t_stats.max_hit_points = random.roll(data.t_stats.level, 8);
         data.t_stats.hit_points = data.t_stats.max_hit_points;
         data.t_stats.armor = mp.m_stats.armor - lev_add;
         data.t_stats.damage = mp.m_stats.damage;
@@ -291,12 +279,12 @@ pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2
         data.t_turn = true;
         data.t_pack = Vec::new();
         if monster_type == MonsterType::Xeroc {
-            data.t_disguise = rnd_thing() as u8;
+            data.t_disguise = rnd_thing(random) as u8;
         }
     });
 
     if iswearing(RingType::Aggravate) {
-        runto(cp);
+        runto(cp, random);
     }
 }
 
@@ -324,24 +312,24 @@ fn exp_add_for(level: i32, max_hp: i32) -> i32 {
 }
 
 /// Spawns a wandering monster in a different room and sets it running toward the hero.
-pub unsafe fn wanderer() {
+pub unsafe fn wanderer(random: &mut Random) {
     let id = DUNGEON.monster_list.spawn_actor();
     let mut cp;
 
     loop {
-        cp = DUNGEON.find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
+        cp = DUNGEON.find_floor(None, 0, true, random).unwrap_or(IVec2::ZERO);
         if roomin(cp) != crate::game::PLAYER.room() {
             break;
         }
     }
 
-    new_monster_id(id, randmonster(true), cp);
+    new_monster_id(id, randmonster(true, random), cp, random);
 
     if player_has(MonsterFlags::SEEMONST) {
         let glyph = if !player_has(MonsterFlags::HALU) {
             crate::draw::monster_type_glyph(id)
         } else {
-            crate::draw::hallucination_glyph()
+            crate::draw::hallucination_glyph(random)
         };
         crate::draw::write_reverse_video_cell_glyph(cp, glyph);
     }
@@ -352,7 +340,7 @@ pub unsafe fn wanderer() {
             Thing::Object { .. } => IVec2::ZERO,
         })
         .unwrap_or(IVec2::ZERO);
-    runto(pos);
+    runto(pos, random);
 
     if crate::wizard::is_wizard() {
         let name = DUNGEON.monster_list
@@ -366,7 +354,7 @@ pub unsafe fn wanderer() {
 }
 
 /// Wakes and updates an adjacent monster's pursuit behavior and special gaze logic.
-pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
+pub unsafe fn wake_monster(y: i32, x: i32, random: &mut Random) -> Option<MonsterId> {
     let Some(id) = crate::game::monster_id_at(y, x) else {
         flush_now();
         std::process::abort();
@@ -380,10 +368,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
         .flatten();
 
     if !has_flag(id, MonsterFlags::RUN)
-        && {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(3)
-        } != 0
+        && random.rnd(3) != 0
         && has_flag(id, MonsterFlags::MEAN)
         && !has_flag(id, MonsterFlags::HELD)
         && !iswearing(RingType::Stealth)
@@ -412,14 +397,14 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
                     data.t_flags.insert(MonsterFlags::FOUND);
                 }
             });
-            if save(VS_MAGIC) == 0 {
+            if save(VS_MAGIC, random) == 0 {
                 if player_has(MonsterFlags::HUH) {
-                    lengthen(Daemon::Unconfuse, spread(HUHDURATION));
+                    lengthen(Daemon::Unconfuse, spread(HUHDURATION, random));
                 } else {
-                    fuse(Daemon::Unconfuse, 0, spread(HUHDURATION), AFTER);
+                    fuse(Daemon::Unconfuse, 0, spread(HUHDURATION, random), AFTER);
                 }
                 crate::game::PLAYER.add_flag(MonsterFlags::HUH);
-                let mname_str = set_mname(id);
+                let mname_str = set_mname(id, random);
                 addmsg_str(&mname_str);
                 if mname_str != "it" {
                     addmsg_str("'");
@@ -451,7 +436,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
 }
 
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
-pub unsafe fn give_pack_id(id: MonsterId) {
+pub unsafe fn give_pack_id(id: MonsterId, random: &mut Random) {
     let kind = DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_type,
@@ -460,12 +445,9 @@ pub unsafe fn give_pack_id(id: MonsterId) {
         .flatten();
     let carry = monsters[kind.map_or(0, |m| m.index())].m_carry;
     if crate::game::current_depth() >= crate::dungeon::max_depth()
-        && {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(100)
-        } < carry
+        && random.rnd(100) < carry
     {
-        let item = new_thing_id();
+        let item = new_thing_id(random);
         DUNGEON.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_pack.insert(0, item);
@@ -475,27 +457,22 @@ pub unsafe fn give_pack_id(id: MonsterId) {
 }
 
 /// Roll a saving throw for the monster behind `id` (pointer-free variant).
-pub fn save_throw_id(which: i32, id: crate::game::MonsterId) -> i32 {
+pub fn save_throw_id(which: i32, id: crate::game::MonsterId, random: &mut Random) -> i32 {
     let level = crate::game::DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_stats.level,
             Thing::Object { .. } => 0,
         })
         .unwrap_or(0);
-    save_throw_for_level(which, level)
+    save_throw_for_level(which, level, random)
 }
 
 /// Roll a saving throw using an explicit caster level (used for the hero, whose
 /// `Thing` is no longer reachable as a raw pointer).
 #[inline]
-fn save_throw_for_level(which: i32, level: i32) -> i32 {
+fn save_throw_for_level(which: i32, level: i32, random: &mut Random) -> i32 {
     let need = 14 + which - level / 2;
-    if unsafe {
-        {
-            let mut random = RNG.lock().unwrap();
-            random.roll(1, 20)
-        }
-    } >= need
+    if random.roll(1, 20) >= need
     {
         1
     } else {
@@ -504,7 +481,7 @@ fn save_throw_for_level(which: i32, level: i32) -> i32 {
 }
 
 /// Rolls the hero's saving throw, applying ring of protection magic adjustment.
-pub unsafe fn save(which: i32) -> i32 {
+pub unsafe fn save(which: i32, random: &mut Random) -> i32 {
     let mut adj = which;
     if which == VS_MAGIC {
         // Ring of protection lowers the save magic number by its `o_arm`.
@@ -515,5 +492,5 @@ pub unsafe fn save(which: i32) -> i32 {
             }
         }
     }
-    save_throw_for_level(adj, PLAYER.level())
+    save_throw_for_level(adj, PLAYER.level(), random)
 }

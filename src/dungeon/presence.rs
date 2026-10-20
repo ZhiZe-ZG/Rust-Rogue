@@ -19,7 +19,7 @@ use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::item::item_type::ItemType;
 use crate::item::things::new_thing_id;
 use crate::level::LevelFlags;
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use crate::tile::{Tile, TrapType};
 
 use super::Dungeon;
@@ -34,19 +34,16 @@ impl Dungeon {
     }
 
     /// Allocate a floor object at `pos` and link it into the level's item list.
-    unsafe fn spawn_object_at(&self, pos: IVec2) -> ThingId {
-        let id = new_thing_id();
+    unsafe fn spawn_object_at(&self, pos: IVec2, random: &mut Random) -> ThingId {
+        let id = new_thing_id(random);
         OBJECTS.with_object_mut(id, |o| o.o_pos = pos);
         self.attach_floor(id);
         id
     }
 
     /// Fill one treasure room with `MIN..MAX` objects and monsters.
-    unsafe fn treas_room(&self) {
-        let idx = self.with_level(|current| {
-            let mut random = RNG.lock().unwrap();
-            current.rnd_room(&mut random)
-        });
+    unsafe fn treas_room(&self, random: &mut Random) {
+        let idx = self.with_level(|current| current.rnd_room(random));
         let mut spots = self.with_level(|current| {
             let room = &current.rooms[idx];
             (room.size.y - 2) * (room.size.x - 2) - GameConfig::MIN_TREASURES
@@ -56,23 +53,17 @@ impl Dungeon {
             spots = GameConfig::MAX_TREASURES - GameConfig::MIN_TREASURES;
         }
 
-        let mut nm = {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(spots)
-        } + GameConfig::MIN_TREASURES;
+        let mut nm = random.rnd(spots) + GameConfig::MIN_TREASURES;
         let num_monst = nm;
         while nm > 0 {
-            if let Some(pos) = self.find_floor(Some(idx), 2 * GameConfig::MAX_PLACEMENT_ATTEMPTS, false)
+            if let Some(pos) = self.find_floor(Some(idx), 2 * GameConfig::MAX_PLACEMENT_ATTEMPTS, false, random)
             {
-                self.spawn_object_at(pos);
+                self.spawn_object_at(pos, random);
             }
             nm -= 1;
         }
 
-        nm = {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(spots)
-        } + GameConfig::MIN_TREASURES;
+        nm = random.rnd(spots) + GameConfig::MIN_TREASURES;
         if nm < num_monst + 2 {
             nm = num_monst + 2;
         }
@@ -87,15 +78,15 @@ impl Dungeon {
         let depth = self.current_depth();
         self.set_current_depth(depth + 1);
         while nm > 0 {
-            if let Some(pos) = self.find_floor(Some(idx), GameConfig::MAX_PLACEMENT_ATTEMPTS, true) {
+            if let Some(pos) = self.find_floor(Some(idx), GameConfig::MAX_PLACEMENT_ATTEMPTS, true, random) {
                 let id = self.monster_list.spawn_actor();
-                new_monster_id(id, randmonster(false), pos);
+                new_monster_id(id, randmonster(false, random), pos, random);
                 self.monster_list.with_mut(id, |t| {
                     if let Thing::Monster { data } = t {
                         data.t_flags.insert(MonsterFlags::MEAN);
                     }
                 });
-                give_pack_id(id);
+                give_pack_id(id, random);
             }
             nm -= 1;
         }
@@ -106,7 +97,7 @@ impl Dungeon {
     ///
     /// Each room may hold a gold stash (value `rnd(50 + 10*level) + 2`) and has
     /// a chance of a monster guarding it (higher when the room has gold).
-    unsafe fn place_room_contents(&self) {
+    unsafe fn place_room_contents(&self, random: &mut Random) {
         let level = self.current_depth();
         let max_level = self.max_depth();
         let has_amulet = self.has_amulet();
@@ -117,18 +108,12 @@ impl Dungeon {
                 continue;
             }
 
-            if {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(2)
-            } == 0
+            if random.rnd(2) == 0
                 && (!has_amulet || level >= max_level)
             {
                 let gold = new_item_id();
-                let goldval = {
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(50 + 10 * level)
-                } + 2;
-                let gold_pos = self.find_floor(Some(i), 0, false).unwrap_or(IVec2::ZERO);
+                let goldval = random.rnd(50 + 10 * level) + 2;
+                let gold_pos = self.find_floor(Some(i), 0, false, random).unwrap_or(IVec2::ZERO);
                 OBJECTS.with_object_mut(gold, |og| {
                     og.o_arm = goldval;
                     og.o_pos = gold_pos;
@@ -144,15 +129,12 @@ impl Dungeon {
             }
 
             let goldval = self.with_level(|current| current.rooms[i].goldval);
-            if {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(100)
-            } < if goldval > 0 { 80 } else { 25 }
+            if random.rnd(100) < if goldval > 0 { 80 } else { 25 }
             {
                 let id = self.monster_list.spawn_actor();
-                if let Some(pos) = self.find_floor(Some(i), 0, true) {
-                    new_monster_id(id, randmonster(false), pos);
-                    give_pack_id(id);
+                if let Some(pos) = self.find_floor(Some(i), 0, true, random) {
+                    new_monster_id(id, randmonster(false, random), pos, random);
+                    give_pack_id(id, random);
                 }
             }
         }
@@ -160,7 +142,7 @@ impl Dungeon {
 
     /// Put potions and scrolls (and, deep enough, the Amulet of Yendor) on this
     /// level.
-    unsafe fn put_things(&self) {
+    unsafe fn put_things(&self, random: &mut Random) {
         let level = self.current_depth();
 
         // Once you have found the amulet, the only way to get new stuff is
@@ -170,24 +152,18 @@ impl Dungeon {
         }
 
         // Check for treasure rooms, and if so, put it in.
-        if {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(GameConfig::TREASURE_ROOM_CHANCE)
-        } == 0
+        if random.rnd(GameConfig::TREASURE_ROOM_CHANCE) == 0
         {
-            self.treas_room();
+            self.treas_room(random);
         }
 
         // Do MAXOBJ attempts to put things on a level.
         for _ in 0..GameConfig::MAX_OBJECTS {
-            if {
-                let mut random = RNG.lock().unwrap();
-                random.rnd(100)
-            } < 36
+            if random.rnd(100) < 36
             {
                 // Pick a new object and link it in the list.
-                if let Some(pos) = self.find_floor(None, 0, false) {
-                    self.spawn_object_at(pos);
+                if let Some(pos) = self.find_floor(None, 0, false, random) {
+                    self.spawn_object_at(pos, random);
                 }
             }
         }
@@ -195,7 +171,7 @@ impl Dungeon {
         // If he is really deep in the dungeon and he hasn't found the amulet
         // yet, put it somewhere on the ground.
         if level >= GameConfig::AMULET_LEVEL && !self.has_amulet() {
-            if let Some(pos) = self.find_floor(None, 0, false) {
+            if let Some(pos) = self.find_floor(None, 0, false, random) {
                 let obj = new_item_id();
                 OBJECTS.with_object_mut(obj, |og| {
                     og.o_hplus = 0;
@@ -212,21 +188,15 @@ impl Dungeon {
     }
 
     /// Scatter traps (scaled by depth) on floor cells.
-    unsafe fn place_traps(&self) {
+    unsafe fn place_traps(&self, random: &mut Random) {
         let level = self.current_depth();
 
-        if {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(10)
-        } >= level
+        if random.rnd(10) >= level
         {
             return;
         }
 
-        let mut ntraps = {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(level / 4)
-        } + 1;
+        let mut ntraps = random.rnd(level / 4) + 1;
         if ntraps > GameConfig::MAX_TRAPS {
             ntraps = GameConfig::MAX_TRAPS;
         }
@@ -235,7 +205,7 @@ impl Dungeon {
         let mut i = ntraps;
         while i > 0 {
             let stairs = loop {
-                match self.find_floor(None, 0, false) {
+                match self.find_floor(None, 0, false, random) {
                     Some(pos) => {
                         if self.with_level(|current| {
                             current.tile_at(pos.y as usize, pos.x as usize)
@@ -250,10 +220,7 @@ impl Dungeon {
 
             self.with_level_mut(|current| {
                 let idx = LevelFlags::flag_idx(stairs.y as usize, stairs.x as usize);
-                let trap = TrapType::from_raw({
-                    let mut random = RNG.lock().unwrap();
-                    random.rnd(GameConfig::TRAP_KIND_COUNT)
-                } as u8);
+                let trap = TrapType::from_raw(random.rnd(GameConfig::TRAP_KIND_COUNT) as u8);
                 current.map.set(stairs, Tile::Trap(trap));
                 current.flags.real[idx] = false;
             });
@@ -262,8 +229,8 @@ impl Dungeon {
     }
 
     /// Place the down staircase on a floor cell.
-    unsafe fn place_stairs(&self) {
-        let stairs = self.find_floor(None, 0, false).unwrap_or(IVec2::ZERO);
+    unsafe fn place_stairs(&self, random: &mut Random) {
+        let stairs = self.find_floor(None, 0, false, random).unwrap_or(IVec2::ZERO);
         // The staircase is a tile in the level map; it renders `%` via draw.
         self.with_level_mut(|current| {
             current.stairs = stairs;
@@ -285,8 +252,8 @@ impl Dungeon {
     }
 
     /// Place the hero on an open floor cell.
-    fn place_hero(&self) {
-        if let Some(pos) = self.find_floor(None, 0, true) {
+    fn place_hero(&self, random: &mut Random) {
+        if let Some(pos) = self.find_floor(None, 0, true, random) {
             crate::game::PLAYER.set_pos(pos);
         }
     }
@@ -295,12 +262,12 @@ impl Dungeon {
     /// the hero.
     ///
     /// Called by [`Dungeon::new_level`] after the map is generated.
-    pub(crate) unsafe fn populate_level(&self) {
-        self.place_room_contents();
-        self.put_things(); /* Place objects (if any) */
-        self.place_traps();
-        self.place_stairs();
+    pub(crate) unsafe fn populate_level(&self, random: &mut Random) {
+        self.place_room_contents(random);
+        self.put_things(random); /* Place objects (if any) */
+        self.place_traps(random);
+        self.place_stairs(random);
         self.link_monsters_to_rooms();
-        self.place_hero();
+        self.place_hero(random);
     }
 }

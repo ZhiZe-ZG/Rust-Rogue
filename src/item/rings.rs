@@ -3,7 +3,7 @@
 //! Ported from `src/c/rings.c` to Rust.
 use crate::entity::player::ObjectFlags;
 use crate::item::potions::invis_on;
-use crate::rnd::RNG;
+use crate::rnd::Random;
 
 use crate::game::PLAYER;
 use crate::item::arena::{ThingId, OBJECTS};
@@ -88,7 +88,7 @@ const USES: [i32; RingType::COUNT] = [
 use crate::game::globals::{mpos, terse};
 
 /// Prompts for a ring and equips it on an available hand, applying immediate ring effects.
-pub unsafe fn ring_on() {
+pub unsafe fn ring_on(random: &mut Random) {
     let Some(obj) = get_item_id("put on", ItemFilter::Category(ItemType::RING)) else {
         return;
     };
@@ -143,7 +143,7 @@ pub unsafe fn ring_on() {
     match RingType::from_raw(which) {
         Some(RingType::AddStrength) => chg_str(o_arm),
         Some(RingType::SeeInvisible) => invis_on(),
-        Some(RingType::Aggravate) => aggravate(),
+        Some(RingType::Aggravate) => aggravate(random),
         _ => {}
     }
 
@@ -154,7 +154,7 @@ pub unsafe fn ring_on() {
 }
 
 /// Removes a worn ring from the chosen hand after passing drop constraints.
-pub unsafe fn ring_off() {
+pub unsafe fn ring_off(random: &mut Random) {
     let eq = PLAYER.equipment();
     let left_empty = eq.left_ring_id().is_none();
     let right_empty = eq.right_ring_id().is_none();
@@ -188,7 +188,7 @@ pub unsafe fn ring_off() {
         return;
     };
 
-    if dropcheck_id(obj) {
+    if dropcheck_id(obj, random) {
         let packch = OBJECTS.with_object(obj, |o| o.o_packch).unwrap_or(0);
         msg_str(&format!(
             "was wearing {}({})",
@@ -229,7 +229,7 @@ pub unsafe fn gethand() -> i32 {
 }
 
 /// Computes per-turn food impact for the ring on the given hand.
-pub unsafe fn ring_eat(hand: i32) -> i32 {
+pub unsafe fn ring_eat(hand: i32, random: &mut Random) -> i32 {
     let hand_idx = hand as usize;
     if hand_idx > RIGHT {
         return 0;
@@ -243,7 +243,6 @@ pub unsafe fn ring_eat(hand: i32) -> i32 {
     let mut eat = USES[ring_type.index()];
     if eat < 0 {
         eat = if {
-            let mut random = RNG.lock().unwrap();
             random.rnd(-eat)
         } == 0
         {
