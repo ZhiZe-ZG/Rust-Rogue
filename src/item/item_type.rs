@@ -223,12 +223,16 @@ mod tests {
     fn same_category_ignores_subtype() {
         assert!(ItemType::Potion(PotionType::Healing)
             .same_category(ItemType::Potion(PotionType::Poison)));
-        assert!(!ItemType::Potion(PotionType::Healing).same_category(ItemType::Scroll(ScrollType::Map)));
+        assert!(
+            !ItemType::Potion(PotionType::Healing).same_category(ItemType::Scroll(ScrollType::Map))
+        );
     }
 
     #[test]
     fn filters_select_expected_kinds() {
-        assert!(ItemFilter::Category(ItemType::POTION).matches(ItemType::Potion(PotionType::Poison)));
+        assert!(
+            ItemFilter::Category(ItemType::POTION).matches(ItemType::Potion(PotionType::Poison))
+        );
         assert!(!ItemFilter::Category(ItemType::POTION).matches(ItemType::Scroll(ScrollType::Map)));
         assert!(ItemFilter::Callable.matches(ItemType::Potion(PotionType::Poison)));
         assert!(!ItemFilter::Callable.matches(ItemType::Food));

@@ -36,3 +36,17 @@ pub fn set_seed(seed: i32) {
     let mut guard = rng_state().lock().unwrap();
     *guard = StdRng::seed_from_u64(seed as u64);
 }
+
+/// Roll a number of dice: sum `number` independent results of `rnd(sides) + 1`.
+///
+/// This is the legacy `roll()` helper used throughout the combat and item
+/// code. It lives beside [`rnd`] because it is a pure random-number utility
+/// with no startup-specific behaviour.
+pub fn roll(mut number: i32, sides: i32) -> i32 {
+    let mut total = 0;
+    while number > 0 {
+        total += rnd(sides) + 1;
+        number -= 1;
+    }
+    total
+}

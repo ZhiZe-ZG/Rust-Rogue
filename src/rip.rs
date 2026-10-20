@@ -3,13 +3,12 @@
 //! Ported from `src/c/rip.c` to Rust.
 use std::io::Write;
 
-use crate::game::globals::{allscore, monsters, numscores, CMonster, NUMNAME};
+use crate::game::globals::{get_purse, monster_info, ALLSCORE, NUMSCORES, NUMNAME};
+use crate::item::arena::{with_object, OBJECTS};
 use crate::item::item_type::ItemType;
-use crate::item::things::inv_name;
-use crate::machdep::{lock_sc, start_score, unlock_sc};
-use crate::mdport::md_getuid;
+use crate::item::things::inv_name_id;
+use crate::machdep::{lock_sc, unlock_sc};
 use crate::score::{rd_score, wr_score, Score};
-use crate::startup::my_exit;
 use crate::ui::input::wait_for;
 use crate::ui::output;
 use glam::IVec2;
@@ -32,25 +31,8 @@ pub const RIP_ART: &[&str] = &[
     "         ________)/\\\\_//(\\/(/\\)/\\//\\/|_)_______\n",
 ];
 
-static mut KILLNAME_BUFFER: [u8; MAXSTR] = [0; MAXSTR];
-
-use crate::game::globals::{amulet, max_level, noscore, purse, tombstone};
-
-
-#[inline]
-unsafe fn thing_t(
-    tp: *mut crate::entity::player::Thing,
-) -> *mut crate::entity::player::ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(
-    tp: *mut crate::entity::player::Thing,
-) -> *mut crate::entity::player::ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
+use crate::dungeon::DUNGEON;
+use crate::game::globals::{noscore, purse, tombstone};
 
 #[inline]
 fn vowelstr(s: &str) -> &'static str {
@@ -79,8 +61,7 @@ pub unsafe fn killname(monst: u8, doart: bool) -> String {
     let mut name = String::from("Wally the Wonder Badger");
     if (monst as u8).is_ascii_uppercase() {
         let idx = (monst as u8 - b'A') as usize;
-        let monster = unsafe { &*std::ptr::addr_of!(monsters).cast::<CMonster>().add(idx) };
-        name = monster.m_name.to_string();
+        name = monster_info(idx).m_name.to_string();
         article = true;
     } else {
         let special = match monst as u8 {
@@ -110,39 +91,11 @@ pub unsafe fn killname(monst: u8, doart: bool) -> String {
 
 pub unsafe fn death_monst() -> u8 {
     static POSS: [u8; 33] = [
-        b'A' as u8,
-        b'B' as u8,
-        b'C' as u8,
-        b'D' as u8,
-        b'E' as u8,
-        b'F' as u8,
-        b'G' as u8,
-        b'H' as u8,
-        b'I' as u8,
-        b'J' as u8,
-        b'K' as u8,
-        b'L' as u8,
-        b'M' as u8,
-        b'N' as u8,
-        b'O' as u8,
-        b'P' as u8,
-        b'Q' as u8,
-        b'R' as u8,
-        b'S' as u8,
-        b'T' as u8,
-        b'U' as u8,
-        b'V' as u8,
-        b'W' as u8,
-        b'X' as u8,
-        b'Y' as u8,
-        b'Z' as u8,
-        b'a' as u8,
-        b'b' as u8,
-        b'h' as u8,
-        b'd' as u8,
-        b's' as u8,
-        b' ' as u8,
-        0,
+        b'A' as u8, b'B' as u8, b'C' as u8, b'D' as u8, b'E' as u8, b'F' as u8, b'G' as u8,
+        b'H' as u8, b'I' as u8, b'J' as u8, b'K' as u8, b'L' as u8, b'M' as u8, b'N' as u8,
+        b'O' as u8, b'P' as u8, b'Q' as u8, b'R' as u8, b'S' as u8, b'T' as u8, b'U' as u8,
+        b'V' as u8, b'W' as u8, b'X' as u8, b'Y' as u8, b'Z' as u8, b'a' as u8, b'b' as u8,
+        b'h' as u8, b'd' as u8, b's' as u8, b' ' as u8, 0,
     ];
 
     let idx = (crate::rnd::rnd(33) as usize) % POSS.len();
@@ -150,8 +103,8 @@ pub unsafe fn death_monst() -> u8 {
 }
 
 pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
-    let mut top_ten = Vec::with_capacity(numscores as usize);
-    for _ in 0..numscores as usize {
+    let mut top_ten = Vec::with_capacity(NUMSCORES as usize);
+    for _ in 0..NUMSCORES as usize {
         top_ten.push(Score {
             sc_uid: 0,
             sc_score: 0,
@@ -163,12 +116,10 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
         });
     }
 
-    start_score();
-
     if flags >= 0 || crate::wizard::is_wizard() {
         // Keep the legacy interactive flow behavior close to the C version without
         // requiring the full curses backend to be reimplemented in Rust here.
-        output::write_text_at(IVec2::new(0, 23), "[Press return to continue]");
+        crate::ui::terminal::UI.write_text_at(IVec2::new(0, 23), "[Press return to continue]");
         output::refresh();
     }
 
@@ -176,7 +127,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
 
     let mut sc2 = None;
     if noscore == 0 {
-        let uid = md_getuid();
+        let uid = libc::getuid() as u32;
         let mut insert_at = top_ten.len();
 
         for (idx, entry) in top_ten.iter().enumerate() {
@@ -184,14 +135,14 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
                 insert_at = idx;
                 break;
             }
-            if allscore == 0 && flags != 2 && entry.sc_uid == uid && entry.sc_flags != 2 {
+            if ALLSCORE == 0 && flags != 2 && entry.sc_uid == uid && entry.sc_flags != 2 {
                 insert_at = top_ten.len();
                 break;
             }
         }
 
         if insert_at < top_ten.len() {
-            if flags != 2 && allscore == 0 {
+            if flags != 2 && ALLSCORE == 0 {
                 let mut candidate = insert_at;
                 while candidate < top_ten.len() {
                     if top_ten[candidate].sc_uid == uid && top_ten[candidate].sc_flags != 2 {
@@ -222,7 +173,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
             entry.sc_score = amount;
             entry.sc_flags = flags as u32;
             entry.sc_level = if flags == 2 {
-                max_level
+                crate::dungeon::max_depth()
             } else {
                 crate::game::current_depth()
             };
@@ -241,7 +192,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
         }
     }
 
-    let mode = if allscore != 0 { "Scores" } else { "Rogueists" };
+    let mode = if ALLSCORE != 0 { "Scores" } else { "Rogueists" };
     println!("Top {} {}:", NUMNAME, mode);
     println!("   Score Name");
 
@@ -282,11 +233,11 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
 pub unsafe fn death(monst: u8) {
     let mut killer = killname(monst, false);
     purse -= purse / 10;
-    output::clear_screen();
+    crate::ui::terminal::UI.clear();
 
     if tombstone == 0 {
         // Legacy C path: print a compact death message when tombstones are disabled.
-        output::write_text_at(IVec2::new(0, 23), "Killed by ");
+        crate::ui::terminal::UI.write_text_at(IVec2::new(0, 23), "Killed by ");
         if monst != b's' as u8 && monst != b'h' as u8 {
             let article = if matches!(
                 killer.as_bytes().first(),
@@ -305,16 +256,11 @@ pub unsafe fn death(monst: u8) {
             } else {
                 "a "
             };
-            let line = format!(
-                "{}{} with {} gold",
-                article,
-                killer,
-                std::ptr::addr_of!(purse).read()
-            );
-            output::write_text(&line);
+            let line = format!("{}{} with {} gold", article, killer, get_purse());
+            crate::ui::terminal::UI.write_text(&line);
         } else {
-            let line = format!("{} with {} gold", killer, std::ptr::addr_of!(purse).read());
-            output::write_text(&line);
+            let line = format!("{} with {} gold", killer, get_purse());
+            crate::ui::terminal::UI.write_text(&line);
         }
     } else {
         let mut date = 0_i64;
@@ -325,12 +271,12 @@ pub unsafe fn death(monst: u8) {
         let v = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(date as u64);
         let _ = v;
         for i in 0..rogue_rip_count() {
-            output::write_text(rogue_rip_line(i));
+            crate::ui::terminal::UI.write_text(rogue_rip_line(i));
         }
         let killer_x = center_string(&killer) as i32;
-        output::write_text_at(IVec2::new(killer_x, 17), &killer);
+        crate::ui::terminal::UI.write_text_at(IVec2::new(killer_x, 17), &killer);
         if monst == b's' as u8 || monst == b'h' as u8 {
-            output::write_text_at(IVec2::new(32, 16), " ");
+            crate::ui::terminal::UI.write_text_at(IVec2::new(32, 16), " ");
         } else {
             let article = if matches!(
                 killer.as_bytes().first(),
@@ -351,28 +297,26 @@ pub unsafe fn death(monst: u8) {
             };
             let phrase = format!("{}{}", article, killer);
             if !phrase.is_empty() {
-                output::write_text_at(IVec2::new(33, 16), &phrase);
+                crate::ui::terminal::UI.write_text_at(IVec2::new(33, 16), &phrase);
             }
         }
         let hero_name = crate::game::globals::whoami();
-        output::write_text_at(
-            IVec2::new(center_string(&hero_name) as i32, 14),
-            &hero_name,
-        );
-        let score_text = format!("{} Au", std::ptr::addr_of!(purse).read());
-        output::move_cursor(IVec2::new(center_string(&score_text) as i32, 15));
-        output::write_text(&score_text);
+        crate::ui::terminal::UI
+            .write_text_at(IVec2::new(center_string(&hero_name) as i32, 14), &hero_name);
+        let score_text = format!("{} Au", get_purse());
+        crate::ui::terminal::UI.move_cursor(IVec2::new(center_string(&score_text) as i32, 15));
+        crate::ui::terminal::UI.write_text(&score_text);
         let year = 1900 + 0;
         let year_text = format!("{:4}", year);
-        output::write_text_at(IVec2::new(26, 18), &year_text);
+        crate::ui::terminal::UI.write_text_at(IVec2::new(26, 18), &year_text);
     }
 
     output::refresh();
-    score(purse, if amulet != 0 { 3 } else { 0 }, monst);
+    score(purse, if DUNGEON.has_amulet() { 3 } else { 0 }, monst);
     print!("[Press return to continue]");
     let _ = std::io::stdout().flush();
     wait_for('\n');
-    my_exit(0);
+    crate::startup::request_exit(0);
 }
 
 pub unsafe fn total_winner() {
@@ -389,44 +333,42 @@ pub unsafe fn total_winner() {
         "     Congratulations, you have made it to the light of day!    \n",
     ];
 
-    output::clear_screen();
-    output::set_standout(true);
+    crate::ui::terminal::UI.clear();
+    crate::ui::terminal::UI.set_reverse_video(true);
     for line in lines {
-        output::write_text(line);
+        crate::ui::terminal::UI.write_text(line);
     }
-    output::set_standout(false);
-    output::write_text("\nYou have joined the elite ranks of those who have escaped the\nDungeons of Doom alive.  You journey home and sell all your loot at\na great profit and are admitted to the Fighters' Guild.\n");
-    output::write_text_at(IVec2::new(0, 23), "--Press space to continue--");
+    crate::ui::terminal::UI.set_reverse_video(false);
+    crate::ui::terminal::UI.write_text("\nYou have joined the elite ranks of those who have escaped the\nDungeons of Doom alive.  You journey home and sell all your loot at\na great profit and are admitted to the Fighters' Guild.\n");
+    crate::ui::terminal::UI.write_text_at(IVec2::new(0, 23), "--Press space to continue--");
     output::refresh();
     wait_for(' ');
-    output::clear_screen();
-    output::write_text_at(IVec2::new(0, 0), "   Worth  Item\n");
+    crate::ui::terminal::UI.clear();
+    crate::ui::terminal::UI.write_text_at(IVec2::new(0, 0), "   Worth  Item\n");
     let oldpurse = purse;
     for id in crate::game::PLAYER.pack() {
-        let obj = crate::item::arena::ptr_of(id);
-        if obj.is_null() {
+        let Some((item_type, o_count, packch)) =
+            with_object(id, |o| (o.o_type, o.o_count, o.o_packch))
+        else {
             continue;
-        }
+        };
         let mut worth = 0;
-        let item_type = (*thing_o(obj)).o_type;
-        match item_type {
-            ItemType::Food => worth = 2 * (*thing_o(obj)).o_count,
-            _ => {}
+        if matches!(item_type, ItemType::Food) {
+            worth = 2 * o_count;
         }
         if worth < 0 {
             worth = 0;
         }
-        let packch = (*thing_o(obj)).o_packch as u8;
-        let item_name = inv_name(obj, 0);
-        let line = format!("{} ) {:5}  {}\n", packch, worth, item_name);
-        output::write_text(&line);
+        let item_name = inv_name_id(id, false);
+        let line = format!("{} ) {:5}  {}\n", packch as u8, worth, item_name);
+        crate::ui::terminal::UI.write_text(&line);
         purse += worth;
     }
     let summary = format!("   {:5}  Gold Pieces          ", oldpurse);
-    output::write_text(&summary);
+    crate::ui::terminal::UI.write_text(&summary);
     output::refresh();
     score(purse, 2, b' ' as u8);
-    my_exit(0);
+    crate::startup::request_exit(0);
 }
 
 /// Returns the Rust-owned tombstone artwork used by the death screen.

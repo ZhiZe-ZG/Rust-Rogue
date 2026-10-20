@@ -1,213 +1,304 @@
 //! Process startup sequence, ported from `src/c/main.c`.
 
-use std::io::Write;
+use std::error::Error;
+use std::fmt;
+use std::io::{self, Write};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
-use crate::command::command;
+use crate::command_dispatch::{do_command, CommandState};
+use crate::command_line_parameter::CommandLineParameter;
 use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
+use crate::dungeon::DUNGEON;
 use crate::entity::chase::roomin;
-use crate::entity::player::{MonsterFlags, Thing, ThingMonster};
-use std::time::{SystemTime, UNIX_EPOCH};
-use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
-use crate::level::new_level;
-use crate::machdep::{getltchars, init_check, open_score, playltchars, resetltchars, setup};
-use crate::mdport::{
-    md_gethomedir, md_getpid, md_getusername, md_hasclreol, md_init, md_normaluser, md_shellescape,
-    md_tstpresume, md_tstpsignal,
+use crate::entity::player::MonsterFlags;
+use crate::game::globals::{
+    after, count, get_purse, in_shell, inv_type, mpos, noscore, oldpos, oldrp, playing, purse,
+    q_comm, seed, to_death,
 };
+use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
+use crate::machdep::{init_check, open_score, setup};
 use crate::options::parse_opts;
-use crate::rip::{death, death_monst, score};
-use crate::rnd::{rnd, set_seed};
-use crate::save::restore;
-use crate::ui::input::{self, readchar, wait_for};
+use crate::rip::score;
+use crate::rnd::set_seed;
+use crate::save::{restore, RestoreError};
+use crate::ui::input::{readchar, wait_for};
 use crate::ui::output::{self, msg_str, status};
-use crate::ui::runtime;
-use crate::ui::Window;
+use crate::ui::terminal;
+use crate::wizard::{set_wizard_mode, wizard_mode};
 use glam::IVec2;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-const MAXSTR: usize = 1024;
 const AFTER: i32 = 2;
 const WANDERTIME: i32 = 70;
 const INV_CLEAR: i32 = 2;
-const SIGINT: i32 = 2;
+static EXIT_ON_INTERRUPT: AtomicBool = AtomicBool::new(false);
+static REQUESTED_EXIT: AtomicI32 = AtomicI32::new(-1);
 
-/// Flushes the process stdout stream (replaces the C `fflush(stdout)` calls).
-#[inline]
-fn flush_stdout() {
+pub(crate) fn request_exit(code: i32) {
+    let _ = REQUESTED_EXIT.compare_exchange(-1, code, Ordering::Relaxed, Ordering::Relaxed);
+}
+
+pub(crate) fn exit_requested() -> bool {
+    REQUESTED_EXIT.load(Ordering::Relaxed) >= 0
+}
+
+fn requested_exit_code() -> Option<i32> {
+    match REQUESTED_EXIT.load(Ordering::Relaxed) {
+        -1 => None,
+        code => Some(code),
+    }
+}
+
+#[derive(Debug)]
+pub enum StartupError {
+    PrivilegeDrop {
+        operation: &'static str,
+        source: io::Error,
+    },
+    SignalHandlers(io::Error),
+    StartupOutput(io::Error),
+    Restore(RestoreError),
+    TerminalTooSmall {
+        actual: IVec2,
+        required: IVec2,
+    },
+}
+
+impl fmt::Display for StartupError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PrivilegeDrop { operation, source } => {
+                write!(formatter, "could not {operation}: {source}")
+            }
+            Self::SignalHandlers(source) => {
+                write!(formatter, "could not install signal handlers: {source}")
+            }
+            Self::StartupOutput(source) => {
+                write!(formatter, "could not flush startup message: {source}")
+            }
+            Self::Restore(source) => write!(formatter, "could not restore game: {source}"),
+            Self::TerminalTooSmall { actual, required } => write!(
+                formatter,
+                "terminal is {}x{}; at least {}x{} is required",
+                actual.x, actual.y, required.x, required.y
+            ),
+        }
+    }
+}
+
+impl Error for StartupError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::PrivilegeDrop { source, .. }
+            | Self::SignalHandlers(source)
+            | Self::StartupOutput(source) => Some(source),
+            Self::Restore(source) => Some(source),
+            Self::TerminalTooSmall { .. } => None,
+        }
+    }
+}
+
+// ─── Signal handling ──────────────────────────────────────────────────────────
+
+fn install_signal_handlers() -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use signal_hook::consts::{SIGINT, SIGTSTP};
+        use signal_hook::iterator::Signals;
+
+        let mut signals = Signals::new([SIGINT, SIGTSTP])?;
+        std::thread::Builder::new()
+            .name("rogue-signals".to_owned())
+            .spawn(move || {
+                for signal in signals.forever() {
+                    match signal {
+                        SIGTSTP => suspend_terminal(),
+                        SIGINT if EXIT_ON_INTERRUPT.load(Ordering::Relaxed) => request_exit(0),
+                        SIGINT => request_exit(128 + signal),
+                        _ => {}
+                    }
+                }
+            })?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn suspend_terminal() {
+    use signal_hook::consts::SIGTSTP;
+
+    let old_cursor = terminal::UI.cursor_pos();
+    output::flush_now();
+    let _ = std::io::stdout().flush();
+    let _ = signal_hook::low_level::emulate_default_handler(SIGTSTP);
+    terminal::UI.raw();
+    output::refresh();
+    terminal::UI.move_cursor(old_cursor);
     let _ = std::io::stdout().flush();
 }
 
-use crate::game::globals::{after, count, dnum, in_shell, inv_type, jump, master_mode_enabled, mpos, noscore, oldpos, oldrp, playing, purse, q_comm, running, see_floor, seed, terse, to_death};
+// ─── Privilege handling ───────────────────────────────────────────────────────
 
+fn drop_privileges() -> Result<(), StartupError> {
+    #[cfg(unix)]
+    unsafe {
+        let real_gid = libc::getgid();
+        let real_uid = libc::getuid();
 
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        let group_error = libc::setresgid((-1i32) as libc::gid_t, real_gid, real_gid) != 0;
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        let group_error = libc::setregid(real_gid, real_gid) != 0;
+        if group_error {
+            return Err(StartupError::PrivilegeDrop {
+                operation: "drop setgid privileges",
+                source: io::Error::last_os_error(),
+            });
+        }
 
-// ── Game control functions ported from src/c/main.c ─────────────────────────
-
-/// endit:
-/// Exit the program abnormally.
-///
-/// No globals used directly.
-pub unsafe extern "C" fn endit(sig: i32) {
-    let _ = sig;
-    fatal("Okay, bye bye!\n");
-}
-
-/// fatal:
-/// Exit the program, printing a message.
-///
-/// No globals used directly.
-pub unsafe fn fatal(s: &str) {
-    output::write_text_at(
-        IVec2::new(0, GameConfig::SCREEN_LINES - 2),
-        s,
-    );
-    output::refresh();
-    runtime::shutdown();
-    my_exit(0);
-}
-
-/// roll:
-/// Roll a number of dice.
-///
-/// No globals used directly (uses rnd()).
-pub unsafe fn roll(mut number: i32, sides: i32) -> i32 {
-    let mut dtotal = 0;
-
-    while number > 0 {
-        dtotal += rnd(sides) + 1;
-        number -= 1;
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        let user_error = libc::setresuid((-1i32) as libc::uid_t, real_uid, real_uid) != 0;
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        let user_error = libc::setreuid(real_uid, real_uid) != 0;
+        if user_error {
+            return Err(StartupError::PrivilegeDrop {
+                operation: "drop setuid privileges",
+                source: io::Error::last_os_error(),
+            });
+        }
     }
-    dtotal
+    Ok(())
 }
 
-/// tstp:
-/// Handle stop and start signals.
-pub unsafe extern "C" fn tstp(ignored: i32) {
-    let _ = ignored;
+// ─── Startup helpers ──────────────────────────────────────────────────────────
 
-    /*
-     * leave nicely
-     */
-    let old_cursor = output::window_cursor(Window::Curscr);
-    runtime::move_physical_cursor(
-        IVec2::new(GameConfig::SCREEN_COLS - 1, 0),
-        IVec2::new(0, GameConfig::SCREEN_LINES - 1),
-    );
-    runtime::shutdown();
-    resetltchars();
-    flush_stdout();
-    md_tstpsignal();
-
-    /*
-     * start back up again
-     */
-    md_tstpresume();
-    input::set_raw_mode(true);
-    input::set_echo(false);
-    input::set_keypad(Window::Stdscr, true);
-    playltchars();
-    output::set_clear_on_refresh(Window::Curscr, true);
-    output::refresh_window(Window::Curscr);
-    runtime::move_physical_cursor(output::window_cursor(Window::Curscr), old_cursor);
-    output::move_cursor(old_cursor);
-    flush_stdout();
+/// Read and apply the `ROGUEOPTS` environment variable, if it is set.
+///
+/// Returns whether `ROGUEOPTS` was present, so callers can distinguish an
+/// explicitly set (possibly empty) value from an unset one.
+unsafe fn parse_rogueopts() -> bool {
+    match std::env::var("ROGUEOPTS") {
+        Ok(options) => {
+            parse_opts(&options);
+            true
+        }
+        Err(_) => false,
+    }
 }
+
+/// Initialise the home directory and the default `"<home>rogue.save"` path.
+unsafe fn init_home_and_save_path() {
+    let mut home_dir = std::env::var("HOME").unwrap_or_default();
+    if !home_dir.is_empty() && !home_dir.ends_with('/') {
+        home_dir.push('/');
+    }
+    crate::game::globals::set_home(home_dir.clone());
+    crate::game::globals::set_file_name(format!("{}rogue.save", home_dir));
+}
+
+/// Resolve the player name from the environment when it is not already known.
+unsafe fn init_identity(had_options: bool) {
+    if !had_options || crate::game::globals::whoami().is_empty() {
+        let username = std::env::var("USER")
+            .or_else(|_| std::env::var("LOGNAME"))
+            .or_else(|_| std::env::var("USERNAME"))
+            .unwrap_or_else(|_| "nobody".to_owned());
+        crate::game::globals::set_whoami(crate::options::filter_printable(&username));
+    }
+}
+
+/// Seed the RNG from the command line, or from the clock and process id.
+unsafe fn init_seed(seed_arg: Option<i32>) {
+    let now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i32)
+        .unwrap_or(0);
+    let clock_seed = now_secs + std::process::id() as i32;
+    seed = seed_arg.unwrap_or(clock_seed);
+    set_seed(seed);
+}
+
+/// Build the object/trap/colour tables and the initial player.
+unsafe fn init_game_tables() {
+    crate::game::globals::init_inv_t_names();
+    crate::game::globals::init_trap_names();
+    init_probs();
+    init_player();
+    init_names();
+    init_colors();
+    init_stones();
+    init_materials();
+    setup();
+}
+
+/// Schedule the recurring daemons that drive the running game.
+unsafe fn start_game_daemons() {
+    start_daemon(Daemon::Runners, 0, AFTER);
+    start_daemon(Daemon::Doctor, 0, AFTER);
+    fuse(Daemon::Swander, 0, WANDERTIME, AFTER);
+    start_daemon(Daemon::Stomach, 0, AFTER);
+    start_daemon(Daemon::RingEffects, 0, AFTER);
+}
+
+// ─── Main loop and in-game escapes ────────────────────────────────────────────
 
 /// playit:
 /// The main loop of the program.  Loop until the game is over,
 /// refreshing things and looking at the proper times.
 ///
-/// Uses globals: terse, jump, see_floor, inv_type, oldpos, oldrp,
-/// hero, playing, running.
-pub unsafe fn playit() {
-    /*
-     * set up defaults for slow terminals
-     */
-    if runtime::baud_rate() <= 1200 {
-        terse = true as u8;
-        jump = true as u8;
-        see_floor = false as u8;
-    }
-
-    if md_hasclreol() != 0 {
-        inv_type = INV_CLEAR;
-    }
+/// Uses globals: inv_type, oldpos, oldrp, playing.
+pub unsafe fn main_loop_step() {
+    inv_type = INV_CLEAR;
 
     /*
      * parse environment declaration of options
      */
-    let c_options = std::env::var("ROGUEOPTS").ok();
-    if let Some(options) = c_options.as_ref() {
-        parse_opts(options);
-    }
+    parse_rogueopts();
 
-    oldpos = crate::game::PLAYER.pos();
     let hero_pos = crate::game::PLAYER.pos();
+    oldpos = hero_pos;
     oldrp = roomin(hero_pos);
-    while playing != false as u8 {
-        command(); /* Command execution */
+    start_daemon(Daemon::UiRender, 0, AFTER);
+    Daemon::UiRender.run(0);
+    let mut command_state = CommandState::default();
+    while playing != 0 && !exit_requested() {
+        do_command(&mut command_state); /* Command execution */
     }
-    endit(0);
 }
 
 /// quit:
 /// Have player make certain, then exit.
 ///
 /// Uses globals: q_comm, mpos, purse, count, to_death.
-pub unsafe extern "C" fn quit(sig: i32) {
-    let _ = sig;
-
+pub unsafe fn quit() {
     /*
      * Reset the signal in case we got here via an interrupt
      */
-    if q_comm == false as u8 {
+    if q_comm == 0 {
         mpos = 0;
     }
-    let old_cursor = output::window_cursor(Window::Curscr);
+    let old_cursor = crate::ui::terminal::UI.cursor_pos();
     msg_str("really quit?");
     if readchar() == b'y' as i32 {
-        libc::signal(libc::SIGINT, leave as libc::sighandler_t);
-        output::clear_screen();
-        let line = format!(
-            "You quit with {} gold pieces",
-            std::ptr::addr_of!(purse).read()
-        );
-        output::write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), &line);
-        output::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
+        crate::ui::terminal::UI.clear();
+        let line = format!("You quit with {} gold pieces", get_purse());
+        crate::ui::terminal::UI.write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), &line);
+        crate::ui::terminal::UI.move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
         output::refresh();
+        EXIT_ON_INTERRUPT.store(true, Ordering::Relaxed);
         score(purse, 1, 0);
-        my_exit(0);
+        request_exit(0);
     } else {
-        output::move_cursor(IVec2::new(0, 0));
-        output::clear_to_end_of_line();
+        crate::ui::terminal::UI.move_cursor(IVec2::new(0, 0));
+        crate::ui::terminal::UI.clear_to_end_of_line();
         status();
-        output::move_cursor(old_cursor);
+        crate::ui::terminal::UI.move_cursor(old_cursor);
         output::refresh();
         mpos = 0;
         count = 0;
-        to_death = false as u8;
+        to_death = 0;
     }
-}
-
-/// leave:
-/// Leave quickly, but curteously.
-pub unsafe extern "C" fn leave(sig: i32) {
-    let _ = sig;
-
-    if !runtime::is_shutdown() {
-        runtime::move_physical_cursor(
-            IVec2::new(GameConfig::SCREEN_COLS - 1, 0),
-            IVec2::new(0, GameConfig::SCREEN_LINES - 1),
-        );
-        runtime::shutdown();
-    }
-
-    let _ = std::io::stdout().write_all(b"\n");
-    my_exit(0);
 }
 
 /// shell:
@@ -218,166 +309,96 @@ pub unsafe fn shell() {
     /*
      * Set the terminal back to original mode
      */
-    output::move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
+    crate::ui::terminal::UI.move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
     output::refresh();
-    runtime::shutdown();
-    resetltchars();
+    output::flush_now();
     let _ = std::io::stdout().write_all(b"\n");
-    in_shell = true as u8;
-    after = false as u8;
-    flush_stdout();
+    in_shell = 1;
+    after = 0;
+    let _ = std::io::stdout().flush();
     /*
      * Fork and do a shell
      */
-    md_shellescape();
+    #[cfg(unix)]
+    {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_owned());
+        let _ = std::process::Command::new(shell).arg("-i").status();
+    }
 
     print!("\n[Press return to continue]");
     let _ = std::io::stdout().flush();
-    input::set_echo(false);
-    input::set_raw_mode(true);
-    input::set_keypad(Window::Stdscr, true);
-    playltchars();
-    in_shell = false as u8;
+    terminal::UI.raw();
+    in_shell = 0;
     wait_for('\n');
-    output::set_clear_on_refresh(Window::Stdscr, true);
 }
 
-/// my_exit:
-/// Leave the process properly.
-///
-/// No globals used directly.
-pub unsafe fn my_exit(st: i32) -> ! {
-    resetltchars();
-    if !runtime::is_shutdown() {
-        input::set_echo(true);
-        runtime::shutdown();
-    }
-    flush_stdout();
-    let _ = std::io::stderr().flush();
-    std::process::exit(st);
-}
+// ─── Entry point ──────────────────────────────────────────────────────────────
 
 /// The game entry point. `args` mirrors the process `argv` (including the
 /// program name at index 0); `src/bin/rogue.rs` calls this with
 /// `std::env::args()`.
-pub unsafe fn rogue_main(args: &[String]) -> i32 {
-    md_init();
-
-    let mut argv: Vec<String> = args.to_vec();
-    if master_mode_enabled != 0 && argv.len() >= 2 && argv[1].is_empty() {
-        crate::wizard::set_wizard_mode(1);
-        crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
-        argv.remove(1);
-    }
-    let argc = argv.len() as i32;
-
-    let home_dir = md_gethomedir();
-    crate::game::globals::set_home(home_dir.clone());
-    // Default save file: "<home>rogue.save".
-    let save_name = format!("{}rogue.save", home_dir);
-    crate::game::globals::set_file_name(save_name);
-
-    let options = std::env::var("ROGUEOPTS").ok();
-    if let Some(options) = options.as_ref() {
-        parse_opts(options);
-    }
-    if options.is_none() || crate::game::globals::whoami().is_empty() {
-        let username = md_getusername();
-        crate::game::globals::set_whoami(crate::options::filter_printable(&username));
-    }
-
-    let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i32).unwrap_or(0);
-    let clock_seed = now_secs + md_getpid();
-    dnum = if master_mode_enabled != 0 && crate::wizard::is_wizard() {
-        std::env::var("SEED")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(clock_seed)
-    } else {
-        clock_seed
+pub unsafe fn rogue_main(parameter: CommandLineParameter) -> ! {
+    let exit_code = match run_startup(parameter) {
+        Ok(exit_code) => exit_code,
+        Err(error) => {
+            eprintln!("rogue: {error}");
+            1
+        }
     };
-    seed = dnum;
-    set_seed(seed);
-    open_score();
-    md_normaluser();
+    terminal::UI.deinit_terminal();
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
+    std::process::exit(exit_code);
+}
 
-    if argc == 2 {
-        let argument = argv[1].as_str();
-        if argument == "-s" {
-            noscore = 1;
-            score(0, -1, 0);
-            return 0;
-        }
-        if argument == "-d" {
-            dnum = rnd(100);
-            while dnum > 1 {
-                dnum -= 1;
-                rnd(100);
-            }
-            purse = rnd(100) + 1;
-            crate::game::set_current_depth(rnd(100) + 1);
-            runtime::initialize();
-            getltchars();
-            death(death_monst());
-            return 0;
-        }
+unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupError> {
+    // Init terminal
+    terminal::UI.init_terminal();
+
+    let seed_arg = parameter.seed;
+    let mut restore_target = parameter.restore.or(parameter.save_file);
+    if restore_target.as_deref() == Some("") {
+        set_wizard_mode(1);
+        crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
+        restore_target = None;
     }
+
+    init_home_and_save_path();
+
+    let had_options = parse_rogueopts();
+    init_identity(had_options);
+    init_seed(seed_arg);
+
+    open_score();
+    drop_privileges()?;
+    install_signal_handlers().map_err(StartupError::SignalHandlers)?;
 
     init_check();
-    if argc == 2 && restore(&argv[1]) == 0 {
-        my_exit(1);
+    if let Some(save_file) = restore_target {
+        restore(&save_file).map_err(StartupError::Restore)?;
+        return Ok(requested_exit_code().unwrap_or(0));
     }
 
-    if master_mode_enabled != 0 && crate::wizard::is_wizard() {
-        print!(
-            "Hello {}, welcome to dungeon #{}",
-            crate::game::globals::whoami(),
-            std::ptr::addr_of!(dnum).read()
-        );
-    } else {
-        print!(
-            "Hello {}, just a moment while I dig the dungeon...",
-            crate::game::globals::whoami()
-        );
-    }
     std::io::stdout()
         .flush()
-        .expect("failed to flush startup message");
-    runtime::initialize();
+        .map_err(StartupError::StartupOutput)?;
     // Reject terminals smaller than the fixed game grid. The physical size is
     // unavailable on some backends; in that case keep the legacy permissive
     // behaviour and continue.
-    if let Some(size) = crate::ui::physical_size() {
+    if let Some(size) = terminal::UI.physical_size() {
         if size.y < GameConfig::SCREEN_LINES || size.x < GameConfig::SCREEN_COLS {
-            runtime::shutdown();
-            eprintln!(
-                "Sorry, the screen must be at least {}x{}",
-                GameConfig::SCREEN_LINES,
-                GameConfig::SCREEN_COLS
-            );
-            eprintln!("Current terminal size: {}x{}", size.x, size.y);
-            my_exit(1);
+            output::flush_now();
+            return Err(StartupError::TerminalTooSmall {
+                actual: size,
+                required: IVec2::new(GameConfig::SCREEN_COLS, GameConfig::SCREEN_LINES),
+            });
         }
     }
 
-    crate::game::globals::init_inv_t_names();
-    crate::game::globals::init_trap_names();
-    init_probs();
-    init_player();
-    init_names();
-    init_colors();
-    init_stones();
-    init_materials();
-    setup();
-    output::set_line_optimization(Window::Stdscr, true);
-    if master_mode_enabled != 0 {
-        noscore = crate::wizard::wizard_mode();
-    }
-    new_level();
-    start_daemon(Daemon::Runners, 0, AFTER);
-    start_daemon(Daemon::Doctor, 0, AFTER);
-    fuse(Daemon::Swander, 0, WANDERTIME, AFTER);
-    start_daemon(Daemon::Stomach, 0, AFTER);
-    playit();
-    0
+    init_game_tables();
+    noscore = wizard_mode();
+    DUNGEON.new_level();
+    start_game_daemons();
+    main_loop_step();
+    Ok(requested_exit_code().unwrap_or(0))
 }

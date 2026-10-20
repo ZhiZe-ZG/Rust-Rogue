@@ -1,4 +1,4 @@
-//! Player command reading and dispatch.
+//! Player command vocabulary and key decoding.
 //!
 //! Ported from `src/c/command.c` to Rust.
 //!
@@ -8,1052 +8,415 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-use crate::config::GameConfig;
-use crate::daemon::{do_daemons, do_fuses};
-use crate::draw::{add_pass, look};
-use crate::entity::chase::{diag_ok, see_monst};
-use crate::entity::player::{
-    do_move, do_run, MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject,
-};
-use crate::game::PLAYER;
-use crate::game::globals::{pot_info, ring_info, scr_info, ws_info, CObjInfo};
-use crate::item::item_type::{ItemFilter, ItemType};
-use crate::help::{help, identify};
-use crate::item::armor::{take_off, wear};
-use crate::item::pack::{add_pack, get_item, inventory, pick_up, picky_inven};
-use crate::item::potions::{quaff, raise_level, turn_see};
-use crate::item::rings::{ring_off, ring_on, RingType};
-use crate::item::scrolls::read_scroll;
-use crate::item::sticks::do_zap;
-use crate::item::arena::new_item;
-use crate::item::things::{discovered, drop, inv_name};
-use crate::item::weapons::{init_weapon, missile, wield};
-use crate::level::new_level;
-use crate::misc::{eat, get_dir};
-use crate::options::{option, read_line};
-use crate::rip::total_winner;
-use crate::rnd::rnd;
-use crate::save::save_game;
-use crate::startup::{quit, shell};
-use crate::ui::input::readchar;
-use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
-use crate::ui::Window;
-use crate::wizard::{create_obj, show_map, teleport, whatis};
-use glam::IVec2;
+use crate::direction::Direction;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const MAXSTR: usize = 1024;
-
-// Glyphs
-const PASSAGE: u8 = b'#' as u8;
-const DOOR: u8 = b'+' as u8;
-const FLOOR: u8 = b'.' as u8;
-const TRAP: u8 = b'^' as u8;
-const STAIRS: u8 = b'%' as u8;
-
-// Map flags
-const F_REAL: u8 = 0x10u8 as u8;
-const F_SEEN: u8 = 0x40u8 as u8;
-const F_TMASK: u8 = 0x07u8 as u8;
-
-// Escape
-const ESCAPE: i32 = 27;
-
-// get_str() return codes
-const NORM: i32 = 0;
-
-// Weapon/armor kinds for the wizard ('^I' = CTRL-I) cheat
-const TWOSWORD: i32 = 5;
-const PLATE_MAIL: i32 = 7;
-
-// Delayed-action phases
-const BEFORE: i32 = 1;
-const AFTER: i32 = 2;
-
-/// CTRL(c) macro from rogue.h: `c & 037`.
-///
-/// Precomputed constants are used in `match` patterns (Rust does not allow
-/// function calls in patterns, even for `const fn`s).
-const CTRL_A: u8 = b'A' & 0x1f; // 0x01
-const CTRL_B: u8 = b'B' & 0x1f; // 0x02
-const CTRL_C: u8 = b'C' & 0x1f; // 0x03
-const CTRL_D: u8 = b'D' & 0x1f; // 0x04
-const CTRL_E: u8 = b'E' & 0x1f; // 0x05
-const CTRL_F: u8 = b'F' & 0x1f; // 0x06
-const CTRL_G: u8 = b'G' & 0x1f; // 0x07
-const CTRL_H: u8 = b'H' & 0x1f; // 0x08
-const CTRL_I: u8 = b'I' & 0x1f; // 0x09
-const CTRL_J: u8 = b'J' & 0x1f; // 0x0a
-const CTRL_K: u8 = b'K' & 0x1f; // 0x0b
-const CTRL_L: u8 = b'L' & 0x1f; // 0x0c
-const CTRL_N: u8 = b'N' & 0x1f; // 0x0e
-const CTRL_P: u8 = b'P' & 0x1f; // 0x10
-const CTRL_R: u8 = b'R' & 0x1f; // 0x12
-const CTRL_T: u8 = b'T' & 0x1f; // 0x14
-const CTRL_U: u8 = b'U' & 0x1f; // 0x15
-const CTRL_W: u8 = b'W' & 0x1f; // 0x17
-const CTRL_X: u8 = b'X' & 0x1f; // 0x18
-const CTRL_Y: u8 = b'Y' & 0x1f; // 0x19
-const CTRL_TILDE: u8 = b'~' & 0x1f; // CTRL-~ (0x1e)
-
-/// Inline evaluator for CTRL(c) used in expression position.
-#[inline]
-const fn ctrl(c: u8) -> u8 {
-    c & 0x1f
+/// A command key interpreted by the main dispatcher.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Command {
+    Digit(u8),
+    Pickup,
+    Shell,
+    Move(Direction),
+    Run(Direction),
+    RunPrefix(Direction),
+    Fire,
+    FireKamikaze,
+    Throw,
+    Again,
+    Quaff,
+    Quit,
+    Inventory,
+    InventorySelect,
+    Drop,
+    ReadScroll,
+    Eat,
+    Wield,
+    Wear,
+    TakeOff,
+    RingOn,
+    RingOff,
+    Options,
+    Call,
+    Descend,
+    Ascend,
+    Help,
+    Identify,
+    Search,
+    Zap,
+    Discover,
+    MessageHistory,
+    Refresh,
+    Version,
+    Save,
+    Rest,
+    FindTrap,
+    WizardToggle,
+    Escape,
+    MoveOn,
+    CurrentWeapon,
+    CurrentArmor,
+    CurrentRings,
+    Status,
+    WizardPosition,
+    WizardCreate,
+    WizardInpack,
+    WizardInventory,
+    WizardIdentify,
+    WizardDown,
+    WizardUp,
+    WizardMap,
+    WizardTeleport,
+    WizardFood,
+    WizardAddPassage,
+    WizardToggleSee,
+    WizardCharge,
+    WizardGear,
+    WizardList,
+    Space,
+    UnknownKey,
 }
 
-/// Wizard-mode: the preprocessor conditional in the C code is replaced by a
-/// runtime check on the `wizard` global.  All wizard helpers are always
-/// compiled in, matching the style used by wizard.rs, chase.rs and friends.
-const MASTER: bool = true;
-
-// ─── Static locals for command() ─────────────────────────────────────────────
-
-static mut COUNTCH: u8 = 0;
-static mut DIRECTION: u8 = 0;
-static mut NEWCOUNT: u8 = false as u8;
-
-// ─── Extern C globals ─────────────────────────────────────────────────────────
-
-use crate::game::globals::{after, again, amulet, count, delta, dir_ch, dnum, door_stop, firstmove, food_left, has_hit, inpack, inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm, r_stones, runch, running, save_msg, seenstairs, stat_msg, take, terse, to_death, ws_made};
-
-
-// ─── Extern C functions called from this module ───────────────────────────────
-
-
-
-// ─── Module-local helpers ─────────────────────────────────────────────────────
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-#[inline]
-fn hero_pos() -> IVec2 {
-    crate::game::PLAYER.pos()
-}
-
-#[inline]
-fn player_has(flag: MonsterFlags) -> bool {
-    crate::game::PLAYER.has_flag(flag)
-}
-
-#[inline]
-unsafe fn moat_at(y: i32, x: i32) -> *mut Thing {
-    crate::game::monster_at(y, x)
-}
-
-#[inline]
-unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
-    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
-}
-
-/// Copy a string slice into an owned [`String`].
-#[inline]
-fn cstr_at(s: &str) -> String {
-    s.to_owned()
-}
-
-// ─── command() ────────────────────────────────────────────────────────────────
-
-/// command:
-/// Process the user commands.
-///
-/// Uses globals: player, has_hit, running, door_stop, lastscore,
-/// purse, hero, jump, take, after, wizard, noscore, no_command,
-/// count, move_on, mpos, runch, to_death, countch, l_last_comm /
-/// last_comm / last_dir / last_pick (via reset_last/last_*), lvl_obj,
-/// terse, mlist (via moat), max_hit, mp/t_flags (via to_death),
-/// dir_ch, delta, q_comm, huh, release, amulet, level, seenstairs,
-/// tr_name, stat_msg, inpack, food_left, equipment, inv_describe.
-pub unsafe fn command() {
-    let mut ch: u8;
-    let mut ntimes: i32 = 1; // Number of player moves
-    let mut mp: *mut Thing;
-
-    if player_has(MonsterFlags::HASTE) {
-        ntimes += 1;
+impl Command {
+    /// Capture a decimal repeat-count prefix and return its terminating command.
+    pub(crate) fn capture_count_prefix(
+        first_digit: u8,
+        mut next_command: impl FnMut() -> Self,
+    ) -> (Self, i32) {
+        let mut count = 0;
+        let mut digit = first_digit;
+        let command = loop {
+            count = (count * 10 + digit as i32).min(255);
+            match next_command() {
+                Self::Digit(next_digit) => digit = next_digit,
+                command => break command,
+            }
+        };
+        (command, count)
     }
 
-    /*
-     * Let the daemons start up
-     */
-    do_daemons(BEFORE);
-    do_fuses(BEFORE);
-
-    while ntimes > 0 {
-        ntimes -= 1;
-        again = false as u8;
-        if has_hit != 0 {
-            look(false as u8);
-            endmsg();
-            has_hit = false as u8;
-        }
-
-        /*
-         * these are illegal things for the player to be, so if any are
-         * set, someone's been poking in memory
-         */
-        if player_has(
-            MonsterFlags::SLOW
-                | MonsterFlags::GREED
-                | MonsterFlags::INVIS
-                | MonsterFlags::REGEN
-                | MonsterFlags::TARGET,
-        ) {
-            std::process::exit(1);
-        }
-
-        look(true as u8);
-        if running == 0 {
-            door_stop = false as u8;
-        }
-        status();
-        lastscore = purse;
-        let hero = hero_pos();
-        output::move_cursor(IVec2::new(hero.x, hero.y));
-        if !((running != 0 || count != 0) && jump != 0) {
-            output::refresh(); // Draw screen
-        }
-        take = 0;
-        after = true as u8;
-
-        /*
-         * Read command or continue run
-         */
-        if MASTER && crate::wizard::is_wizard() {
-            noscore = 1;
-        }
-
-        if no_command == 0 {
-            if running != 0 || to_death != 0 {
-                ch = runch as u8;
-            } else if count != 0 {
-                ch = COUNTCH as u8;
-            } else {
-                ch = readchar() as u8;
-                move_on = false as u8;
-                if mpos != 0 {
-                    // Erase message if it's there
-                    msg_str("");
+    pub fn from_key_event(event: KeyEvent) -> Self {
+        match event.code {
+            KeyCode::Char(character) => {
+                if event.modifiers.contains(KeyModifiers::CONTROL) {
+                    return match character.to_ascii_lowercase() {
+                        'a' => Self::WizardUp,
+                        'b' => Self::RunPrefix(Direction::SouthWest),
+                        'c' => Self::UnknownKey,
+                        'd' => Self::WizardDown,
+                        'e' => Self::WizardFood,
+                        'f' => Self::WizardMap,
+                        'g' => Self::WizardInventory,
+                        'h' => Self::RunPrefix(Direction::West),
+                        'i' => Self::WizardGear,
+                        'j' => Self::RunPrefix(Direction::South),
+                        'k' => Self::RunPrefix(Direction::North),
+                        'l' => Self::RunPrefix(Direction::East),
+                        'n' => Self::RunPrefix(Direction::SouthEast),
+                        'p' => Self::MessageHistory,
+                        'r' => Self::Refresh,
+                        't' => Self::WizardTeleport,
+                        'u' => Self::RunPrefix(Direction::NorthEast),
+                        'w' => Self::WizardIdentify,
+                        'x' => Self::WizardToggleSee,
+                        'y' => Self::RunPrefix(Direction::NorthWest),
+                        '~' => Self::WizardCharge,
+                        _ => Self::UnknownKey,
+                    };
+                }
+                if event
+                    .modifiers
+                    .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
+                {
+                    return Self::UnknownKey;
+                }
+                let shifted =
+                    event.modifiers.contains(KeyModifiers::SHIFT) || character.is_ascii_uppercase();
+                match character.to_ascii_lowercase() {
+                    '0'..='9' => Self::Digit(character as u8 - b'0'),
+                    ',' => Self::Pickup,
+                    '!' => Self::Shell,
+                    'h' => movement(Direction::West, shifted),
+                    'j' => movement(Direction::South, shifted),
+                    'k' => movement(Direction::North, shifted),
+                    'l' => movement(Direction::East, shifted),
+                    'y' => movement(Direction::NorthWest, shifted),
+                    'u' => movement(Direction::NorthEast, shifted),
+                    'b' => movement(Direction::SouthWest, shifted),
+                    'n' => movement(Direction::SouthEast, shifted),
+                    'f' => {
+                        if shifted {
+                            Self::FireKamikaze
+                        } else {
+                            Self::Fire
+                        }
+                    }
+                    't' => {
+                        if shifted {
+                            Self::TakeOff
+                        } else {
+                            Self::Throw
+                        }
+                    }
+                    'a' => Self::Again,
+                    'q' => {
+                        if shifted {
+                            Self::Quit
+                        } else {
+                            Self::Quaff
+                        }
+                    }
+                    'i' => {
+                        if shifted {
+                            Self::InventorySelect
+                        } else {
+                            Self::Inventory
+                        }
+                    }
+                    'd' => {
+                        if shifted {
+                            Self::Discover
+                        } else {
+                            Self::Drop
+                        }
+                    }
+                    'r' => {
+                        if shifted {
+                            Self::RingOff
+                        } else {
+                            Self::ReadScroll
+                        }
+                    }
+                    'e' => Self::Eat,
+                    'w' => {
+                        if shifted {
+                            Self::Wear
+                        } else {
+                            Self::Wield
+                        }
+                    }
+                    'p' => {
+                        if shifted {
+                            Self::RingOn
+                        } else {
+                            Self::UnknownKey
+                        }
+                    }
+                    'o' => Self::Options,
+                    'c' => {
+                        if shifted {
+                            Self::WizardCreate
+                        } else {
+                            Self::Call
+                        }
+                    }
+                    '>' => Self::Descend,
+                    '<' => Self::Ascend,
+                    '?' => Self::Help,
+                    '/' => Self::Identify,
+                    's' => {
+                        if shifted {
+                            Self::Save
+                        } else {
+                            Self::Search
+                        }
+                    }
+                    'z' => Self::Zap,
+                    'v' => Self::Version,
+                    '.' => Self::Rest,
+                    ' ' => Self::Space,
+                    '^' => Self::FindTrap,
+                    '+' => Self::WizardToggle,
+                    'm' => Self::MoveOn,
+                    ')' => Self::CurrentWeapon,
+                    ']' => Self::CurrentArmor,
+                    '=' => Self::CurrentRings,
+                    '@' => Self::Status,
+                    '|' => Self::WizardPosition,
+                    '$' => Self::WizardInpack,
+                    '*' => Self::WizardList,
+                    _ if character.is_ascii() => Self::UnknownKey,
+                    _ => Self::UnknownKey,
                 }
             }
-        } else {
-            ch = b'.';
-        }
-
-        if no_command != 0 {
-            no_command -= 1;
-            if no_command == 0 {
-                crate::game::PLAYER.add_flag(MonsterFlags::RUN);
-                msg_str("you can move again");
-            }
-        } else {
-            /*
-             * check for prefixes
-             */
-            NEWCOUNT = false as u8;
-            if ch.is_ascii_digit() {
-                count = 0;
-                NEWCOUNT = true as u8;
-                while ch.is_ascii_digit() {
-                    count = count * 10 + (ch - b'0') as i32;
-                    if count > 255 {
-                        count = 255;
-                    }
-                    ch = readchar() as u8;
-                }
-                COUNTCH = ch as u8;
-                /*
-                 * turn off count for commands which don't make sense
-                 * to repeat
-                 */
-                if !matches!(
-                    ch,
-                    CTRL_B
-                        | CTRL_H
-                        | CTRL_J
-                        | CTRL_K
-                        | CTRL_L
-                        | CTRL_N
-                        | CTRL_U
-                        | CTRL_Y
-                        | b'.'
-                        | b'a'
-                        | b'b'
-                        | b'h'
-                        | b'j'
-                        | b'k'
-                        | b'l'
-                        | b'm'
-                        | b'n'
-                        | b'q'
-                        | b'r'
-                        | b's'
-                        | b't'
-                        | b'u'
-                        | b'y'
-                        | b'z'
-                        | b'B'
-                        | b'C'
-                        | b'H'
-                        | b'I'
-                        | b'J'
-                        | b'K'
-                        | b'L'
-                        | b'N'
-                        | b'U'
-                        | b'Y'
-                        | CTRL_D
-                        | CTRL_A
-                ) {
-                    count = 0;
-                }
-            }
-
-            /*
-             * execute a command
-             */
-            if count != 0 && running == 0 {
-                count -= 1;
-            }
-            if ch != b'a' && ch != ESCAPE as u8 && running == 0 && count == 0 && to_death == 0 {
-                l_last_comm = last_comm;
-                l_last_dir = last_dir;
-                l_last_pick = last_pick;
-                last_comm = ch as u8;
-                last_dir = b'\0' as u8;
-                last_pick = None;
-            }
-
-            // ── Command dispatch ────────────────────────────────────────────
-            // The C code uses `goto over` from a few arms; we emulate it with
-            // a labelled loop: arms that re-dispatch set `ch` and `continue`.
-            'dispatch: loop {
-                match ch {
-                    b',' => {
-                        let hero = hero_pos();
-                        let mut found_obj: *mut Thing = std::ptr::null_mut();
-                        for obj in crate::game::item_ptrs() {
-                            if (*thing_o(obj)).o_pos.y == hero.y
-                                && (*thing_o(obj)).o_pos.x == hero.x
-                            {
-                                found_obj = obj;
-                                break;
-                            }
-                        }
-
-                        if !found_obj.is_null() {
-                            if levit_check() == 0 {
-                                pick_up((*thing_o(found_obj)).o_type.code() as u8);
-                            }
-                        } else {
-                            if terse == 0 {
-                                addmsg_str("there is ");
-                            }
-                            addmsg_str("nothing here");
-                            if terse == 0 {
-                                addmsg_str(" to pick up");
-                            }
-                            endmsg();
-                        }
-                    }
-                    b'!' => {
-                        shell();
-                    }
-                    b'h' => do_move(0, -1),
-                    b'j' => do_move(1, 0),
-                    b'k' => do_move(-1, 0),
-                    b'l' => do_move(0, 1),
-                    b'y' => do_move(-1, -1),
-                    b'u' => do_move(-1, 1),
-                    b'b' => do_move(1, -1),
-                    b'n' => do_move(1, 1),
-                    b'H' => do_run(b'h' as u8),
-                    b'J' => do_run(b'j' as u8),
-                    b'K' => do_run(b'k' as u8),
-                    b'L' => do_run(b'l' as u8),
-                    b'Y' => do_run(b'y' as u8),
-                    b'U' => do_run(b'u' as u8),
-                    b'B' => do_run(b'b' as u8),
-                    b'N' => do_run(b'n' as u8),
-                    v if v == ctrl(b'H')
-                        || v == ctrl(b'J')
-                        || v == ctrl(b'K')
-                        || v == ctrl(b'L')
-                        || v == ctrl(b'Y')
-                        || v == ctrl(b'U')
-                        || v == ctrl(b'B')
-                        || v == ctrl(b'N') =>
-                    {
-                        if !player_has(MonsterFlags::BLIND) {
-                            door_stop = true as u8;
-                            firstmove = true as u8;
-                        }
-                        if count != 0 && NEWCOUNT == 0 {
-                            ch = DIRECTION as u8;
-                        } else {
-                            // ('A' - CTRL('A')) == 64
-                            ch = ch.wrapping_add(64);
-                            DIRECTION = ch as u8;
-                        }
-                        continue 'dispatch;
-                    }
-                    b'f' | b'F' => {
-                        if ch == b'F' {
-                            kamikaze = true as u8;
-                        }
-                        if get_dir() == 0 {
-                            after = false as u8;
-                        } else {
-                            let hero = hero_pos();
-                            delta.y += hero.y;
-                            delta.x += hero.x;
-                            mp = moat_at(delta.y, delta.x);
-                            if mp.is_null()
-                                || (see_monst(mp) == 0 && !player_has(MonsterFlags::SEEMONST))
-                            {
-                                if terse == 0 {
-                                    addmsg_str("I see ");
-                                }
-                                msg_str("no monster there");
-                                after = false as u8;
-                            } else if diag_ok(hero_pos(), delta) != 0 {
-                                to_death = true as u8;
-                                max_hit = 0;
-                                (*thing_t(mp)).t_flags.insert(MonsterFlags::TARGET);
-                                runch = dir_ch;
-                                ch = dir_ch as u8;
-                                continue 'dispatch;
-                            }
-                        }
-                    }
-                    b't' => {
-                        if get_dir() == 0 {
-                            after = false as u8;
-                        } else {
-                            missile(delta.y, delta.x);
-                        }
-                    }
-                    b'a' => {
-                        if last_comm == 0 {
-                            msg_str("you haven't typed a command yet");
-                            after = false as u8;
-                        } else {
-                            ch = last_comm as u8;
-                            again = true as u8;
-                            continue 'dispatch;
-                        }
-                    }
-                    b'q' => quaff(),
-                    b'Q' => {
-                        after = false as u8;
-                        q_comm = true as u8;
-                        quit(0);
-                        q_comm = false as u8;
-                    }
-                    b'i' => {
-                        after = false as u8;
-                        inventory(&crate::item::pack::pack_ptrs(), ItemFilter::Any);
-                    }
-                    b'I' => {
-                        after = false as u8;
-                        picky_inven();
-                    }
-                    b'd' => drop(),
-                    b'r' => read_scroll(),
-                    b'e' => eat(),
-                    b'w' => wield(),
-                    b'W' => wear(),
-                    b'T' => take_off(),
-                    b'P' => ring_on(),
-                    b'R' => ring_off(),
-                    b'o' => {
-                        option();
-                        after = false as u8;
-                    }
-                    b'c' => {
-                        call();
-                        after = false as u8;
-                    }
-                    b'>' => {
-                        after = false as u8;
-                        d_level();
-                    }
-                    b'<' => {
-                        after = false as u8;
-                        u_level();
-                    }
-                    b'?' => {
-                        after = false as u8;
-                        help();
-                    }
-                    b'/' => {
-                        after = false as u8;
-                        identify();
-                    }
-                    b's' => search(),
-                    b'z' => {
-                        if get_dir() != 0 {
-                            do_zap();
-                        } else {
-                            after = false as u8;
-                        }
-                    }
-                    b'D' => {
-                        after = false as u8;
-                        discovered();
-                    }
-                    CTRL_P => {
-                        after = false as u8;
-                        msg_str(&crate::game::globals::huh_string());
-                    }
-                    CTRL_R => {
-                        after = false as u8;
-                        output::set_clear_on_refresh(Window::Curscr, true);
-                        output::refresh_window(Window::Curscr);
-                    }
-                    b'v' => {
-                        after = false as u8;
-                        msg_str(&format!(
-                            "version {}. (mctesq was here)",
-                            crate::vers::release()
-                        ));
-                    }
-                    b'S' => {
-                        after = false as u8;
-                        save_game();
-                    }
-                    b'.' => {
-                        // Rest command
-                    }
-                    b' ' => {
-                        after = false as u8; // "Legal" illegal command
-                    }
-                    b'^' => {
-                        after = false as u8;
-                        if get_dir() != 0 {
-                            let hero = hero_pos();
-                            delta.y += hero.y;
-                            delta.x += hero.x;
-                            if terse == 0 {
-                                addmsg_str("You have found ");
-                            }
-                            if !crate::draw::is_trap_cell(delta.y, delta.x) {
-                                msg_str("no trap there");
-                            } else if player_has(MonsterFlags::HALU) {
-                                let name = crate::game::globals::trap_name(
-                                    rnd(GameConfig::TRAP_KIND_COUNT) as usize,
-                                );
-                                msg_str(&name);
-                            } else {
-                                let name = crate::game::globals::trap_name(
-                                    crate::draw::trap_kind_at(delta.y, delta.x) as usize,
-                                );
-                                msg_str(&name);
-                                crate::draw::set_seen_at(delta.y, delta.x);
-                            }
-                        }
-                    }
-                    b'+' => {
-                        // Wizard toggle (was the `when '+'` arm under `#ifdef MASTER`)
-                        after = false as u8;
-                        if MASTER {
-                            if crate::wizard::is_wizard() {
-                                crate::wizard::set_wizard_mode(0);
-                                turn_see(true as u8);
-                                msg_str("not wizard any more");
-                            } else {
-                                crate::wizard::set_wizard_mode(1);
-                                noscore = 1;
-                                turn_see(false as u8);
-                                msg_str(&format!(
-                                    "you are suddenly as smart as Ken Arnold in dungeon #{}",
-                                    std::ptr::addr_of!(dnum).read()
-                                ));
-                            }
-                        }
-                    }
-                    v if v == ESCAPE as u8 => {
-                        door_stop = false as u8;
-                        count = 0;
-                        after = false as u8;
-                        again = false as u8;
-                    }
-                    b'm' => {
-                        move_on = true as u8;
-                        if get_dir() == 0 {
-                            after = false as u8;
-                        } else {
-                            ch = dir_ch as u8;
-                            COUNTCH = dir_ch;
-                            continue 'dispatch;
-                        }
-                    }
-                    b')' => {
-                        current(PLAYER.weapon(), "wielding", "");
-                    }
-                    b']' => {
-                        current(PLAYER.armor(), "wearing", "");
-                    }
-                    b'=' => {
-                        current(
-                            PLAYER.left_ring(),
-                            "wearing",
-                            if terse != 0 {
-                                "(L)"
-                            } else {
-                                "on left hand"
-                            },
-                        );
-                        current(
-                            PLAYER.right_ring(),
-                            "wearing",
-                            if terse != 0 {
-                                "(R)"
-                            } else {
-                                "on right hand"
-                            },
-                        );
-                    }
-                    b'@' => {
-                        stat_msg = true as u8;
-                        status();
-                        stat_msg = false as u8;
-                        after = false as u8;
-                    }
-                    _ => {
-                        after = false as u8;
-                        if MASTER && crate::wizard::is_wizard() {
-                            match ch {
-                                b'|' => {
-                                    let hero = hero_pos();
-                                    msg_str(&format!("@ {},{}", hero.y, hero.x));
-                                }
-                                b'C' => create_obj(),
-                                b'$' => {
-                                    msg_str(&format!(
-                                        "inpack = {}",
-                                        std::ptr::addr_of!(inpack).read()
-                                    ));
-                                }
-                                CTRL_G => {
-                                    let _ = inventory(&crate::game::PLAYER.pack(), ItemFilter::Any);
-                                }
-                                CTRL_W => whatis(false as u8, ItemFilter::Any),
-                                CTRL_D => {
-                                    crate::game::set_current_depth(
-                                        crate::game::current_depth() + 1,
-                                    );
-                                    new_level();
-                                }
-                                CTRL_A => {
-                                    crate::game::set_current_depth(
-                                        crate::game::current_depth() - 1,
-                                    );
-                                    new_level();
-                                }
-                                CTRL_F => show_map(),
-                                CTRL_T => teleport(),
-                                CTRL_E => {
-                                    msg_str(&format!(
-                                        "food left: {}",
-                                        std::ptr::addr_of!(food_left).read()
-                                    ));
-                                }
-                                CTRL_C => add_pass(),
-                                CTRL_X => {
-                                    turn_see(if player_has(MonsterFlags::SEEMONST) {
-                                        true as u8
-                                    } else {
-                                        false as u8
-                                    });
-                                }
-                                CTRL_TILDE => {
-                                    let item =
-                                        get_item("charge", ItemFilter::Category(ItemType::STICK));
-                                    if !item.is_null() {
-                                        (*thing_o(item)).o_arm = 10000;
-                                    }
-                                }
-                                CTRL_I => {
-                                    let mut obj: *mut Thing;
-
-                                    for _ in 0..9 {
-                                        raise_level();
-                                    }
-                                    /*
-                                     * Give him a sword (+1,+1)
-                                     */
-                                    obj = new_item();
-                                    init_weapon(obj, TWOSWORD);
-                                    (*thing_o(obj)).o_hplus = 1;
-                                    (*thing_o(obj)).o_dplus = 1;
-                                    add_pack(obj, true as u8);
-                                    PLAYER.set_weapon(obj);
-                                    /*
-                                     * And his suit of armor
-                                     */
-                                    obj = new_item();
-                                    (*thing_o(obj)).o_type = ItemType::Armor(PLATE_MAIL);
-                                    (*thing_o(obj)).o_which = PLATE_MAIL;
-                                    (*thing_o(obj)).o_arm = -5;
-                                    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-                                    (*thing_o(obj)).o_count = 1;
-                                    (*thing_o(obj)).o_group = 0;
-                                    PLAYER.set_armor(obj);
-                                    add_pack(obj, true as u8);
-                                }
-                                b'*' => pr_list(),
-                                _ => illcom(ch as i32),
-                            }
-                        } else {
-                            illcom(ch as i32);
-                        }
-                    }
-                }
-                break; // Fall out of the dispatch loop; C's `break` out of switch.
-            }
-        }
-
-        /*
-         * If he ran into something to take, let him pick it up.
-         */
-        if take != 0 {
-            pick_up(take);
-        }
-        if running == 0 {
-            door_stop = false as u8;
-        }
-        if after == 0 {
-            ntimes += 1;
+            KeyCode::Left => navigation_command(Direction::West, event.modifiers),
+            KeyCode::Down => navigation_command(Direction::South, event.modifiers),
+            KeyCode::Up => navigation_command(Direction::North, event.modifiers),
+            KeyCode::Right => navigation_command(Direction::East, event.modifiers),
+            KeyCode::Home => navigation_command(Direction::NorthWest, event.modifiers),
+            KeyCode::PageUp => navigation_command(Direction::NorthEast, event.modifiers),
+            KeyCode::End => navigation_command(Direction::SouthWest, event.modifiers),
+            KeyCode::PageDown => navigation_command(Direction::SouthEast, event.modifiers),
+            KeyCode::Esc => Self::Escape,
+            KeyCode::Tab => Self::WizardGear,
+            _ => Self::UnknownKey,
         }
     }
 
-    do_daemons(AFTER);
-    do_fuses(AFTER);
-    if isring(PLAYER.left_ring(), RingType::Searching) {
-        search();
-    } else if isring(PLAYER.left_ring(), RingType::Teleport) && rnd(50) == 0 {
-        teleport();
+    pub(crate) fn illegal_command_name(self) -> String {
+        format!("{self:?}")
     }
-    if isring(PLAYER.right_ring(), RingType::Searching) {
-        search();
-    } else if isring(PLAYER.right_ring(), RingType::Teleport) && rnd(50) == 0 {
-        teleport();
+
+    pub const fn is_repeatable(self) -> bool {
+        matches!(
+            self,
+            Self::RunPrefix(_)
+                | Self::Move(_)
+                | Self::Run(_)
+                | Self::MoveOn
+                | Self::Quaff
+                | Self::ReadScroll
+                | Self::Search
+                | Self::Throw
+                | Self::Zap
+                | Self::Rest
+                | Self::Again
+                | Self::InventorySelect
+                | Self::WizardCreate
+                | Self::WizardDown
+                | Self::WizardUp
+        )
     }
 }
 
-// ─── illcom() ─────────────────────────────────────────────────────────────────
-
-/// illcom:
-/// What to do with an illegal command.
-///
-/// Uses globals: save_msg, count.
-pub unsafe fn illcom(ch: i32) {
-    save_msg = false as u8;
-    count = 0;
-    msg_str(&format!(
-        "illegal command '{}'",
-        output::format_key(ch as u8)
-    ));
-    save_msg = true as u8;
-}
-
-// ─── search() ─────────────────────────────────────────────────────────────────
-
-/// search:
-/// Player gropes about him to find hidden things.
-///
-/// Uses globals: hero, player, places (via chat/flat), count, running,
-/// terse, tr_name.
-pub unsafe fn search() {
-    let hero = hero_pos();
-    let ey = hero.y + 1;
-    let ex = hero.x + 1;
-    let mut probinc: i32 = 0;
-    let mut found = false;
-
-    if player_has(MonsterFlags::HALU) {
-        probinc += 3;
-    }
-    if player_has(MonsterFlags::BLIND) {
-        probinc += 2;
-    }
-
-    let mut y = hero.y - 1;
-    while y <= ey {
-        let mut x = hero.x - 1;
-        while x <= ex {
-            if y == hero.y && x == hero.x {
-                x += 1;
-                continue;
-            }
-            let flags = crate::draw::flat_at(y, x);
-            if (flags as u8 & F_REAL as u8) == 0 {
-                match crate::game::tile_at(y, x) {
-                    crate::tile::Tile::Wall | crate::tile::Tile::HiddenDoor => {
-                        if rnd(5 + probinc) == 0 {
-                            crate::draw::reveal_secret_at(y, x);
-                            msg_str("a secret door");
-                            found = true;
-                            count = false as u8 as i32;
-                            running = false as u8;
-                        }
-                    }
-                    crate::tile::Tile::Trap(_) => {
-                        if rnd(2 + probinc) == 0 {
-                            crate::level::with_current_level_mut(|current| {
-                                current.reveal_trap(y as usize, x as usize);
-                            });
-                            if terse == 0 {
-                                addmsg_str("you found ");
-                            }
-                            if player_has(MonsterFlags::HALU) {
-                                let name = crate::game::globals::trap_name(
-                                    rnd(GameConfig::TRAP_KIND_COUNT) as usize,
-                                );
-                                msg_str(&name);
-                            } else {
-                                let name = crate::game::globals::trap_name(
-                                    crate::draw::trap_kind_at(y, x) as usize,
-                                );
-                                msg_str(&name);
-                            }
-                            found = true;
-                            count = false as u8 as i32;
-                            running = false as u8;
-                        }
-                    }
-                    crate::tile::Tile::Empty => {
-                        if rnd(3 + probinc) == 0 {
-                            crate::draw::reveal_secret_at(y, x);
-                            found = true;
-                            count = false as u8 as i32;
-                            running = false as u8;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            x += 1;
-        }
-        y += 1;
-    }
-
-    if found {
-        look(false as u8);
-    }
-}
-
-// ─── d_level() / u_level() / levit_check() ────────────────────────────────────
-
-/// d_level:
-/// He wants to go down a level.
-///
-/// Uses globals: hero, places (via chat), level, seenstairs.
-pub unsafe fn d_level() {
-    if levit_check() != 0 {
-        return;
-    }
-    let hero = hero_pos();
-    if crate::game::tile_at(hero.y, hero.x) != crate::tile::Tile::Stairs {
-        msg_str("I see no way down");
+const fn movement(direction: Direction, run: bool) -> Command {
+    if run {
+        Command::Run(direction)
     } else {
-        crate::game::set_current_depth(crate::game::current_depth() + 1);
-        seenstairs = false as u8;
-        new_level();
+        Command::Move(direction)
     }
 }
 
-/// u_level:
-/// He wants to go up a level.
-///
-/// Uses globals: hero, places (via chat), amulet, level.
-pub unsafe fn u_level() {
-    if levit_check() != 0 {
-        return;
-    }
-    let hero = hero_pos();
-    if crate::game::tile_at(hero.y, hero.x) == crate::tile::Tile::Stairs {
-        if amulet != 0 {
-            crate::game::set_current_depth(crate::game::current_depth() - 1);
-            if crate::game::current_depth() == 0 {
-                total_winner();
-            }
-            new_level();
-            msg_str("you feel a wrenching sensation in your gut");
-        } else {
-            msg_str("your way is magically blocked");
-        }
+fn navigation_command(direction: Direction, modifiers: KeyModifiers) -> Command {
+    if modifiers.intersects(KeyModifiers::SHIFT | KeyModifiers::CONTROL) {
+        Command::RunPrefix(direction)
     } else {
-        msg_str("I see no way up");
+        Command::Move(direction)
     }
 }
 
-/// levit_check:
-/// Check to see if she's levitating, and if she is, print an
-/// appropriate message.
-///
-/// Uses globals: player.
-pub unsafe fn levit_check() -> u8 {
-    if !player_has(MonsterFlags::LEVIT) {
-        return false as u8;
+#[cfg(test)]
+mod command_type_tests {
+    use super::Command;
+    use crate::direction::Direction;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use glam::IVec2;
+
+    #[test]
+    fn key_events_map_to_commands_with_modifiers() {
+        let event = |code, modifiers| KeyEvent::new(code, modifiers);
+
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Char('h'), KeyModifiers::NONE)),
+            Command::Move(Direction::West)
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Char('H'), KeyModifiers::SHIFT)),
+            Command::Run(Direction::West)
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Char('j'), KeyModifiers::CONTROL)),
+            Command::RunPrefix(Direction::South)
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Char('q'), KeyModifiers::SHIFT)),
+            Command::Quit
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Left, KeyModifiers::NONE)),
+            Command::Move(Direction::West)
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::Left, KeyModifiers::SHIFT)),
+            Command::RunPrefix(Direction::West)
+        );
+        assert_eq!(
+            Command::from_key_event(event(KeyCode::F(1), KeyModifiers::NONE)),
+            Command::UnknownKey
+        );
     }
-    msg_str("You can't.  You're floating off the ground!");
-    true as u8
-}
 
-// ─── call() ───────────────────────────────────────────────────────────────────
-
-/// call:
-/// Allow a user to call a potion, scroll, or ring something.
-///
-/// Uses globals: ring_info, r_stones, pot_info, p_colors, scr_info,
-/// s_names, ws_info, ws_made, terse, prbuf.
-pub unsafe fn call() {
-    let obj = get_item("call", ItemFilter::Callable);
-
-    // Make certain that it's something that we want to wear
-    if obj.is_null() {
-        return;
+    #[test]
+    fn illegal_command_label_uses_command_name() {
+        assert_eq!(Command::WizardMap.illegal_command_name(), "WizardMap");
+        assert_eq!(Command::UnknownKey.illegal_command_name(), "UnknownKey");
     }
 
-    let otype = (*thing_o(obj)).o_type;
+    #[test]
+    fn count_prefix_preserves_terminating_command() {
+        let mut commands = [Command::Digit(7), Command::Move(Direction::East)].into_iter();
+        let (command, count) = Command::capture_count_prefix(2, || commands.next().unwrap());
 
-    if matches!(otype, ItemType::Food) {
-        msg_str("you can't call that anything");
-        return;
+        assert_eq!(command, Command::Move(Direction::East));
+        assert_eq!(count, 27);
     }
 
-    // Weapons and armor store their player-assigned name directly in `o_label`.
-    if !matches!(
-        otype,
-        ItemType::Ring(_) | ItemType::Potion(_) | ItemType::Scroll(_) | ItemType::Stick(_)
-    ) {
-        if let Some(elsewise) = (*thing_o(obj)).o_label.as_ref() {
-            if terse == 0 {
-                addmsg_str("Was ");
-            }
-            msg_str(&format!("called \"{}\"", elsewise));
+    #[test]
+    fn count_prefix_saturates_at_255() {
+        let mut commands = [Command::Digit(9), Command::Digit(9), Command::Search].into_iter();
+        let (command, count) = Command::capture_count_prefix(9, || commands.next().unwrap());
+
+        assert_eq!(command, Command::Search);
+        assert_eq!(count, 255);
+    }
+
+    #[test]
+    fn count_prefix_can_terminate_with_unknown_key() {
+        let (command, count) = Command::capture_count_prefix(0, || Command::UnknownKey);
+
+        assert_eq!(command, Command::UnknownKey);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn direction_has_expected_movement_deltas() {
+        let cases = [
+            (Direction::West, IVec2::new(-1, 0)),
+            (Direction::South, IVec2::new(0, 1)),
+            (Direction::North, IVec2::new(0, -1)),
+            (Direction::East, IVec2::new(1, 0)),
+            (Direction::NorthWest, IVec2::new(-1, -1)),
+            (Direction::NorthEast, IVec2::new(1, -1)),
+            (Direction::SouthWest, IVec2::new(-1, 1)),
+            (Direction::SouthEast, IVec2::new(1, 1)),
+        ];
+
+        for (direction, delta) in cases {
+            assert_eq!(direction.delta(), delta);
         }
-
-        if terse != 0 {
-            msg_str("call it: ");
-        } else {
-            msg_str("what do you want to call it? ");
-        }
-
-        let initial = (*thing_o(obj)).o_label.clone().unwrap_or_default();
-        if let Some(text) = read_line(&initial, Window::Stdscr) {
-            (*thing_o(obj)).o_label = Some(text);
-        }
-        return;
     }
 
-    // Magic items keep their call-name in the obj-info table entry.
-    let op = match otype {
-        ItemType::Ring(_) => &mut ring_info[..],
-        ItemType::Potion(_) => &mut pot_info[..],
-        ItemType::Scroll(_) => &mut scr_info[..],
-        _ => &mut ws_info[..],
-    };
-
-    let which = (*thing_o(obj)).o_which as usize;
-    let mut elsewise: String = match otype {
-        ItemType::Ring(_) => cstr_at(r_stones[which]),
-        ItemType::Potion(_) => cstr_at(p_colors[which]),
-        ItemType::Scroll(_) => crate::game::globals::scroll_name(which),
-        _ => cstr_at(ws_made[which]),
-    };
-
-    if let Some(guess) = &op[which].oi_guess {
-        elsewise = guess.clone();
-    }
-
-    if op[which].oi_know {
-        msg_str("that has already been identified");
-        return;
-    }
-
-    if op[which].oi_guess.is_some() {
-        if terse == 0 {
-            addmsg_str("Was ");
+    #[test]
+    fn repeatability_matches_supported_legacy_prefix_commands() {
+        for command in [
+            Command::RunPrefix(Direction::West),
+            Command::RunPrefix(Direction::SouthEast),
+            Command::Move(Direction::NorthWest),
+            Command::Run(Direction::East),
+            Command::MoveOn,
+            Command::Quaff,
+            Command::ReadScroll,
+            Command::Search,
+            Command::Throw,
+            Command::Zap,
+            Command::Rest,
+            Command::Again,
+            Command::InventorySelect,
+            Command::WizardCreate,
+            Command::WizardDown,
+            Command::WizardUp,
+        ] {
+            assert!(command.is_repeatable(), "{command:?}");
         }
-        msg_str(&format!("called \"{}\"", elsewise));
-    }
-
-    if terse != 0 {
-        msg_str("call it: ");
-    } else {
-        msg_str("what do you want to call it? ");
-    }
-
-    if let Some(text) = read_line(&elsewise, Window::Stdscr) {
-        op[which].oi_guess = Some(text);
-    }
-}
-
-// ─── current() ────────────────────────────────────────────────────────────────
-
-/// current:
-/// Print the current weapon/armor.
-///
-/// Uses globals: after, terse, inv_describe.
-pub unsafe fn current(cur: *mut Thing, how: &str, where_: &str) {
-    after = false as u8;
-    if !cur.is_null() {
-        if terse == 0 {
-            addmsg_str(&format!(
-                "you are {} (",
-                how
-            ));
+        for command in [
+            Command::Quit,
+            Command::Inventory,
+            Command::Drop,
+            Command::FireKamikaze,
+            Command::Shell,
+            Command::WizardGear,
+        ] {
+            assert!(!command.is_repeatable(), "{command:?}");
         }
-        inv_describe = false as u8;
-        addmsg_str(&format!(
-            "{}) {}",
-            (*thing_o(cur)).o_packch as char,
-            inv_name(cur, true as u8)
-        ));
-        inv_describe = true as u8;
-        if !where_.is_empty() {
-            addmsg_str(&format!(" {}", where_));
-        }
-        endmsg();
-    } else {
-        if terse == 0 {
-            addmsg_str("you are ");
-        }
-        addmsg_str(&format!(
-            "{} nothing",
-            how
-        ));
-        if !where_.is_empty() {
-            addmsg_str(&format!(" {}", where_));
-        }
-        endmsg();
-    }
-}
-
-// ─── pr_list() ────────────────────────────────────────────────────────────────
-
-/// pr_list:
-/// Wizard command to list the objects on the current level.
-///
-/// Uses globals: lvl_obj, mlist.
-pub unsafe fn pr_list() {
-    for obj in crate::game::item_ptrs() {
-        msg_str(&format!(
-            "{}) {}",
-            crate::draw::item_glyph((*thing_o(obj)).o_type),
-            inv_name(obj, false as u8)
-        ));
     }
 }

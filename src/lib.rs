@@ -4,11 +4,15 @@
 //! is a direct port of the corresponding `.c` file and preserves its C ABI
 //! wherever the legacy engine still depends on it.
 pub mod colors;
+pub mod command_line_parameter;
 pub mod command;
+pub(crate) mod command_dispatch;
 pub mod config;
 pub mod daemon;
 pub mod daemons;
+pub mod direction;
 pub mod draw;
+pub mod dungeon;
 pub mod entity;
 
 pub mod game;
@@ -17,7 +21,6 @@ pub mod init;
 pub mod item;
 pub mod level;
 pub mod machdep;
-pub mod mdport;
 pub mod misc;
 pub mod options;
 pub mod rip;

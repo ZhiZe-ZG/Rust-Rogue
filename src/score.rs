@@ -2,14 +2,13 @@
 //!
 //! Ported from `src/c/score.c` to Rust; reads and writes the legacy on-disk
 //! top-ten score-file format.
-use crate::game::globals::{numscores, scoreboard};
+use crate::game::globals::{NUMSCORES, scoreboard};
 use std::io::{Read, Seek, SeekFrom, Write};
 
 const MAXSTR: usize = 1024;
 const SCORELINE_LEN: usize = 100;
 
-/// On-disk scoreboard entry layout (legacy score-file representation).
-#[repr(C)]
+/// A single scoreboard entry.
 #[derive(Clone)]
 pub struct Score {
     pub sc_uid: u32,
@@ -45,7 +44,7 @@ pub unsafe fn rd_score(top_ten: &mut [Score]) {
 
     let _ = file.seek(SeekFrom::Start(0));
 
-    for entry in top_ten.iter_mut().take(numscores as usize) {
+    for entry in top_ten.iter_mut().take(NUMSCORES as usize) {
         let _ = file.read_exact(&mut entry.sc_name);
         let _ = file.read_exact(&mut scoreline);
         if let Some((uid, score, flags, monster, level, time)) = parse_scoreline(&scoreline) {
@@ -71,7 +70,7 @@ pub unsafe fn wr_score(top_ten: &[Score]) {
 
     let _ = file.seek(SeekFrom::Start(0));
 
-    for entry in top_ten.iter().take(numscores as usize) {
+    for entry in top_ten.iter().take(NUMSCORES as usize) {
         scoreline.fill(0);
 
         let _ = file.write_all(&entry.sc_name);

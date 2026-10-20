@@ -3,9 +3,9 @@
 //! The legacy C engine kept the per-cell monster pointer in the `places` grid.
 //! This module replaces that with a Rust-native owner: a [`MonsterMap`] stores
 //! the [`MonsterId`] of the monster resting on each map cell, and the single
-//! live map is the process-wide [`MONSTER_MAP`] global. The grid is held behind
-//! a `Mutex` so the standalone global can be mutated through shared references,
-//! mirroring [`crate::game::MonsterList`].
+//! live map is the process-wide `Dungeon::monster_map` global. The grid is held behind
+//! a `Mutex` so the [`Dungeon`](super::Dungeon) can own it and mutate it through
+//! shared references, mirroring [`super::MonsterList`].
 
 use std::sync::{Mutex, MutexGuard};
 
@@ -34,7 +34,7 @@ impl Default for MonsterMap {
 
 impl MonsterMap {
     /// An empty map.
-    const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             cells: Mutex::new([None; CELLS]),
         }
@@ -73,5 +73,3 @@ impl MonsterMap {
     }
 }
 
-/// The process-wide per-cell monster occupancy for the live level.
-pub static MONSTER_MAP: MonsterMap = MonsterMap::new();

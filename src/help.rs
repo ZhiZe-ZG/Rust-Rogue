@@ -1,12 +1,10 @@
 //! Command help and map-symbol identification.
 
-
-
 use crate::config::GameConfig;
 use crate::game::globals::{lower_msg, monsters, mpos};
 use crate::ui::input::{readchar, wait_for};
+use crate::ui::output;
 use crate::ui::output::msg_str;
-use crate::ui::{output, Window};
 use glam::IVec2;
 
 const ESCAPE: i32 = 27;
@@ -176,14 +174,10 @@ pub(crate) unsafe fn help() {
     mpos = 0;
 
     if helpch != b'*' {
-        output::move_cursor(IVec2::new(0, 0));
+        crate::ui::terminal::UI.move_cursor(IVec2::new(0, 0));
         if let Some(entry) = HELP_ENTRIES.iter().find(|entry| entry.ch == helpch) {
             lower_msg = true as u8;
-            msg_str(&format!(
-                "{}{}",
-                output::format_key(entry.ch),
-                entry.desc
-            ));
+            msg_str(&format!("{}{}", output::format_key(entry.ch), entry.desc));
             lower_msg = false as u8;
         } else {
             msg_str(&format!(
@@ -200,8 +194,7 @@ pub(crate) unsafe fn help() {
     }
     numprint = (numprint / 2).min(GameConfig::SCREEN_LINES - 1);
 
-    let help_window = Window::Stdscr;
-    output::clear_window(help_window);
+    crate::ui::terminal::UI.clear();
     for (count, entry) in HELP_ENTRIES
         .iter()
         .filter(|entry| entry.print)
@@ -209,31 +202,26 @@ pub(crate) unsafe fn help() {
         .enumerate()
     {
         let count = count as i32;
-        output::move_window_cursor(
-            help_window,
-            IVec2::new(
-                if count >= numprint {
-                    GameConfig::SCREEN_COLS / 2
-                } else {
-                    0
-                },
-                count % numprint,
-            ),
-        );
+        crate::ui::terminal::UI.move_cursor(IVec2::new(
+            if count >= numprint {
+                GameConfig::SCREEN_COLS / 2
+            } else {
+                0
+            },
+            count % numprint,
+        ));
         if entry.ch != 0 {
-            output::write_window_text(help_window, &output::format_key(entry.ch));
+            crate::ui::terminal::UI.write_text(&output::format_key(entry.ch));
         }
-        output::write_window_text(help_window, &entry.desc);
+        crate::ui::terminal::UI.write_text(&entry.desc);
     }
 
-    output::move_window_cursor(help_window, IVec2::new(0, GameConfig::SCREEN_LINES - 1));
-    output::write_window_text(help_window, "--Press space to continue--");
-    output::refresh_window(help_window);
+    crate::ui::terminal::UI.move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
+    crate::ui::terminal::UI.write_text("--Press space to continue--");
+    output::refresh();
     wait_for(' ');
-    output::set_clear_on_refresh(Window::Stdscr, true);
     msg_str("");
-    output::touch_window(Window::Stdscr);
-    output::refresh_window(Window::Stdscr);
+    output::refresh();
 }
 
 /// Describes a map glyph or monster letter selected by the player.

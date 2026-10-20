@@ -9,7 +9,6 @@
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
 use crate::rnd::rnd;
-use crate::ui::output;
 use glam::IVec2;
 
 use crate::ui::output::{addmsg_str, msg_str};
@@ -18,13 +17,14 @@ use crate::daemon::{extinguish, fuse, kill_daemon, start_daemon, Daemon};
 use crate::draw::enter_room;
 use crate::entity::chase::{cansee, see_monst};
 use crate::entity::monsters::{wanderer, MonsterType};
-use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
-use crate::game::MONSTER_LIST;
+use crate::entity::player::{MonsterFlags, Thing};
+use crate::dungeon::DUNGEON;
 use crate::game::PLAYER;
+use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
 use crate::rip::death;
-use crate::startup::roll;
+use crate::rnd::roll;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -41,25 +41,23 @@ const STARVETIME: i32 = 850;
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
-use crate::game::globals::{after, amulet, count, food_left, hungry_state, jump, no_command, quiet, running, seenstairs, terse, to_death};
-
+use crate::game::globals::{
+    after, count, food_left, hungry_state, jump, no_command, quiet, running, terse, to_death,
+};
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
 
+/// The `(position, disguise, oldch, flags)` of a monster `id`, if it exists.
 #[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-/// ISRING(hand, ring_type): true when the player wears ring_type on hand.
-#[inline]
-unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
-    !ring.is_null() && RingType::from_raw((*thing_o(ring)).o_which) == Some(ring_type)
+fn monster_view(id: crate::game::MonsterId) -> Option<(IVec2, u8, u8, MonsterFlags)> {
+    DUNGEON.monster_list
+        .with(id, |t| match t {
+            Thing::Monster { data } => {
+                Some((data.t_pos, data.t_disguise, data.t_oldch, data.t_flags))
+            }
+            Thing::Object { .. } => None,
+        })
+        .flatten()
 }
 
 // ─── Module globals ───────────────────────────────────────────────────────────
@@ -67,6 +65,22 @@ unsafe fn isring(ring: *mut Thing, ring_type: RingType) -> bool {
 use crate::game::globals::between;
 
 // ─── Daemon / fuse callbacks ──────────────────────────────────────────────────
+
+/// Apply the effects of searching and teleportation rings.
+pub unsafe fn ring_effects() {
+    let equipment = PLAYER.equipment();
+    for hand in 0..2usize {
+        match equipment.ring_type(hand) {
+            Some(RingType::Searching) => crate::command_dispatch::search(),
+            Some(RingType::Teleport) => {
+                if rnd(50) == 0 {
+                    crate::wizard::teleport();
+                }
+            }
+            _ => {}
+        }
+    }
+}
 
 /// doctor:
 /// A healing daemon that restores hit points after rest.
@@ -81,11 +95,13 @@ pub unsafe fn doctor() {
     } else if quiet >= 3 {
         PLAYER.with_stats_mut(|stats| stats.hit_points += rnd(lv - 7) + 1);
     }
-    if isring(PLAYER.left_ring(), RingType::Regeneration) {
-        PLAYER.with_stats_mut(|stats| stats.hit_points += 1);
-    }
-    if isring(PLAYER.right_ring(), RingType::Regeneration) {
-        PLAYER.with_stats_mut(|stats| stats.hit_points += 1);
+    // A ring of regeneration adds an extra point on each hand it is worn.
+    let regenerations = [0usize, 1]
+        .into_iter()
+        .filter(|&hand| PLAYER.equipment().ring_type(hand) == Some(RingType::Regeneration))
+        .count() as i32;
+    if regenerations != 0 {
+        PLAYER.with_stats_mut(|stats| stats.hit_points += regenerations);
     }
     if ohp != PLAYER.stats().hit_points {
         let max = PLAYER.stats().max_hit_points;
@@ -129,13 +145,10 @@ pub unsafe fn unconfuse() {
 /// unsee:
 /// Turn off the ability to see invisible.
 pub unsafe fn unsee() {
-    for id in MONSTER_LIST.ids() {
-        if let Some(th) = MONSTER_LIST.handle(id) {
-            if (*thing_t(th)).t_flags.contains(MonsterFlags::INVIS) && see_monst(th) != 0 {
-                output::write_glyph_at(
-                    IVec2::new((*thing_t(th)).t_pos.x, (*thing_t(th)).t_pos.y),
-                    ((*thing_t(th)).t_oldch as u8) as char,
-                );
+    for id in DUNGEON.monster_list.ids() {
+        if let Some((pos, _disguise, oldch, flags)) = monster_view(id) {
+            if flags.contains(MonsterFlags::INVIS) && see_monst(id) != 0 {
+                crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), oldch as char);
             }
         }
     }
@@ -178,6 +191,9 @@ pub unsafe fn stomach() {
         food_left -= 1;
         if old_food < -STARVETIME {
             death(b's' as u8);
+            if crate::startup::exit_requested() {
+                return;
+            }
         }
         // The hero is fainting.
         if no_command != 0 || rnd(5) != 0 {
@@ -194,7 +210,7 @@ pub unsafe fn stomach() {
         msg_str(choose_str("You freak out", "You faint"));
     } else {
         let oldfood = food_left;
-        food_left -= ring_eat(LEFT as i32) + ring_eat(RIGHT as i32) + 1 - amulet as i32;
+        food_left -= ring_eat(LEFT as i32) + ring_eat(RIGHT as i32) + 1 - DUNGEON.has_amulet() as i32;
 
         if food_left < MORETIME && oldfood >= MORETIME {
             hungry_state = 2;
@@ -238,33 +254,28 @@ pub unsafe fn come_down() {
     }
 
     // Undo the things (objects on the level).
-    for tp in crate::game::item_ptrs() {
-        let op = thing_o(tp);
-        if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
-            output::write_glyph_at(
-                IVec2::new((*op).o_pos.x, (*op).o_pos.y),
-                crate::draw::item_glyph((*op).o_type),
-            );
+    for id in crate::game::item_ids() {
+        if let Some((pos, otype)) = OBJECTS.with_object(id, |o| (o.o_pos, o.o_type)) {
+            if cansee(pos.y, pos.x) != 0 {
+                crate::draw::write_cell_glyph(
+                    IVec2::new(pos.x, pos.y),
+                    crate::draw::item_glyph(otype),
+                );
+            }
         }
     }
 
     // Undo the monsters.
     let seemonst = PLAYER.has_flag(MonsterFlags::SEEMONST);
     let cansee_invis = PLAYER.has_flag(MonsterFlags::CANSEE);
-    for id in MONSTER_LIST.ids() {
-        if let Some(tp) = MONSTER_LIST.handle(id) {
-            output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
-            if cansee((*thing_t(tp)).t_pos.y, (*thing_t(tp)).t_pos.x) != 0 {
-                if !(*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS) || cansee_invis {
-                    output::write_glyph(crate::draw::monster_glyph(tp));
+    for id in DUNGEON.monster_list.ids() {
+        if let Some((pos, _disguise, _oldch, flags)) = monster_view(id) {
+            if cansee(pos.y, pos.x) != 0 {
+                if !flags.contains(MonsterFlags::INVIS) || cansee_invis {
+                    crate::draw::write_cell_glyph(pos, crate::draw::monster_glyph(id));
                 }
-                // If invisible and player can't see invisible, skip (original code
-                // falls through to the else-if, but cansee returned true here,
-                // so seemonst branch is not reached — matching C behavior).
             } else if seemonst {
-                output::set_standout(true);
-                output::write_glyph(crate::draw::monster_type_glyph(tp));
-                output::set_standout(false);
+                crate::draw::write_reverse_video_cell_glyph(pos, crate::draw::monster_type_glyph(id));
             }
         }
     }
@@ -279,37 +290,38 @@ pub unsafe fn visuals() {
     }
 
     // Change the things (objects).
-    for tp in crate::game::item_ptrs() {
-        let op = thing_o(tp);
-        if cansee((*op).o_pos.y, (*op).o_pos.x) != 0 {
-            output::write_glyph_at(
-                IVec2::new((*op).o_pos.x, (*op).o_pos.y),
-                (rnd_thing() as u8) as char,
-            );
+    for id in crate::game::item_ids() {
+        if let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) {
+            if cansee(pos.y, pos.x) != 0 {
+                crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), rnd_thing() as char);
+            }
         }
     }
 
     // Change the stairs.
     let stairs = crate::game::stairs();
-    if seenstairs == 0 && cansee(stairs.y, stairs.x) != 0 {
-        output::write_glyph_at(IVec2::new(stairs.x, stairs.y), (rnd_thing() as u8) as char);
+    if !DUNGEON.seen_stairs() && cansee(stairs.y, stairs.x) != 0 {
+        crate::draw::write_cell_glyph(stairs, rnd_thing() as char);
     }
 
     // Change the monsters.
     let seemonst = PLAYER.has_flag(MonsterFlags::SEEMONST);
-    for id in MONSTER_LIST.ids() {
-        if let Some(tp) = MONSTER_LIST.handle(id) {
-            output::move_cursor(IVec2::new((*thing_t(tp)).t_pos.x, (*thing_t(tp)).t_pos.y));
-            if see_monst(tp) != 0 {
-                if (*thing_t(tp)).t_type == Some(MonsterType::Xeroc) && (*thing_t(tp)).t_disguise != b'X' {
-                    output::write_glyph((rnd_thing() as u8) as char);
+    for id in DUNGEON.monster_list.ids() {
+        if let Some((pos, disguise, _oldch, _flags)) = monster_view(id) {
+            let typ = DUNGEON.monster_list
+                .with(id, |t| match t {
+                    Thing::Monster { data } => data.t_type,
+                    Thing::Object { .. } => None,
+                })
+                .flatten();
+            if see_monst(id) != 0 {
+                if typ == Some(MonsterType::Xeroc) && disguise != b'X' {
+                    crate::draw::write_cell_glyph(pos, rnd_thing() as char);
                 } else {
-                    output::write_glyph(crate::draw::hallucination_glyph());
+                    crate::draw::write_cell_glyph(pos, crate::draw::hallucination_glyph());
                 }
             } else if seemonst {
-                output::set_standout(true);
-                output::write_glyph(crate::draw::hallucination_glyph());
-                output::set_standout(false);
+                crate::draw::write_reverse_video_cell_glyph(pos, crate::draw::hallucination_glyph());
             }
         }
     }

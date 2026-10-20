@@ -6,8 +6,8 @@
 //! as [RON] (Rust Object Notation), a human-readable self-describing format.
 //!
 //! The engine's live state is still held in process-wide safe owners
-//! ([`crate::game::PLAYER`], [`crate::game::MONSTER_LIST`],
-//! [`crate::game::MONSTER_MAP`], [`crate::game::CURRENT_LEVEL`], the item
+//! ([`crate::game::PLAYER`], `Dungeon::monster_list`,
+//! `Dungeon::monster_map`, [`crate::dungeon::DUNGEON`], the item
 //! arena and the many `static mut` globals). This module only *snapshots* that
 //! state into plain value types, and rebuilds it on restore. Pointers between
 //! things (intrusive list links, chase targets, equipment slots) are encoded as
@@ -15,19 +15,20 @@
 //!
 //! [RON]: https://github.com/ron-rs/ron
 
+use crate::command::Command;
+use crate::direction::Direction;
 use glam::IVec2;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
 use crate::daemon::CDelayedAction;
 use crate::entity::monsters::MonsterType;
-use crate::entity::player::{
-    set_thing_dest, set_thing_pack, thing_o, thing_t, MonsterFlags, Stats, Thing, ThingObject,
-};
-use crate::game::{MONSTER_LIST, MONSTER_MAP, PLAYER};
-use crate::item::arena::{new_item, new_item_id, ThingId, OBJECTS};
-use crate::level::{LevelFlags, Passage, PassageLinks, RoomGraph};
-use crate::structure::{Room, Structure};
+use crate::entity::player::{MonsterFlags, Stats, Thing, ThingObject};
+use crate::dungeon::DUNGEON;
+use crate::game::{MonsterId, PLAYER};
+use crate::item::arena::{new_item_id, ThingId, OBJECTS};
+use crate::level::{LevelFlags, PassageLinks, RoomGraph};
+use crate::structure::{Passage, Room, Structure};
 
 /// Number of generated scroll names persisted (legacy `MAXSCROLLS`).
 const MAXSCROLLS: usize = 18;
@@ -140,8 +141,8 @@ pub struct GameSnapshot {
     pub tombstone: bool,
     pub wizard: i32,
     pub pack_used: [u8; 26],
-    pub dir_ch: u8,
-    pub runch: u8,
+    pub dir_ch: Direction,
+    pub runch: Direction,
     pub take: u8,
 
     // ── strings / string tables ─────────────────────────────────────────
@@ -162,10 +163,10 @@ pub struct GameSnapshot {
 
     // ── numeric globals ─────────────────────────────────────────────────
     pub orig_dsusp: i32,
-    pub l_last_comm: u8,
-    pub l_last_dir: u8,
-    pub last_comm: u8,
-    pub last_dir: u8,
+    pub l_last_comm: Command,
+    pub l_last_dir: Direction,
+    pub last_comm: Command,
+    pub last_dir: Direction,
     pub n_objs: i32,
     pub ntraps: i32,
     pub hungry_state: i32,
@@ -183,7 +184,6 @@ pub struct GameSnapshot {
     pub purse: i32,
     pub quiet: i32,
     pub vf_hit: i32,
-    pub dnum: i32,
     pub seed: i32,
     pub e_levels: Vec<i32>,
     pub delta: IVec2,
@@ -249,66 +249,81 @@ fn build_object_list(items: &[ThingObject]) -> Vec<ThingId> {
         .collect()
 }
 
-/// Index of the object behind `target` within the pack `pack`, or `None`.
-fn list_index_of(pack: &[ThingId], target: *mut Thing) -> Option<usize> {
-    let target = crate::item::arena::id_of(target)?;
-    pack.iter().position(|&id| id == target)
-}
-
 /// Index of the object handle `target` within the pack `pack`, or `None`.
 fn list_index_of_id(pack: &[ThingId], target: Option<ThingId>) -> Option<usize> {
     let target = target?;
     pack.iter().position(|&id| id == target)
 }
 
-/// The raw handle for the `i`-th pack entry, or null.
-fn list_nth(pack: &[ThingId], i: usize) -> *mut Thing {
-    pack.get(i)
-        .copied()
-        .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
-}
-
-/// Snapshot a monster `Thing` into a pointer-free [`MonsterSnapshot`].
-///
-/// `monster_index` is the position of this monster among the live monster
-/// list, and `level_items` is the live floor-item handle list, head first (used
-/// to resolve object chase targets).
-unsafe fn snapshot_monster(
-    tp: *mut Thing,
-    level_items: &[*mut Thing],
+/// Snapshot the fields of an actor (monster or the hero) into a
+/// pointer-free [`MonsterSnapshot`], resolving any live [`DestRef`] handle into
+/// the index-based, address-free form. `level_items` is the live floor-item
+/// handle list, head first (used to resolve object chase targets).
+fn snapshot_actor(
+    pos: IVec2,
+    turn: bool,
+    typ: Option<MonsterType>,
+    disguise: u8,
+    oldch: u8,
+    dest_ref: crate::entity::player::DestRef,
+    flags: MonsterFlags,
+    stats: Stats,
+    room: Option<usize>,
+    pack: &[ThingId],
+    reserved: i32,
+    level_items: &[ThingId],
 ) -> MonsterSnapshot {
-    let t = thing_t(tp);
-
-    // Translate the live handle-based destination into the index-based,
-    // address-free snapshot form.
-    let dest = match crate::entity::player::thing_dest(tp) {
+    let dest = match dest_ref {
         crate::entity::player::DestRef::None => DestRef::None,
         crate::entity::player::DestRef::Hero => DestRef::Hero,
         crate::entity::player::DestRef::Monster(id) => {
-            DestRef::Monster(MONSTER_LIST.position(id).unwrap_or(usize::MAX))
+            DestRef::Monster(DUNGEON.monster_list.position(id).unwrap_or(usize::MAX))
         }
         crate::entity::player::DestRef::Object(id) => DestRef::Object(
             level_items
                 .iter()
-                .position(|&obj| crate::item::arena::id_of(obj) == Some(id))
+                .position(|&o| o == id)
                 .unwrap_or(usize::MAX),
         ),
         crate::entity::player::DestRef::RoomGold(r) => DestRef::RoomGold(r),
     };
 
     MonsterSnapshot {
-        t_pos: (*t).t_pos,
-        t_turn: (*t).t_turn,
-        t_type: (*t).t_type,
-        t_disguise: (*t).t_disguise,
-        t_oldch: (*t).t_oldch,
+        t_pos: pos,
+        t_turn: turn,
+        t_type: typ,
+        t_disguise: disguise,
+        t_oldch: oldch,
         t_dest: dest,
-        t_flags: (*t).t_flags,
-        t_stats: (*t).t_stats,
-        t_room: (*t).t_room,
-        t_pack: collect_objects(&crate::entity::player::thing_pack(tp)),
-        t_reserved: (*t).t_reserved,
+        t_flags: flags,
+        t_stats: stats,
+        t_room: room,
+        t_pack: collect_objects(pack),
+        t_reserved: reserved,
     }
+}
+
+/// Snapshot a live monster `id` into a pointer-free [`MonsterSnapshot`].
+fn snapshot_monster(id: MonsterId, level_items: &[ThingId]) -> Option<MonsterSnapshot> {
+    DUNGEON.monster_list
+        .with(id, |t| match t {
+            Thing::Monster { data } => Some(snapshot_actor(
+                data.t_pos,
+                data.t_turn,
+                data.t_type,
+                data.t_disguise,
+                data.t_oldch,
+                data.t_dest,
+                data.t_flags,
+                data.t_stats,
+                data.t_room,
+                &data.t_pack,
+                data.t_reserved,
+                level_items,
+            )),
+            Thing::Object { .. } => None,
+        })
+        .flatten()
 }
 
 // ─── Save ────────────────────────────────────────────────────────────────────
@@ -318,26 +333,40 @@ unsafe fn build_snapshot() -> GameSnapshot {
     use crate::game::globals::*;
 
     // Player actor snapshot (without its pack, which is captured separately).
-    let hero_ptr = PLAYER.with_mut(|thing| thing as *mut Thing);
     let hero_pack = PLAYER.pack();
-    let level_items = crate::game::item_ptrs();
+    let level_items = crate::game::item_ids();
 
-    let mut player = snapshot_monster(hero_ptr, &level_items);
+    let mut player = PLAYER.with_monster(|data| {
+        snapshot_actor(
+            data.t_pos,
+            data.t_turn,
+            data.t_type,
+            data.t_disguise,
+            data.t_oldch,
+            data.t_dest,
+            data.t_flags,
+            data.t_stats,
+            data.t_room,
+            &data.t_pack,
+            data.t_reserved,
+            &level_items,
+        )
+    });
     player.t_pack = Vec::new();
 
-    let monster_snaps: Vec<MonsterSnapshot> = MONSTER_LIST
+    let monster_snaps: Vec<MonsterSnapshot> = DUNGEON.monster_list
         .ids()
         .into_iter()
-        .filter_map(|id| MONSTER_LIST.handle(id))
-        .map(|tp| snapshot_monster(tp, &level_items))
+        .filter_map(|id| snapshot_monster(id, &level_items))
         .collect();
 
     let player_pack = collect_objects(&hero_pack);
+    let eq = PLAYER.equipment();
     let equipment = EquipmentSnapshot {
-        armor: list_index_of(&hero_pack, PLAYER.armor()),
-        left_ring: list_index_of(&hero_pack, PLAYER.left_ring()),
-        right_ring: list_index_of(&hero_pack, PLAYER.right_ring()),
-        weapon: list_index_of(&hero_pack, PLAYER.weapon()),
+        armor: list_index_of_id(&hero_pack, eq.armor_id()),
+        left_ring: list_index_of_id(&hero_pack, eq.left_ring_id()),
+        right_ring: list_index_of_id(&hero_pack, eq.right_ring_id()),
+        weapon: list_index_of_id(&hero_pack, eq.weapon_id()),
         last_pick: list_index_of_id(&hero_pack, crate::game::globals::last_pick),
         l_last_pick: list_index_of_id(&hero_pack, crate::game::globals::l_last_pick),
     };
@@ -347,8 +376,8 @@ unsafe fn build_snapshot() -> GameSnapshot {
         let mut monster_cells = Vec::new();
         for y in 0..crate::config::GameConfig::LEVEL_HEIGHT {
             for x in 0..crate::config::GameConfig::LEVEL_WIDTH {
-                if let Some(id) = MONSTER_MAP.at(y, x) {
-                    if let Some(pos) = MONSTER_LIST.position(id) {
+                if let Some(id) = DUNGEON.monster_map.at(y, x) {
+                    if let Some(pos) = DUNGEON.monster_list.position(id) {
                         monster_cells.push((y, x, pos));
                     }
                 }
@@ -364,7 +393,17 @@ unsafe fn build_snapshot() -> GameSnapshot {
             map: lvl.map.clone(),
             flags: lvl.flags.clone(),
             passage_links: lvl.passage_links.clone(),
-            items: level_items.iter().map(|&p| (*thing_o(p)).clone()).collect(),
+            items: level_items
+                .iter()
+                .filter_map(|&id| {
+                    OBJECTS
+                        .with(id, |t| match t {
+                            Thing::Object { data, .. } => Some(data.clone()),
+                            Thing::Monster { .. } => None,
+                        })
+                        .flatten()
+                })
+                .collect(),
             monster_cells,
             room_gold: crate::game::ROOM_GOLD.to_vec(),
         }
@@ -376,7 +415,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         monster_stats.push(m.m_stats);
     }
 
-    let obj_states = |table: &[CObjInfo]| -> Vec<ObjInfoState> {
+    let obj_states = |table: &[ObjInfo]| -> Vec<ObjInfoState> {
         table
             .iter()
             .map(|info| ObjInfoState {
@@ -386,14 +425,14 @@ unsafe fn build_snapshot() -> GameSnapshot {
             .collect()
     };
 
-    let daemons: Vec<CDelayedAction> = (*std::ptr::addr_of!(D_LIST)).to_vec();
+    let daemons: Vec<CDelayedAction> = daemon_table().to_vec();
 
     GameSnapshot {
         after: after != 0,
         again: again != 0,
         noscore,
-        seenstairs: seenstairs != 0,
-        amulet: amulet != 0,
+        seenstairs: DUNGEON.seen_stairs(),
+        amulet: DUNGEON.has_amulet(),
         door_stop: door_stop != 0,
         fight_flush: fight_flush != 0,
         firstmove: firstmove != 0,
@@ -445,13 +484,13 @@ unsafe fn build_snapshot() -> GameSnapshot {
         last_comm,
         last_dir,
         n_objs,
-        ntraps,
+        ntraps: DUNGEON.ntraps(),
         hungry_state,
         inpack,
         inv_type,
-        max_level,
+        max_level: crate::dungeon::max_depth(),
         mpos,
-        no_food,
+        no_food: crate::dungeon::no_food(),
         a_class: a_class.to_vec(),
         count,
         food_left,
@@ -461,7 +500,6 @@ unsafe fn build_snapshot() -> GameSnapshot {
         purse,
         quiet,
         vf_hit,
-        dnum,
         seed,
         e_levels: e_levels.to_vec(),
         delta,
@@ -513,14 +551,6 @@ pub fn rs_restore_file(input: &mut dyn Read) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Resolve an `Option<usize>` pack index against the rebuilt pack handles.
-fn resolve_index(pack: &[ThingId], index: Option<usize>) -> *mut Thing {
-    match index {
-        Some(i) => list_nth(pack, i),
-        None => std::ptr::null_mut(),
-    }
-}
-
 /// Resolve an `Option<usize>` pack index against the rebuilt pack handles,
 /// returning the arena handle (or `None`).
 fn resolve_id(pack: &[ThingId], index: Option<usize>) -> Option<ThingId> {
@@ -546,8 +576,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     set_flag!(after);
     set_flag!(again);
     noscore = s.noscore;
-    set_flag!(seenstairs);
-    set_flag!(amulet);
+    DUNGEON.set_seen_stairs(s.seenstairs);
+    DUNGEON.set_amulet(s.amulet);
     set_flag!(door_stop);
     set_flag!(fight_flush);
     set_flag!(firstmove);
@@ -637,13 +667,13 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     last_comm = s.last_comm;
     last_dir = s.last_dir;
     n_objs = s.n_objs;
-    ntraps = s.ntraps;
+    DUNGEON.set_ntraps(s.ntraps);
     hungry_state = s.hungry_state;
     inpack = s.inpack;
     inv_type = s.inv_type;
-    max_level = s.max_level;
+    crate::dungeon::set_max_depth(s.max_level);
     mpos = s.mpos;
-    no_food = s.no_food;
+    crate::dungeon::set_no_food(s.no_food);
     for (i, v) in s.a_class.iter().enumerate() {
         if i < a_class.len() {
             a_class[i] = *v;
@@ -657,7 +687,6 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     purse = s.purse;
     quiet = s.quiet;
     vf_hit = s.vf_hit;
-    dnum = s.dnum;
     seed = s.seed;
     for (i, v) in s.e_levels.iter().enumerate() {
         if i < e_levels.len() {
@@ -673,7 +702,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
             monsters[i].m_stats = *stats;
         }
     }
-    let apply_obj = |table: &mut [CObjInfo], states: &[ObjInfoState]| {
+    let apply_obj = |table: &mut [ObjInfo], states: &[ObjInfoState]| {
         for (i, st) in states.iter().enumerate() {
             if i < table.len() {
                 table[i].oi_guess = st.guess.clone();
@@ -697,8 +726,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     }
 
     // ── level ───────────────────────────────────────────────────────────
-    MONSTER_LIST.clear();
-    MONSTER_MAP.clear();
+    DUNGEON.monster_list.clear();
+    DUNGEON.monster_map.clear();
 
     let room_gold = s.level.room_gold.clone();
     crate::game::with_current_level_mut(|lvl| {
@@ -715,9 +744,13 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
             .items
             .iter()
             .map(|data| {
-                let item = new_item();
-                *thing_o(item) = data.clone();
-                OBJECTS.id_for_ptr(item).expect("fresh item has an id")
+                let item = new_item_id();
+                let _ = OBJECTS.with_mut(item, |t| {
+                    if let Thing::Object { data: slot, .. } = t {
+                        *slot = data.clone();
+                    }
+                });
+                item
             })
             .collect();
     });
@@ -731,72 +764,78 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     }
 
     // ── monsters ────────────────────────────────────────────────────────
-    let mut monster_ptrs: Vec<*mut Thing> = Vec::new();
+    let mut monster_ids: Vec<MonsterId> = Vec::new();
     for snap in &s.monsters {
-        let tp = crate::game::new_actor();
-        let t = thing_t(tp);
-        (*t).t_pos = snap.t_pos;
-        (*t).t_turn = snap.t_turn;
-        (*t).t_type = snap.t_type;
-        (*t).t_disguise = snap.t_disguise;
-        (*t).t_oldch = snap.t_oldch;
-        (*t).t_flags = snap.t_flags;
-        (*t).t_stats = snap.t_stats;
-        (*t).t_room = snap.t_room;
-        (*t).t_dest = crate::entity::player::DestRef::None;
+        let id = DUNGEON.monster_list.spawn_actor();
+        DUNGEON.monster_list.with_mut(id, |t| {
+            if let Thing::Monster { data } = t {
+                data.t_pos = snap.t_pos;
+                data.t_turn = snap.t_turn;
+                data.t_type = snap.t_type;
+                data.t_disguise = snap.t_disguise;
+                data.t_oldch = snap.t_oldch;
+                data.t_flags = snap.t_flags;
+                data.t_stats = snap.t_stats;
+                data.t_room = snap.t_room;
+                data.t_dest = crate::entity::player::DestRef::None;
+            }
+        });
         let pack = build_object_list(&snap.t_pack);
-        set_thing_pack(tp, pack);
-        monster_ptrs.push(tp);
+        crate::entity::player::set_monster_pack(id, pack);
+        monster_ids.push(id);
     }
 
     // Monster occupancy.
     for &(y, x, idx) in &s.level.monster_cells {
-        if let Some(&tp) = monster_ptrs.get(idx) {
-            crate::game::set_monster(y as i32, x as i32, tp);
+        if let Some(&id) = monster_ids.get(idx) {
+            crate::game::set_monster_id(y as i32, x as i32, Some(id));
         }
     }
 
     // Resolve object, monster and room-gold chase targets to live handles now
     // that everything exists.
-    let item_ptrs = crate::game::item_ptrs();
+    let item_ids = crate::game::item_ids();
     for (i, snap) in s.monsters.iter().enumerate() {
-        let tp = monster_ptrs[i];
+        let id = monster_ids[i];
         let live = match snap.t_dest {
             DestRef::None => crate::entity::player::DestRef::None,
             DestRef::Hero => crate::entity::player::DestRef::Hero,
-            DestRef::Object(j) => item_ptrs
-                .get(j)
-                .and_then(|&obj| crate::item::arena::id_of(obj))
-                .map_or(crate::entity::player::DestRef::None, crate::entity::player::DestRef::Object),
+            DestRef::Object(j) => item_ids.get(j).copied().map_or(
+                crate::entity::player::DestRef::None,
+                crate::entity::player::DestRef::Object,
+            ),
             DestRef::RoomGold(j) => crate::entity::player::DestRef::RoomGold(j),
-            DestRef::Monster(j) => monster_ptrs
-                .get(j)
-                .and_then(|&target| MONSTER_LIST.find(target))
-                .map_or(crate::entity::player::DestRef::None, crate::entity::player::DestRef::Monster),
+            DestRef::Monster(j) => monster_ids.get(j).copied().map_or(
+                crate::entity::player::DestRef::None,
+                crate::entity::player::DestRef::Monster,
+            ),
         };
-        set_thing_dest(tp, live);
+        crate::entity::player::set_monster_dest(id, live);
     }
 
     // ── player ──────────────────────────────────────────────────────────
-    let hero_ptr = PLAYER.with_mut(|thing| thing as *mut Thing);
-    let t = thing_t(hero_ptr);
-    (*t).t_pos = s.player.t_pos;
-    (*t).t_turn = s.player.t_turn;
-    (*t).t_type = s.player.t_type;
-    (*t).t_disguise = s.player.t_disguise;
-    (*t).t_oldch = s.player.t_oldch;
-    (*t).t_flags = s.player.t_flags;
-    (*t).t_stats = s.player.t_stats;
-    (*t).t_room = s.player.t_room;
-    (*t).t_dest = crate::entity::player::DestRef::None;
+    PLAYER.with_monster_mut(|data| {
+        data.t_pos = s.player.t_pos;
+        data.t_turn = s.player.t_turn;
+        data.t_type = s.player.t_type;
+        data.t_disguise = s.player.t_disguise;
+        data.t_oldch = s.player.t_oldch;
+        data.t_flags = s.player.t_flags;
+        data.t_stats = s.player.t_stats;
+        data.t_room = s.player.t_room;
+        data.t_dest = crate::entity::player::DestRef::None;
+    });
     let player_pack = build_object_list(&s.player_pack);
-    set_thing_pack(hero_ptr, player_pack.clone());
-    set_thing_dest(hero_ptr, crate::entity::player::DestRef::None);
+    PLAYER.set_pack(player_pack.clone());
+    PLAYER.set_weapon_id(None);
+    PLAYER.set_armor_id(None);
+    PLAYER.set_left_ring_id(None);
+    PLAYER.set_right_ring_id(None);
 
-    PLAYER.set_armor(resolve_index(&player_pack, s.equipment.armor));
-    PLAYER.set_left_ring(resolve_index(&player_pack, s.equipment.left_ring));
-    PLAYER.set_right_ring(resolve_index(&player_pack, s.equipment.right_ring));
-    PLAYER.set_weapon(resolve_index(&player_pack, s.equipment.weapon));
+    PLAYER.set_armor_id(resolve_id(&player_pack, s.equipment.armor));
+    PLAYER.set_left_ring_id(resolve_id(&player_pack, s.equipment.left_ring));
+    PLAYER.set_right_ring_id(resolve_id(&player_pack, s.equipment.right_ring));
+    PLAYER.set_weapon_id(resolve_id(&player_pack, s.equipment.weapon));
     crate::game::globals::last_pick = resolve_id(&player_pack, s.equipment.last_pick);
     crate::game::globals::l_last_pick = resolve_id(&player_pack, s.equipment.l_last_pick);
 
@@ -845,8 +884,8 @@ mod tests {
             tombstone: true,
             wizard: 0,
             pack_used: [0; 26],
-            dir_ch: b'h',
-            runch: 0,
+            dir_ch: Direction::West,
+            runch: Direction::None,
             take: 0,
             file_name: "save.ron".to_owned(),
             huh: String::new(),
@@ -863,10 +902,10 @@ mod tests {
             ws_type: vec!["staff".to_owned()],
             ws_made: vec!["oaken".to_owned()],
             orig_dsusp: 0,
-            l_last_comm: 0,
-            l_last_dir: 0,
-            last_comm: 0,
-            last_dir: 0,
+            l_last_comm: Command::UnknownKey,
+            l_last_dir: Direction::None,
+            last_comm: Command::UnknownKey,
+            last_dir: Direction::None,
             n_objs: 0,
             ntraps: 0,
             hungry_state: 0,
@@ -884,7 +923,6 @@ mod tests {
             purse: 0,
             quiet: 0,
             vf_hit: 0,
-            dnum: 0,
             seed: 42,
             e_levels: vec![10, 20],
             delta: IVec2::new(1, 0),

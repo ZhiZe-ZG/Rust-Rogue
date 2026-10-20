@@ -16,12 +16,29 @@
 //! dropped the argument, which was undefined behaviour for callbacks such as
 //! `turn_see`).
 
-
 use crate::game::globals::D_LIST;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const EMPTY: i32 = 0;
 const DAEMON: i32 = -1;
 const MAXDAEMONS: usize = 20;
+static LAST_RENDERED_LEVEL: AtomicU64 = AtomicU64::new(u64::MAX);
+
+unsafe fn render_current_level() {
+    let generation = crate::level::with_current_level(|level| level.generation());
+    if LAST_RENDERED_LEVEL.swap(generation, Ordering::Relaxed) != generation {
+        crate::ui::terminal::UI.clear();
+        let hero = crate::game::PLAYER.pos();
+        crate::draw::enter_room(hero);
+        if crate::game::PLAYER.has_flag(crate::entity::player::MonsterFlags::SEEMONST) {
+            crate::item::potions::turn_see(false as u8);
+        }
+        crate::draw::write_cell_glyph(hero, '@');
+        crate::ui::output::refresh();
+    }
+    crate::ui::output::status();
+    crate::ui::output::render_pending();
+}
 
 /// A delayed-action callback, identified by a stable tag.
 ///
@@ -40,9 +57,11 @@ pub enum Daemon {
     Unsee,
     Sight,
     Visuals,
+    UiRender,
     TurnSee,
     ComeDown,
     Land,
+    RingEffects,
 }
 
 impl Daemon {
@@ -51,7 +70,7 @@ impl Daemon {
     /// # Safety
     ///
     /// Every callback mutates process-wide game state through the global owners
-    /// (`PLAYER`, `MONSTER_LIST`, `CURRENT_LEVEL`, ...); the game is
+    /// (`PLAYER`, `DUNGEON.monster_list`, `DUNGEON`, ...); the game is
     /// single-threaded, so callers must not invoke this concurrently.
     pub unsafe fn run(self, arg: i32) {
         match self {
@@ -65,11 +84,13 @@ impl Daemon {
             Daemon::Unsee => crate::daemons::unsee(),
             Daemon::Sight => crate::daemons::sight(),
             Daemon::Visuals => crate::daemons::visuals(),
+            Daemon::UiRender => render_current_level(),
             Daemon::TurnSee => {
                 let _ = crate::item::potions::turn_see(arg as u8);
             }
             Daemon::ComeDown => crate::daemons::come_down(),
             Daemon::Land => crate::daemons::land(),
+            Daemon::RingEffects => crate::daemons::ring_effects(),
         }
     }
 
@@ -89,7 +110,12 @@ impl Daemon {
             Daemon::Unconfuse => Some(7),
             Daemon::Unsee => Some(8),
             Daemon::Sight => Some(9),
-            Daemon::Visuals | Daemon::TurnSee | Daemon::ComeDown | Daemon::Land => None,
+            Daemon::Visuals
+            | Daemon::UiRender
+            | Daemon::TurnSee
+            | Daemon::ComeDown
+            | Daemon::Land
+            | Daemon::RingEffects => None,
         }
     }
 
@@ -266,6 +292,7 @@ mod tests {
     fn unknown_callbacks_are_not_serialised() {
         for daemon in [
             Daemon::Visuals,
+            Daemon::UiRender,
             Daemon::TurnSee,
             Daemon::ComeDown,
             Daemon::Land,
@@ -275,5 +302,14 @@ mod tests {
         assert_eq!(Daemon::from_save_id(0), None);
         assert_eq!(Daemon::from_save_id(-1), None);
         assert_eq!(Daemon::from_save_id(10), None);
+    }
+
+    #[test]
+    fn ui_render_daemon_flushes_pending_frame() {
+        crate::ui::output::refresh();
+
+        unsafe { Daemon::UiRender.run(0) };
+
+        assert!(!crate::ui::output::render_pending());
     }
 }

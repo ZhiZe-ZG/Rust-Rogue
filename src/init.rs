@@ -8,18 +8,16 @@
 //!
 //! See the file LICENSE.TXT for full copyright and licensing information.
 
-use crate::game::PLAYER;
 use crate::game::globals::{
-    arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, CObjInfo,
+    arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, ObjInfo,
 };
+use crate::game::PLAYER;
 use crate::rnd::rnd;
 
-
-
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::item::arena::{new_item_id, OBJECTS};
 use crate::item::item_type::ItemType;
-use crate::item::pack::add_pack;
-use crate::item::arena::new_item;
+use crate::item::pack::add_pack_id;
 use crate::item::weapons::init_weapon;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -43,16 +41,11 @@ const MACE: i32 = 0;
 const BOW: i32 = 2;
 const ARROW: i32 = 3;
 
-/// Matches the C `STONE` typedef used for ring stone names and values.
-#[repr(C)]
-pub struct CStone {
+/// Ring stone names and values (legacy `STONE` table).
+pub struct Stone {
     pub st_name: &'static str,
     pub st_value: i32,
 }
-
-// Safety: CStone only carries `&'static str` references (string literals) that
-// are never mutated, so cross-thread sharing is fine.
-unsafe impl Sync for CStone {}
 
 // ─── Exported global data arrays ─────────────────────────────────────────────
 
@@ -61,37 +54,115 @@ const NWOOD: usize = 33;
 const NMETAL: usize = 22;
 
 /// Ring-stone table.  Exported as `STONE stones[]` for legacy consumers.
-pub static stones: [CStone; NSTONES] = [
-    CStone { st_name: "agate", st_value: 25 },
-    CStone { st_name: "alexandrite", st_value: 40 },
-    CStone { st_name: "amethyst", st_value: 50 },
-    CStone { st_name: "carnelian", st_value: 40 },
-    CStone { st_name: "diamond", st_value: 300 },
-    CStone { st_name: "emerald", st_value: 300 },
-    CStone { st_name: "germanium", st_value: 225 },
-    CStone { st_name: "granite", st_value: 5 },
-    CStone { st_name: "garnet", st_value: 50 },
-    CStone { st_name: "jade", st_value: 150 },
-    CStone { st_name: "kryptonite", st_value: 300 },
-    CStone { st_name: "lapis lazuli", st_value: 50 },
-    CStone { st_name: "moonstone", st_value: 50 },
-    CStone { st_name: "obsidian", st_value: 15 },
-    CStone { st_name: "onyx", st_value: 60 },
-    CStone { st_name: "opal", st_value: 200 },
-    CStone { st_name: "pearl", st_value: 220 },
-    CStone { st_name: "peridot", st_value: 63 },
-    CStone { st_name: "ruby", st_value: 350 },
-    CStone { st_name: "sapphire", st_value: 285 },
-    CStone { st_name: "stibotantalite", st_value: 200 },
-    CStone { st_name: "tiger eye", st_value: 50 },
-    CStone { st_name: "topaz", st_value: 60 },
-    CStone { st_name: "turquoise", st_value: 70 },
-    CStone { st_name: "taaffeite", st_value: 300 },
-    CStone { st_name: "zircon", st_value: 80 },
+pub static stones: [Stone; NSTONES] = [
+    Stone {
+        st_name: "agate",
+        st_value: 25,
+    },
+    Stone {
+        st_name: "alexandrite",
+        st_value: 40,
+    },
+    Stone {
+        st_name: "amethyst",
+        st_value: 50,
+    },
+    Stone {
+        st_name: "carnelian",
+        st_value: 40,
+    },
+    Stone {
+        st_name: "diamond",
+        st_value: 300,
+    },
+    Stone {
+        st_name: "emerald",
+        st_value: 300,
+    },
+    Stone {
+        st_name: "germanium",
+        st_value: 225,
+    },
+    Stone {
+        st_name: "granite",
+        st_value: 5,
+    },
+    Stone {
+        st_name: "garnet",
+        st_value: 50,
+    },
+    Stone {
+        st_name: "jade",
+        st_value: 150,
+    },
+    Stone {
+        st_name: "kryptonite",
+        st_value: 300,
+    },
+    Stone {
+        st_name: "lapis lazuli",
+        st_value: 50,
+    },
+    Stone {
+        st_name: "moonstone",
+        st_value: 50,
+    },
+    Stone {
+        st_name: "obsidian",
+        st_value: 15,
+    },
+    Stone {
+        st_name: "onyx",
+        st_value: 60,
+    },
+    Stone {
+        st_name: "opal",
+        st_value: 200,
+    },
+    Stone {
+        st_name: "pearl",
+        st_value: 220,
+    },
+    Stone {
+        st_name: "peridot",
+        st_value: 63,
+    },
+    Stone {
+        st_name: "ruby",
+        st_value: 350,
+    },
+    Stone {
+        st_name: "sapphire",
+        st_value: 285,
+    },
+    Stone {
+        st_name: "stibotantalite",
+        st_value: 200,
+    },
+    Stone {
+        st_name: "tiger eye",
+        st_value: 50,
+    },
+    Stone {
+        st_name: "topaz",
+        st_value: 60,
+    },
+    Stone {
+        st_name: "turquoise",
+        st_value: 70,
+    },
+    Stone {
+        st_name: "taaffeite",
+        st_value: 300,
+    },
+    Stone {
+        st_name: "zircon",
+        st_value: 80,
+    },
 ];
 
 /// Count of entries in `stones`.  Exported as `int cNSTONES` for C.
-pub static mut cNSTONES: i32 = NSTONES as i32;
+pub const C_NSTONES: i32 = NSTONES as i32;
 
 /// Wand / staff wood materials.  Exported as `char *wood[]` for C.
 pub static wood: [&'static str; NWOOD] = [
@@ -131,7 +202,7 @@ pub static wood: [&'static str; NWOOD] = [
 ];
 
 /// Count of entries in `wood`.  Exported as `int cNWOOD` for C.
-pub static mut cNWOOD: i32 = NWOOD as i32;
+pub const C_NWOOD: i32 = NWOOD as i32;
 
 /// Wand metal materials.  Exported as `char *metal[]` for C.
 pub static metal: [&'static str; NMETAL] = [
@@ -160,7 +231,7 @@ pub static metal: [&'static str; NMETAL] = [
 ];
 
 /// Count of entries in `metal`.  Exported as `int cNMETAL` for C.
-pub static mut cNMETAL: i32 = NMETAL as i32;
+pub const C_NMETAL: i32 = NMETAL as i32;
 
 // ─── Private static data ─────────────────────────────────────────────────────
 
@@ -179,27 +250,9 @@ const SYLLS: &[&str] = &[
     "xo", "y", "yot", "yu", "zant", "zeb", "zim", "zok", "zon", "zum",
 ];
 
-// Size = max(potion colours 27, stones 26, wood 33) = 33.
-/// Shared boolean scratch array used by init_colors, init_stones,
-/// and init_materials (mirrors the C-side `static bool used[]`).
-static mut USED: [u8; 33] = [0; 33];
-
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
 use crate::game::globals::{a_class, food_left, max_stats};
-
-
-// ─── Private helpers ─────────────────────────────────────────────────────────
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
 
 // ─── Exported functions ───────────────────────────────────────────────────────
 
@@ -209,58 +262,69 @@ pub unsafe fn init_player() {
     food_left = HUNGERTIME;
 
     // Give her some food
-    let obj = new_item();
-    (*thing_o(obj)).o_type = ItemType::Food;
-    (*thing_o(obj)).o_count = 1;
-    add_pack(obj, true as u8);
+    let food = new_item_id();
+    OBJECTS.with_object_mut(food, |o| {
+        o.o_type = ItemType::Food;
+        o.o_count = 1;
+    });
+    add_pack_id(Some(food), true);
 
     // A suit of ring-mail armor
-    let obj = new_item();
-    (*thing_o(obj)).o_type = ItemType::Armor(RING_MAIL);
-    (*thing_o(obj)).o_which = RING_MAIL;
-    (*thing_o(obj)).o_arm = a_class[RING_MAIL as usize] - 1;
-    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    (*thing_o(obj)).o_count = 1;
-    PLAYER.set_armor(obj);
-    add_pack(obj, true as u8);
+    let armor = new_item_id();
+    OBJECTS.with_object_mut(armor, |o| {
+        o.o_type = ItemType::Armor(RING_MAIL);
+        o.o_which = RING_MAIL;
+        o.o_arm = a_class[RING_MAIL as usize] - 1;
+        o.o_flags.insert(ObjectFlags::KNOW);
+        o.o_count = 1;
+    });
+    PLAYER.set_armor_id(Some(armor));
+    add_pack_id(Some(armor), true);
 
     // A +1 mace
-    let obj = new_item();
-    init_weapon(obj, MACE);
-    (*thing_o(obj)).o_hplus = 1;
-    (*thing_o(obj)).o_dplus = 1;
-    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    add_pack(obj, true as u8);
-    PLAYER.set_weapon(obj);
+    let mace_id = new_item_id();
+    init_weapon(mace_id, MACE);
+    OBJECTS.with_object_mut(mace_id, |o| {
+        o.o_hplus = 1;
+        o.o_dplus = 1;
+        o.o_flags.insert(ObjectFlags::KNOW);
+    });
+    add_pack_id(Some(mace_id), true);
+    PLAYER.set_weapon_id(Some(mace_id));
 
     // A +1 bow
-    let obj = new_item();
-    init_weapon(obj, BOW);
-    (*thing_o(obj)).o_hplus = 1;
-    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    add_pack(obj, true as u8);
+    let bow_id = new_item_id();
+    init_weapon(bow_id, BOW);
+    OBJECTS.with_object_mut(bow_id, |o| {
+        o.o_hplus = 1;
+        o.o_flags.insert(ObjectFlags::KNOW);
+    });
+    add_pack_id(Some(bow_id), true);
 
     // Arrows
-    let obj = new_item();
-    init_weapon(obj, ARROW);
-    (*thing_o(obj)).o_count = rnd(15) + 25;
-    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
-    add_pack(obj, true as u8);
+    let arrow_id = new_item_id();
+    init_weapon(arrow_id, ARROW);
+    OBJECTS.with_object_mut(arrow_id, |o| {
+        o.o_count = rnd(15) + 25;
+        o.o_flags.insert(ObjectFlags::KNOW);
+    });
+    add_pack_id(Some(arrow_id), true);
 }
 
 /// Assign a random colour from [`crate::colors::POTION_COLORS`] to each potion.
 pub unsafe fn init_colors() {
-    for i in 0..crate::colors::POTION_COLOR_COUNT {
-        USED[i] = 0;
-    }
+    // Local `used[]` scratch array (mirrors the C-side `static bool used[]`,
+    // which was reset at the start of every init routine anyway; the Rust local
+    // is zero-initialised for free).
+    let mut used = [0u8; crate::colors::POTION_COLOR_COUNT];
     for i in 0..MAXPOTIONS {
         let j = loop {
             let j = rnd(crate::colors::POTION_COLOR_COUNT as i32) as usize;
-            if USED[j] == 0 {
+            if used[j] == 0 {
                 break j;
             }
         };
-        USED[j] = 1;
+        used[j] = 1;
         crate::game::globals::p_colors[i] = crate::colors::POTION_COLORS[j];
     }
 }
@@ -295,17 +359,15 @@ pub unsafe fn init_names() {
 
 /// Assign a random stone setting to each ring type.
 pub unsafe fn init_stones() {
-    for i in 0..NSTONES {
-        USED[i] = 0;
-    }
+    let mut used = [0u8; NSTONES];
     for i in 0..MAXRINGS {
         let j = loop {
             let j = rnd(NSTONES as i32) as usize;
-            if USED[j] == 0 {
+            if used[j] == 0 {
                 break j;
             }
         };
-        USED[j] = 1;
+        used[j] = 1;
         crate::game::globals::r_stones[i] = stones[j].st_name;
         ring_info[i].oi_worth += stones[j].st_value;
     }
@@ -313,9 +375,7 @@ pub unsafe fn init_stones() {
 
 /// Assign random wood / metal materials to wands and staves.
 pub unsafe fn init_materials() {
-    for i in 0..NWOOD {
-        USED[i] = 0;
-    }
+    let mut used = [0u8; NWOOD];
     let mut metused: [u8; NMETAL] = [0; NMETAL];
     for i in 0..MAXSTICKS {
         loop {
@@ -329,10 +389,10 @@ pub unsafe fn init_materials() {
                 }
             } else {
                 let j = rnd(NWOOD as i32) as usize;
-                if USED[j] == 0 {
+                if used[j] == 0 {
                     crate::game::globals::ws_type[i] = "staff";
                     crate::game::globals::ws_made[i] = wood[j];
-                    USED[j] = 1;
+                    used[j] = 1;
                     break;
                 }
             }
@@ -343,7 +403,7 @@ pub unsafe fn init_materials() {
 /// Accumulate cumulative probabilities for one item-info table.
 ///
 /// Mirrors the C `sumprobs(struct obj_info *info, int bound)`.
-pub unsafe fn sumprobs(info: &mut [CObjInfo], bound: usize) {
+pub unsafe fn sumprobs(info: &mut [ObjInfo], bound: usize) {
     let mut i = 1usize;
     while i < bound {
         info[i].oi_prob += info[i - 1].oi_prob;

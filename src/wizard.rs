@@ -2,25 +2,23 @@
 //!
 //! Ported from `src/c/wizard.c` to Rust.
 use crate::rnd::rnd;
-use std::ptr;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::config::GameConfig;
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
-use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
-use crate::game::globals::{monsters, pot_info, ring_info, scr_info, ws_info, CObjInfo};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
+use crate::game::globals::{monsters, pot_info, ring_info, scr_info, ws_info, ObjInfo};
+use crate::item::arena::{new_item_id, ThingId, OBJECTS};
 use crate::item::item_type::{ItemFilter, ItemType};
-use crate::item::pack::{add_pack, floor_at, get_item};
-use crate::item::sticks::fix_stick;
-use crate::item::arena::new_item;
-use crate::item::things::inv_name;
+use crate::item::pack::{add_pack_id, floor_at, get_item_id};
+use crate::item::sticks::fix_stick_id;
+use crate::item::things::inv_name_id;
 use crate::item::weapons::init_weapon;
-use crate::level::find_floor;
+use crate::dungeon::DUNGEON;
 use crate::machdep::flush_type;
 use crate::ui::input::readchar;
 use crate::ui::output::{msg_str, show_win};
-use crate::ui::{output, Window};
 use glam::IVec2;
 
 const FOOD: i32 = b':' as i32;
@@ -28,7 +26,6 @@ const GOLD: i32 = b'*' as i32;
 
 const F_REAL: u8 = 0x10u8 as u8;
 
-static mut master_mode_enabled: u8 = 1;
 static WIZARD: AtomicI32 = AtomicI32::new(0);
 
 pub fn wizard_mode() -> i32 {
@@ -41,16 +38,6 @@ pub fn set_wizard_mode(value: i32) {
 
 pub fn is_wizard() -> bool {
     wizard_mode() != 0
-}
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
 }
 
 #[inline]
@@ -88,12 +75,11 @@ unsafe fn get_num() -> i32 {
 }
 
 #[inline]
-unsafe fn master_enabled() -> bool {
-    master_mode_enabled != 0
+fn master_enabled() -> bool {
+    crate::game::globals::master_mode_enabled != 0
 }
 
 use crate::game::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hit};
-
 
 pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
     let pack = crate::game::PLAYER.pack();
@@ -102,15 +88,19 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
         return;
     }
 
-    let mut obj: *mut Thing = ptr::null_mut();
+    let mut obj: Option<ThingId> = None;
     loop {
-        obj = get_item("identify", filter);
+        obj = get_item_id("identify", filter);
         if insist != 0 {
             if n_objs == 0 {
                 return;
-            } else if obj.is_null() {
+            } else if obj.is_none() {
                 msg_str("you must identify something");
-            } else if !filter.matches((*thing_o(obj)).o_type) {
+            } else if !filter.matches(
+                OBJECTS
+                    .with_object(obj.unwrap(), |o| o.o_type)
+                    .unwrap_or(ItemType::None),
+            ) {
                 msg_str(&format!("you must identify a {}", type_name(filter)));
             } else {
                 break;
@@ -120,35 +110,34 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
         }
     }
 
-    if obj.is_null() {
+    let Some(obj) = obj else {
         return;
-    }
+    };
 
-    match (*thing_o(obj)).o_type {
-        ItemType::Scroll(_) => set_know(obj, &mut scr_info[..]),
-        ItemType::Potion(_) => set_know(obj, &mut pot_info[..]),
-        ItemType::Stick(_) => set_know(obj, &mut ws_info[..]),
+    let otype = OBJECTS
+        .with_object(obj, |o| o.o_type)
+        .unwrap_or(ItemType::None);
+    match otype {
+        ItemType::Scroll(_) => set_know_id(obj, &mut scr_info[..]),
+        ItemType::Potion(_) => set_know_id(obj, &mut pot_info[..]),
+        ItemType::Stick(_) => set_know_id(obj, &mut ws_info[..]),
         ItemType::Weapon(_) | ItemType::Armor(_) => {
-            (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW)
+            OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::KNOW));
         }
-        ItemType::Ring(_) => set_know(obj, &mut ring_info[..]),
+        ItemType::Ring(_) => set_know_id(obj, &mut ring_info[..]),
         _ => {}
     }
 
-    msg_str(&inv_name(obj, false as u8));
+    msg_str(&inv_name_id(obj, false));
 }
 
-pub unsafe fn set_know(obj: *mut Thing, info: &mut [CObjInfo]) {
-    if obj.is_null() {
-        return;
-    }
-
-    let idx = (*thing_o(obj)).o_which as usize;
+pub unsafe fn set_know_id(id: ThingId, info: &mut [ObjInfo]) {
+    let idx = OBJECTS.with_object(id, |o| o.o_which).unwrap_or(0) as usize;
     if let Some(item) = info.get_mut(idx) {
         item.oi_know = true;
         item.oi_guess = None;
     }
-    (*thing_o(obj)).o_flags.insert(ObjectFlags::KNOW);
+    OBJECTS.with_object_mut(id, |o| o.o_flags.insert(ObjectFlags::KNOW));
 }
 
 pub fn type_name(filter: ItemFilter) -> &'static str {
@@ -170,7 +159,7 @@ pub unsafe fn create_obj() {
         return;
     }
 
-    let obj = new_item();
+    let obj = new_item_id();
     let mut ch: i32;
 
     msg_str("type of item: ");
@@ -186,59 +175,65 @@ pub unsafe fn create_obj() {
     } else {
         ch - b'a' as i32 + 10
     };
-    (*thing_o(obj)).o_which = which;
-    (*thing_o(obj)).o_type = ItemType::from_raw(type_ch, which);
-
-    (*thing_o(obj)).o_group = 0;
-    (*thing_o(obj)).o_count = 1;
+    OBJECTS.with_object_mut(obj, |o| {
+        o.o_which = which;
+        o.o_type = ItemType::from_raw(type_ch, which);
+        o.o_group = 0;
+        o.o_count = 1;
+    });
     mpos = 0;
 
-    match (*thing_o(obj)).o_type {
+    let otype = OBJECTS
+        .with_object(obj, |o| o.o_type)
+        .unwrap_or(ItemType::None);
+    match otype {
         ItemType::Weapon(_) | ItemType::Armor(_) => {
             msg_str("blessing? (+,-,n)");
             let bless = readchar() as u8;
             mpos = 0;
             if bless == ('-' as u8) {
-                (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
+                OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
             }
-            if matches!((*thing_o(obj)).o_type, ItemType::Weapon(_)) {
-                init_weapon(obj, (*thing_o(obj)).o_which);
+            if matches!(otype, ItemType::Weapon(_)) {
+                let w = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
+                init_weapon(obj, w);
                 if bless == ('-' as u8) {
-                    (*thing_o(obj)).o_hplus -= rnd(3) + 1;
+                    OBJECTS.with_object_mut(obj, |o| o.o_hplus -= rnd(3) + 1);
                 }
                 if bless == ('+' as u8) {
-                    (*thing_o(obj)).o_hplus += rnd(3) + 1;
+                    OBJECTS.with_object_mut(obj, |o| o.o_hplus += rnd(3) + 1);
                 }
             } else {
-                (*thing_o(obj)).o_arm = a_class[(*thing_o(obj)).o_which as usize];
+                let w = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
+                OBJECTS.with_object_mut(obj, |o| o.o_arm = a_class[w as usize]);
                 if bless == ('-' as u8) {
-                    (*thing_o(obj)).o_arm += rnd(3) + 1;
+                    OBJECTS.with_object_mut(obj, |o| o.o_arm += rnd(3) + 1);
                 }
                 if bless == ('+' as u8) {
-                    (*thing_o(obj)).o_arm -= rnd(3) + 1;
+                    OBJECTS.with_object_mut(obj, |o| o.o_arm -= rnd(3) + 1);
                 }
             }
         }
-        ItemType::Ring(_) => match (*thing_o(obj)).o_which {
-            0 | 1 | 2 | 3 | 6 | 7 => {
-                msg_str("blessing? (+,-,n)");
-                let bless = readchar() as u8;
-                mpos = 0;
-                if bless == ('-' as u8) {
-                    (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
+        ItemType::Ring(_) => {
+            let which = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
+            match which {
+                0 | 1 | 2 | 3 | 6 | 7 => {
+                    msg_str("blessing? (+,-,n)");
+                    let bless = readchar() as u8;
+                    mpos = 0;
+                    if bless == ('-' as u8) {
+                        OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
+                    }
+                    let arm = if bless == ('-' as u8) { -1 } else { rnd(2) + 1 };
+                    OBJECTS.with_object_mut(obj, |o| o.o_arm = arm);
                 }
-                (*thing_o(obj)).o_arm = if bless == ('-' as u8) {
-                    -1
-                } else {
-                    rnd(2) + 1
-                };
+                _ => {
+                    OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
+                }
             }
-            _ => {
-                (*thing_o(obj)).o_flags.insert(ObjectFlags::CURSED);
-            }
-        },
+        }
         ItemType::Stick(_) => {
-            fix_stick(obj);
+            fix_stick_id(obj);
         }
         ItemType::Gold => {
             msg_str("how much?");
@@ -247,14 +242,14 @@ pub unsafe fn create_obj() {
         _ => {}
     }
 
-    add_pack(obj, false as u8);
+    add_pack_id(Some(obj), false);
 }
 
 pub unsafe fn teleport() {
-    let mut c = find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
+    let mut c = DUNGEON.find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
     let mut hero = hero();
 
-    output::write_glyph_at(IVec2::new(hero.x, hero.y), (floor_at() as u8) as char);
+    crate::draw::write_cell_glyph(hero, floor_at() as char);
     if roomin(c) != proom() {
         leave_room(hero);
         hero = c;
@@ -264,7 +259,7 @@ pub unsafe fn teleport() {
         look(true as u8);
     }
     crate::game::PLAYER.set_pos(hero);
-    output::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
+    crate::draw::write_cell_glyph(hero, '@');
 
     if crate::game::PLAYER.has_flag(MonsterFlags::HELD) {
         crate::game::PLAYER.remove_flag(MonsterFlags::HELD);
@@ -284,18 +279,15 @@ pub unsafe fn show_map() {
         return;
     }
 
-    let window = Window::Stdscr;
-    output::clear_window(window);
+    crate::ui::terminal::UI.clear();
     for y in 1..(GameConfig::SCREEN_LINES - 1) {
         for x in 0..GameConfig::SCREEN_COLS {
             let real = flat(y, x);
+            let glyph = (chat(y, x) as u8) as char;
             if ((real as u8) & (F_REAL as u8)) == 0 {
-                output::set_window_standout(window, true);
-            }
-            output::move_window_cursor(window, IVec2::new(x, y));
-            output::write_window_glyph(window, (chat(y, x) as u8) as char);
-            if real == 0 {
-                output::set_window_standout(window, false);
+                crate::draw::write_reverse_video_cell_glyph(IVec2::new(x, y), glyph);
+            } else {
+                crate::draw::write_cell_glyph(IVec2::new(x, y), glyph);
             }
         }
     }
@@ -319,27 +311,14 @@ mod tests {
     #[test]
     fn set_know_marks_object_known() {
         unsafe {
-            let mut obj = Thing::Object {
-                data: ThingObject {
-                    o_type: ItemType::SCROLL,
-                    o_pos: IVec2 { x: 0, y: 0 },
-                    o_text: None,
-                    o_launch: 0,
-                    o_packch: 0,
-                    o_damage: [0; 8],
-                    o_hurldmg: [0; 8],
-                    o_count: 1,
-                    o_which: 0,
-                    o_hplus: 0,
-                    o_dplus: 0,
-                    o_arm: 0,
-                    o_flags: ObjectFlags::NONE,
-                    o_group: 0,
-                    o_label: None,
-                },
-            };
+            let id = crate::item::arena::new_item_id();
+            crate::item::arena::OBJECTS.with_object_mut(id, |o| {
+                o.o_type = ItemType::SCROLL;
+                o.o_which = 0;
+                o.o_count = 1;
+            });
 
-            let mut info = [CObjInfo {
+            let mut info = [ObjInfo {
                 oi_name: "",
                 oi_prob: 0,
                 oi_worth: 0,
@@ -347,9 +326,13 @@ mod tests {
                 oi_know: false,
             }];
 
-            set_know(&mut obj, &mut info[..]);
+            set_know_id(id, &mut info[..]);
             assert_eq!(info[0].oi_know, true);
-            assert!((*thing_o(&mut obj)).o_flags.contains(ObjectFlags::KNOW));
+            assert!(crate::item::arena::with_object(id, |o| {
+                o.o_flags.contains(ObjectFlags::KNOW)
+            })
+            .unwrap());
+            let _ = crate::item::arena::OBJECTS.remove(id);
         }
     }
 }

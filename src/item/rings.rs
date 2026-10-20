@@ -1,16 +1,17 @@
 //! Rings: putting them on, taking them off, and their magical effects.
 //!
 //! Ported from `src/c/rings.c` to Rust.
-use crate::entity::player::{ObjectFlags, Thing, ThingObject};
+use crate::entity::player::ObjectFlags;
 use crate::item::potions::invis_on;
 use crate::rnd::rnd;
 
 use crate::game::PLAYER;
+use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::item_type::{ItemFilter, ItemType};
-use crate::item::pack::get_item;
-use crate::item::things::{dropcheck, inv_name};
+use crate::item::pack::get_item_id;
+use crate::item::things::{dropcheck_id, inv_name_id};
 use crate::item::weapons::num;
-use crate::misc::{aggravate, chg_str, is_current};
+use crate::misc::{aggravate, chg_str, is_current_id};
 use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, msg_str};
 
@@ -86,19 +87,15 @@ const USES: [i32; RingType::COUNT] = [
 
 use crate::game::globals::{mpos, terse};
 
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
 /// Prompts for a ring and equips it on an available hand, applying immediate ring effects.
 pub unsafe fn ring_on() {
-    let obj = get_item("put on", ItemFilter::Category(ItemType::RING));
-    if obj.is_null() {
+    let Some(obj) = get_item_id("put on", ItemFilter::Category(ItemType::RING)) else {
         return;
-    }
-    if !matches!((*thing_o(obj)).o_type, ItemType::Ring(_)) {
+    };
+    if !matches!(
+        OBJECTS.with_object(obj, |o| o.o_type),
+        Some(ItemType::Ring(_))
+    ) {
         if terse == 0 {
             msg_str("it would be difficult to wrap that around a finger");
         } else {
@@ -107,19 +104,22 @@ pub unsafe fn ring_on() {
         return;
     }
 
-    if is_current(obj) {
+    if is_current_id(obj) {
         return;
     }
 
-    let left_hand = if PLAYER.left_ring().is_null() && PLAYER.right_ring().is_null() {
+    let eq = PLAYER.equipment();
+    let left_empty = eq.left_ring_id().is_none();
+    let right_empty = eq.right_ring_id().is_none();
+    let left_hand = if left_empty && right_empty {
         let hand = gethand();
         if hand < 0 {
             return;
         }
         hand as usize == LEFT
-    } else if PLAYER.left_ring().is_null() {
+    } else if left_empty {
         true
-    } else if PLAYER.right_ring().is_null() {
+    } else if right_empty {
         false
     } else {
         if terse == 0 {
@@ -131,13 +131,17 @@ pub unsafe fn ring_on() {
     };
 
     if left_hand {
-        PLAYER.set_left_ring(obj);
+        PLAYER.set_left_ring_id(Some(obj));
     } else {
-        PLAYER.set_right_ring(obj);
+        PLAYER.set_right_ring_id(Some(obj));
     }
 
-    match RingType::from_raw((*thing_o(obj)).o_which) {
-        Some(RingType::AddStrength) => chg_str((*thing_o(obj)).o_arm),
+    let (which, o_arm, packch) = OBJECTS
+        .with_object(obj, |o| (o.o_which, o.o_arm, o.o_packch))
+        .unwrap_or((0, 0, 0));
+
+    match RingType::from_raw(which) {
+        Some(RingType::AddStrength) => chg_str(o_arm),
         Some(RingType::SeeInvisible) => invis_on(),
         Some(RingType::Aggravate) => aggravate(),
         _ => {}
@@ -146,25 +150,24 @@ pub unsafe fn ring_on() {
     if terse == 0 {
         addmsg_str("you are now wearing ");
     }
-    msg_str(&format!(
-        "{} ({})",
-        inv_name(obj, 1),
-        (*thing_o(obj)).o_packch as char,
-    ));
+    msg_str(&format!("{} ({})", inv_name_id(obj, true), packch as char));
 }
 
 /// Removes a worn ring from the chosen hand after passing drop constraints.
 pub unsafe fn ring_off() {
-    let left_hand = if PLAYER.left_ring().is_null() && PLAYER.right_ring().is_null() {
+    let eq = PLAYER.equipment();
+    let left_empty = eq.left_ring_id().is_none();
+    let right_empty = eq.right_ring_id().is_none();
+    let left_hand = if left_empty && right_empty {
         if terse != 0 {
             msg_str("no rings");
         } else {
             msg_str("you aren't wearing any rings");
         }
         return;
-    } else if PLAYER.left_ring().is_null() {
+    } else if left_empty {
         false
-    } else if PLAYER.right_ring().is_null() {
+    } else if right_empty {
         true
     } else {
         let hand = gethand();
@@ -176,20 +179,21 @@ pub unsafe fn ring_off() {
 
     mpos = 0;
     let obj = if left_hand {
-        PLAYER.left_ring()
+        PLAYER.equipment().left_ring_id()
     } else {
-        PLAYER.right_ring()
+        PLAYER.equipment().right_ring_id()
     };
-    if obj.is_null() {
+    let Some(obj) = obj else {
         msg_str("not wearing such a ring");
         return;
-    }
+    };
 
-    if dropcheck(obj) != 0 {
+    if dropcheck_id(obj) {
+        let packch = OBJECTS.with_object(obj, |o| o.o_packch).unwrap_or(0);
         msg_str(&format!(
             "was wearing {}({})",
-            inv_name(obj, 1),
-            (*thing_o(obj)).o_packch as char,
+            inv_name_id(obj, true),
+            packch as char,
         ));
     }
 }
@@ -231,16 +235,7 @@ pub unsafe fn ring_eat(hand: i32) -> i32 {
         return 0;
     }
 
-    let ring = match hand_idx {
-        LEFT => PLAYER.left_ring(),
-        RIGHT => PLAYER.right_ring(),
-        _ => return 0,
-    };
-    if ring.is_null() {
-        return 0;
-    }
-
-    let ring_type = match RingType::from_raw((*thing_o(ring)).o_which) {
+    let ring_type = match PLAYER.equipment().ring_type(hand_idx) {
         Some(ring_type) => ring_type,
         None => return 0,
     };
@@ -257,20 +252,22 @@ pub unsafe fn ring_eat(hand: i32) -> i32 {
 
 /// Returns bracketed ring bonus text for known stat-modifier rings.
 #[allow(dead_code)]
-unsafe fn ring_num(obj: *mut Thing) -> String {
-    if obj.is_null() {
+unsafe fn ring_num(id: ThingId) -> String {
+    let Some((know, which, o_arm)) = OBJECTS.with_object(id, |o| {
+        (o.o_flags.contains(ObjectFlags::KNOW), o.o_which, o.o_arm)
+    }) else {
         return String::new();
-    }
-    if !(*thing_o(obj)).o_flags.contains(ObjectFlags::KNOW) {
+    };
+    if !know {
         return String::new();
     }
 
-    match RingType::from_raw((*thing_o(obj)).o_which) {
+    match RingType::from_raw(which) {
         Some(
             RingType::Protection | RingType::AddStrength | RingType::AddDamage | RingType::AddHit,
         ) => {
             // Not a weapon, so `num` formats a single signed value.
-            let inner = num((*thing_o(obj)).o_arm, 0, 0);
+            let inner = num(o_arm, 0, 0);
             format!(" [{}]", inner)
         }
         _ => String::new(),

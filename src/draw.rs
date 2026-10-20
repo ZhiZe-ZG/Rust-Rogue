@@ -1,6 +1,7 @@
 //! Per-turn drawing and level-cell access.
 //!
-//! The single place that turns the Rust `CURRENT_LEVEL` (tile [`Tile`] map +
+//! The single place that turns the Rust [`DUNGEON`](crate::dungeon::DUNGEON)
+//! level (tile [`Tile`] map +
 //! [`LevelFlags`] grids) plus the global monster/object lists into the ASCII
 //! graphic printed by ncurses. Cell *state* (the legacy `p_ch`) is never
 //! cached: every read ([`cell_glyph`], [`winat`], [`flat_at`]) is computed on
@@ -9,22 +10,24 @@
 //! [`reveal_secret_at`], [`reveal_trap_at`], [`set_seen_at`]) update the
 //! level state directly instead of scribbling into a glyph grid.
 //!
-//! The exported `#[no_mangle]` functions (`look`, `erase_lamp`, `trip_ch`,
-//! `add_pass`, `enter_room`, `leave_room`, `turnref`) are the same
-//! C ABI symbols the C engine has always called, now driven entirely by
-//! `CURRENT_LEVEL`.
-
+//! The Rust-native replacements for the legacy `look`, `erase_lamp`,
+//! `trip_ch`, `add_pass`, `enter_room`, `leave_room`, and `turnref` routines
+//! are plain Rust functions (`pub unsafe fn`), driven entirely by
+//! `DUNGEON`; no C ABI symbols are exported.
 
 use crate::config::GameConfig;
 use crate::entity::chase::{roomin, see_monst};
 use crate::entity::monsters::wake_monster;
-use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
+use crate::entity::player::{MonsterFlags, Thing};
 use crate::game;
-use crate::level::{door_open, with_current_level, with_current_level_mut};
+use crate::dungeon::DUNGEON;
+use crate::game::MonsterId;
+use crate::item::arena::ThingId;
+use crate::level::{with_current_level, with_current_level_mut};
 use crate::rnd::rnd;
 use crate::tile::Tile;
 use crate::tile::TrapType;
-use crate::ui::{output, Window};
+use crate::ui::output;
 use glam::IVec2;
 
 // ─── Glyphs ───────────────────────────────────────────────────────────────────
@@ -57,22 +60,13 @@ pub const F_TMASK: u8 = 0x07u8 as u8;
 
 const LAMPDIST: i32 = 3;
 
-// ─── Legacy C ABI surface ─────────────────────────────────────────────────────
+// ─── Process-wide flags read by the draw loop ────────────────────────────────
 
-use crate::game::globals::{after, door_stop, firstmove, jump, oldpos, oldrp, runch, running, see_floor, seenstairs};
-
+use crate::game::globals::{
+    after, door_stop, firstmove, jump, oldpos, oldrp, runch, running, see_floor,
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
 
 #[inline]
 fn hero_pos() -> IVec2 {
@@ -105,8 +99,12 @@ fn is_wall(tile: Option<Tile>) -> bool {
 /// doorway or passage) renders as a horizontal bar (`-`).
 #[inline]
 fn wall_glyph(lvl: &crate::level::Level, y: usize, x: usize) -> u8 {
-    let up = if y == 0 { None } else { lvl.map.get(y - 1, x) };
-    let down = lvl.map.get(y + 1, x);
+    let up = if y == 0 {
+        None
+    } else {
+        lvl.map.get(IVec2::new(x as i32, y as i32 - 1))
+    };
+    let down = lvl.map.get(IVec2::new(x as i32, y as i32 + 1));
     if is_wall(up) && is_wall(down) {
         V_WALL
     } else {
@@ -122,7 +120,7 @@ fn wall_glyph(lvl: &crate::level::Level, y: usize, x: usize) -> u8 {
 pub(crate) unsafe fn terrain_chat_at(y: i32, x: i32) -> u8 {
     with_current_level(|lvl| {
         let (yu, xu) = (y as usize, x as usize);
-        let tile = lvl.map.get(yu, xu).unwrap_or(Tile::Empty);
+        let tile = lvl.map.get(IVec2::new(x, y)).unwrap_or(Tile::Empty);
         let idx = cell_index(yu, xu);
         match tile {
             Tile::Empty => SPACE,
@@ -163,8 +161,8 @@ pub(crate) fn item_glyph(ty: crate::item::item_type::ItemType) -> char {
 
 /// The rendering glyph for a floor object handle (its kind's character).
 #[inline]
-pub(crate) unsafe fn obj_glyph(obj: *mut Thing) -> char {
-    item_glyph((*thing_o(obj)).o_type)
+pub(crate) fn obj_glyph(id: ThingId) -> char {
+    crate::item::arena::with_object(id, |o| item_glyph(o.o_type)).unwrap_or(' ')
 }
 
 pub(crate) unsafe fn cell_glyph(y: i32, x: i32) -> u8 {
@@ -178,22 +176,32 @@ pub(crate) unsafe fn cell_glyph(y: i32, x: i32) -> u8 {
 
 /// Redraw one cell from the current game model.
 pub(crate) unsafe fn redraw_cell(y: i32, x: i32) {
-    output::write_glyph_at(IVec2::new(x, y), (cell_glyph(y, x) as u8) as char);
+    write_cell_glyph(IVec2::new(x, y), (cell_glyph(y, x) as u8) as char);
 }
 
 /// The glyph a *visible* monster is drawn as: its disguise, or a random letter
 /// under hallucination. This is the single place a monster's identity becomes a
 /// screen character; callers must not cast `t_type`/`t_disguise` themselves.
 #[inline]
-pub(crate) unsafe fn monster_glyph(tp: *mut Thing) -> char {
-    ((*thing_t(tp)).t_disguise) as char
+pub(crate) fn monster_glyph(id: MonsterId) -> char {
+    DUNGEON.monster_list
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_disguise as char,
+            Thing::Object { .. } => ' ',
+        })
+        .unwrap_or(' ')
 }
 
 /// The glyph a merely-*sensed* monster (`SEEMONST`) is drawn as: its real
 /// identity, or a random letter under hallucination.
 #[inline]
-pub(crate) unsafe fn monster_type_glyph(tp: *mut Thing) -> char {
-    (*thing_t(tp)).t_type.map_or(' ', |m| m.glyph() as char)
+pub(crate) fn monster_type_glyph(id: MonsterId) -> char {
+    DUNGEON.monster_list
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_type.map_or(' ', |m| m.glyph() as char),
+            Thing::Object { .. } => ' ',
+        })
+        .unwrap_or(' ')
 }
 
 /// A random `'A'..='Z'` glyph used when the hero is hallucinating.
@@ -202,14 +210,36 @@ pub(crate) fn hallucination_glyph() -> char {
     ((rnd(26) + b'A' as i32) as u8) as char
 }
 
+/// Write a world-cell glyph through the drawing layer.
+#[inline]
+pub(crate) fn write_cell_glyph(pos: IVec2, glyph: char) {
+    crate::ui::terminal::UI.write_glyph_at(pos, glyph);
+}
+
+#[inline]
+pub(crate) fn screen_glyph_at(pos: IVec2) -> char {
+    crate::ui::terminal::UI.glyph_at(pos)
+}
+
+/// Write a world-cell glyph with reverse video enabled.
+#[inline]
+pub(crate) fn write_reverse_video_cell_glyph(pos: IVec2, glyph: char) {
+    crate::ui::terminal::UI.set_reverse_video(true);
+    crate::ui::terminal::UI.write_glyph_at(pos, glyph);
+    crate::ui::terminal::UI.set_reverse_video(false);
+}
+
 /// Visible glyph at `(y, x)`: a monster's disguise if one stands here,
 /// otherwise [`cell_glyph`].
 pub(crate) unsafe fn winat(y: i32, x: i32) -> u8 {
-    let tp = game::monster_at(y, x);
-    if tp.is_null() {
-        cell_glyph(y, x)
-    } else {
-        (*thing_t(tp)).t_disguise as u8
+    match game::monster_id_at(y, x) {
+        None => cell_glyph(y, x),
+        Some(id) => DUNGEON.monster_list
+            .with(id, |t| match t {
+                Thing::Monster { data } => data.t_disguise,
+                Thing::Object { .. } => cell_glyph(y, x),
+            })
+            .unwrap_or_else(|| cell_glyph(y, x)),
     }
 }
 
@@ -229,29 +259,19 @@ pub(crate) unsafe fn flat_at(y: i32, x: i32) -> u8 {
         if lvl.flags.real[idx] {
             f |= F_REAL as u8;
         }
-        f |= (lvl
-            .map
-            .get(y as usize, x as usize)
-            .unwrap_or(Tile::Empty)
-            .trap() as u8)
-            & (F_TMASK as u8);
+        f |= (lvl.map.get(IVec2::new(x, y)).unwrap_or(Tile::Empty).trap() as u8) & (F_TMASK as u8);
         f as u8
     })
 }
 
 /// Trap kind (0-7) at `(y, x)` from the tile map.
 pub(crate) unsafe fn trap_kind_at(y: i32, x: i32) -> TrapType {
-    with_current_level(|lvl| {
-        lvl.map
-            .get(y as usize, x as usize)
-            .unwrap_or(Tile::Empty)
-            .trap()
-    })
+    with_current_level(|lvl| lvl.map.get(IVec2::new(x, y)).unwrap_or(Tile::Empty).trap())
 }
 
 /// Whether the tile at `(y, x)` is a hidden trap.
 pub(crate) unsafe fn is_trap_cell(y: i32, x: i32) -> bool {
-    with_current_level(|lvl| matches!(lvl.map.get(y as usize, x as usize), Some(Tile::Trap(_))))
+    with_current_level(|lvl| matches!(lvl.map.get(IVec2::new(x, y)), Some(Tile::Trap(_))))
 }
 
 /// Mark `(y, x)` seen (drawn/identified).
@@ -277,7 +297,7 @@ pub(crate) unsafe fn reveal_secret_at(y: i32, x: i32) {
 /// Reveal cell `(y, x)` for a magic-map scroll, returning the glyph to draw.
 ///
 /// Equivalent of the legacy `map_cell_reveal` over the C `places` grid,
-/// operating directly on `CURRENT_LEVEL`: page-mapping reveals hidden doors
+/// operating directly on the `DUNGEON` level: page-mapping reveals hidden doors
 /// as `+`, hidden passages as `#`, and hidden traps as `^`.
 pub(crate) unsafe fn map_cell_reveal(y: i32, x: i32) -> i32 {
     let ch = terrain_chat_at(y, x);
@@ -335,15 +355,14 @@ pub(crate) unsafe fn map_cell_reveal(y: i32, x: i32) -> i32 {
 /// Whether `ch`/`flags` describe a doorway or a hidden (non-real) wall.
 #[inline]
 fn is_door_or_hidden(ch: u8, flags: u8) -> bool {
-    ch == DOOR
-        || ((flags as u8 & F_REAL as u8) == 0 && (ch == b'|' as u8 || ch == b'-' as u8))
+    ch == DOOR || ((flags as u8 & F_REAL as u8) == 0 && (ch == b'|' as u8 || ch == b'-' as u8))
 }
 
-/// Draw all passage and door tiles for the current level (FFI export).
+/// Draw all passage and door tiles for the current level.
 ///
 /// Iterates the screen and redraws every cell marked as a passage or a door,
 /// marking it seen. Every glyph comes from [`cell_glyph`]/[`flat_at`] which read
-/// `CURRENT_LEVEL` directly.
+/// the `DUNGEON` level directly.
 pub unsafe fn add_pass() {
     for y in 1..GameConfig::SCREEN_LINES - 1 {
         for x in 0..GameConfig::SCREEN_COLS {
@@ -355,20 +374,24 @@ pub unsafe fn add_pass() {
                     out_ch = PASSAGE;
                 }
                 set_seen_at(y, x);
-                output::move_cursor(IVec2::new(x, y));
-                let monst = game::monster_at(y, x);
-                if !monst.is_null() {
-                    (*thing_t(monst)).t_oldch = ch as u8;
+                crate::ui::terminal::UI.move_cursor(IVec2::new(x, y));
+                let monst = game::monster_id_at(y, x);
+                if let Some(id) = monst {
+                    DUNGEON.monster_list.with_mut(id, |t| {
+                        if let Thing::Monster { data } = t {
+                            data.t_oldch = ch as u8;
+                        }
+                    });
                 } else if (flags as u8 & F_REAL as u8) != 0 {
-                    output::write_glyph((out_ch as u8) as char);
+                    crate::ui::terminal::UI.write_glyph((out_ch as u8) as char);
                 } else {
-                    output::set_standout(true);
-                    output::write_glyph(if (flags as u8 & F_PASS as u8) != 0 {
+                    crate::ui::terminal::UI.set_reverse_video(true);
+                    crate::ui::terminal::UI.write_glyph(if (flags as u8 & F_PASS as u8) != 0 {
                         (PASSAGE as u8) as char
                     } else {
                         (DOOR as u8) as char
                     });
-                    output::set_standout(false);
+                    crate::ui::terminal::UI.set_reverse_video(false);
                 }
             }
         }
@@ -380,7 +403,6 @@ pub unsafe fn add_pass() {
 /// wake monsters that the hero can now see.
 pub unsafe fn look(wakeup: u8) {
     let mut ch: i32;
-    let mut tp: *mut Thing;
     let mut ey: i32;
     let mut ex: i32;
     let mut passcount: i32 = 0;
@@ -446,26 +468,38 @@ pub unsafe fn look(wakeup: u8) {
                 }
             }
 
-            tp = game::monster_at(y, x);
-            if tp.is_null() {
-                ch = trip_ch(y, x, ch);
-            } else {
-                if player_has(MonsterFlags::SEEMONST)
-                    && (*thing_t(tp)).t_flags.contains(MonsterFlags::INVIS)
-                {
-                    if door_stop != 0 && firstmove == 0 {
-                        running = false as u8;
+            let tp = game::monster_id_at(y, x);
+            match tp {
+                None => {
+                    ch = trip_ch(y, x, ch);
+                }
+                Some(id) => {
+                    let invis = DUNGEON.monster_list
+                        .with(id, |t| match t {
+                            Thing::Monster { data } => data.t_flags.contains(MonsterFlags::INVIS),
+                            Thing::Object { .. } => false,
+                        })
+                        .unwrap_or(false);
+                    if player_has(MonsterFlags::SEEMONST) && invis {
+                        if door_stop != 0 && firstmove == 0 {
+                            running = false as u8;
+                        }
+                        continue;
                     }
-                    continue;
-                }
-                if wakeup != 0 {
-                    wake_monster(y, x);
-                }
-                if see_monst(tp) != 0 {
-                    if player_has(MonsterFlags::HALU) {
-                        ch = rnd(26) + b'A' as i32;
-                    } else {
-                        ch = (*thing_t(tp)).t_disguise as i32;
+                    if wakeup != 0 {
+                        wake_monster(y, x);
+                    }
+                    if see_monst(id) != 0 {
+                        if player_has(MonsterFlags::HALU) {
+                            ch = rnd(26) + b'A' as i32;
+                        } else {
+                            ch = DUNGEON.monster_list
+                                .with(id, |t| match t {
+                                    Thing::Monster { data } => data.t_disguise as i32,
+                                    Thing::Object { .. } => ch,
+                                })
+                                .unwrap_or(ch);
+                        }
                     }
                 }
             }
@@ -474,7 +508,7 @@ pub unsafe fn look(wakeup: u8) {
                 continue;
             }
 
-            output::move_cursor(IVec2::new(x, y));
+            crate::ui::terminal::UI.move_cursor(IVec2::new(x, y));
             let player_room = crate::game::PLAYER.room();
             if player_room.is_some()
                 && crate::game::room_dark(player_room)
@@ -485,34 +519,34 @@ pub unsafe fn look(wakeup: u8) {
                 ch = b' ' as i32;
             }
 
-            let screen_ch = output::glyph_at_cursor() as i32;
-            if tp.is_null() || ch != screen_ch {
-                output::write_glyph((ch as u8) as char);
+            let screen_ch = crate::ui::terminal::UI.glyph_at_cursor() as i32;
+            if tp.is_none() || ch != screen_ch {
+                crate::ui::terminal::UI.write_glyph((ch as u8) as char);
             }
 
             if door_stop != 0 && firstmove == 0 && running != 0 {
-                if runch == b'h' as u8 && x == ex {
+                if runch == crate::direction::Direction::West && x == ex {
                     continue;
                 }
-                if runch == b'j' as u8 && y == sy {
+                if runch == crate::direction::Direction::South && y == sy {
                     continue;
                 }
-                if runch == b'k' as u8 && y == ey {
+                if runch == crate::direction::Direction::North && y == ey {
                     continue;
                 }
-                if runch == b'l' as u8 && x == sx {
+                if runch == crate::direction::Direction::East && x == sx {
                     continue;
                 }
-                if runch == b'y' as u8 && (y + x) - sumhero >= 1 {
+                if runch == crate::direction::Direction::NorthWest && (y + x) - sumhero >= 1 {
                     continue;
                 }
-                if runch == b'u' as u8 && (y - x) - diffhero >= 1 {
+                if runch == crate::direction::Direction::NorthEast && (y - x) - diffhero >= 1 {
                     continue;
                 }
-                if runch == b'n' as u8 && (y + x) - sumhero <= -1 {
+                if runch == crate::direction::Direction::SouthEast && (y + x) - sumhero <= -1 {
                     continue;
                 }
-                if runch == b'b' as u8 && (y - x) - diffhero <= -1 {
+                if runch == crate::direction::Direction::SouthWest && (y - x) - diffhero <= -1 {
                     continue;
                 }
 
@@ -540,7 +574,7 @@ pub unsafe fn look(wakeup: u8) {
         running = false as u8;
     }
     if running == 0 || jump == 0 {
-        output::write_glyph_at(IVec2::new(hero.x, hero.y), '@');
+        crate::ui::terminal::UI.write_glyph_at(IVec2::new(hero.x, hero.y), '@');
     }
 }
 
@@ -556,7 +590,7 @@ pub unsafe fn trip_ch(y: i32, x: i32, ch: i32) -> i32 {
             && tile != b' ' as u8
             && tile != b'-' as u8
             && tile != b'|' as u8
-            && !(y == game::stairs().y && x == game::stairs().x && seenstairs != 0)
+            && !(y == game::stairs().y && x == game::stairs().x && DUNGEON.seen_stairs())
         {
             return rnd(26) as u8 as i32;
         }
@@ -585,9 +619,9 @@ pub unsafe fn erase_lamp(pos: IVec2, rp: Option<usize>) {
             if y == hero.y && x == hero.x {
                 continue;
             }
-            output::move_cursor(IVec2::new(x, y));
-            if output::glyph_at_cursor() as u8 == FLOOR {
-                output::write_glyph(' ');
+            crate::ui::terminal::UI.move_cursor(IVec2::new(x, y));
+            if crate::ui::terminal::UI.glyph_at_cursor() as u8 == FLOOR {
+                crate::ui::terminal::UI.write_glyph(' ');
             }
         }
     }
@@ -602,7 +636,7 @@ unsafe fn is_upper(ch: u8) -> bool {
 
 #[inline]
 unsafe fn cchar_at_cursor() -> u8 {
-    output::glyph_at_cursor() as u8
+    crate::ui::terminal::UI.glyph_at_cursor() as u8
 }
 
 /// enter_room:
@@ -614,7 +648,7 @@ pub unsafe fn enter_room(cp: IVec2) {
     }
 
     crate::game::PLAYER.set_room(rp);
-    door_open(rp);
+    DUNGEON.door_open(rp);
 
     if crate::game::room_dark(rp) || player_has(MonsterFlags::BLIND) {
         return;
@@ -630,30 +664,37 @@ pub unsafe fn enter_room(cp: IVec2) {
     let x_end = x0 + size.x;
     let mut y = y0;
     while y < y_end {
-        output::move_cursor(IVec2::new(x0, y));
+        crate::ui::terminal::UI.move_cursor(IVec2::new(x0, y));
         let mut x = x0;
         while x < x_end {
-            let tp = game::monster_at(y, x);
+            let tp = game::monster_id_at(y, x);
             let ch = cell_glyph(y, x);
 
-            if tp.is_null() {
-                if cchar_at_cursor() != ch {
-                    output::write_glyph((ch as u8) as char);
-                } else {
-                    output::move_cursor(IVec2::new(x + 1, y));
-                }
-            } else {
-                (*thing_t(tp)).t_oldch = ch as u8;
-                if see_monst(tp) == 0 {
-                    if player_has(MonsterFlags::SEEMONST) {
-                        output::set_standout(true);
-                        output::write_glyph(crate::draw::monster_glyph(tp));
-                        output::set_standout(false);
+            match tp {
+                None => {
+                    if cchar_at_cursor() != ch {
+                        crate::ui::terminal::UI.write_glyph((ch as u8) as char);
                     } else {
-                        output::write_glyph((ch as u8) as char);
+                        crate::ui::terminal::UI.move_cursor(IVec2::new(x + 1, y));
                     }
-                } else {
-                    output::write_glyph(crate::draw::monster_glyph(tp));
+                }
+                Some(id) => {
+                    DUNGEON.monster_list.with_mut(id, |t| {
+                        if let Thing::Monster { data } = t {
+                            data.t_oldch = ch as u8;
+                        }
+                    });
+                    if see_monst(id) == 0 {
+                        if player_has(MonsterFlags::SEEMONST) {
+                            crate::ui::terminal::UI.set_reverse_video(true);
+                            crate::ui::terminal::UI.write_glyph(monster_glyph(id));
+                            crate::ui::terminal::UI.set_reverse_video(false);
+                        } else {
+                            crate::ui::terminal::UI.write_glyph((ch as u8) as char);
+                        }
+                    } else {
+                        crate::ui::terminal::UI.write_glyph(monster_glyph(id));
+                    }
                 }
             }
             x += 1;
@@ -699,20 +740,20 @@ pub unsafe fn leave_room(cp: IVec2) {
     while y < y_end {
         let mut x = x0;
         while x < x_end {
-            output::move_cursor(IVec2::new(x, y));
+            crate::ui::terminal::UI.move_cursor(IVec2::new(x, y));
             let ch = cchar_at_cursor();
             if ch == FLOOR {
                 if floor == SPACE && ch != SPACE {
-                    output::write_glyph((SPACE as u8) as char);
+                    crate::ui::terminal::UI.write_glyph((SPACE as u8) as char);
                 }
             } else if is_upper(ch) {
                 if player_has(MonsterFlags::SEEMONST) {
-                    output::set_standout(true);
-                    output::write_glyph((ch as u8) as char);
-                    output::set_standout(false);
+                    crate::ui::terminal::UI.set_reverse_video(true);
+                    crate::ui::terminal::UI.write_glyph((ch as u8) as char);
+                    crate::ui::terminal::UI.set_reverse_video(false);
                 } else {
                     let out = if game::is_door_at(y, x) { DOOR } else { floor };
-                    output::write_glyph((out as u8) as char);
+                    crate::ui::terminal::UI.write_glyph((out as u8) as char);
                 }
             }
             x += 1;
@@ -720,7 +761,7 @@ pub unsafe fn leave_room(cp: IVec2) {
         y += 1;
     }
 
-    door_open(rp);
+    DUNGEON.door_open(rp);
 }
 
 /// turnref:
@@ -729,9 +770,7 @@ pub unsafe fn turnref() {
     let hero = hero_pos();
     if (flat_at(hero.y, hero.x) as u8 & F_SEEN as u8) == 0 {
         if jump != 0 {
-            output::set_leave_cursor(Window::Stdscr, true);
             output::refresh();
-            output::set_leave_cursor(Window::Stdscr, false);
         }
         set_seen_at(hero.y, hero.x);
     }
@@ -746,7 +785,7 @@ mod tests {
         // Directly test that the legacy flat byte layout is preserved by
         // exercising the low-level bit assembly through a synthetic level.
         let mut level = crate::level::Level::new();
-        level.map.set(1, 1, Tile::Door);
+        level.map.set(IVec2::new(1, 1), Tile::Door);
         let _ = &mut level;
     }
 }

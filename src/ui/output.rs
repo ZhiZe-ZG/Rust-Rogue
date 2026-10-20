@@ -1,41 +1,39 @@
 //! Message, status, and overlay output policy for the terminal UI.
 
-use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 
-use crate::config::GameConfig;
-use crate::game::PLAYER;
-use crate::game::globals::{
-    get_hungry_state, get_max_stats, get_mpos, get_purse, lower_msg_enabled, msg_esc_enabled,
-    save_msg_enabled, set_huh_string, set_mpos, stat_msg_enabled,
+use crate::ui::terminal::UI;
+#[cfg(not(test))]
+use crate::{
+    config::GameConfig,
+    game::{
+        globals::{
+            get_hungry_state, get_max_stats, get_mpos, get_purse, lower_msg_enabled,
+            msg_esc_enabled, save_msg_enabled, set_huh_string, set_mpos, stat_msg_enabled,
+        },
+        PLAYER,
+    },
+    ui::input::{readchar, wait_for},
 };
-use crate::ui::input::{readchar, wait_for};
-use crate::ui::terminal as cur;
-use crate::ui::Window;
+#[cfg(not(test))]
 use glam::IVec2;
 
+#[cfg(not(test))]
 const ESCAPE: i32 = 27;
+#[cfg(not(test))]
 const MAXMSG: usize = GameConfig::SCREEN_COLS as usize - 9;
+#[cfg(not(test))]
 const STATLINE: i32 = 23;
 
 /// Result of displaying or flushing a message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MessageResult {
+pub(crate) enum MessageResult {
     Displayed,
+    #[cfg(not(test))]
     Escaped,
 }
 
-#[derive(Default)]
-struct MessageState {
-    pending: String,
-    next_position: i32,
-}
-
-static MESSAGE_STATE: Mutex<MessageState> = Mutex::new(MessageState {
-    pending: String::new(),
-    next_position: 0,
-});
-
+#[cfg(not(test))]
 fn split_message_at(text: &str, limit: usize) -> usize {
     if text.len() <= limit {
         return text.len();
@@ -49,113 +47,30 @@ fn split_message_at(text: &str, limit: usize) -> usize {
         .unwrap_or_else(|| text.chars().next().map_or(0, char::len_utf8))
 }
 
-/// Move the standard-screen cursor.
-pub fn move_cursor(position: IVec2) {
-    cur::move_cursor(position);
+/// Request that pending standard-screen changes be rendered at the next UI
+/// daemon boundary, or before input blocks.
+pub(crate) fn refresh() {
+    UI.render_pending.store(true, Ordering::Release);
 }
 
-/// Write one glyph at the current cursor position.
-pub fn write_glyph(glyph: char) {
-    cur::write_glyph(glyph);
+/// Render a pending frame, returning whether a frame was flushed.
+pub(crate) fn render_pending() -> bool {
+    if UI.render_pending.swap(false, Ordering::AcqRel) {
+        UI.render();
+        true
+    } else {
+        false
+    }
 }
 
-/// Move to a position and write one glyph.
-pub fn write_glyph_at(position: IVec2, glyph: char) {
-    cur::write_glyph_at(position, glyph);
-}
-
-/// Read the glyph currently displayed under the standard-screen cursor.
-pub fn glyph_at_cursor() -> char {
-    cur::glyph_at_cursor()
-}
-
-/// Read the glyph displayed at a position on the standard screen.
-pub fn glyph_at(position: IVec2) -> char {
-    cur::glyph_at(position)
-}
-
-/// Enable or disable standout output on the standard screen.
-pub fn set_standout(enabled: bool) {
-    cur::set_standout(enabled);
-}
-
-/// Flush pending standard-screen changes to the terminal.
-pub fn refresh() {
-    cur::refresh();
-}
-
-/// Clear the standard screen.
-pub fn clear_screen() {
-    cur::clear();
-}
-
-/// Clear from the cursor to the end of its line.
-pub fn clear_to_end_of_line() {
-    cur::clear_to_end_of_line();
-}
-
-/// Write UTF-8 text at the current cursor position.
-pub fn write_text(text: &str) {
-    cur::write_text(text);
-}
-
-/// Move to a position and write UTF-8 text.
-pub fn write_text_at(position: IVec2, text: &str) {
-    cur::write_text_at(position, text);
-}
-
-/// Control whether the terminal may leave the physical cursor after refresh.
-///
-/// The backend always leaves the cursor where it was; retained only for call
-/// sites that mirrored the legacy `leaveok`.
-pub fn set_leave_cursor(_window: Window, _enabled: bool) {}
-
-/// Return the current cursor position.
-pub fn window_cursor(_window: Window) -> IVec2 {
-    cur::cursor_pos()
-}
-
-/// Clear the screen for the given (aliased) window.
-pub fn clear_window(_window: Window) {
-    clear_screen();
-}
-
-/// Move the (aliased) window cursor.
-pub fn move_window_cursor(_window: Window, position: IVec2) {
-    move_cursor(position);
-}
-
-/// Write one glyph to a window.
-pub fn write_window_glyph(_window: Window, glyph: char) {
-    write_glyph(glyph);
-}
-
-/// Write text to a window.
-pub fn write_window_text(_window: Window, text: &str) {
-    write_text(text);
-}
-
-/// Flush pending changes for a window.
-pub fn refresh_window(_window: Window) {
-    refresh();
-}
-
-/// Mark a window for repaint during its next refresh (no-op; single grid).
-pub fn touch_window(_window: Window) {}
-
-/// Request a full repaint of a window on its next refresh (no-op).
-pub fn set_clear_on_refresh(_window: Window, _enabled: bool) {}
-
-/// Enable or disable line optimization for a window (no-op).
-pub fn set_line_optimization(_window: Window, _enabled: bool) {}
-
-/// Enable or disable standout output for a window.
-pub fn set_window_standout(_window: Window, enabled: bool) {
-    set_standout(enabled);
+/// Flush pending output before suspending the terminal or waiting for input.
+pub(crate) fn flush_now() {
+    UI.render_pending.store(true, Ordering::Release);
+    render_pending();
 }
 
 /// Render a key byte in printable caret notation.
-pub fn format_key(key: u8) -> String {
+pub(crate) fn format_key(key: u8) -> String {
     match key {
         0x00..=0x1f => format!("^{}", (key + b'@') as char),
         0x7f => "^?".to_owned(),
@@ -171,13 +86,12 @@ pub fn format_key(key: u8) -> String {
     }
 }
 
+#[cfg(not(test))]
 fn append_message(text: &str) {
     let mut remaining = text;
     while !remaining.is_empty() {
         let available = {
-            let state = MESSAGE_STATE
-                .lock()
-                .unwrap_or_else(|lock| lock.into_inner());
+            let state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
             MAXMSG.saturating_sub(state.pending.len())
         };
 
@@ -189,9 +103,7 @@ fn append_message(text: &str) {
         let split = split_message_at(remaining, available);
         let (chunk, rest) = remaining.split_at(split);
         {
-            let mut state = MESSAGE_STATE
-                .lock()
-                .unwrap_or_else(|lock| lock.into_inner());
+            let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
             state.pending.push_str(chunk);
             state.next_position = state.pending.len() as i32;
         }
@@ -203,10 +115,11 @@ fn append_message(text: &str) {
     }
 }
 
+#[cfg(not(test))]
 fn display_message(text: &str) -> MessageResult {
     if text.is_empty() {
-        move_cursor(IVec2::new(0, 0));
-        clear_to_end_of_line();
+        UI.move_cursor(IVec2::new(0, 0));
+        UI.clear_to_end_of_line();
         set_mpos(0);
         return MessageResult::Displayed;
     }
@@ -218,7 +131,7 @@ fn display_message(text: &str) -> MessageResult {
 /// Display a Rust-formatted message. Returns the message result (useful for
 /// `--More--` escape detection).
 #[inline]
-pub fn msg_str(text: &str) -> MessageResult {
+pub(crate) fn msg_str(text: &str) -> MessageResult {
     #[cfg(not(test))]
     {
         display_message(text)
@@ -232,7 +145,7 @@ pub fn msg_str(text: &str) -> MessageResult {
 
 /// Append a Rust-formatted message segment.
 #[inline]
-pub fn addmsg_str(text: &str) {
+pub(crate) fn addmsg_str(text: &str) {
     #[cfg(not(test))]
     {
         append_message(text);
@@ -245,11 +158,9 @@ pub fn addmsg_str(text: &str) {
 
 /// Flush the pending message and handle pagination.
 #[cfg(not(test))]
-pub fn endmsg() -> MessageResult {
+pub(crate) fn endmsg() -> MessageResult {
     let (mut pending, next_position) = {
-        let mut state = MESSAGE_STATE
-            .lock()
-            .unwrap_or_else(|lock| lock.into_inner());
+        let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
         (std::mem::take(&mut state.pending), state.next_position)
     };
 
@@ -259,7 +170,7 @@ pub fn endmsg() -> MessageResult {
 
     let mpos = get_mpos();
     if mpos != 0 {
-        write_text_at(IVec2::new(mpos, 0), "--More--");
+        UI.write_text_at(IVec2::new(mpos, 0), "--More--");
         refresh();
 
         if !msg_esc_enabled() {
@@ -273,9 +184,7 @@ pub fn endmsg() -> MessageResult {
                 if ch == ESCAPE {
                     pending.clear();
                     set_mpos(0);
-                    let mut state = MESSAGE_STATE
-                        .lock()
-                        .unwrap_or_else(|lock| lock.into_inner());
+                    let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
                     state.next_position = 0;
                     return MessageResult::Escaped;
                 }
@@ -289,12 +198,10 @@ pub fn endmsg() -> MessageResult {
         }
     }
 
-    write_text_at(IVec2::new(0, 0), &pending);
-    clear_to_end_of_line();
+    UI.write_text_at(IVec2::new(0, 0), &pending);
+    UI.clear_to_end_of_line();
     set_mpos(next_position);
-    let mut state = MESSAGE_STATE
-        .lock()
-        .unwrap_or_else(|lock| lock.into_inner());
+    let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
     state.next_position = 0;
     refresh();
     MessageResult::Displayed
@@ -302,19 +209,11 @@ pub fn endmsg() -> MessageResult {
 
 // ─── Status line cache (single-threaded; atomics avoid `static mut`) ─────────
 
-static HPWIDTH: AtomicI32 = AtomicI32::new(0);
-static S_HUNGRY: AtomicI32 = AtomicI32::new(0);
-static S_LVL: AtomicI32 = AtomicI32::new(0);
-static S_PUR: AtomicI32 = AtomicI32::new(-1);
-static S_HP: AtomicI32 = AtomicI32::new(0);
-static S_ARM: AtomicI32 = AtomicI32::new(0);
-static S_STR: AtomicU32 = AtomicU32::new(0);
-static S_EXP: AtomicI32 = AtomicI32::new(0);
-
+#[cfg(not(test))]
 const STATE_NAMES: [&str; 4] = ["", "Hungry", "Weak", "Faint"];
 
 #[cfg(not(test))]
-pub fn status() {
+pub(crate) fn status() {
     let pstats = PLAYER.stats();
     let level = crate::game::current_depth();
     let max_hp = pstats.max_hit_points;
@@ -324,40 +223,41 @@ pub fn status() {
     let purse = get_purse();
     let stat_msg = stat_msg_enabled();
 
-    if S_HP.load(Ordering::Relaxed) == pstats.hit_points
-        && S_EXP.load(Ordering::Relaxed) == pstats.experience
-        && S_PUR.load(Ordering::Relaxed) == purse
-        && S_ARM.load(Ordering::Relaxed) == temp
-        && S_STR.load(Ordering::Relaxed) == pstats.strength
-        && S_LVL.load(Ordering::Relaxed) == level
-        && S_HUNGRY.load(Ordering::Relaxed) == hungry_state
+    if UI.status_hp.load(Ordering::Relaxed) == pstats.hit_points
+        && UI.status_experience.load(Ordering::Relaxed) == pstats.experience
+        && UI.status_purse.load(Ordering::Relaxed) == purse
+        && UI.status_armor.load(Ordering::Relaxed) == temp
+        && UI.status_strength.load(Ordering::Relaxed) == pstats.strength
+        && UI.status_level.load(Ordering::Relaxed) == level
+        && UI.status_hungry.load(Ordering::Relaxed) == hungry_state
         && !stat_msg
     {
         return;
     }
 
-    S_ARM.store(temp, Ordering::Relaxed);
-    let old_cursor = window_cursor(Window::Stdscr);
-    if S_HP.load(Ordering::Relaxed) != max_hp {
+    UI.status_armor.store(temp, Ordering::Relaxed);
+    let old_cursor = UI.cursor_pos();
+    if UI.status_hp.load(Ordering::Relaxed) != max_hp {
         let mut temp_hp = max_hp;
-        S_HP.store(max_hp, Ordering::Relaxed);
+        UI.status_hp.store(max_hp, Ordering::Relaxed);
         let mut hpwidth = 0;
         while temp_hp != 0 {
             hpwidth += 1;
             temp_hp /= 10;
         }
-        HPWIDTH.store(hpwidth, Ordering::Relaxed);
+        UI.hp_width.store(hpwidth, Ordering::Relaxed);
     }
 
-    S_LVL.store(level, Ordering::Relaxed);
-    S_PUR.store(purse, Ordering::Relaxed);
-    S_HP.store(pstats.hit_points, Ordering::Relaxed);
-    S_STR.store(pstats.strength, Ordering::Relaxed);
-    S_EXP.store(pstats.experience, Ordering::Relaxed);
-    S_HUNGRY.store(hungry_state, Ordering::Relaxed);
+    UI.status_level.store(level, Ordering::Relaxed);
+    UI.status_purse.store(purse, Ordering::Relaxed);
+    UI.status_hp.store(pstats.hit_points, Ordering::Relaxed);
+    UI.status_strength.store(pstats.strength, Ordering::Relaxed);
+    UI.status_experience
+        .store(pstats.experience, Ordering::Relaxed);
+    UI.status_hungry.store(hungry_state, Ordering::Relaxed);
 
-    let hpwidth = HPWIDTH.load(Ordering::Relaxed);
-    let s_arm = S_ARM.load(Ordering::Relaxed);
+    let hpwidth = UI.hp_width.load(Ordering::Relaxed);
+    let s_arm = UI.status_armor.load(Ordering::Relaxed);
     let max_stats = get_max_stats();
     let state_name = STATE_NAMES
         .get(hungry_state.max(0) as usize)
@@ -365,7 +265,7 @@ pub fn status() {
         .unwrap_or("");
 
     if stat_msg {
-        move_cursor(IVec2::new(0, 0));
+        UI.move_cursor(IVec2::new(0, 0));
         msg_str(&format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -381,7 +281,7 @@ pub fn status() {
             w = hpwidth as usize,
         ));
     } else {
-        move_cursor(IVec2::new(0, STATLINE));
+        UI.move_cursor(IVec2::new(0, STATLINE));
         let line = format!(
             "Level: {}  Gold: {:<5}  Hp: {:>w$}({:>w$})  Str: {:>2}({})  Arm: {:<2}  Exp: {}/{}  {}",
             level,
@@ -396,42 +296,37 @@ pub fn status() {
             state_name,
             w = hpwidth as usize,
         );
-        write_text(&line);
+        UI.write_text(&line);
     }
 
-    clear_to_end_of_line();
-    move_cursor(old_cursor);
+    UI.clear_to_end_of_line();
+    UI.move_cursor(old_cursor);
 }
 
 #[cfg(not(test))]
-pub fn show_win(message: &str) {
-    let window = Window::Stdscr;
-    move_window_cursor(window, IVec2::new(0, 0));
-    write_window_text(window, message);
-    touch_window(window);
+pub(crate) fn show_win(message: &str) {
+    UI.move_cursor(IVec2::new(0, 0));
+    UI.write_text(message);
     let hero = PLAYER.pos();
-    move_window_cursor(window, IVec2::new(hero.x, hero.y));
-    refresh_window(window);
+    UI.move_cursor(IVec2::new(hero.x, hero.y));
+    refresh();
     wait_for(' ');
-    let standard_screen = Window::Stdscr;
-    set_clear_on_refresh(standard_screen, true);
-    touch_window(standard_screen);
 }
 
 #[cfg(test)]
-pub fn endmsg() -> MessageResult {
+pub(crate) fn endmsg() -> MessageResult {
     MessageResult::Displayed
 }
 
 #[cfg(test)]
-pub fn status() {}
+pub(crate) fn status() {}
 
 #[cfg(test)]
-pub fn show_win(_message: &str) {}
+pub(crate) fn show_win(_message: &str) {}
 
 #[cfg(test)]
 mod tests {
-    use super::format_key;
+    use super::{format_key, refresh, render_pending};
 
     #[test]
     fn formats_control_and_meta_keys() {
@@ -439,5 +334,14 @@ mod tests {
         assert_eq!(format_key(0x01), "^A");
         assert_eq!(format_key(0x7f), "^?");
         assert_eq!(format_key(0x81), "M-^A");
+    }
+
+    #[test]
+    fn refresh_requests_coalesce_until_rendered() {
+        refresh();
+        refresh();
+
+        assert!(render_pending());
+        assert!(!render_pending());
     }
 }

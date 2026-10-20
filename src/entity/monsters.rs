@@ -4,21 +4,19 @@
 use crate::config::GameConfig;
 use crate::daemon::{fuse, lengthen, Daemon};
 use crate::entity::chase::{dist, roomin, runto};
-use crate::entity::player::DestRef;
 use crate::entity::fight::set_mname;
+use crate::entity::player::DestRef;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
 use crate::game::PLAYER;
+use crate::dungeon::DUNGEON;
+use crate::game::MonsterId;
 use crate::item::rings::RingType;
-use crate::entity::player::attach_pack;
-use crate::game::new_actor;
-use crate::item::things::new_thing;
-use crate::level::find_floor;
+use crate::item::things::new_thing_id;
 use crate::misc::{rnd_thing, spread};
 use crate::rnd::rnd;
-use crate::startup::roll;
-use crate::ui::output;
-use crate::ui::output::{addmsg_str, msg_str};
-use crate::ui::runtime;
+use crate::rnd::roll;
+use crate::ui::output::{addmsg_str, flush_now, msg_str};
+use crate::ui::terminal;
 use glam::IVec2;
 
 use crate::game::globals::monsters;
@@ -28,7 +26,7 @@ const HUHDURATION: i32 = 20;
 const AFTER: i32 = 2;
 const VS_MAGIC: i32 = 0o03;
 
-pub use crate::game::globals::CMonster;
+pub use crate::game::globals::MonsterInfo;
 
 /// The identity of a monster kind — the typed replacement for the legacy
 /// `t_type` ASCII letter (`'A'`..=`'Z'`).
@@ -199,22 +197,14 @@ static WAND_MONS: [Option<MonsterType>; 26] = [
     None,
 ];
 
-use crate::game::globals::max_level;
-
-
 #[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-#[inline]
-unsafe fn has_flag(tp: *mut Thing, flag: MonsterFlags) -> bool {
-    (*thing_t(tp)).t_flags.contains(flag)
+fn has_flag(id: MonsterId, flag: MonsterFlags) -> bool {
+    DUNGEON.monster_list
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_flags.contains(flag),
+            Thing::Object { .. } => false,
+        })
+        .unwrap_or(false)
 }
 
 #[inline]
@@ -223,11 +213,8 @@ fn player_has(flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-unsafe fn iswearing(which: RingType) -> bool {
-    (!PLAYER.left_ring().is_null()
-        && RingType::from_raw((*thing_o(PLAYER.left_ring())).o_which) == Some(which))
-        || (!PLAYER.right_ring().is_null()
-            && RingType::from_raw((*thing_o(PLAYER.right_ring())).o_which) == Some(which))
+fn iswearing(which: RingType) -> bool {
+    PLAYER.wearing_ring(which)
 }
 
 /// Picks an appropriate monster kind for the current depth.
@@ -252,59 +239,74 @@ pub unsafe fn randmonster(wander: bool) -> MonsterType {
     }
 }
 
-/// Initializes a freshly allocated monster thing and places it on the map.
-pub unsafe fn new_monster(tp: *mut Thing, monster_type: MonsterType, cp: IVec2) {
+/// Initializes the already-spawned monster `id` and places it on the map.
+pub unsafe fn new_monster_id(id: MonsterId, monster_type: MonsterType, cp: IVec2) {
     let level = crate::game::current_depth();
     let mut lev_add = level - GameConfig::AMULET_LEVEL;
     if lev_add < 0 {
         lev_add = 0;
     }
 
-    // `tp` was already allocated into `MLIST` by `new_actor`; no attach needed.
+    // `id` was already allocated into `DUNGEON.monster_list` by `spawn_actor`.
 
-    (*thing_t(tp)).t_type = Some(monster_type);
-    (*thing_t(tp)).t_disguise = monster_type.glyph();
-    (*thing_t(tp)).t_pos = cp;
-
-    (*thing_t(tp)).t_oldch = crate::draw::cell_glyph(cp.y, cp.x) as u8;
-    (*thing_t(tp)).t_room = roomin(cp);
+    let oldch = crate::draw::cell_glyph(cp.y, cp.x) as u8;
+    let room = roomin(cp);
     // Record the monster in the per-cell occupancy map.
-    crate::game::set_monster(cp.y, cp.x, tp);
+    crate::game::set_monster_id(cp.y, cp.x, Some(id));
 
     let mp = &monsters[monster_type.index()];
-    (*thing_t(tp)).t_stats.level = mp.m_stats.level + lev_add;
-    (*thing_t(tp)).t_stats.max_hit_points = roll((*thing_t(tp)).t_stats.level, 8);
-    (*thing_t(tp)).t_stats.hit_points = (*thing_t(tp)).t_stats.max_hit_points;
-    (*thing_t(tp)).t_stats.armor = mp.m_stats.armor - lev_add;
-    (*thing_t(tp)).t_stats.damage = mp.m_stats.damage;
-    (*thing_t(tp)).t_stats.strength = mp.m_stats.strength;
-    (*thing_t(tp)).t_stats.experience = mp.m_stats.experience + lev_add * 10 + exp_add(tp);
-    (*thing_t(tp)).t_flags = MonsterFlags::from_bits(mp.m_flags);
-    if level > 29 {
-        (*thing_t(tp)).t_flags.insert(MonsterFlags::HASTE);
-    }
-    (*thing_t(tp)).t_turn = true;
-    crate::entity::player::set_thing_pack(tp, Vec::new());
+    DUNGEON.monster_list.with_mut(id, |t| {
+        let Thing::Monster { data } = t else {
+            return;
+        };
+        data.t_type = Some(monster_type);
+        data.t_disguise = monster_type.glyph();
+        data.t_pos = cp;
+        data.t_oldch = oldch;
+        data.t_room = room;
+        data.t_stats.level = mp.m_stats.level + lev_add;
+        data.t_stats.max_hit_points = roll(data.t_stats.level, 8);
+        data.t_stats.hit_points = data.t_stats.max_hit_points;
+        data.t_stats.armor = mp.m_stats.armor - lev_add;
+        data.t_stats.damage = mp.m_stats.damage;
+        data.t_stats.strength = mp.m_stats.strength;
+        data.t_stats.experience = mp.m_stats.experience
+            + lev_add * 10
+            + exp_add_for(data.t_stats.level, data.t_stats.max_hit_points);
+        data.t_flags = MonsterFlags::from_bits(mp.m_flags);
+        if level > 29 {
+            data.t_flags.insert(MonsterFlags::HASTE);
+        }
+        data.t_turn = true;
+        data.t_pack = Vec::new();
+        if monster_type == MonsterType::Xeroc {
+            data.t_disguise = rnd_thing() as u8;
+        }
+    });
 
     if iswearing(RingType::Aggravate) {
         runto(cp);
     }
-    if monster_type == MonsterType::Xeroc {
-        (*thing_t(tp)).t_disguise = rnd_thing() as u8;
-    }
 }
 
 /// Computes bonus experience from a monster's level and max HP.
-pub unsafe fn exp_add(tp: *mut Thing) -> i32 {
-    let mut modu = if (*thing_t(tp)).t_stats.level == 1 {
-        (*thing_t(tp)).t_stats.max_hit_points / 8
-    } else {
-        (*thing_t(tp)).t_stats.max_hit_points / 6
-    };
+pub fn exp_add(id: MonsterId) -> i32 {
+    let (level, max_hp) = DUNGEON.monster_list
+        .with(id, |t| match t {
+            Thing::Monster { data } => (data.t_stats.level, data.t_stats.max_hit_points),
+            Thing::Object { .. } => (0, 0),
+        })
+        .unwrap_or((0, 0));
+    exp_add_for(level, max_hp)
+}
 
-    if (*thing_t(tp)).t_stats.level > 9 {
+/// Bonus experience from an explicit monster `level` and `max_hp`.
+#[inline]
+fn exp_add_for(level: i32, max_hp: i32) -> i32 {
+    let mut modu = if level == 1 { max_hp / 8 } else { max_hp / 6 };
+    if level > 9 {
         modu *= 20;
-    } else if (*thing_t(tp)).t_stats.level > 6 {
+    } else if level > 6 {
         modu *= 4;
     }
     modu
@@ -312,70 +314,90 @@ pub unsafe fn exp_add(tp: *mut Thing) -> i32 {
 
 /// Spawns a wandering monster in a different room and sets it running toward the hero.
 pub unsafe fn wanderer() {
-    let tp = new_actor();
+    let id = DUNGEON.monster_list.spawn_actor();
     let mut cp;
 
     loop {
-        cp = find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
+        cp = DUNGEON.find_floor(None, 0, true).unwrap_or(IVec2::ZERO);
         if roomin(cp) != crate::game::PLAYER.room() {
             break;
         }
     }
 
-    new_monster(tp, randmonster(true), cp);
+    new_monster_id(id, randmonster(true), cp);
 
     if player_has(MonsterFlags::SEEMONST) {
-        output::set_standout(true);
-        if !player_has(MonsterFlags::HALU) {
-            output::write_glyph(crate::draw::monster_type_glyph(tp));
+        let glyph = if !player_has(MonsterFlags::HALU) {
+            crate::draw::monster_type_glyph(id)
         } else {
-            output::write_glyph(crate::draw::hallucination_glyph());
-        }
-        output::set_standout(false);
+            crate::draw::hallucination_glyph()
+        };
+        crate::draw::write_reverse_video_cell_glyph(cp, glyph);
     }
 
-    runto((*thing_t(tp)).t_pos);
+    let pos = DUNGEON.monster_list
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_pos,
+            Thing::Object { .. } => IVec2::ZERO,
+        })
+        .unwrap_or(IVec2::ZERO);
+    runto(pos);
 
     if crate::wizard::is_wizard() {
-        msg_str(&format!(
-            "started a wandering {}",
-            (*thing_t(tp)).t_type.map_or("", |m| m.name())
-        ));
+        let name = DUNGEON.monster_list
+            .with(id, |t| match t {
+                Thing::Monster { data } => data.t_type.map_or("", |m| m.name()).to_string(),
+                Thing::Object { .. } => String::new(),
+            })
+            .unwrap_or_default();
+        msg_str(&format!("started a wandering {name}"));
     }
 }
 
 /// Wakes and updates an adjacent monster's pursuit behavior and special gaze logic.
-pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
-    let tp = crate::game::monster_at(y, x);
-    if tp.is_null() {
-        runtime::shutdown();
+pub unsafe fn wake_monster(y: i32, x: i32) -> Option<MonsterId> {
+    let Some(id) = crate::game::monster_id_at(y, x) else {
+        flush_now();
         std::process::abort();
-    }
+    };
 
-    let ch = (*thing_t(tp)).t_type;
+    let ch = DUNGEON.monster_list
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_type,
+            Thing::Object { .. } => None,
+        })
+        .flatten();
 
-    if !has_flag(tp, MonsterFlags::RUN)
+    if !has_flag(id, MonsterFlags::RUN)
         && rnd(3) != 0
-        && has_flag(tp, MonsterFlags::MEAN)
-        && !has_flag(tp, MonsterFlags::HELD)
+        && has_flag(id, MonsterFlags::MEAN)
+        && !has_flag(id, MonsterFlags::HELD)
         && !iswearing(RingType::Stealth)
         && !player_has(MonsterFlags::LEVIT)
     {
-        crate::entity::player::set_thing_dest_hero(tp);
-        (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
+        crate::entity::player::set_monster_dest_hero(id);
+        DUNGEON.monster_list.with_mut(id, |t| {
+            if let Thing::Monster { data } = t {
+                data.t_flags.insert(MonsterFlags::RUN);
+            }
+        });
     }
 
     if ch == Some(MonsterType::Medusa)
         && !player_has(MonsterFlags::BLIND)
         && !player_has(MonsterFlags::HALU)
-        && !has_flag(tp, MonsterFlags::FOUND)
-        && !has_flag(tp, MonsterFlags::CANCELLED)
-        && has_flag(tp, MonsterFlags::RUN)
+        && !has_flag(id, MonsterFlags::FOUND)
+        && !has_flag(id, MonsterFlags::CANCELLED)
+        && has_flag(id, MonsterFlags::RUN)
     {
         let rp = crate::game::PLAYER.room();
         let hero = crate::game::PLAYER.pos();
         if (rp.is_some() && !crate::game::room_dark(rp)) || dist(y, x, hero.y, hero.x) < LAMPDIST {
-            (*thing_t(tp)).t_flags.insert(MonsterFlags::FOUND);
+            DUNGEON.monster_list.with_mut(id, |t| {
+                if let Thing::Monster { data } = t {
+                    data.t_flags.insert(MonsterFlags::FOUND);
+                }
+            });
             if save(VS_MAGIC) == 0 {
                 if player_has(MonsterFlags::HUH) {
                     lengthen(Daemon::Unconfuse, spread(HUHDURATION));
@@ -383,7 +405,7 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
                     fuse(Daemon::Unconfuse, 0, spread(HUHDURATION), AFTER);
                 }
                 crate::game::PLAYER.add_flag(MonsterFlags::HUH);
-                let mname_str = set_mname(tp);
+                let mname_str = set_mname(id);
                 addmsg_str(&mname_str);
                 if mname_str != "it" {
                     addmsg_str("'");
@@ -393,40 +415,49 @@ pub unsafe fn wake_monster(y: i32, x: i32) -> *mut Thing {
         }
     }
 
-    if has_flag(tp, MonsterFlags::GREED) && !has_flag(tp, MonsterFlags::RUN) {
-        (*thing_t(tp)).t_flags.insert(MonsterFlags::RUN);
+    if has_flag(id, MonsterFlags::GREED) && !has_flag(id, MonsterFlags::RUN) {
+        DUNGEON.monster_list.with_mut(id, |t| {
+            if let Thing::Monster { data } = t {
+                data.t_flags.insert(MonsterFlags::RUN);
+            }
+        });
         let pr = crate::game::PLAYER.room();
         if let Some(room) = pr {
             if crate::game::room_goldval(pr) != 0 {
-                crate::entity::player::set_thing_dest(tp, DestRef::RoomGold(room));
+                crate::entity::player::set_monster_dest(id, DestRef::RoomGold(room));
             } else {
-                crate::entity::player::set_thing_dest_hero(tp);
+                crate::entity::player::set_monster_dest_hero(id);
             }
         } else {
-            crate::entity::player::set_thing_dest_hero(tp);
+            crate::entity::player::set_monster_dest_hero(id);
         }
     }
 
-    tp
+    Some(id)
 }
 
 /// Potentially gives a monster a carried item based on depth and monster carry chance.
-pub unsafe fn give_pack(tp: *mut Thing) {
-    if crate::game::current_depth() >= max_level
-        && rnd(100) < monsters[(*thing_t(tp)).t_type.map_or(0, |m| m.index())].m_carry
-    {
-        attach_pack(tp, new_thing());
+pub unsafe fn give_pack_id(id: MonsterId) {
+    let kind = DUNGEON.monster_list
+        .with(id, |t| match t {
+            Thing::Monster { data } => data.t_type,
+            Thing::Object { .. } => None,
+        })
+        .flatten();
+    let carry = monsters[kind.map_or(0, |m| m.index())].m_carry;
+    if crate::game::current_depth() >= crate::dungeon::max_depth() && rnd(100) < carry {
+        let item = new_thing_id();
+        DUNGEON.monster_list.with_mut(id, |t| {
+            if let Thing::Monster { data } = t {
+                data.t_pack.insert(0, item);
+            }
+        });
     }
-}
-
-/// Rolls a saving throw for any creature against an effect category.
-pub unsafe fn save_throw(which: i32, tp: *mut Thing) -> i32 {
-    save_throw_for_level(which, (*thing_t(tp)).t_stats.level)
 }
 
 /// Roll a saving throw for the monster behind `id` (pointer-free variant).
 pub fn save_throw_id(which: i32, id: crate::game::MonsterId) -> i32 {
-    let level = crate::game::MONSTER_LIST
+    let level = crate::game::DUNGEON.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_stats.level,
             Thing::Object { .. } => 0,
@@ -451,17 +482,12 @@ fn save_throw_for_level(which: i32, level: i32) -> i32 {
 pub unsafe fn save(which: i32) -> i32 {
     let mut adj = which;
     if which == VS_MAGIC {
-        if !PLAYER.left_ring().is_null()
-            && RingType::from_raw((*thing_o(PLAYER.left_ring())).o_which)
-                == Some(RingType::Protection)
-        {
-            adj -= (*thing_o(PLAYER.left_ring())).o_arm;
-        }
-        if !PLAYER.right_ring().is_null()
-            && RingType::from_raw((*thing_o(PLAYER.right_ring())).o_which)
-                == Some(RingType::Protection)
-        {
-            adj -= (*thing_o(PLAYER.right_ring())).o_arm;
+        // Ring of protection lowers the save magic number by its `o_arm`.
+        let equipment = PLAYER.equipment();
+        for hand in 0..2usize {
+            if equipment.ring_type(hand) == Some(RingType::Protection) {
+                adj -= equipment.ring_arm(hand).unwrap_or(0);
+            }
         }
     }
     save_throw_for_level(adj, PLAYER.level())

@@ -18,7 +18,7 @@
 
 use std::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use crate::entity::player::{MonsterFlags, Stats, Thing, ThingMonster};
+use crate::entity::player::{MonsterFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::item::arena::ThingId;
 use glam::IVec2;
 
@@ -111,54 +111,69 @@ impl Equipment {
         self.weapon.set(weapon);
     }
 
-    /// A stable raw handle to the equipped armor (null when empty or freed).
+    /// The `RingType` worn on `hand` (0 = left, 1 = right), if any.
+    ///
+    /// This is the pointer-free replacement for dereferencing
+    /// `PLAYER.left_ring()`/`right_ring()` and reading `o_which`.
     #[inline]
-    pub fn armor(&self) -> *mut Thing {
-        self.armor
-            .get()
-            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
+    pub fn ring_type(&self, hand: usize) -> Option<crate::item::rings::RingType> {
+        let id = self.rings.get(hand)?.get()?;
+        crate::item::arena::OBJECTS
+            .with_object(id, |o| crate::item::rings::RingType::from_raw(o.o_which))
+            .flatten()
     }
 
-    /// Set (or clear) the equipped armor from a raw handle.
+    /// The `o_arm` value of the equipped armor, if any (pointer-free).
     #[inline]
-    pub fn set_armor(&self, armor: *mut Thing) {
-        self.armor.set(crate::item::arena::id_of(armor));
+    pub fn armor_arm(&self) -> Option<i32> {
+        let id = self.armor.get()?;
+        crate::item::arena::OBJECTS.with_object(id, |o| o.o_arm)
     }
 
+    /// The `o_arm` value of the ring worn on `hand`, if any (pointer-free).
     #[inline]
-    pub fn left_ring(&self) -> *mut Thing {
-        self.rings[0]
-            .get()
-            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
+    pub fn ring_arm(&self, hand: usize) -> Option<i32> {
+        let id = self.rings.get(hand)?.get()?;
+        crate::item::arena::OBJECTS.with_object(id, |o| o.o_arm)
     }
 
+    /// The `o_which` value of the equipped weapon, if any (pointer-free).
     #[inline]
-    pub fn right_ring(&self) -> *mut Thing {
-        self.rings[1]
-            .get()
-            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
+    pub fn weapon_which(&self) -> Option<i32> {
+        let id = self.weapon.get()?;
+        crate::item::arena::OBJECTS.with_object(id, |o| o.o_which)
     }
 
+    /// The weapon's `(o_hplus, o_dplus)`, if a weapon is wielded (pointer-free).
     #[inline]
-    pub fn set_left_ring(&self, ring: *mut Thing) {
-        self.rings[0].set(crate::item::arena::id_of(ring));
+    pub fn weapon_hdplus(&self) -> Option<(i32, i32)> {
+        let id = self.weapon.get()?;
+        crate::item::arena::OBJECTS.with_object(id, |o| (o.o_hplus, o.o_dplus))
     }
 
+    /// Run `f` with mutable access to the equipped armor object, if any.
     #[inline]
-    pub fn set_right_ring(&self, ring: *mut Thing) {
-        self.rings[1].set(crate::item::arena::id_of(ring));
+    pub fn with_armor_mut<R>(&self, f: impl FnOnce(&mut ThingObject) -> R) -> Option<R> {
+        let id = self.armor.get()?;
+        crate::item::arena::OBJECTS.with_object_mut(id, f)
     }
 
+    /// Run `f` with mutable access to the wielded weapon object, if any.
     #[inline]
-    pub fn weapon(&self) -> *mut Thing {
-        self.weapon
-            .get()
-            .map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
+    pub fn with_weapon_mut<R>(&self, f: impl FnOnce(&mut ThingObject) -> R) -> Option<R> {
+        let id = self.weapon.get()?;
+        crate::item::arena::OBJECTS.with_object_mut(id, f)
     }
 
+    /// Run `f` with mutable access to the ring worn on `hand`, if any.
     #[inline]
-    pub fn set_weapon(&self, weapon: *mut Thing) {
-        self.weapon.set(crate::item::arena::id_of(weapon));
+    pub fn with_ring_mut<R>(
+        &self,
+        hand: usize,
+        f: impl FnOnce(&mut ThingObject) -> R,
+    ) -> Option<R> {
+        let id = self.rings.get(hand)?.get()?;
+        crate::item::arena::OBJECTS.with_object_mut(id, f)
     }
 }
 
@@ -406,64 +421,82 @@ impl Player {
         &self.equipment
     }
 
-    /// The armor the player is wearing (or a null handle).
-    #[inline]
-    pub fn armor(&self) -> *mut Thing {
-        self.equipment.armor()
-    }
-
     /// The protection value of the currently worn armor, or `None` when the
-    /// player is not wearing any armor.
+    /// player is not wearing any armor (pointer-free).
     #[inline]
     pub fn armor_value(&self) -> Option<i32> {
-        let armor = self.armor();
-        if armor.is_null() {
-            None
-        } else {
-            Some(unsafe { (*crate::entity::player::thing_o(armor)).o_arm })
-        }
+        self.equipment.armor_arm()
     }
 
-    /// Set (or clear) the armor the player is wearing.
+    /// The `o_which` of the wielded weapon, if any (pointer-free).
     #[inline]
-    pub fn set_armor(&self, armor: *mut Thing) {
-        self.equipment.set_armor(armor);
+    pub fn weapon_which(&self) -> Option<i32> {
+        self.equipment.weapon_which()
     }
 
-    /// The ring on the player's left hand (or a null handle).
+    /// The wielded weapon's arena handle, if any (pointer-free).
     #[inline]
-    pub fn left_ring(&self) -> *mut Thing {
-        self.equipment.left_ring()
+    pub fn weapon_id(&self) -> Option<ThingId> {
+        self.equipment.weapon_id()
     }
 
-    /// The ring on the player's right hand (or a null handle).
+    /// Whether the player wears `ring_type` on either hand (pointer-free).
     #[inline]
-    pub fn right_ring(&self) -> *mut Thing {
-        self.equipment.right_ring()
+    pub fn wearing_ring(&self, ring_type: crate::item::rings::RingType) -> bool {
+        self.equipment.ring_type(0) == Some(ring_type)
+            || self.equipment.ring_type(1) == Some(ring_type)
     }
 
-    /// Set (or clear) the ring on the player's left hand.
+    /// Run `f` with mutable access to the equipped armor object, if any.
     #[inline]
-    pub fn set_left_ring(&self, ring: *mut Thing) {
-        self.equipment.set_left_ring(ring);
+    pub fn with_armor_mut<R>(&self, f: impl FnOnce(&mut ThingObject) -> R) -> Option<R> {
+        self.equipment.with_armor_mut(f)
     }
 
-    /// Set (or clear) the ring on the player's right hand.
+    /// Run `f` with mutable access to the wielded weapon object, if any.
     #[inline]
-    pub fn set_right_ring(&self, ring: *mut Thing) {
-        self.equipment.set_right_ring(ring);
+    pub fn with_weapon_mut<R>(&self, f: impl FnOnce(&mut ThingObject) -> R) -> Option<R> {
+        self.equipment.with_weapon_mut(f)
     }
 
-    /// The weapon the player is wielding (or a null handle).
+    /// Run `f` with mutable access to the ring worn on `hand`, if any.
     #[inline]
-    pub fn weapon(&self) -> *mut Thing {
-        self.equipment.weapon()
+    pub fn with_ring_mut<R>(
+        &self,
+        hand: usize,
+        f: impl FnOnce(&mut ThingObject) -> R,
+    ) -> Option<R> {
+        self.equipment.with_ring_mut(hand, f)
     }
 
-    /// Set (or clear) the weapon the player is wielding.
+    /// The wielded weapon's `(o_hplus, o_dplus)`, if any (pointer-free).
     #[inline]
-    pub fn set_weapon(&self, weapon: *mut Thing) {
-        self.equipment.set_weapon(weapon);
+    pub fn weapon_hdplus(&self) -> Option<(i32, i32)> {
+        self.equipment.weapon_hdplus()
+    }
+
+    /// Set (or clear) the equipped armor by arena handle (pointer-free).
+    #[inline]
+    pub fn set_armor_id(&self, armor: Option<ThingId>) {
+        self.equipment.set_armor_id(armor);
+    }
+
+    /// Set (or clear) the left-hand ring by arena handle (pointer-free).
+    #[inline]
+    pub fn set_left_ring_id(&self, ring: Option<ThingId>) {
+        self.equipment.set_left_ring_id(ring);
+    }
+
+    /// Set (or clear) the right-hand ring by arena handle (pointer-free).
+    #[inline]
+    pub fn set_right_ring_id(&self, ring: Option<ThingId>) {
+        self.equipment.set_right_ring_id(ring);
+    }
+
+    /// Set (or clear) the wielded weapon by arena handle (pointer-free).
+    #[inline]
+    pub fn set_weapon_id(&self, weapon: Option<ThingId>) {
+        self.equipment.set_weapon_id(weapon);
     }
 }
 
@@ -513,8 +546,8 @@ mod tests {
     #[test]
     fn equipment_is_a_player_component() {
         let player = Player::EMPTY;
-        assert!(player.equipment().weapon().is_null());
-        player.equipment().set_weapon(std::ptr::null_mut());
-        assert!(player.equipment().armor().is_null());
+        assert_eq!(player.equipment().weapon_id(), None);
+        player.equipment().set_weapon_id(None);
+        assert_eq!(player.equipment().armor_id(), None);
     }
 }

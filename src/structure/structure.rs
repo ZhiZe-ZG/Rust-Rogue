@@ -35,17 +35,23 @@ impl Structure {
         self.width
     }
 
-    /// Read a tile at `(y, x)`.
+    /// Read a tile at `(x, y)`.
     ///
     /// Returns `None` when the coordinate is out of bounds.
-    pub fn get(&self, y: usize, x: usize) -> Option<Tile> {
+    pub fn get(&self, pos: IVec2) -> Option<Tile> {
+        let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) else {
+            return None;
+        };
         self.tiles.get(y).and_then(|row| row.get(x)).copied()
     }
 
-    /// Write `tile` at `(y, x)`.
+    /// Write `tile` at `(x, y)`.
     ///
     /// Returns `true` on success, or `false` when out of bounds.
-    pub fn set(&mut self, y: usize, x: usize, tile: Tile) -> bool {
+    pub fn set(&mut self, pos: IVec2, tile: Tile) -> bool {
+        let (Ok(y), Ok(x)) = (usize::try_from(pos.y), usize::try_from(pos.x)) else {
+            return false;
+        };
         if let Some(slot) = self.tiles.get_mut(y).and_then(|row| row.get_mut(x)) {
             *slot = tile;
             true
@@ -100,17 +106,17 @@ mod tests {
     fn put_sub_structure_copies_tiles_at_position() {
         let mut map = Structure::new(6, 6, Tile::Empty);
         let mut room = Structure::new(2, 2, Tile::Floor);
-        room.set(0, 0, Tile::Wall);
+        room.set(IVec2::ZERO, Tile::Wall);
 
         let ok = map.put_sub_structure(IVec2::new(2, 3), &room);
 
         assert!(ok);
-        assert_eq!(map.get(3, 2), Some(Tile::Wall));
-        assert_eq!(map.get(3, 3), Some(Tile::Floor));
-        assert_eq!(map.get(4, 2), Some(Tile::Floor));
-        assert_eq!(map.get(4, 3), Some(Tile::Floor));
+        assert_eq!(map.get(IVec2::new(2, 3)), Some(Tile::Wall));
+        assert_eq!(map.get(IVec2::new(3, 3)), Some(Tile::Floor));
+        assert_eq!(map.get(IVec2::new(2, 4)), Some(Tile::Floor));
+        assert_eq!(map.get(IVec2::new(3, 4)), Some(Tile::Floor));
         // Uncovered cells stay untouched.
-        assert_eq!(map.get(0, 0), Some(Tile::Empty));
+        assert_eq!(map.get(IVec2::ZERO), Some(Tile::Empty));
     }
 
     #[test]
@@ -135,6 +141,18 @@ mod tests {
         let room = Structure::new(4, 4, Tile::Floor);
 
         assert!(map.put_sub_structure(IVec2::new(0, 0), &room));
-        assert_eq!(map.get(3, 3), Some(Tile::Floor));
+        assert_eq!(map.get(IVec2::new(3, 3)), Some(Tile::Floor));
+    }
+
+    #[test]
+    fn get_and_set_reject_negative_and_out_of_bounds_positions() {
+        let mut map = Structure::new(2, 3, Tile::Empty);
+
+        assert!(!map.set(IVec2::new(-1, 0), Tile::Wall));
+        assert!(!map.set(IVec2::new(3, 0), Tile::Wall));
+        assert_eq!(map.get(IVec2::new(-1, 0)), None);
+        assert_eq!(map.get(IVec2::new(0, 2)), None);
+        assert!(map.set(IVec2::new(2, 1), Tile::Wall));
+        assert_eq!(map.get(IVec2::new(2, 1)), Some(Tile::Wall));
     }
 }

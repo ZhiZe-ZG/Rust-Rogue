@@ -5,18 +5,20 @@
 use crate::config::GameConfig;
 use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
+use crate::game::globals::ObjInfo;
 use crate::game::PLAYER;
-use crate::game::globals::CObjInfo;
+use crate::item::arena::OBJECTS;
 use crate::item::item_type::{ItemFilter, ItemType};
-use crate::item::pack::{get_item, leave_pack, reset_last};
+use crate::item::pack::{get_item_id, leave_pack_id, reset_last};
 use crate::rnd::rnd;
-use crate::ui::input::readchar;
+use crate::ui::input::read_key_event;
 use crate::ui::output::{addmsg_str, msg_str};
 use glam::IVec2;
 
-use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
-use crate::game::MONSTER_LIST;
-use crate::startup::roll;
+use crate::command::Command;
+use crate::entity::player::{MonsterFlags, Thing};
+use crate::dungeon::DUNGEON;
+use crate::rnd::roll;
 
 const PASSAGE: u8 = b'#' as u8;
 const DOOR: u8 = b'+' as u8;
@@ -39,27 +41,13 @@ const MAXSTR: usize = 1024;
 const HUNGERTIME: i32 = 1300;
 const STOMACHSIZE: i32 = 2000;
 const AFTER: i32 = 2;
-const ESCAPE: i32 = 27;
 const NORM: i32 = 0;
 const F_SEEN: u8 = 0x40;
 
-use crate::game::globals::{after, again, amulet, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump, last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running, see_floor, seenstairs, terse};
-
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
-#[inline]
-unsafe fn on(thing: *mut Thing, flag: MonsterFlags) -> bool {
-    (*thing_t(thing)).t_flags.contains(flag)
-}
+use crate::game::globals::{
+    after, again, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump,
+    last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running, see_floor, terse,
+};
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
@@ -95,10 +83,9 @@ pub unsafe fn show_floor() -> bool {
 /// The floor object at `(y, x)`, as an arena handle.
 pub fn find_obj_id(y: i32, x: i32) -> Option<crate::item::arena::ThingId> {
     for id in crate::game::item_ids() {
-        let hit = crate::item::arena::with_object(id, |data| {
-            data.o_pos.y == y && data.o_pos.x == x
-        })
-        .unwrap_or(false);
+        let hit =
+            crate::item::arena::with_object(id, |data| data.o_pos.y == y && data.o_pos.x == x)
+                .unwrap_or(false);
         if hit {
             return Some(id);
         }
@@ -106,16 +93,11 @@ pub fn find_obj_id(y: i32, x: i32) -> Option<crate::item::arena::ThingId> {
     None
 }
 
-pub unsafe fn find_obj(y: i32, x: i32) -> *mut Thing {
-    find_obj_id(y, x).map_or(std::ptr::null_mut(), crate::item::arena::ptr_of)
-}
-
 pub unsafe fn eat() {
-    let obj = get_item("eat", ItemFilter::Category(ItemType::Food));
-    if obj.is_null() {
+    let Some(obj) = get_item_id("eat", ItemFilter::Category(ItemType::Food)) else {
         return;
-    }
-    if !matches!((*thing_o(obj)).o_type, ItemType::Food) {
+    };
+    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Food)) {
         if terse == 0 {
             msg_str("ugh, you would get ill if you ate that");
         } else {
@@ -132,18 +114,22 @@ pub unsafe fn eat() {
         food_left = STOMACHSIZE;
     }
     hungry_state = 0;
-    if obj == PLAYER.weapon() {
-        PLAYER.set_weapon(std::ptr::null_mut());
+    if PLAYER.equipment().weapon_id() == Some(obj) {
+        PLAYER.set_weapon_id(None);
     }
-    if (*thing_o(obj)).o_which == 1 {
-        msg_str(&format!("my, that was a yummy {}", crate::game::globals::fruit()));
+    let which = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
+    if which == 1 {
+        msg_str(&format!(
+            "my, that was a yummy {}",
+            crate::game::globals::fruit()
+        ));
     } else if rnd(100) > 70 {
         PLAYER.with_stats_mut(|stats| stats.experience += 1);
         msg_str("bummer, this food tastes awful");
     } else {
         msg_str("yum, that tasted good");
     }
-    leave_pack(obj, false as u8, false as u8);
+    leave_pack_id(obj, false, false);
 }
 
 pub unsafe fn check_level() {
@@ -181,17 +167,12 @@ pub unsafe fn chg_str(amt: i32) {
     PLAYER.with_stats_mut(|stats| stats.strength = new_strength as u32);
     let mut comp = PLAYER.stats().strength;
 
-    if !PLAYER.left_ring().is_null() {
-        let ring = PLAYER.left_ring();
-        let bonus = (*thing_o(ring)).o_arm as i32;
-        let reduced = comp as i32 - bonus;
-        comp = if reduced < 3 { 3 } else { reduced as u32 };
-    }
-    if !PLAYER.right_ring().is_null() {
-        let ring = PLAYER.right_ring();
-        let bonus = (*thing_o(ring)).o_arm as i32;
-        let reduced = comp as i32 - bonus;
-        comp = if reduced < 3 { 3 } else { reduced as u32 };
+    // Subtract each worn ring's strength bonus (pointer-free read of `o_arm`).
+    for hand in 0..2usize {
+        if let Some(bonus) = PLAYER.equipment().ring_arm(hand) {
+            let reduced = comp as i32 - bonus;
+            comp = if reduced < 3 { 3 } else { reduced as u32 };
+        }
     }
     if comp > max_stats.strength {
         max_stats.strength = comp;
@@ -226,26 +207,34 @@ pub unsafe fn add_haste(potion: bool) -> bool {
 }
 
 pub unsafe fn aggravate() {
-    for id in MONSTER_LIST.ids() {
-        if let Some(mp) = MONSTER_LIST.handle(id) {
-            runto((*thing_t(mp)).t_pos);
+    for id in DUNGEON.monster_list.ids() {
+        if let Some(pos) = DUNGEON.monster_list
+            .with(id, |t| match t {
+                Thing::Monster { data } => Some(data.t_pos),
+                Thing::Object { .. } => None,
+            })
+            .flatten()
+        {
+            runto(pos);
         }
     }
 }
 
-pub unsafe fn is_current(obj: *mut Thing) -> bool {
-    if obj.is_null() {
-        return false;
-    }
-    if obj == PLAYER.armor()
-        || obj == PLAYER.weapon()
-        || obj == PLAYER.left_ring()
-        || obj == PLAYER.right_ring()
+/// Whether the object `id` is currently equipped (worn/wielded), announcing so
+/// when it is.
+pub fn is_current_id(id: crate::item::arena::ThingId) -> bool {
+    let eq = PLAYER.equipment();
+    if eq.armor_id() == Some(id)
+        || eq.weapon_id() == Some(id)
+        || eq.left_ring_id() == Some(id)
+        || eq.right_ring_id() == Some(id)
     {
-        if terse == 0 {
-            addmsg_str("That's already ");
+        unsafe {
+            if terse == 0 {
+                addmsg_str("That's already ");
+            }
+            msg_str("in use");
         }
-        msg_str("in use");
         return true;
     }
     false
@@ -255,7 +244,7 @@ pub unsafe fn get_dir() -> u8 {
     let mut gotit: bool;
     let mut last_delt: IVec2 = IVec2 { x: 0, y: 0 };
 
-    if again != 0 && last_dir != 0 {
+    if again != 0 && last_dir != crate::direction::Direction::None {
         delta.y = last_delt.y;
         delta.x = last_delt.x;
         dir_ch = last_dir;
@@ -265,42 +254,17 @@ pub unsafe fn get_dir() -> u8 {
         }
         loop {
             gotit = true;
-            dir_ch = readchar() as u8;
-            match dir_ch as u8 {
-                b'h' | b'H' => {
-                    delta.y = 0;
-                    delta.x = -1;
+            match Command::from_key_event(read_key_event()) {
+                Command::Move(direction)
+                | Command::Run(direction)
+                | Command::RunPrefix(direction) => {
+                    dir_ch = direction;
+                    let movement = direction.delta();
+                    delta.y = movement.y;
+                    delta.x = movement.x;
                 }
-                b'j' | b'J' => {
-                    delta.y = 1;
-                    delta.x = 0;
-                }
-                b'k' | b'K' => {
-                    delta.y = -1;
-                    delta.x = 0;
-                }
-                b'l' | b'L' => {
-                    delta.y = 0;
-                    delta.x = 1;
-                }
-                b'y' | b'Y' => {
-                    delta.y = -1;
-                    delta.x = -1;
-                }
-                b'u' | b'U' => {
-                    delta.y = -1;
-                    delta.x = 1;
-                }
-                b'b' | b'B' => {
-                    delta.y = 1;
-                    delta.x = -1;
-                }
-                b'n' | b'N' => {
-                    delta.y = 1;
-                    delta.x = 1;
-                }
-                c if c as i32 == ESCAPE => {
-                    last_dir = 0;
+                Command::Escape => {
+                    last_dir = crate::direction::Direction::None;
                     reset_last();
                     return false as u8;
                 }
@@ -313,9 +277,6 @@ pub unsafe fn get_dir() -> u8 {
             if gotit {
                 break;
             }
-        }
-        if (dir_ch as u8).is_ascii_uppercase() {
-            dir_ch = (dir_ch as u8).to_ascii_lowercase() as u8;
         }
         last_dir = dir_ch;
         last_delt.y = delta.y;
@@ -349,7 +310,7 @@ pub unsafe fn spread(nm: i32) -> i32 {
     nm - nm / 20 + rnd(nm / 10)
 }
 
-pub unsafe fn call_it(info: &mut CObjInfo) {
+pub unsafe fn call_it(info: &mut ObjInfo) {
     if info.oi_know {
         info.oi_guess = None;
     } else if info.oi_guess.is_none() {
@@ -358,7 +319,7 @@ pub unsafe fn call_it(info: &mut CObjInfo) {
         } else {
             msg_str("what do you want to call it? ");
         }
-        if let Some(text) = crate::options::read_line("", crate::ui::Window::Stdscr) {
+        if let Some(text) = crate::options::read_line("") {
             info.oi_guess = Some(text);
         }
     }

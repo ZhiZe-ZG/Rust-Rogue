@@ -5,19 +5,18 @@ use crate::rnd::rnd;
 
 use crate::config::GameConfig;
 use crate::draw::{look, map_cell_reveal};
-use crate::entity::monsters::{new_monster, randmonster};
-use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
+use crate::entity::monsters::{new_monster_id, randmonster};
+use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game;
-use crate::game::PLAYER;
 use crate::game::globals::{scr_info, weap_info};
+use crate::dungeon::DUNGEON;
+use crate::game::PLAYER;
 use crate::init::pick_color;
+use crate::item::arena::{ThingId, OBJECTS};
 use crate::item::item_type::{ItemFilter, ItemType};
-use crate::item::pack::{get_item, leave_pack};
-use crate::entity::player::discard;
-use crate::game::new_actor;
+use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::misc::{aggravate, call_it, choose_str};
-use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win, status};
-use crate::ui::{output, Window};
+use crate::ui::output::{addmsg_str, endmsg, msg_str, show_win};
 use crate::wizard::{teleport, whatis};
 use glam::IVec2;
 
@@ -105,17 +104,6 @@ impl ScrollType {
 
 use crate::game::globals::{no_command, terse};
 
-
-#[inline]
-unsafe fn thing_t(tp: *mut Thing) -> *mut ThingMonster {
-    crate::entity::player::thing_t(tp)
-}
-
-#[inline]
-unsafe fn thing_o(tp: *mut Thing) -> *mut ThingObject {
-    crate::entity::player::thing_o(tp)
-}
-
 #[inline]
 fn hero() -> IVec2 {
     crate::game::PLAYER.pos()
@@ -132,17 +120,19 @@ fn player_has(flag: MonsterFlags) -> bool {
 }
 
 // Map reveal now lives in `crate::draw::map_cell_reveal`, operating directly
-// on the `CURRENT_LEVEL` tile map and flag grids.
+// on the `DUNGEON` level's tile map and flag grids.
 
 /// read_scroll:
 /// Read a scroll from the pack and apply its effect.
 pub unsafe fn read_scroll() {
-    let mut obj = get_item("read", ItemFilter::Category(ItemType::SCROLL));
-    if obj.is_null() {
+    let Some(obj) = get_item_id("read", ItemFilter::Category(ItemType::SCROLL)) else {
         return;
-    }
+    };
 
-    if !matches!((*thing_o(obj)).o_type, ItemType::Scroll(_)) {
+    if !matches!(
+        OBJECTS.with_object(obj, |o| o.o_type),
+        Some(ItemType::Scroll(_))
+    ) {
         if terse == 0 {
             msg_str("there is nothing on it to read");
         } else {
@@ -151,26 +141,32 @@ pub unsafe fn read_scroll() {
         return;
     }
 
-    if obj == PLAYER.weapon() {
-        PLAYER.set_weapon(std::ptr::null_mut());
+    if PLAYER.equipment().weapon_id() == Some(obj) {
+        PLAYER.set_weapon_id(None);
     }
 
-    let discardit = (*thing_o(obj)).o_count == 1;
-    leave_pack(obj, false as u8, false as u8);
+    let (o_count, o_which) = OBJECTS
+        .with_object(obj, |o| (o.o_count, o.o_which))
+        .unwrap_or((0, 0));
+    let discardit = o_count == 1;
+    leave_pack_id(obj, false, false);
     let orig_obj = obj;
 
-    let scroll_type = ScrollType::from_raw((*thing_o(obj)).o_which);
+    let scroll_type = ScrollType::from_raw(o_which);
     match scroll_type {
         ScrollType::Confuse => {
             crate::game::PLAYER.add_flag(MonsterFlags::CANHUH);
             msg_str(&format!("your hands begin to glow {}", pick_color("red")));
         }
         ScrollType::Armor => {
-            if !PLAYER.armor().is_null() {
-                (*thing_o(PLAYER.armor())).o_arm -= 1;
-                (*thing_o(PLAYER.armor()))
-                    .o_flags
-                    .remove(ObjectFlags::CURSED);
+            // Enchant the worn armor (pointer-free mutation via the arena).
+            let enchanted = PLAYER
+                .with_armor_mut(|o| {
+                    o.o_arm -= 1;
+                    o.o_flags.remove(ObjectFlags::CURSED);
+                })
+                .is_some();
+            if enchanted {
                 msg_str(&format!(
                     "your armor glows {} for a moment",
                     pick_color("silver")
@@ -189,7 +185,7 @@ pub unsafe fn read_scroll() {
                         continue;
                     }
                     if let Some(mid) = game::monster_id_at(y, x) {
-                        let running_held = game::MONSTER_LIST
+                        let running_held = game::DUNGEON.monster_list
                             .with_mut(mid, |t| {
                                 if let Thing::Monster { data } = t {
                                     if data.t_flags.contains(MonsterFlags::RUN) {
@@ -242,9 +238,7 @@ pub unsafe fn read_scroll() {
                         continue;
                     }
                     let is_scare = crate::misc::find_obj_id(y, x)
-                        .and_then(|id| {
-                            crate::item::arena::with_object(id, |data| data.o_type)
-                        })
+                        .and_then(|id| crate::item::arena::with_object(id, |data| data.o_type))
                         .is_some_and(|t| matches!(t, ItemType::Scroll(ScrollType::Scare)));
                     if is_scare {
                         continue;
@@ -260,8 +254,8 @@ pub unsafe fn read_scroll() {
             if i == 0 {
                 msg_str("you hear a faint cry of anguish in the distance");
             } else {
-                obj = new_actor();
-                new_monster(obj, randmonster(false), mp);
+                let id = DUNGEON.monster_list.spawn_actor();
+                new_monster_id(id, randmonster(false), mp);
             }
         }
         ScrollType::IdentifyPotion
@@ -281,12 +275,12 @@ pub unsafe fn read_scroll() {
                 ItemFilter::Category(ItemType::ARMOR),
                 ItemFilter::RingOrStick,
             ];
-            scr_info[(*thing_o(obj)).o_which as usize].oi_know = true;
+            scr_info[o_which as usize].oi_know = true;
             msg_str(&format!(
                 "this scroll is an {} scroll",
-                scr_info[(*thing_o(obj)).o_which as usize].oi_name
+                scr_info[o_which as usize].oi_name
             ));
-            whatis(true as u8, id_filter[(*thing_o(obj)).o_which as usize]);
+            whatis(true as u8, id_filter[o_which as usize]);
         }
         ScrollType::Map => {
             scr_info[ScrollType::Map.index()].oi_know = true;
@@ -298,14 +292,14 @@ pub unsafe fn read_scroll() {
                     if ch != SPACE {
                         let has_monster = game::monster_id_at(y, x);
                         if let Some(mid) = has_monster {
-                            game::MONSTER_LIST.with_mut(mid, |t| {
+                            game::DUNGEON.monster_list.with_mut(mid, |t| {
                                 if let Thing::Monster { data } = t {
                                     data.t_oldch = ch as u8;
                                 }
                             });
                         }
                         if has_monster.is_none() || !player_has(MonsterFlags::SEEMONST) {
-                            output::write_glyph_at(IVec2::new(x, y), (ch as u8) as char);
+                            crate::draw::write_cell_glyph(IVec2::new(x, y), ch as u8 as char);
                         }
                     }
                 }
@@ -313,15 +307,14 @@ pub unsafe fn read_scroll() {
         }
         ScrollType::FindFood => {
             let mut found = false as u8;
-            let window = Window::Stdscr;
-            output::clear_window(window);
+            crate::ui::terminal::UI.clear();
             for id in crate::game::item_ids() {
                 let info = crate::item::arena::with_object(id, |data| (data.o_type, data.o_pos));
                 if let Some((otype, opos)) = info {
                     if matches!(otype, ItemType::Food) {
                         found = true as u8;
-                        output::move_window_cursor(window, IVec2::new(opos.x, opos.y));
-                        output::write_window_glyph(window, (FOOD as u8) as char);
+                        crate::ui::terminal::UI.move_cursor(IVec2::new(opos.x, opos.y));
+                        crate::draw::write_cell_glyph(opos, FOOD as u8 as char);
                     }
                 }
             }
@@ -340,34 +333,39 @@ pub unsafe fn read_scroll() {
             }
         }
         ScrollType::Enchant => {
-            if PLAYER.weapon().is_null()
-                || !matches!((*thing_o(PLAYER.weapon())).o_type, ItemType::Weapon(_))
-            {
-                msg_str("you feel a strange sense of loss");
-            } else {
-                (*thing_o(PLAYER.weapon()))
-                    .o_flags
-                    .remove(ObjectFlags::CURSED);
-                if rnd(2) == 0 {
-                    (*thing_o(PLAYER.weapon())).o_hplus += 1;
-                } else {
-                    (*thing_o(PLAYER.weapon())).o_dplus += 1;
-                }
-                msg_str(&format!(
+            // Enchant the wielded weapon; only a real weapon qualifies.
+            let weapon_name = PLAYER
+                .with_weapon_mut(|o| {
+                    if !matches!(o.o_type, ItemType::Weapon(_)) {
+                        return None;
+                    }
+                    o.o_flags.remove(ObjectFlags::CURSED);
+                    if rnd(2) == 0 {
+                        o.o_hplus += 1;
+                    } else {
+                        o.o_dplus += 1;
+                    }
+                    Some(weap_info[o.o_which as usize].oi_name)
+                })
+                .flatten();
+            match weapon_name {
+                Some(name) => msg_str(&format!(
                     "your {} glows {} for a moment",
-                    weap_info[(*thing_o(PLAYER.weapon())).o_which as usize].oi_name,
+                    name,
                     pick_color("blue")
-                ));
-            }
+                )),
+                None => msg_str("you feel a strange sense of loss"),
+            };
         }
         ScrollType::Scare => {
             msg_str("you hear maniacal laughter in the distance");
         }
         ScrollType::RemoveCurse => {
-            uncurse(PLAYER.armor());
-            uncurse(PLAYER.weapon());
-            uncurse(PLAYER.left_ring());
-            uncurse(PLAYER.right_ring());
+            // Lift the curse from every equipped object (pointer-free).
+            PLAYER.with_armor_mut(|o| o.o_flags.remove(ObjectFlags::CURSED));
+            PLAYER.with_weapon_mut(|o| o.o_flags.remove(ObjectFlags::CURSED));
+            PLAYER.with_ring_mut(0, |o| o.o_flags.remove(ObjectFlags::CURSED));
+            PLAYER.with_ring_mut(1, |o| o.o_flags.remove(ObjectFlags::CURSED));
             msg_str(choose_str(
                 "you feel in touch with the Universal Onenes",
                 "you feel as if somebody is watching over you",
@@ -378,8 +376,11 @@ pub unsafe fn read_scroll() {
             msg_str("you hear a high pitched humming noise");
         }
         ScrollType::Protect => {
-            if !PLAYER.armor().is_null() {
-                (*thing_o(PLAYER.armor())).o_flags.insert(ObjectFlags::PROT);
+            // Mark the worn armor as protected (pointer-free).
+            let protected = PLAYER
+                .with_armor_mut(|o| o.o_flags.insert(ObjectFlags::PROT))
+                .is_some();
+            if protected {
                 msg_str(&format!(
                     "your armor is covered by a shimmering {} shield",
                     pick_color("gold")
@@ -391,20 +392,15 @@ pub unsafe fn read_scroll() {
         _ => {}
     }
 
-    obj = orig_obj;
+    let _ = orig_obj;
     look(true as u8);
-    status();
-
-    call_it(&mut scr_info[(*thing_o(obj)).o_which as usize]);
+    call_it(&mut scr_info[o_which as usize]);
     if discardit {
-        discard(obj);
+        let _ = OBJECTS.remove(obj);
     }
 }
 
-/// uncurse:
 /// Uncurse an item.
-pub unsafe fn uncurse(obj: *mut Thing) {
-    if !obj.is_null() {
-        (*thing_o(obj)).o_flags.remove(ObjectFlags::CURSED);
-    }
+pub unsafe fn uncurse_id(id: ThingId) {
+    OBJECTS.with_object_mut(id, |o| o.o_flags.remove(ObjectFlags::CURSED));
 }

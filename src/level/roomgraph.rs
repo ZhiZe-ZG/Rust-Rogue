@@ -4,8 +4,9 @@
 //! nine grid slots are geometrically adjacent and which of those connections
 //! have actually been dug. This module keeps that plan entirely in Rust:
 //! [`RoomGraph`] records which room pairs get passages, computed by
-//! [`plan_connections`] from each slot's `gone` flag, growing a spanning tree
-//! over the live rooms and then adding a few extra links for loopiness.
+//! [`RoomGraph::plan_connections`] from each slot's `gone` flag, growing a
+//! spanning tree over the live rooms and then adding a few extra links for
+//! loopiness.
 
 use crate::config::GameConfig;
 use crate::rnd::rnd;
@@ -17,52 +18,39 @@ pub struct RoomGraph {
 }
 
 impl RoomGraph {
-    /// Build an empty connection plan.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Planned passage pairs, each a `(from, to)` pair of room indexes.
     pub(crate) fn connections(&self) -> &[(usize, usize)] {
         &self.connections
     }
 
-    /// Recompute the connection plan from the rooms' `gone` flags.
-    pub(crate) fn generate(&mut self, gone: &[bool]) {
-        self.connections = plan_connections(gone);
-    }
+    /// Build a connection plan from the rooms' `gone` flags.
+    pub(crate) fn plan_connections(gone: &[bool]) -> Self {
+        let live_rooms = gone.iter().filter(|&&is_gone| !is_gone).count();
+        if live_rooms <= 1 {
+            return Self::default();
+        }
 
-    /// Discard the current connection plan.
-    pub fn reset(&mut self) {
-        self.connections.clear();
+        let connections = build_spanning_tree(gone, live_rooms);
+        Self {
+            connections: add_extra_connections(gone, connections),
+        }
     }
-}
-
-/// Plan which room pairs get connected.
-fn plan_connections(gone: &[bool]) -> Vec<(usize, usize)> {
-    let live_rooms = gone.iter().filter(|&&is_gone| !is_gone).count();
-    if live_rooms <= 1 {
-        return Vec::new();
-    }
-
-    let mut connections = Vec::new();
-    build_spanning_tree(gone, live_rooms, &mut connections);
-    add_extra_connections(gone, &mut connections);
-    connections
 }
 
 /// Grow a spanning tree over the live rooms.
 ///
 /// "Gone" rooms act as pass-through cells in the 3x3 grid: they may appear in
 /// the tree, but only non-gone rooms must become reachable.
-fn build_spanning_tree(gone: &[bool], live_rooms: usize, connections: &mut Vec<(usize, usize)>) {
+fn build_spanning_tree(gone: &[bool], live_rooms: usize) -> Vec<(usize, usize)> {
+    let mut connections = Vec::new();
     let mut in_graph = [false; GameConfig::MAX_ROOMS];
     let mut current = pick_random(|idx| !gone[idx]);
     in_graph[current] = true;
     let mut reached = 1;
 
     while reached < live_rooms {
-        match next_unreached(current, &in_graph) {
+        // Random adjacent room not yet part of the connected graph.
+        match pick_unconnected(neighbors(current), |room| in_graph[room]) {
             Some(next) => {
                 in_graph[next] = true;
                 if !gone[next] {
@@ -74,34 +62,27 @@ fn build_spanning_tree(gone: &[bool], live_rooms: usize, connections: &mut Vec<(
             None => current = pick_random(|idx| in_graph[idx]),
         }
     }
+
+    connections
 }
 
 /// Add a few extra connecting passages for loopiness.
-fn add_extra_connections(gone: &[bool], connections: &mut Vec<(usize, usize)>) {
+fn add_extra_connections(
+    gone: &[bool],
+    mut connections: Vec<(usize, usize)>,
+) -> Vec<(usize, usize)> {
     let mut extra = rnd(GameConfig::EXTRA_CONNECTION_ROLLS);
     while extra > 0 {
         let from = pick_random(|idx| !gone[idx]);
-        if let Some(to) = next_unconnected(from, connections) {
+        // Random adjacent room with no dug connection to `from` yet.
+        if let Some(to) = pick_unconnected(neighbors(from), |room| {
+            connections.contains(&(from, room)) || connections.contains(&(room, from))
+        }) {
             connections.push((from, to));
         }
         extra -= 1;
     }
-}
-
-/// Pick a uniformly random adjacent room not yet part of the connected graph.
-fn next_unreached(from: usize, in_graph: &[bool; GameConfig::MAX_ROOMS]) -> Option<usize> {
-    pick_unconnected(neighbors(from), |room| in_graph[room])
-}
-
-/// Pick a uniformly random adjacent room with no dug connection to `from` yet.
-fn next_unconnected(from: usize, connections: &[(usize, usize)]) -> Option<usize> {
-    pick_unconnected(neighbors(from), |room| {
-        is_connected(connections, from, room)
-    })
-}
-
-fn is_connected(connections: &[(usize, usize)], a: usize, b: usize) -> bool {
-    connections.contains(&(a, b)) || connections.contains(&(b, a))
+    connections
 }
 
 /// Pick a uniformly random candidate that is not blocked, or `None` when every
@@ -162,6 +143,11 @@ mod tests {
     }
 
     #[test]
+    fn default_plan_has_no_connections() {
+        assert!(RoomGraph::default().connections().is_empty());
+    }
+
+    #[test]
     fn plan_connections_with_single_live_room_is_empty() {
         let mut gone = [false; GameConfig::MAX_ROOMS];
         for (i, is_gone) in gone.iter_mut().enumerate() {
@@ -169,13 +155,14 @@ mod tests {
                 *is_gone = true;
             }
         }
-        assert!(plan_connections(&gone).is_empty());
+        assert!(RoomGraph::plan_connections(&gone).connections().is_empty());
     }
 
     #[test]
     fn plan_connections_connects_all_live_rooms() {
         let gone = [false; GameConfig::MAX_ROOMS];
-        let connections = plan_connections(&gone);
+        let graph = RoomGraph::plan_connections(&gone);
+        let connections = graph.connections();
         let live = GameConfig::MAX_ROOMS;
 
         // Spanning tree yields |V| - 1 links; extra links are added on top,
@@ -184,25 +171,12 @@ mod tests {
         assert!(connections.len() <= live - 1 + GameConfig::EXTRA_CONNECTION_ROLLS as usize);
 
         // Every link joins orthogonally adjacent slots.
-        for &(a, b) in &connections {
+        for &(a, b) in connections {
             assert!(neighbors(a).any(|n| n == b), "{a} is not adjacent to {b}");
         }
 
         // The resulting graph reaches every live room.
-        assert!(reaches_all_rooms(&connections, live));
-    }
-
-    #[test]
-    fn room_graph_generate_and_reset() {
-        let gone = [false; GameConfig::MAX_ROOMS];
-        let mut graph = RoomGraph::new();
-        assert!(graph.connections().is_empty());
-
-        graph.generate(&gone);
-        assert!(!graph.connections().is_empty());
-
-        graph.reset();
-        assert!(graph.connections().is_empty());
+        assert!(reaches_all_rooms(connections, live));
     }
 
     fn reaches_all_rooms(connections: &[(usize, usize)], room_count: usize) -> bool {
