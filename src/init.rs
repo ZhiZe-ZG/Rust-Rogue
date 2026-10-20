@@ -454,7 +454,8 @@ pub unsafe fn init_probs() {
 /// return the supplied colour unchanged.
 pub unsafe fn pick_color(col: &'static str) -> &'static str {
     if crate::game::PLAYER.has_flag(MonsterFlags::HALU) {
-        crate::colors::random_color()
+        let mut random = RNG.lock().unwrap();
+        crate::colors::random_color(&mut random)
     } else {
         col
     }

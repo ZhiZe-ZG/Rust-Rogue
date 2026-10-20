@@ -117,6 +117,18 @@ mod tests {
     }
 
     #[test]
+    fn random_color_uses_the_supplied_generator() {
+        let mut random = Random::new();
+        let mut reference = Random::new();
+        for _ in 0..100 {
+            let expected = crate::colors::POTION_COLORS
+                [reference.rnd(crate::colors::POTION_COLOR_COUNT as i32) as usize];
+            assert_eq!(crate::colors::random_color(&mut random), expected);
+        }
+        assert_eq!(random.rnd(1000), reference.rnd(1000));
+    }
+
+    #[test]
     fn rolls_match_successive_draws_and_preserve_state() {
         let mut random = Random::new();
         let mut reference = Random::new();
