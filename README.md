@@ -1,8 +1,8 @@
 # Rust Rogue
 
-This is a Rust rewrite of *Rogue: Exploring the Dungeons of Doom*, based on the original C code forked from <https://github.com/Davidslv/rogue>. The project is now written entirely in Rust, with no C source code remaining.
+This is a Rust rewrite of *Rogue: Exploring the Dungeons of Doom*, based on the original C code forked from <https://github.com/Davidslv/rogue>. The game library and executable are implemented in Rust. The separate [rogomatic/README.md](rogomatic/README.md) describes the retained C Rog-O-Matic sources, which are not part of the Cargo game build.
 
-> ncurses is still required to build the game.
+The Rust terminal UI uses `ratatui` with the `crossterm` backend, not ncurses. Dependencies are declared in [Cargo.toml](Cargo.toml). The Nix development shell still includes ncurses, but the Rust game has no ncurses crate dependency.
 
 ## Develop Environment
 
@@ -15,39 +15,52 @@ nix develop
 ```bash
 cargo build --release
 ./target/release/rogue          # play
-./target/release/rogue -d       # demo death screen
-./target/release/rogue -s       # show high scores
+./target/release/rogue --seed 12345 # start with an explicit RNG seed
 ./target/release/rogue FILE     # restore a saved game
+./target/release/rogue --restore FILE # restore an explicit file
+./target/release/rogue -r       # restore the default save file
+./target/release/rogue --help   # show command-line options
+cargo test --all-targets -- --test-threads=1
 ```
+
+The CLI is defined in [src/command_line_parameter.rs](src/command_line_parameter.rs) using `clap`. The old `-d` and `-s` startup modes are not defined by the current CLI. Gameplay expects an interactive terminal; the rendering grid is 80 × 24.
 
 ## Rust global variable inventory
 
 This repository still has a number of process-wide Rust globals and singleton owners. They are the current refactor targets if the goal is to move away from legacy C-style global state and make state ownership more explicit.
 
-### Core game globals (`src/game/globals.rs`)
+### Dungeon-owned state
 
-The main mutable game-state bucket is in `src/game/globals.rs`. It currently contains the following process-wide values. Each item is annotated with the role it plays in the legacy engine so it can be reduced or moved more intentionally.
+`DUNGEON` in [src/dungeon/mod.rs](src/dungeon/mod.rs) owns the current `Level`, accessed through scoped `with_level()` / `with_level_mut()` closures, plus the live `monster_list` and `monster_map`.
+
+It also owns atomic fields for `max_level` (deepest dungeon depth), `no_food` (food-generation counter), `ntraps`, `seenstairs`, and `amulet`. These are not standalone globals. Use methods such as `max_depth()`, `seen_stairs()`, `set_seen_stairs()`, and `has_amulet()`.
+
+`Level` in [src/level/level.rs](src/level/level.rs) contains depth, generation identity, stairs position, rooms, passages, room graph, map, cell flags, passage links, and floor-item handles. There is no separate `dnum` global: `DUNGEON.current_depth()` reads `Level::depth`. **`seenstairs` currently belongs to `Dungeon`, not `Level`.**
+
+The former `CURRENT_LEVEL`, `MONSTER_LIST`, and `MONSTER_MAP` singleton storage is now owned by `DUNGEON`.
+
+### Core game globals
+
+The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/globals.rs). Many player, movement, inventory, and message scalars remain separate globals; they have not all moved into owner structs.
 
 #### Boolean / flag globals
 
-- `allscore`: enables the all-scores display mode used by the standard build.
+- `ALLSCORE`: immutable constant enabling the standard all-scores display mode.
 - `after`: toggles the post-move/status phase used by the command loop.
 - `again`: tracks whether the previous command should be replayed.
-- `seenstairs`: remembers whether the staircase has been seen on this level.
-- `amulet`: marks whether the Amulet of Yendor has been acquired.
 - `door_stop`: stops movement when a door is encountered.
 - `fight_flush`: requests a fight/flush update after combat resolution.
 - `firstmove`: indicates the first move in the current turn cycle.
-- `got_ltc`: tracks whether the player has obtained the last letter/level clue state.
+- `got_ltc`: records whether terminal control characters were captured.
 - `has_hit`: flag set when a hit occurs during combat.
 - `in_shell`: whether the game is in the shell/command mode.
 - `inv_describe`: controls whether inventory items are described in detail.
-- `jump`: active when the player is performing a jumping move.
+- `jump`: suppresses intermediate screen updates during running.
 - `kamikaze`: enables the special kamikaze behavior.
 - `lower_msg`: whether messages should be displayed in lower-case.
 - `move_on`: whether movement continues after an action.
 - `msg_esc`: allows the user to leave the message display.
-- `passgo`: whether moving onto a tile should advance the turn.
+- `passgo`: controls automatic passage-following during running.
 - `playing`: global game-running flag.
 - `q_comm`: indicates a quick command mode.
 - `running`: whether the player is in a running movement state.
@@ -55,42 +68,39 @@ The main mutable game-state bucket is in `src/game/globals.rs`. It currently con
 - `see_floor`: whether floor tiles are visible or hidden.
 - `stat_msg`: whether the status line is shown through the message area.
 - `terse`: toggles terse output mode.
-- `to_death`: ending-state flag used when the game is dying.
+- `to_death`: controls repeated fighting, not whether the player is dead.
 - `tombstone`: whether the death screen / tombstone is enabled.
 - `master_mode_enabled`: wizard-mode gate for master-mode debugging.
-- `dir_ch`: most-recent direction character input.
-- `runch`: current running direction.
+- `dir_ch`: most-recent input direction, represented by `Direction`.
+- `runch`: current running direction, represented by `Direction`.
 - `take`: last object-take command state.
 
 #### Player / inventory / progress state
 
 - `pack_used`: record of used pack slots.
-- `orig_dsusp`: original suspicion value used by the game logic.
+- `noscore`: suppresses score recording when nonzero.
+- `orig_dsusp`: original terminal delayed-suspend character.
 - `l_last_comm`: previous last command value.
 - `l_last_dir`: previous last direction value.
 - `last_comm`: most recent command.
 - `last_dir`: most recent movement direction.
-- `numscores`: total number of saved score entries.
-- `n_objs`: number of objects in the current state.
-- `ntraps`: number of traps in the current level state.
+- `NUMSCORES`: immutable maximum number of retained scores; `NUMNAME` is its display label.
+- `n_objs`: number of eligible choices during item selection.
 - `hungry_state`: player hunger state / status level.
-- `inpack`: whether the player is carrying or interacting with inventory.
+- `inpack`: count of pack contents.
 - `inv_type`: current inventory display type.
 - `max_hit`: maximum hit value used by combat calculations.
-- `max_level`: highest dungeon level reached.
 - `mpos`: current message cursor column / pagination position.
-- `no_food`: food deprivation / no-food state.
 - `a_class`: armor class table used by the game.
-- `count`: generic engine counter used across turn logic.
+- `count`: remaining command repetitions.
 - `scoreboard`: open score file handle.
 - `food_left`: remaining food units.
 - `lastscore`: most recently recorded score value.
-- `no_command`: flag to suppress command processing.
-- `no_move`: flag to block movement.
+- `no_command`: remaining turns during which commands are suppressed.
+- `no_move`: remaining turns during which movement is blocked.
 - `purse`: current gold count.
-- `quiet`: quiet mode / suppress output state.
+- `quiet`: turn counter used for regeneration, not output volume.
 - `vf_hit`: venus-flytrap hit counter state.
-- `dnum`: dungeon depth number.
 - `seed`: RNG seed.
 - `e_levels`: experience thresholds per level.
 - `delta`: last movement delta / offset vector.
@@ -98,7 +108,7 @@ The main mutable game-state bucket is in `src/game/globals.rs`. It currently con
 - `l_last_pick`: last picked item for the previous cycle.
 - `last_pick`: last picked item in the current cycle.
 - `max_stats`: player max-stat template.
-- `oldrp`: old room pointer / save-restore helper state.
+- `oldrp`: previous room index, represented by `Option<usize>`.
 
 #### Runtime tables and arrays
 
@@ -132,113 +142,58 @@ The main mutable game-state bucket is in `src/game/globals.rs`. It currently con
 - `INV_T_NAMES`: inventory display style names.
 - `TRAP_NAMES`: trap naming strings.
 
-### Other global singleton owners and caches
+### Other singleton owners and local state
 
-These are process-wide singletons used outside the main globals table, and they are usually the next best candidates for explicit ownership or context-scoped state:
+The current owners outside the main globals module are:
 
 - `PLAYER`: the live player actor and equipment owner.
-- `CURRENT_LEVEL`: current dungeon level singleton.
-- `MONSTER_LIST`: live monster list registry.
-- `MONSTER_MAP`: per-cell monster occupancy map.
+- `DUNGEON`: current level, dungeon counters, live monsters, and occupancy map.
 - `OBJECTS`: item arena / object storage.
 - `RNG`: random-number generator state.
 - `RELEASE`: release/version string.
-- `statlist`: obfuscated status-list bytes.
-- `version`: game version banner bytes.
-- `LFD`: last file descriptor / save-file handle.
-- `COUNTCH`: command counting state.
-- `DIRECTION`: current input direction state.
-- `NEWCOUNT`: updated count used during input processing.
-- `RET`: generic return position used in random movement.
-- `CH_RET`: chase-return destination.
-- `THIS`: current target/position holder in movement logic.
-- `TRYP`: temporary move-attempt coordinate.
-- `CANSEE_TP`: visible-target coordinate used in chase logic.
-- `KILLNAME_BUFFER`: buffer used to build monster/player kill names.
-- `MNAME_BUF`: text buffer for monster names.
-- `MNAME_INIT`: whether monster-name buffer has been initialized.
-- `PRNAME_BUF`: temporary player name buffer.
-- `USED`: material-use tracking array.
-- `MESSAGE_STATE`: UI message renderer state.
-- `GRID`: terminal rendering grid.
-- `CURSOR`: current terminal cursor location.
-- `STANDOUT`: standout-mode rendering flag.
-- `INPUT_TIMEOUT`: terminal input timeout setting.
-- `SHUTDOWN`: terminal shutdown state.
-- `TERMINAL`: actual terminal/backend instance.
-- `HPWIDTH`: width of the HP/status display.
-- `S_HUNGRY`: cached hunger status display value.
-- `S_LVL`: cached level display value.
-- `S_PUR`: cached purse display value.
-- `S_HP`: cached HP display value.
-- `S_ARM`: cached armor display value.
-- `S_STR`: cached strength display value.
-- `S_EXP`: cached experience display value.
+- `WIZARD`: private atomic wizard-mode state in [src/wizard.rs](src/wizard.rs), reached through `wizard_mode()`, `set_wizard_mode()`, and `is_wizard()`. The old public mutable `wizard` global is absent; wizard helpers remain.
+- `LFD`: optional file handle used by platform locking helpers.
+- `UI`: the `UiState` owner in [src/ui/terminal.rs](src/ui/terminal.rs), containing the grid, cursor, reverse-video mode, timeout, shutdown state, terminal backend, pending-render flag, message buffer, and status caches. Former standalone terminal/message/cache globals are fields of this owner.
+- Exit-request atomics in [src/startup.rs](src/startup.rs) and the rendered-level cache in [src/daemon.rs](src/daemon.rs).
 
-This list is not meant to be permanent; it is a checklist for future reductions and ownership cleanup.
+`CommandState` in [src/command_dispatch.rs](src/command_dispatch.rs) is local to the main loop and passed into dispatch. Its repeat/run command fields and new-count flag replace the old `COUNTCH`, `DIRECTION`, and `NEWCOUNT` statics. The `Command` and `Direction` enums replace untyped command/direction bytes in gameplay state.
+
+Former chase-coordinate, name-buffer, random-move return, and material-use scratch globals are no longer separate process-wide owners. `STATLIST` and `VERSION` in [src/vers.rs](src/vers.rs) are immutable constants, not mutable globals.
+
+`PLAYER` uses an `RwLock` for the hero and mutex-protected optional `ThingId` handles for equipment. `OBJECTS` owns arena storage; packs and floor-item lists use handles. These synchronization mechanisms do not make the entire legacy engine thread-safe.
 
 ## Layout
 
-- `Cargo.toml`: Crate definition.  Produces both a library (`rogue_rust`,
-  used for unit testing) and a native binary (`rogue`).
-- `src/bin/rogue.rs`: Native Rust entry point.  Builds the legacy C-style
-  `argv`/`envp` arrays from `std::env` and hands them to `startup::rogue_main`.
-- `src/lib.rs`: Rust module root.
-- `src/startup.rs`: Process startup sequence (`rogue_main`, `playit`, `quit`,
-  `shell`, `my_exit`, signal handlers).
-- `src/vers.rs`: Version/identity strings (`release`, `version`,
-  `statlist`) ported byte-for-byte from the old `vers.c`.
-- `src/globals.rs`: Game-global variables, all exported with the legacy
-  `#[no_mangle]` symbol names.
-- `src/machdep.rs` / `src/mdport.rs`: Machine-dependent helpers and
-  portability wrappers (originally `mach_dep.c` / `mdport.c`).
-- `src/curses.rs`: C-shape ncurses wrappers (`*mut c_void` windows, raw
-  string pointers) translating to the safe `ncurses` crate.
-- `src/rnd.rs`: Random number generator state and legacy RNG symbols
-  (`rnd`, `set_seed`) backed by the `rand` crate.
-- `src/level/`: Level generation subsystem.
-  - `src/level/ffi.rs`: Level creation entrypoints (`new_level`, `find_floor`)
-    and internal room/passage drawing.
-  - `src/level/passages.rs`: Corridor/passage digging.
-  - `src/level/structure/`: Tile-grid container and room model
-    (`structure/structure.rs` = `Structure`, `structure/room.rs` = `Room`).
-  - `src/level/tile/`: Tile and trap vocabulary (`tile/tile.rs` = `Tile`,
-    `tile/trap.rs` = `Trap`).
-  - `src/level/mod.rs`: Level module root and public re-exports.
-- `src/game.rs`: Shared `CURRENT_LEVEL`, monster/object lists, and game state
-  backing the legacy save format.
-- `src/rndmove.rs`: Random movement helper used by monster/player logic.
-- `src/rip.rs`: RIP tombstone art provider and end-of-run scoreboard.
-- `src/save.rs`: Save/restore and autosave entrypoints (`save_game`,
-  `save_file`, `restore`, `auto_save`).
-- `src/score.rs`: Scoreboard persistence (`rd_score`, `wr_score`).
-- `src/rings.rs`: Ring mechanics (`ring_on`, `ring_off`, `gethand`,
-  `ring_eat`, `ring_num`).
-- `src/monsters.rs`: Monster behavior helpers and save checks (`randmonster`,
-  `new_monster`, `wake_monster`, etc.).
-- `src/potions.rs`: Potion effects and visibility/status helpers (`quaff`,
-  `is_magic`, `invis_on`, `turn_see`, `seen_stairs`, `raise_level`, `do_pot`).
-- `src/weapons.rs`: Weapon/projectile handling and formatting (`missile`,
-  `do_motion`, `fall`, `wield`, `num`, etc.).
-- `src/armor.rs`: Armor equip/unequip and pass-turn helper functions (`wear`,
-  `take_off`, `waste_time`).
-- `src/sticks.rs`: Wand/staff behavior and charge formatting (`fix_stick`,
-  `do_zap`, `drain`, `fire_bolt`, `charge_str`).
-- `src/scrolls.rs`: Scroll effects and curses removal (`read_scroll`,
-  `uncurse`).
-- `src/wizard.rs`: Wizard helpers and debug commands (`whatis`, `teleport`,
-  `create_obj`, `show_map`) with runtime global gating instead of `#ifdef`
-  guards.
-- `src/player.rs`: Shared C-layout bindings and player-facing helpers used
-  across modules.
-- `src/command.rs`, `src/io.rs`, `src/fight.rs`, `src/chase.rs`,
-  `src/daemon.rs`, `src/daemons.rs`, `src/draw.rs`, `src/misc.rs`,
-  `src/options.rs`, `src/pack.rs`, `src/list.rs`, `src/things.rs`,
-  `src/state.rs`: Remaining gameplay subsystems, all in Rust.
+- [Cargo.toml](Cargo.toml): crate definition for the `rogue_rust` library and native `rogue` binary.
+- [src/bin/rogue.rs](src/bin/rogue.rs): parse arguments with `clap` and call `startup::rogue_main`.
+- [src/lib.rs](src/lib.rs): Rust module root.
+- [src/command_line_parameter.rs](src/command_line_parameter.rs): CLI definitions.
+- [src/startup.rs](src/startup.rs): initialization, main loop, signals, exit requests, quit, and shell escape.
+- [src/command.rs](src/command.rs), [src/direction.rs](src/direction.rs): command and direction vocabulary.
+- [src/command_dispatch.rs](src/command_dispatch.rs): runtime command execution and command-local bookkeeping.
+- [src/game/mod.rs](src/game/mod.rs): shared game API and owner re-exports.
+- [src/game/globals.rs](src/game/globals.rs): remaining shared scalars, tables, and strings.
+- [src/game/player.rs](src/game/player.rs): player and equipment owner.
+- [src/dungeon/mod.rs](src/dungeon/mod.rs): dungeon owner and level lifecycle.
+- [src/dungeon/generation.rs](src/dungeon/generation.rs), [src/dungeon/presence.rs](src/dungeon/presence.rs): level generation and population.
+- [src/dungeon/monster_list.rs](src/dungeon/monster_list.rs), [src/dungeon/monster_map.rs](src/dungeon/monster_map.rs): monster storage and occupancy.
+- [src/level/level.rs](src/level/level.rs), [src/level/passages.rs](src/level/passages.rs), [src/level/roomgraph.rs](src/level/roomgraph.rs): level model, corridor generation, and room connectivity.
+- [src/structure/mod.rs](src/structure/mod.rs), [src/tile/mod.rs](src/tile/mod.rs): spatial containers, rooms, passages, tiles, and traps.
+- [src/entity/mod.rs](src/entity/mod.rs): actor types, stats, movement, chase, combat, and monsters.
+- [src/item/mod.rs](src/item/mod.rs): item arena, inventory, armor, weapons, potions, rings, scrolls, and sticks.
+- [src/ui/mod.rs](src/ui/mod.rs): terminal input, message/status output, and rendering.
+- [src/save.rs](src/save.rs), [src/state.rs](src/state.rs): save-file envelope, restoration, and serialized snapshots.
+- [src/rip.rs](src/rip.rs), [src/score.rs](src/score.rs): end-of-run handling, tombstone art, and score persistence.
+- [src/daemon.rs](src/daemon.rs), [src/daemons.rs](src/daemons.rs): scheduled actions and timed gameplay effects.
+- [src/init.rs](src/init.rs), [src/options.rs](src/options.rs), [src/config.rs](src/config.rs): initialization tables, options, and configuration.
+- [src/machdep.rs](src/machdep.rs): platform and terminal-control helpers.
+- [src/rnd.rs](src/rnd.rs), [src/vers.rs](src/vers.rs): randomness and version information.
+- [src/wizard.rs](src/wizard.rs): wizard-mode accessors and debug helpers.
 
-## C ABI notes
+## Save format and legacy interfaces
 
-Although there is no C source left, many module boundaries still speak the
-legacy C ABI (fixed symbol names, `#[repr(C)]` layout mirrors, raw pointers),
-which keeps the port faithful to the original game and simplifies
-save-file compatibility.
+[src/save.rs](src/save.rs) writes the header `ROGUE-RON 1\n`, followed by a Serde/RON `GameSnapshot` defined in [src/state.rs](src/state.rs). This is a Rust snapshot format, not the original C binary save format. Item references and chase targets are encoded as indices or explicit reference variants rather than serialized memory addresses.
+
+The snapshot adapts runtime ownership to saved fields: `seenstairs`, `amulet`, `ntraps`, `max_level`, and `no_food` are saved from `DUNGEON`, while depth is stored in the level snapshot. Daemons and the `between`/`group` counters are also persisted. Terminal resources, rendering caches, open file handles, and command-loop-local bookkeeping are not. Some output-related globals, including message flags and `mpos`, are persisted; not all UI-related state is transient.
+
+Parts of the engine still use `unsafe`, raw item pointers, and legacy-shaped helpers. These are implementation details of the port, not a requirement to link against the original C sources or a promise of C save-file compatibility.
