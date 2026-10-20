@@ -45,8 +45,8 @@ const BEFORE: i32 = 1;
 const AFTER: i32 = 2;
 
 /// Wizard-mode: the preprocessor conditional in the C code is replaced by a
-/// runtime check on the `wizard` global.  All wizard helpers are always
-/// compiled in, matching the style used by wizard.rs, chase.rs and friends.
+/// runtime check through `crate::wizard::is_wizard()`. All wizard helpers are
+/// always compiled in, matching the other gameplay modules.
 const MASTER: bool = true;
 
 // ─── Command-local persistent state ──────────────────────────────────────────
@@ -73,7 +73,7 @@ use crate::game::globals::{
     after, again, count, delta, dir_ch, door_stop, firstmove, get_food_left, get_inpack, has_hit,
     inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
     last_pick, lastscore, max_hit, move_on, mpos, no_command, noscore, p_colors, purse, q_comm,
-    r_stones, runch, running, save_msg, stat_msg, take, terse, to_death, wizard, ws_made,
+    r_stones, runch, running, save_msg, stat_msg, take, terse, to_death, ws_made,
 };
 
 // ─── Extern C functions called from this module ───────────────────────────────
@@ -102,12 +102,13 @@ fn cstr_at(s: &str) -> String {
 /// Process the user commands.
 ///
 /// Uses globals: player, has_hit, running, door_stop, lastscore,
-/// purse, hero, jump, take, after, wizard, noscore, no_command,
+/// purse, hero, jump, take, after, noscore, no_command,
 /// count, move_on, mpos, runch, to_death, countch, l_last_comm /
 /// last_comm / last_dir / last_pick (via reset_last/last_*), lvl_obj,
 /// terse, mlist (via moat), max_hit, mp/t_flags (via to_death),
 /// dir_ch, delta, q_comm, huh, release, amulet, level, seenstairs,
 /// tr_name, stat_msg, inpack, food_left, equipment, inv_describe.
+/// Wizard mode is queried and updated through `crate::wizard` accessors.
 pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
     let mut ntimes = initial_move_budget(player_has(MonsterFlags::HASTE));
 
@@ -149,7 +150,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
         /*
          * Read command or continue run
          */
-        if MASTER && wizard != 0 {
+        if MASTER && crate::wizard::is_wizard() {
             noscore = 1;
         }
 
@@ -401,12 +402,12 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         // Wizard toggle (was the `when '+'` arm under `#ifdef MASTER`)
                         after = false as u8;
                         if MASTER {
-                            if wizard != 0 {
-                                wizard = 0;
+                            if crate::wizard::is_wizard() {
+                                crate::wizard::set_wizard_mode(0);
                                 turn_see(true as u8);
                                 msg_str("not wizard any more");
                             } else {
-                                wizard = 1;
+                                crate::wizard::set_wizard_mode(1);
                                 noscore = 1;
                                 turn_see(false as u8);
                                 msg_str(&format!(
@@ -461,7 +462,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                     }
                     _ => {
                         after = false as u8;
-                        if MASTER && wizard != 0 {
+                        if MASTER && crate::wizard::is_wizard() {
                             match command {
                                 Command::WizardPosition => {
                                     let hero = hero_pos();
