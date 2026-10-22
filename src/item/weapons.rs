@@ -43,7 +43,7 @@ struct InitWeap {
     iw_flags: ObjectFlags,
 }
 
-static INIT_DAM: [InitWeap; MAXWEAPONS] = [
+const INIT_DAM: [InitWeap; MAXWEAPONS] = [
     InitWeap {
         iw_dam: b"2x4\0",
         iw_hrl: b"1x3\0",
