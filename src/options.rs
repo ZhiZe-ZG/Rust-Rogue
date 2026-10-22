@@ -31,7 +31,6 @@ enum StrTarget {
 /// Identifies a boolean global an option edits.
 #[derive(Clone, Copy)]
 enum BoolFlag {
-    Terse,
     FightFlush,
     Jump,
     SeeFloor,
@@ -44,7 +43,6 @@ impl BoolFlag {
     #[inline]
     unsafe fn get(self) -> bool {
         match self {
-            BoolFlag::Terse => terse != 0,
             BoolFlag::FightFlush => fight_flush != 0,
             BoolFlag::Jump => jump != 0,
             BoolFlag::SeeFloor => see_floor != 0,
@@ -58,7 +56,6 @@ impl BoolFlag {
     unsafe fn set(self, on: bool) {
         let value = on as u8;
         match self {
-            BoolFlag::Terse => terse = value,
             BoolFlag::FightFlush => fight_flush = value,
             BoolFlag::Jump => jump = value,
             BoolFlag::SeeFloor => see_floor = value,
@@ -104,7 +101,7 @@ pub struct OPTION {
 }
 
 use crate::game::globals::{
-    after, fight_flush, inv_type, jump, mpos, passgo, see_floor, terse, tombstone,
+    after, fight_flush, inv_type, jump, mpos, passgo, see_floor, tombstone,
 };
 
 unsafe fn hero_pos() -> IVec2 {
@@ -115,16 +112,8 @@ unsafe fn proom_ptr() -> Option<usize> {
     crate::game::PLAYER.room()
 }
 
-unsafe fn option_list() -> [OPTION; 10] {
+unsafe fn option_list() -> [OPTION; 9] {
     [
-        OPTION {
-            o_name: "terse",
-            o_prompt: "Terse output",
-            o_target: OptTarget::Bool(BoolFlag::Terse),
-            o_str: StrTarget::None,
-            o_putfunc: put_bool,
-            o_getfunc: get_bool,
-        },
         OPTION {
             o_name: "flush",
             o_prompt: "Flush typeahead during battle",
@@ -551,4 +540,19 @@ pub fn filter_printable(src: &str) -> String {
         .take(MAXINP)
         .filter(|ch| ch.is_ascii_graphic() || *ch == ' ')
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terse_is_not_a_runtime_option() {
+        let options = unsafe { option_list() };
+        assert_eq!(options.len(), 9);
+        assert!(options.iter().all(|option| option.o_name != "terse"));
+        unsafe { parse_opts("terse") };
+        const VERBOSE: bool = crate::game::globals::terse == 0;
+        assert!(VERBOSE);
+    }
 }

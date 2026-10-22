@@ -594,7 +594,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     set_flag!(save_msg);
     set_flag!(see_floor);
     set_flag!(stat_msg);
-    set_flag!(terse);
+    // Keep the serialized terse field for compatibility, but output is now
+    // fixed to verbose by the compile-time constant.
     set_flag!(to_death);
     set_flag!(tombstone);
     crate::wizard::set_wizard_mode(s.wizard);

@@ -104,8 +104,9 @@ pub static mut save_msg: u8 = 1;
 pub static mut see_floor: u8 = 1;
 /// Whether a status message is pending.
 pub static mut stat_msg: u8 = 0;
-/// Uses terse message output when nonzero.
-pub static mut terse: u8 = 0;
+/// Message output is always verbose; this flag is not configurable at runtime.
+#[allow(non_upper_case_globals)]
+pub const terse: u8 = 0;
 /// Whether the player is dead or dying.
 pub static mut to_death: u8 = 0;
 /// Whether the tombstone should be displayed on death.
