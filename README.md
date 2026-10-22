@@ -2,13 +2,15 @@
 
 This is a Rust rewrite of *Rogue: Exploring the Dungeons of Doom*, based on the original C code forked from <https://github.com/Davidslv/rogue>. The game library and executable are implemented in Rust. The separate [rogomatic/README.md](rogomatic/README.md) describes the retained C Rog-O-Matic sources, which are not part of the Cargo game build.
 
-The Rust terminal UI uses `ratatui` with the `crossterm` backend, not ncurses. Dependencies are declared in [Cargo.toml](Cargo.toml). The Nix development shell still includes ncurses, but the Rust game has no ncurses crate dependency.
+The Rust terminal UI uses `ratatui` with the `crossterm` backend, not ncurses. Dependencies are declared in [Cargo.toml](Cargo.toml). The Rust game has no ncurses crate dependency, and ncurses is not enabled in the current Nix development shell.
 
-## Develop Environment
+## Development environment
 
 ```bash
 nix develop
 ```
+
+The development shell in [flake.nix](flake.nix) provides Rust 1.98.0, including Rust sources and rust-analyzer. Alternatively, use a compatible installed Rust toolchain and Cargo from the repository root. The flake's package definition still references the old src/rust layout; the Cargo build below reflects the current root-level crate layout.
 
 ## Build & run
 
@@ -31,13 +33,22 @@ This repository still has a number of process-wide Rust globals and singleton ow
 
 ### Dungeon-owned state
 
-`DUNGEON` in [src/dungeon/mod.rs](src/dungeon/mod.rs) owns the current `Level`, accessed through scoped `with_level()` / `with_level_mut()` closures, plus the live `monster_list` and `monster_map`.
+`DUNGEON` in [src/dungeon/mod.rs](src/dungeon/mod.rs) owns:
+
+- The current `Level`, accessed through scoped `with_level()` / `with_level_mut()` closures.
+- The live `monster_list` and per-cell `monster_map`.
+- `player`: the hero actor and its equipment, defined by `Player` in [src/game/player.rs](src/game/player.rs).
+- `objects`: the generational `ThingArena` in [src/item/arena.rs](src/item/arena.rs), shared by floor items, player inventory, monster packs, and equipment handles.
 
 It also owns atomic fields for `max_level` (deepest dungeon depth), `no_food` (food-generation counter), `ntraps`, `seenstairs`, and `amulet`. These are not standalone globals. Use methods such as `max_depth()`, `seen_stairs()`, `set_seen_stairs()`, and `has_amulet()`.
 
 `Level` in [src/level/level.rs](src/level/level.rs) contains depth, generation identity, stairs position, rooms, passages, room graph, map, cell flags, passage links, and floor-item handles. There is no separate `dnum` global: `DUNGEON.current_depth()` reads `Level::depth`. **`seenstairs` currently belongs to `Dungeon`, not `Level`.**
 
-The former `CURRENT_LEVEL`, `MONSTER_LIST`, and `MONSTER_MAP` singleton storage is now owned by `DUNGEON`.
+The former `CURRENT_LEVEL`, `MONSTER_LIST`, `MONSTER_MAP`, `PLAYER`, and `OBJECTS` singleton storage is now owned by `DUNGEON`. Access the player and object arena through `DUNGEON.player` and `DUNGEON.objects`; there are no separate `PLAYER` or `OBJECTS` globals.
+
+`Player` uses an `RwLock` for the lazily initialized hero and mutex-protected optional `ThingId` handles for equipment. Packs and floor-item lists also hold `ThingId` handles, not raw item pointers. `Dungeon::clear_items()` unlinks floor-item handles and removes those objects from its own arena without discarding unrelated inventory objects.
+
+`Dungeon::empty()` creates independent level, counter, player, monster, and object storage. The engine is not yet fully instance-based: many gameplay helpers still use the `DUNGEON` singleton, including equipment helpers that resolve object handles through `DUNGEON.objects`. The locks do not make the entire legacy engine thread-safe.
 
 ### Core game globals
 
@@ -57,17 +68,17 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `inv_describe`: controls whether inventory items are described in detail.
 - `jump`: suppresses intermediate screen updates during running.
 - `kamikaze`: enables the special kamikaze behavior.
-- `lower_msg`: whether messages should be displayed in lower-case.
+- `lower_msg`: message-priority/capitalization flag; suppresses automatic initial capitalization when set.
 - `move_on`: whether movement continues after an action.
 - `msg_esc`: allows the user to leave the message display.
 - `passgo`: controls automatic passage-following during running.
 - `playing`: global game-running flag.
-- `q_comm`: indicates a quick command mode.
+- `q_comm`: quit-flow sentinel used during quit confirmation and handling.
 - `running`: whether the player is in a running movement state.
 - `save_msg`: whether messages are saved to the message history.
 - `see_floor`: whether floor tiles are visible or hidden.
 - `stat_msg`: whether the status line is shown through the message area.
-- `terse`: toggles terse output mode.
+- `terse`: immutable constant set to `0`; output is always verbose, not runtime-configurable.
 - `to_death`: controls repeated fighting, not whether the player is dead.
 - `tombstone`: whether the death screen / tombstone is enabled.
 - `master_mode_enabled`: wizard-mode gate for master-mode debugging.
@@ -143,12 +154,10 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 
 ### Other singleton owners and local state
 
-The current owners outside the main globals module are:
+The current owners and other module-local statics outside the main globals module include:
 
-- `PLAYER`: the live player actor and equipment owner.
-- `DUNGEON`: current level, dungeon counters, live monsters, and occupancy map.
-- `OBJECTS`: item arena / object storage.
-- `RNG`: random-number generator state.
+- `DUNGEON`: current level, dungeon counters, live monsters, occupancy map, player, and object arena.
+- `RNG`: the shared `LazyLock<Mutex<Random>>` random-number generator in [src/rnd.rs](src/rnd.rs).
 - `RELEASE`: release/version string.
 - `WIZARD`: private atomic wizard-mode state in [src/wizard.rs](src/wizard.rs), reached through `wizard_mode()`, `set_wizard_mode()`, and `is_wizard()`. The old public mutable `wizard` global is absent; wizard helpers remain.
 - `LFD`: optional file handle used by platform locking helpers.
@@ -157,9 +166,13 @@ The current owners outside the main globals module are:
 
 `CommandState` in [src/command_dispatch.rs](src/command_dispatch.rs) is local to the main loop and passed into dispatch. Its repeat/run command fields and new-count flag replace the old `COUNTCH`, `DIRECTION`, and `NEWCOUNT` statics. The `Command` and `Direction` enums replace untyped command/direction bytes in gameplay state.
 
-Former chase-coordinate, name-buffer, random-move return, and material-use scratch globals are no longer separate process-wide owners. `STATLIST` and `VERSION` in [src/vers.rs](src/vers.rs) are immutable constants, not mutable globals.
+Former chase-coordinate, name-buffer, random-move return, and material-use scratch globals are no longer separate process-wide owners. `STATLIST` and `VERSION` in [src/vers.rs](src/vers.rs) and the weapon initializer table `INIT_DAM` in [src/item/weapons.rs](src/item/weapons.rs) are immutable constants, not mutable globals.
 
-`PLAYER` uses an `RwLock` for the hero and mutex-protected optional `ThingId` handles for equipment. `OBJECTS` owns arena storage; packs and floor-item lists use handles. These synchronization mechanisms do not make the entire legacy engine thread-safe.
+### Randomness and runtime options
+
+`Random` owns a plain `StdRng`; synchronization belongs to the shared `RNG`, not the generator's fields. `rnd()`, `roll()`, and `set_seed()` are methods taking `&mut self`. Level/maze generation, item generation, random colors, trap messages, and many gameplay effects receive `&mut Random` explicitly. Callers at the application boundary lock `RNG` and pass that generator onward; code already using the borrowed generator must not lock `RNG` again.
+
+The runtime options in [src/options.rs](src/options.rs) are `flush`, `jump`, `seefloor`, `passgo`, `tombstone`, `inven`, `name`, `fruit`, and `file`. `terse` is no longer an option.
 
 ## Layout
 
@@ -172,8 +185,8 @@ Former chase-coordinate, name-buffer, random-move return, and material-use scrat
 - [src/command_dispatch.rs](src/command_dispatch.rs): runtime command execution and command-local bookkeeping.
 - [src/game/mod.rs](src/game/mod.rs): shared game API and owner re-exports.
 - [src/game/globals.rs](src/game/globals.rs): remaining shared scalars, tables, and strings.
-- [src/game/player.rs](src/game/player.rs): player and equipment owner.
-- [src/dungeon/mod.rs](src/dungeon/mod.rs): dungeon owner and level lifecycle.
+- [src/game/player.rs](src/game/player.rs): dungeon-owned `Player` and `Equipment` types.
+- [src/dungeon/mod.rs](src/dungeon/mod.rs): dungeon owner, including player/object storage, and level lifecycle.
 - [src/dungeon/generation.rs](src/dungeon/generation.rs), [src/dungeon/presence.rs](src/dungeon/presence.rs): level generation and population.
 - [src/dungeon/monster_list.rs](src/dungeon/monster_list.rs), [src/dungeon/monster_map.rs](src/dungeon/monster_map.rs): monster storage and occupancy.
 - [src/level/level.rs](src/level/level.rs), [src/level/passages.rs](src/level/passages.rs), [src/level/roomgraph.rs](src/level/roomgraph.rs): level model, corridor generation, and room connectivity.
@@ -195,6 +208,8 @@ Former chase-coordinate, name-buffer, random-move return, and material-use scrat
 
 The snapshot adapts runtime ownership to saved fields: `seenstairs`, `amulet`, `ntraps`, `max_level`, and `no_food` are saved from `DUNGEON`, while depth is stored in the level snapshot. Daemons and the `between`/`group` counters are also persisted. Terminal resources, rendering caches, open file handles, and command-loop-local bookkeeping are not. Some output-related globals, including message flags and `mpos`, are persisted; not all UI-related state is transient.
 
+The hero, pack, and equipment are read from `DUNGEON.player`, and item records are read from `DUNGEON.objects`. Restoration allocates fresh arena handles and reconnects saved item references. The snapshot retains a `terse` field for format compatibility, but restoring it does not change the fixed verbose output mode. The saved `seed` field is not a serialized copy of the live `StdRng` state.
+
 Score recording is no longer suppressed by wizard-mode use. The former score-suppression field is omitted from new snapshots; its presence in older saves is ignored during deserialization.
 
-Parts of the engine still use `unsafe`, raw item pointers, and legacy-shaped helpers. These are implementation details of the port, not a requirement to link against the original C sources or a promise of C save-file compatibility.
+Parts of the engine still use `unsafe`, mutable statics, platform-level raw pointers, and legacy-shaped helpers. Actor and item references use handles or explicit reference variants rather than raw `Thing` pointers. These remaining legacy interfaces are implementation details of the port, not a requirement to link against the original C sources or a promise of C save-file compatibility.
