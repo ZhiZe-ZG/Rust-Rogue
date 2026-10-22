@@ -117,7 +117,7 @@ fn resolve_dest(dest: DestRef) -> IVec2 {
                 Thing::Object { .. } => hero_pos(),
             })
             .unwrap_or_else(hero_pos),
-        DestRef::Object(id) => crate::item::arena::OBJECTS
+        DestRef::Object(id) => DUNGEON.objects
             .with(id, |t| match t {
                 Thing::Object { data, .. } => data.o_pos,
                 Thing::Monster { .. } => hero_pos(),

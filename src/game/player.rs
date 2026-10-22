@@ -118,7 +118,7 @@ impl Equipment {
     #[inline]
     pub fn ring_type(&self, hand: usize) -> Option<crate::item::rings::RingType> {
         let id = self.rings.get(hand)?.get()?;
-        crate::item::arena::OBJECTS
+        crate::dungeon::DUNGEON.objects
             .with_object(id, |o| crate::item::rings::RingType::from_raw(o.o_which))
             .flatten()
     }
@@ -127,42 +127,42 @@ impl Equipment {
     #[inline]
     pub fn armor_arm(&self) -> Option<i32> {
         let id = self.armor.get()?;
-        crate::item::arena::OBJECTS.with_object(id, |o| o.o_arm)
+        crate::dungeon::DUNGEON.objects.with_object(id, |o| o.o_arm)
     }
 
     /// The `o_arm` value of the ring worn on `hand`, if any (pointer-free).
     #[inline]
     pub fn ring_arm(&self, hand: usize) -> Option<i32> {
         let id = self.rings.get(hand)?.get()?;
-        crate::item::arena::OBJECTS.with_object(id, |o| o.o_arm)
+        crate::dungeon::DUNGEON.objects.with_object(id, |o| o.o_arm)
     }
 
     /// The `o_which` value of the equipped weapon, if any (pointer-free).
     #[inline]
     pub fn weapon_which(&self) -> Option<i32> {
         let id = self.weapon.get()?;
-        crate::item::arena::OBJECTS.with_object(id, |o| o.o_which)
+        crate::dungeon::DUNGEON.objects.with_object(id, |o| o.o_which)
     }
 
     /// The weapon's `(o_hplus, o_dplus)`, if a weapon is wielded (pointer-free).
     #[inline]
     pub fn weapon_hdplus(&self) -> Option<(i32, i32)> {
         let id = self.weapon.get()?;
-        crate::item::arena::OBJECTS.with_object(id, |o| (o.o_hplus, o.o_dplus))
+        crate::dungeon::DUNGEON.objects.with_object(id, |o| (o.o_hplus, o.o_dplus))
     }
 
     /// Run `f` with mutable access to the equipped armor object, if any.
     #[inline]
     pub fn with_armor_mut<R>(&self, f: impl FnOnce(&mut ThingObject) -> R) -> Option<R> {
         let id = self.armor.get()?;
-        crate::item::arena::OBJECTS.with_object_mut(id, f)
+        crate::dungeon::DUNGEON.objects.with_object_mut(id, f)
     }
 
     /// Run `f` with mutable access to the wielded weapon object, if any.
     #[inline]
     pub fn with_weapon_mut<R>(&self, f: impl FnOnce(&mut ThingObject) -> R) -> Option<R> {
         let id = self.weapon.get()?;
-        crate::item::arena::OBJECTS.with_object_mut(id, f)
+        crate::dungeon::DUNGEON.objects.with_object_mut(id, f)
     }
 
     /// Run `f` with mutable access to the ring worn on `hand`, if any.
@@ -173,7 +173,7 @@ impl Equipment {
         f: impl FnOnce(&mut ThingObject) -> R,
     ) -> Option<R> {
         let id = self.rings.get(hand)?.get()?;
-        crate::item::arena::OBJECTS.with_object_mut(id, f)
+        crate::dungeon::DUNGEON.objects.with_object_mut(id, f)
     }
 }
 
@@ -526,8 +526,8 @@ mod tests {
         assert_eq!(equipment.left_ring_id(), Some(left));
         assert_eq!(equipment.right_ring_id(), Some(right));
 
-        let _ = crate::item::arena::OBJECTS.remove(left);
-        let _ = crate::item::arena::OBJECTS.remove(right);
+        let _ = crate::dungeon::DUNGEON.objects.remove(left);
+        let _ = crate::dungeon::DUNGEON.objects.remove(right);
     }
 
     #[test]

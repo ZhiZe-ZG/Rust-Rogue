@@ -233,45 +233,39 @@ impl Default for ThingArena {
     }
 }
 
-/// Generational owner of every live object (item) thing.
-///
-/// Callers keep a [`ThingId`]; this global is reached through the safe
-/// allocation/access helpers below.
-pub static OBJECTS: ThingArena = ThingArena::new();
-
 /// Allocate an object (item) thing in the arena and return its [`ThingId`].
 pub fn new_object_id() -> ThingId {
-    OBJECTS.new_object_id()
+    crate::dungeon::DUNGEON.objects.new_object_id()
 }
 
 /// Allocate an object thing and return its [`ThingId`] handle.
 pub fn new_item_id() -> ThingId {
-    OBJECTS.new_item_id()
+    crate::dungeon::DUNGEON.objects.new_item_id()
 }
 
 /// Number of live objects tracked by the global arena.
 pub fn allocated_count() -> i32 {
-    OBJECTS.allocated_count()
+    crate::dungeon::DUNGEON.objects.allocated_count()
 }
 
 /// Whether `id` still refers to a live object in the global arena.
 #[inline]
 pub fn contains(id: ThingId) -> bool {
-    OBJECTS.contains(id)
+    crate::dungeon::DUNGEON.objects.contains(id)
 }
 
 /// Immutably access the object payload behind `id` (`None` for a stale handle
 /// or a non-object).
 #[inline]
 pub fn with_object<R>(id: ThingId, operation: impl FnOnce(&ThingObject) -> R) -> Option<R> {
-    OBJECTS.with_object(id, operation)
+    crate::dungeon::DUNGEON.objects.with_object(id, operation)
 }
 
 /// Mutably access the object payload behind `id` (`None` for a stale handle or
 /// a non-object).
 #[inline]
 pub fn with_object_mut<R>(id: ThingId, operation: impl FnOnce(&mut ThingObject) -> R) -> Option<R> {
-    OBJECTS.with_object_mut(id, operation)
+    crate::dungeon::DUNGEON.objects.with_object_mut(id, operation)
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 //! Object information tables and object naming/inventory helpers.
 //!
 //! Ported from `src/c/things.c` to Rust.
+use crate::dungeon::Dungeon;
 use crate::game::PLAYER;
 use crate::item::armor::waste_time;
 use crate::item::pack::{get_item_id, leave_pack_id};
@@ -12,11 +13,10 @@ use crate::entity::player::ObjectFlags;
 use crate::game::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, ObjInfo,
 };
-use crate::item::arena::new_item_id;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::rings::RingType;
-use crate::item::sticks::fix_stick_id;
-use crate::item::weapons::init_weapon;
+use crate::item::sticks::fix_stick_in;
+use crate::item::weapons::init_weapon_in;
 
 const MAXSTR: usize = 1024;
 const NUMTHINGS: usize = 7;
@@ -223,10 +223,18 @@ pub unsafe fn dropcheck_id(id: crate::item::arena::ThingId, random: &mut Random)
 
 /// Allocate and initialize a random object, returning its arena handle.
 pub unsafe fn new_thing_id(random: &mut Random) -> crate::item::arena::ThingId {
-    let cur_id = new_item_id();
+    new_thing_in(&crate::dungeon::DUNGEON, random)
+}
+
+/// Allocate and initialize a random object in the supplied dungeon.
+pub(crate) unsafe fn new_thing_in(
+    dungeon: &Dungeon,
+    random: &mut Random,
+) -> crate::item::arena::ThingId {
+    let cur_id = dungeon.objects.new_item_id();
 
     // Baseline weapon/armor fields, shared by every generated object.
-    crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+    dungeon.objects.with_object_mut(cur_id, |o| {
         o.o_hplus = 0;
         o.o_dplus = 0;
         o.o_damage = [b'0', b'x', b'0', 0, 0, 0, 0, 0];
@@ -237,7 +245,7 @@ pub unsafe fn new_thing_id(random: &mut Random) -> crate::item::arena::ThingId {
         o.o_flags = ObjectFlags::NONE;
     });
 
-    let choice = if crate::dungeon::no_food() > 3 {
+    let choice = if dungeon.no_food() > 3 {
         2
     } else {
         pick_one(&things[..], NUMTHINGS, random)
@@ -245,35 +253,40 @@ pub unsafe fn new_thing_id(random: &mut Random) -> crate::item::arena::ThingId {
     match choice {
         0 => {
             let which = pick_one(&pot_info[..], MAXPOTIONS, random);
-            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+            dungeon.objects.with_object_mut(cur_id, |o| {
                 o.o_which = which;
                 o.o_type = ItemType::potion(which);
             });
         }
         1 => {
             let which = pick_one(&scr_info[..], MAXSCROLLS, random);
-            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+            dungeon.objects.with_object_mut(cur_id, |o| {
                 o.o_which = which;
                 o.o_type = ItemType::scroll(which);
             });
         }
         2 => {
-            crate::dungeon::set_no_food(0);
+            dungeon.set_no_food(0);
             let which = if random.rnd(10) != 0
             {
                 0
             } else {
                 1
             };
-            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+            dungeon.objects.with_object_mut(cur_id, |o| {
                 o.o_type = ItemType::Food;
                 o.o_which = which;
             });
         }
         3 => {
-            init_weapon(cur_id, pick_one(&weap_info[..], MAXWEAPONS, random), random);
+            init_weapon_in(
+                &dungeon.objects,
+                cur_id,
+                pick_one(&weap_info[..], MAXWEAPONS, random),
+                random,
+            );
             let r = random.rnd(100);
-            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+            dungeon.objects.with_object_mut(cur_id, |o| {
                 if r < 10 {
                     o.o_flags.insert(ObjectFlags::CURSED);
                     o.o_hplus -= random.rnd(3) + 1;
@@ -285,7 +298,7 @@ pub unsafe fn new_thing_id(random: &mut Random) -> crate::item::arena::ThingId {
         4 => {
             let which = pick_one(&arm_info[..], MAXARMORS, random);
             let r = random.rnd(100);
-            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+            dungeon.objects.with_object_mut(cur_id, |o| {
                 o.o_which = which;
                 o.o_type = ItemType::Armor(which);
                 o.o_arm = a_class[which as usize];
@@ -300,7 +313,7 @@ pub unsafe fn new_thing_id(random: &mut Random) -> crate::item::arena::ThingId {
         5 => {
             let ring_type = RingType::from_raw(pick_one(&ring_info[..], MAXRINGS, random))
                 .expect("ring metadata produced an invalid ring type");
-            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+            dungeon.objects.with_object_mut(cur_id, |o| {
                 o.o_which = ring_type as i32;
                 o.o_type = ItemType::Ring(ring_type);
                 match ring_type {
@@ -324,11 +337,11 @@ pub unsafe fn new_thing_id(random: &mut Random) -> crate::item::arena::ThingId {
         }
         6 => {
             let which = pick_one(&ws_info[..], MAXSTICKS, random);
-            crate::item::arena::OBJECTS.with_object_mut(cur_id, |o| {
+            dungeon.objects.with_object_mut(cur_id, |o| {
                 o.o_which = which;
                 o.o_type = ItemType::stick(which);
             });
-            fix_stick_id(cur_id, random);
+            fix_stick_in(&dungeon.objects, cur_id, random);
         }
         _ => {}
     }

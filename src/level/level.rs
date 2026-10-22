@@ -81,7 +81,7 @@ pub struct Level {
     ///
     /// This is a plain `Vec` of the arena handles for the objects on the floor,
     /// head first (index 0 is the top of the former linked list). The objects
-    /// themselves are owned by [`crate::item::arena::OBJECTS`].
+    /// themselves are owned by [`crate::dungeon::Dungeon::objects`].
     pub items: Vec<ThingId>,
 }
 

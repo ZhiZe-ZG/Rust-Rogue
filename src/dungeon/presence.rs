@@ -6,8 +6,9 @@
 //! safe per-cell monster occupancy grid. Items are addressed by arena
 //! [`ThingId`] handles and monsters by [`MonsterId`] handles. This replaces the
 //! legacy process-wide `static mut` game globals (`amulet`, `ntraps`,
-//! `seenstairs`) with counters on the [`Dungeon`] itself; only the item/monster
-//! stores remain externally owned.
+//! `seenstairs`) with counters on the [`Dungeon`] itself. Floor objects are
+//! allocated in this dungeon's arena; legacy monster helpers still use the
+//! process-wide dungeon.
 
 use glam::IVec2;
 
@@ -15,9 +16,9 @@ use crate::config::GameConfig;
 use crate::entity::chase::roomin;
 use crate::entity::monsters::{give_pack_id, new_monster_id, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
-use crate::item::arena::{new_item_id, ThingId, OBJECTS};
+use crate::item::arena::ThingId;
 use crate::item::item_type::ItemType;
-use crate::item::things::new_thing_id;
+use crate::item::things::new_thing_in;
 use crate::level::LevelFlags;
 use crate::rnd::Random;
 use crate::tile::{Tile, TrapType};
@@ -35,8 +36,8 @@ impl Dungeon {
 
     /// Allocate a floor object at `pos` and link it into the level's item list.
     unsafe fn spawn_object_at(&self, pos: IVec2, random: &mut Random) -> ThingId {
-        let id = new_thing_id(random);
-        OBJECTS.with_object_mut(id, |o| o.o_pos = pos);
+        let id = new_thing_in(self, random);
+        self.objects.with_object_mut(id, |o| o.o_pos = pos);
         self.attach_floor(id);
         id
     }
@@ -111,10 +112,10 @@ impl Dungeon {
             if random.rnd(2) == 0
                 && (!has_amulet || level >= max_level)
             {
-                let gold = new_item_id();
+                let gold = self.objects.new_item_id();
                 let goldval = random.rnd(50 + 10 * level) + 2;
                 let gold_pos = self.find_floor(Some(i), 0, false, random).unwrap_or(IVec2::ZERO);
-                OBJECTS.with_object_mut(gold, |og| {
+                self.objects.with_object_mut(gold, |og| {
                     og.o_arm = goldval;
                     og.o_pos = gold_pos;
                     og.o_flags = ObjectFlags::MANY;
@@ -172,8 +173,8 @@ impl Dungeon {
         // yet, put it somewhere on the ground.
         if level >= GameConfig::AMULET_LEVEL && !self.has_amulet() {
             if let Some(pos) = self.find_floor(None, 0, false, random) {
-                let obj = new_item_id();
-                OBJECTS.with_object_mut(obj, |og| {
+                let obj = self.objects.new_item_id();
+                self.objects.with_object_mut(obj, |og| {
                     og.o_hplus = 0;
                     og.o_dplus = 0;
                     og.o_damage = [b'0', b'x', b'0', 0, 0, 0, 0, 0];

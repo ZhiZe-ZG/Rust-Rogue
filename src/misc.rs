@@ -7,7 +7,6 @@ use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
 use crate::game::globals::ObjInfo;
 use crate::game::PLAYER;
-use crate::item::arena::OBJECTS;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id, reset_last};
 use crate::rnd::{Random, RNG};
@@ -96,7 +95,7 @@ pub unsafe fn eat() {
     let Some(obj) = get_item_id("eat", ItemFilter::Category(ItemType::Food)) else {
         return;
     };
-    if !matches!(OBJECTS.with_object(obj, |o| o.o_type), Some(ItemType::Food)) {
+    if !matches!(DUNGEON.objects.with_object(obj, |o| o.o_type), Some(ItemType::Food)) {
         if terse == 0 {
             msg_str("ugh, you would get ill if you ate that");
         } else {
@@ -119,7 +118,7 @@ pub unsafe fn eat() {
     if PLAYER.equipment().weapon_id() == Some(obj) {
         PLAYER.set_weapon_id(None);
     }
-    let which = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
+    let which = DUNGEON.objects.with_object(obj, |o| o.o_which).unwrap_or(0);
     if which == 1 {
         msg_str(&format!(
             "my, that was a yummy {}",

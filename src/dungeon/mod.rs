@@ -11,7 +11,7 @@ use std::sync::RwLock;
 
 use glam::IVec2;
 
-use crate::item::arena::OBJECTS;
+use crate::item::arena::ThingArena;
 use crate::level::Level;
 use crate::rnd::Random;
 use crate::tile::Tile;
@@ -25,7 +25,7 @@ pub use monster_list::{MonsterId, MonsterList};
 pub use monster_map::MonsterMap;
 
 /// Process-wide owner of the live dungeon level, its counters, and the live
-/// monsters.
+/// monsters and objects.
 ///
 /// Replaces the scattered process-wide globals of the legacy engine (the
 /// `CURRENT_LEVEL` singleton, the `max_level`/`no_food` counters, the
@@ -49,6 +49,8 @@ pub struct Dungeon {
     pub monster_list: MonsterList,
     /// The per-cell monster occupancy grid for the current level.
     pub monster_map: MonsterMap,
+    /// Generational arena owning the dungeon's live objects (including pack items).
+    pub objects: ThingArena,
 }
 
 impl Dungeon {
@@ -57,7 +59,7 @@ impl Dungeon {
     pub fn clear_items(&self) {
         let items = self.with_level_mut(|level| std::mem::take(&mut level.items));
         for id in items {
-            let _ = OBJECTS.remove(id);
+            let _ = self.objects.remove(id);
         }
     }
 
@@ -72,6 +74,7 @@ impl Dungeon {
             amulet: AtomicU8::new(0),
             monster_list: MonsterList::new(),
             monster_map: MonsterMap::new(),
+            objects: ThingArena::new(),
         }
     }
 
@@ -313,13 +316,11 @@ mod tests {
     #[test]
     fn clear_items_removes_only_floor_objects_and_is_repeatable() {
         use crate::entity::player::{Thing, ThingObject};
-        use crate::item::arena::OBJECTS;
-
         let dungeon = Dungeon::empty();
-        let floor = OBJECTS.insert(Thing::object(ThingObject::default()));
-        let stale = OBJECTS.insert(Thing::object(ThingObject::default()));
-        OBJECTS.remove(stale);
-        let unrelated = OBJECTS.insert(Thing::object(ThingObject::default()));
+        let floor = dungeon.objects.insert(Thing::object(ThingObject::default()));
+        let stale = dungeon.objects.insert(Thing::object(ThingObject::default()));
+        dungeon.objects.remove(stale);
+        let unrelated = dungeon.objects.insert(Thing::object(ThingObject::default()));
         dungeon.with_level_mut(|level| {
             level.add_item(floor);
             level.add_item(stale);
@@ -328,11 +329,26 @@ mod tests {
 
         dungeon.clear_items();
         assert!(dungeon.with_level(|level| level.item_ids().is_empty()));
-        assert!(!OBJECTS.contains(floor));
-        assert!(OBJECTS.contains(unrelated));
+        assert!(!dungeon.objects.contains(floor));
+        assert!(dungeon.objects.contains(unrelated));
         dungeon.clear_items();
-        assert!(OBJECTS.contains(unrelated));
-        OBJECTS.remove(unrelated);
+        assert!(dungeon.objects.contains(unrelated));
+        dungeon.objects.remove(unrelated);
+    }
+
+    #[test]
+    fn object_arenas_are_owned_by_each_dungeon() {
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        let id = first.objects.new_item_id();
+        assert!(first.objects.contains(id));
+        assert!(second.objects.is_empty());
+        assert!(!second.objects.contains(id));
+        first.with_level_mut(|level| level.add_item(id));
+        second.clear_items();
+        assert!(first.objects.contains(id));
+        first.clear_items();
+        assert!(first.objects.is_empty());
     }
 
     #[test]

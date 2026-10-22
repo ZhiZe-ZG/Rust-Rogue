@@ -9,7 +9,7 @@
 
 use crate::entity::player::{MonsterFlags, ObjectFlags};
 use crate::dungeon::DUNGEON;
-use crate::item::arena::{with_object, with_object_mut, ThingId, OBJECTS};
+use crate::item::arena::{with_object, with_object_mut, ThingId};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::scrolls::ScrollType;
 use crate::item::things::{add_line, inv_name_id};
@@ -46,7 +46,7 @@ unsafe fn detach_floor(id: ThingId) {
 
 /// Discard the object `id` from the item arena.
 unsafe fn discard_item(id: ThingId) {
-    let _ = OBJECTS.remove(id);
+    let _ = DUNGEON.objects.remove(id);
 }
 
 /// The player's pack as arena handles, head first.
@@ -256,7 +256,6 @@ mod tests {
     use super::*;
     use crate::entity::player::{Thing, ThingObject};
     use crate::game::{with_current_level_mut, PLAYER};
-    use crate::item::arena::OBJECTS;
     use crate::misc::find_obj_id;
 
     #[test]
@@ -271,7 +270,7 @@ mod tests {
             pack_used = [0; 26];
 
             let pos = PLAYER.pos();
-            let food = OBJECTS.insert(Thing::object(ThingObject {
+            let food = DUNGEON.objects.insert(Thing::object(ThingObject {
                 o_type: ItemType::Food,
                 o_count: 1,
                 o_pos: pos,
@@ -282,15 +281,15 @@ mod tests {
             assert_eq!(PLAYER.pack(), vec![food]);
             assert_eq!(find_obj_id(pos.y, pos.x), None);
             assert_eq!({ inpack }, 1);
-            assert!(OBJECTS
+            assert!(DUNGEON.objects
                 .with_object(food, |obj| obj.o_flags.contains(ObjectFlags::FOUND))
                 .unwrap());
 
             add_pack_id(None, true);
-            assert_eq!(OBJECTS.with_object(food, |obj| obj.o_count), Some(1));
+            assert_eq!(DUNGEON.objects.with_object(food, |obj| obj.o_count), Some(1));
             assert_eq!(PLAYER.pack(), vec![food]);
 
-            let weapon = OBJECTS.insert(Thing::object(ThingObject {
+            let weapon = DUNGEON.objects.insert(Thing::object(ThingObject {
                 o_type: ItemType::Weapon(0),
                 o_count: 1,
                 o_pos: pos,
@@ -301,10 +300,10 @@ mod tests {
             assert_eq!(PLAYER.pack(), vec![food, weapon]);
             assert_eq!(find_obj_id(pos.y, pos.x), None);
             assert_eq!({ inpack }, 2);
-            assert_eq!(OBJECTS.with_object(food, |obj| obj.o_packch), Some(b'a'));
-            assert_eq!(OBJECTS.with_object(weapon, |obj| obj.o_packch), Some(b'b'));
+            assert_eq!(DUNGEON.objects.with_object(food, |obj| obj.o_packch), Some(b'a'));
+            assert_eq!(DUNGEON.objects.with_object(weapon, |obj| obj.o_packch), Some(b'b'));
 
-            let more_food = OBJECTS.insert(Thing::object(ThingObject {
+            let more_food = DUNGEON.objects.insert(Thing::object(ThingObject {
                 o_type: ItemType::Food,
                 o_count: 1,
                 o_pos: pos,
@@ -314,12 +313,12 @@ mod tests {
             add_pack_id(None, true);
             assert_eq!(PLAYER.pack(), vec![food, weapon]);
             assert_eq!(find_obj_id(pos.y, pos.x), None);
-            assert_eq!(OBJECTS.with_object(food, |obj| obj.o_count), Some(2));
-            assert!(!OBJECTS.contains(more_food));
+            assert_eq!(DUNGEON.objects.with_object(food, |obj| obj.o_count), Some(2));
+            assert!(!DUNGEON.objects.contains(more_food));
             assert_eq!({ inpack }, 3);
 
-            OBJECTS.remove(food);
-            OBJECTS.remove(weapon);
+            DUNGEON.objects.remove(food);
+            DUNGEON.objects.remove(weapon);
             PLAYER.set_pack(old_pack);
             inpack = old_inpack;
             pack_used = old_pack_used;
@@ -370,14 +369,14 @@ pub unsafe fn leave_pack_id(id: ThingId, newobj: bool, all: bool) -> Option<Thin
     inpack -= 1;
     if count > 1 && !all {
         last_pick = Some(id);
-        crate::item::arena::OBJECTS.with_object_mut(id, |o| o.o_count -= 1);
+        DUNGEON.objects.with_object_mut(id, |o| o.o_count -= 1);
         if group != 0 {
             inpack += 1;
         }
         if newobj {
-            let cloned = crate::item::arena::OBJECTS.with(id, |thing| thing.clone())?;
-            let copy = crate::item::arena::OBJECTS.insert(cloned);
-            crate::item::arena::OBJECTS.with_object_mut(copy, |o| o.o_count = 1);
+            let cloned = DUNGEON.objects.with(id, |thing| thing.clone())?;
+            let copy = DUNGEON.objects.insert(cloned);
+            DUNGEON.objects.with_object_mut(copy, |o| o.o_count = 1);
             Some(copy)
         } else {
             Some(id)

@@ -26,7 +26,7 @@ use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingObject};
 use crate::dungeon::DUNGEON;
 use crate::game::{MonsterId, PLAYER};
-use crate::item::arena::{new_item_id, ThingId, OBJECTS};
+use crate::item::arena::ThingId;
 use crate::level::{LevelFlags, PassageLinks, RoomGraph};
 use crate::structure::{Passage, Room, Structure};
 
@@ -222,7 +222,7 @@ pub struct GameSnapshot {
 fn collect_objects(ids: &[ThingId]) -> Vec<ThingObject> {
     ids.iter()
         .filter_map(|&id| {
-            OBJECTS
+            DUNGEON.objects
                 .with(id, |t| match t {
                     Thing::Object { data, .. } => Some(data.clone()),
                     Thing::Monster { .. } => None,
@@ -237,8 +237,8 @@ fn build_object_list(items: &[ThingObject]) -> Vec<ThingId> {
     items
         .iter()
         .map(|data| {
-            let id = new_item_id();
-            let _ = OBJECTS.with_mut(id, |t| {
+            let id = DUNGEON.objects.new_item_id();
+            let _ = DUNGEON.objects.with_mut(id, |t| {
                 if let Thing::Object { data: slot, .. } = t {
                     *slot = data.clone();
                 }
@@ -395,7 +395,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
             items: level_items
                 .iter()
                 .filter_map(|&id| {
-                    OBJECTS
+                    DUNGEON.objects
                         .with(id, |t| match t {
                             Thing::Object { data, .. } => Some(data.clone()),
                             Thing::Monster { .. } => None,
@@ -742,8 +742,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
             .items
             .iter()
             .map(|data| {
-                let item = new_item_id();
-                let _ = OBJECTS.with_mut(item, |t| {
+                let item = DUNGEON.objects.new_item_id();
+                let _ = DUNGEON.objects.with_mut(item, |t| {
                     if let Thing::Object { data: slot, .. } = t {
                         *slot = data.clone();
                     }

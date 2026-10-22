@@ -5,7 +5,7 @@ use crate::entity::monsters::{save, save_throw_id};
 use crate::entity::player::ObjectFlags;
 use crate::game::globals::ws_info;
 use crate::game::PLAYER;
-use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::arena::{ThingArena, ThingId};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
 use crate::item::weapons::{do_motion, hit_monster};
@@ -100,22 +100,30 @@ unsafe fn set_c_string(dst: &mut [u8], src: &str) {
 
 #[inline]
 fn stick_type(id: ThingId) -> Option<StickType> {
-    OBJECTS
+    crate::dungeon::DUNGEON.objects
         .with_object(id, |o| StickType::from_raw(o.o_which))
         .flatten()
 }
 
 /// Set up a new stick with the expected damage and charge values.
 pub unsafe fn fix_stick_id(id: ThingId, random: &mut Random) {
+    fix_stick_in(&crate::dungeon::DUNGEON.objects, id, random);
+}
+
+/// Set up a new stick in the supplied arena.
+pub(crate) unsafe fn fix_stick_in(objects: &ThingArena, id: ThingId, random: &mut Random) {
     if !matches!(
-        OBJECTS.with_object(id, |o| o.o_type),
+        objects.with_object(id, |o| o.o_type),
         Some(ItemType::Stick(_))
     ) {
         return;
     }
 
-    let light = stick_type(id) == Some(StickType::Light);
-    OBJECTS.with_object_mut(id, |o| {
+    let light = objects
+        .with_object(id, |o| StickType::from_raw(o.o_which))
+        .flatten()
+        == Some(StickType::Light);
+    objects.with_object_mut(id, |o| {
         if light {
             set_c_string(&mut o.o_damage, "2x3");
         } else {
@@ -137,14 +145,14 @@ pub unsafe fn do_zap(random: &mut Random) {
         return;
     };
     if !matches!(
-        OBJECTS.with_object(obj, |o| o.o_type),
+        crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_type),
         Some(ItemType::Stick(_))
     ) {
         after = false as u8;
         msg_str("you can't zap with that!");
         return;
     }
-    if OBJECTS.with_object(obj, |o| o.o_arm).unwrap_or(0) == 0 {
+    if crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_arm).unwrap_or(0) == 0 {
         msg_str("nothing happens");
         return;
     }
@@ -183,7 +191,7 @@ pub unsafe fn do_zap(random: &mut Random) {
             ws_info[StickType::Missile.index()].oi_know = true;
             let bolt = crate::item::arena::new_item_id();
             let launch = PLAYER.weapon_which();
-            crate::item::arena::OBJECTS.with_object_mut(bolt, |o| {
+            crate::dungeon::DUNGEON.objects.with_object_mut(bolt, |o| {
                 o.o_type = ItemType::Weapon(FLAME);
                 o.o_which = FLAME;
                 set_c_string(&mut o.o_hurldmg, "1x4");
@@ -210,7 +218,7 @@ pub unsafe fn do_zap(random: &mut Random) {
             } else {
                 msg_str("the missle vanishes with a puff of smoke");
             }
-            let _ = crate::item::arena::OBJECTS.remove(bolt);
+            let _ = crate::dungeon::DUNGEON.objects.remove(bolt);
         }
         Some(StickType::HasteM) | Some(StickType::SlowM) => {
             let hero = hero_pos();
@@ -242,7 +250,7 @@ pub unsafe fn do_zap(random: &mut Random) {
         }
     }
 
-    OBJECTS.with_object_mut(obj, |o| o.o_arm -= 1);
+    crate::dungeon::DUNGEON.objects.with_object_mut(obj, |o| o.o_arm -= 1);
 }
 
 /// drain:
@@ -264,7 +272,7 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str, random: &mut Rand
     let hit_hero = start != hero;
     let bolt = crate::item::arena::new_item_id();
 
-    crate::item::arena::OBJECTS.with_object_mut(bolt, |o| {
+    crate::dungeon::DUNGEON.objects.with_object_mut(bolt, |o| {
         o.o_type = ItemType::Weapon(FLAME);
         o.o_which = FLAME;
         set_c_string(&mut o.o_hurldmg, "6x6");
@@ -296,7 +304,7 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str, random: &mut Rand
         }
     }
 
-    let _ = crate::item::arena::OBJECTS.remove(bolt);
+    let _ = crate::dungeon::DUNGEON.objects.remove(bolt);
     crate::draw::write_cell_glyph(pos, '/');
     output::refresh();
 }

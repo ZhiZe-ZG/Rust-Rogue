@@ -9,7 +9,7 @@ use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game::globals::{monsters, pot_info, ring_info, scr_info, ws_info, ObjInfo};
-use crate::item::arena::{new_item_id, ThingId, OBJECTS};
+use crate::item::arena::{new_item_id, ThingId};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{add_pack_id, floor_at, get_item_id};
 use crate::item::sticks::fix_stick_id;
@@ -97,7 +97,7 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
             } else if obj.is_none() {
                 msg_str("you must identify something");
             } else if !filter.matches(
-                OBJECTS
+                DUNGEON.objects
                     .with_object(obj.unwrap(), |o| o.o_type)
                     .unwrap_or(ItemType::None),
             ) {
@@ -114,7 +114,7 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
         return;
     };
 
-    let otype = OBJECTS
+    let otype = DUNGEON.objects
         .with_object(obj, |o| o.o_type)
         .unwrap_or(ItemType::None);
     match otype {
@@ -122,7 +122,7 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
         ItemType::Potion(_) => set_know_id(obj, &mut pot_info[..]),
         ItemType::Stick(_) => set_know_id(obj, &mut ws_info[..]),
         ItemType::Weapon(_) | ItemType::Armor(_) => {
-            OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::KNOW));
+            DUNGEON.objects.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::KNOW));
         }
         ItemType::Ring(_) => set_know_id(obj, &mut ring_info[..]),
         _ => {}
@@ -132,12 +132,12 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
 }
 
 pub unsafe fn set_know_id(id: ThingId, info: &mut [ObjInfo]) {
-    let idx = OBJECTS.with_object(id, |o| o.o_which).unwrap_or(0) as usize;
+    let idx = DUNGEON.objects.with_object(id, |o| o.o_which).unwrap_or(0) as usize;
     if let Some(item) = info.get_mut(idx) {
         item.oi_know = true;
         item.oi_guess = None;
     }
-    OBJECTS.with_object_mut(id, |o| o.o_flags.insert(ObjectFlags::KNOW));
+    DUNGEON.objects.with_object_mut(id, |o| o.o_flags.insert(ObjectFlags::KNOW));
 }
 
 pub fn type_name(filter: ItemFilter) -> &'static str {
@@ -175,7 +175,7 @@ pub unsafe fn create_obj() {
     } else {
         ch - b'a' as i32 + 10
     };
-    OBJECTS.with_object_mut(obj, |o| {
+    DUNGEON.objects.with_object_mut(obj, |o| {
         o.o_which = which;
         o.o_type = ItemType::from_raw(type_ch, which);
         o.o_group = 0;
@@ -183,7 +183,7 @@ pub unsafe fn create_obj() {
     });
     mpos = 0;
 
-    let otype = OBJECTS
+    let otype = DUNGEON.objects
         .with_object(obj, |o| o.o_type)
         .unwrap_or(ItemType::None);
     match otype {
@@ -192,13 +192,13 @@ pub unsafe fn create_obj() {
             let bless = readchar() as u8;
             mpos = 0;
             if bless == ('-' as u8) {
-                OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
+                DUNGEON.objects.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
             }
             if matches!(otype, ItemType::Weapon(_)) {
-                let w = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
+                let w = DUNGEON.objects.with_object(obj, |o| o.o_which).unwrap_or(0);
                 init_weapon(obj, w, &mut RNG.lock().unwrap());
                 if bless == ('-' as u8) {
-                    OBJECTS.with_object_mut(obj, |o| {
+                    DUNGEON.objects.with_object_mut(obj, |o| {
                         o.o_hplus -= {
                             let mut random = RNG.lock().unwrap();
                             random.rnd(3)
@@ -206,7 +206,7 @@ pub unsafe fn create_obj() {
                     });
                 }
                 if bless == ('+' as u8) {
-                    OBJECTS.with_object_mut(obj, |o| {
+                    DUNGEON.objects.with_object_mut(obj, |o| {
                         o.o_hplus += {
                             let mut random = RNG.lock().unwrap();
                             random.rnd(3)
@@ -214,10 +214,10 @@ pub unsafe fn create_obj() {
                     });
                 }
             } else {
-                let w = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
-                OBJECTS.with_object_mut(obj, |o| o.o_arm = a_class[w as usize]);
+                let w = DUNGEON.objects.with_object(obj, |o| o.o_which).unwrap_or(0);
+                DUNGEON.objects.with_object_mut(obj, |o| o.o_arm = a_class[w as usize]);
                 if bless == ('-' as u8) {
-                    OBJECTS.with_object_mut(obj, |o| {
+                    DUNGEON.objects.with_object_mut(obj, |o| {
                         o.o_arm += {
                             let mut random = RNG.lock().unwrap();
                             random.rnd(3)
@@ -225,7 +225,7 @@ pub unsafe fn create_obj() {
                     });
                 }
                 if bless == ('+' as u8) {
-                    OBJECTS.with_object_mut(obj, |o| {
+                    DUNGEON.objects.with_object_mut(obj, |o| {
                         o.o_arm -= {
                             let mut random = RNG.lock().unwrap();
                             random.rnd(3)
@@ -235,14 +235,14 @@ pub unsafe fn create_obj() {
             }
         }
         ItemType::Ring(_) => {
-            let which = OBJECTS.with_object(obj, |o| o.o_which).unwrap_or(0);
+            let which = DUNGEON.objects.with_object(obj, |o| o.o_which).unwrap_or(0);
             match which {
                 0 | 1 | 2 | 3 | 6 | 7 => {
                     msg_str("blessing? (+,-,n)");
                     let bless = readchar() as u8;
                     mpos = 0;
                     if bless == ('-' as u8) {
-                        OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
+                        DUNGEON.objects.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
                     }
                     let arm = if bless == ('-' as u8) {
                         -1
@@ -252,10 +252,10 @@ pub unsafe fn create_obj() {
                             random.rnd(2)
                         } + 1)
                     };
-                    OBJECTS.with_object_mut(obj, |o| o.o_arm = arm);
+                    DUNGEON.objects.with_object_mut(obj, |o| o.o_arm = arm);
                 }
                 _ => {
-                    OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
+                    DUNGEON.objects.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
                 }
             }
         }
@@ -339,7 +339,7 @@ mod tests {
     fn set_know_marks_object_known() {
         unsafe {
             let id = crate::item::arena::new_item_id();
-            crate::item::arena::OBJECTS.with_object_mut(id, |o| {
+            DUNGEON.objects.with_object_mut(id, |o| {
                 o.o_type = ItemType::SCROLL;
                 o.o_which = 0;
                 o.o_count = 1;
@@ -359,7 +359,7 @@ mod tests {
                 o.o_flags.contains(ObjectFlags::KNOW)
             })
             .unwrap());
-            let _ = crate::item::arena::OBJECTS.remove(id);
+            let _ = DUNGEON.objects.remove(id);
         }
     }
 }

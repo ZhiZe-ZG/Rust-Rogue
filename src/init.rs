@@ -15,7 +15,7 @@ use crate::game::PLAYER;
 use crate::rnd::{Random, RNG};
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
-use crate::item::arena::{new_item_id, OBJECTS};
+use crate::item::arena::new_item_id;
 use crate::item::item_type::ItemType;
 use crate::item::pack::add_pack_id;
 use crate::item::weapons::init_weapon;
@@ -263,7 +263,7 @@ pub unsafe fn init_player() {
 
     // Give her some food
     let food = new_item_id();
-    OBJECTS.with_object_mut(food, |o| {
+    crate::dungeon::DUNGEON.objects.with_object_mut(food, |o| {
         o.o_type = ItemType::Food;
         o.o_count = 1;
     });
@@ -271,7 +271,7 @@ pub unsafe fn init_player() {
 
     // A suit of ring-mail armor
     let armor = new_item_id();
-    OBJECTS.with_object_mut(armor, |o| {
+    crate::dungeon::DUNGEON.objects.with_object_mut(armor, |o| {
         o.o_type = ItemType::Armor(RING_MAIL);
         o.o_which = RING_MAIL;
         o.o_arm = a_class[RING_MAIL as usize] - 1;
@@ -284,7 +284,7 @@ pub unsafe fn init_player() {
     // A +1 mace
     let mace_id = new_item_id();
     init_weapon(mace_id, MACE, &mut RNG.lock().unwrap());
-    OBJECTS.with_object_mut(mace_id, |o| {
+    crate::dungeon::DUNGEON.objects.with_object_mut(mace_id, |o| {
         o.o_hplus = 1;
         o.o_dplus = 1;
         o.o_flags.insert(ObjectFlags::KNOW);
@@ -295,7 +295,7 @@ pub unsafe fn init_player() {
     // A +1 bow
     let bow_id = new_item_id();
     init_weapon(bow_id, BOW, &mut RNG.lock().unwrap());
-    OBJECTS.with_object_mut(bow_id, |o| {
+    crate::dungeon::DUNGEON.objects.with_object_mut(bow_id, |o| {
         o.o_hplus = 1;
         o.o_flags.insert(ObjectFlags::KNOW);
     });
@@ -304,7 +304,7 @@ pub unsafe fn init_player() {
     // Arrows
     let arrow_id = new_item_id();
     init_weapon(arrow_id, ARROW, &mut RNG.lock().unwrap());
-    OBJECTS.with_object_mut(arrow_id, |o| {
+    crate::dungeon::DUNGEON.objects.with_object_mut(arrow_id, |o| {
         o.o_count = {
             let mut random = RNG.lock().unwrap();
             random.rnd(15)

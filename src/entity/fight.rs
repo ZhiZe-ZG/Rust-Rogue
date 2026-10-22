@@ -17,7 +17,7 @@ use crate::game::globals::{monsters, weap_info};
 use crate::dungeon::DUNGEON;
 use crate::game::{MonsterId, PLAYER};
 use crate::init::pick_color;
-use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::arena::ThingId;
 use crate::item::armor::rust_armor_id;
 use crate::item::item_type::ItemType;
 use crate::item::pack::leave_pack_id;
@@ -447,7 +447,7 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
                     remove_mon(mon.pos, tp, false as u8, random);
                     leave_pack_id(steal, false, false);
                     msg_str(&format!("she stole {}!", inv_name_id(steal, true)));
-                    let _ = OBJECTS.remove(steal);
+                    let _ = DUNGEON.objects.remove(steal);
                     count = 0;
                     return -1;
                 }
@@ -879,7 +879,7 @@ pub unsafe fn remove_mon(mp: IVec2, tp: MonsterId, waskill: u8, random: &mut Ran
         if waskill != 0 {
             fall(id, false, random);
         } else {
-            let _ = crate::item::arena::OBJECTS.remove(id);
+            let _ = DUNGEON.objects.remove(id);
         }
     }
     crate::game::set_monster_id(mp.y, mp.x, None);
@@ -918,7 +918,7 @@ pub unsafe fn killed(tp: MonsterId, pr: u8, random: &mut Random) {
         let level = crate::game::current_depth();
         if tp_room.is_some() && fallpos(mon.pos, random).is_some() && level >= crate::dungeon::max_depth() {
             let gold = crate::item::arena::new_item_id();
-            OBJECTS.with_object_mut(gold, |o| {
+            DUNGEON.objects.with_object_mut(gold, |o| {
                 o.o_type = ItemType::Gold;
                 // o_goldval is #define'd to o_arm
                 let mut value = random.rnd(50 + 10 * level) + 2; // GOLDCALC

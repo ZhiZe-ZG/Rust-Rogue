@@ -13,7 +13,7 @@ use crate::game::globals::{pot_info, ObjInfo};
 use crate::game::PLAYER;
 use crate::dungeon::DUNGEON;
 use crate::game::MonsterId;
-use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::item::rings::RingType;
@@ -233,7 +233,7 @@ pub unsafe fn quaff(random: &mut Random) {
     let trip = player_has(MonsterFlags::HALU);
 
     if !matches!(
-        OBJECTS.with_object(obj, |o| o.o_type),
+        DUNGEON.objects.with_object(obj, |o| o.o_type),
         Some(ItemType::Potion(_))
     ) {
         if terse == 0 {
@@ -247,7 +247,7 @@ pub unsafe fn quaff(random: &mut Random) {
         PLAYER.set_weapon_id(None);
     }
 
-    let (o_count, o_which) = OBJECTS
+    let (o_count, o_which) = DUNGEON.objects
         .with_object(obj, |o| (o.o_count, o.o_which))
         .unwrap_or((0, 0));
     let discardit = o_count == 1;
@@ -300,7 +300,7 @@ pub unsafe fn quaff(random: &mut Random) {
                 for id in floor {
                     if is_magic_id(id) {
                         show = true;
-                        if let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) {
+                        if let Some(pos) = DUNGEON.objects.with_object(id, |o| o.o_pos) {
                             crate::ui::terminal::UI.move_cursor(IVec2::new(pos.x, pos.y));
                             crate::draw::write_cell_glyph(pos, MAGIC as u8 as char);
                         }
@@ -423,13 +423,13 @@ pub unsafe fn quaff(random: &mut Random) {
 
     call_it(pot_info_at(o_which as usize));
     if discardit {
-        let _ = OBJECTS.remove(obj);
+        let _ = DUNGEON.objects.remove(obj);
     }
 }
 
 /// Whether the object `id` radiates magic (pointer-free).
 pub fn is_magic_id(id: ThingId) -> bool {
-    let Some((typ, prot, o_arm, o_hplus, o_dplus)) = OBJECTS.with_object(id, |o| {
+    let Some((typ, prot, o_arm, o_hplus, o_dplus)) = DUNGEON.objects.with_object(id, |o| {
         (
             o.o_type,
             o.o_flags.contains(ObjectFlags::PROT),

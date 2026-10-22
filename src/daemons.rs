@@ -20,7 +20,7 @@ use crate::entity::monsters::{wanderer, MonsterType};
 use crate::entity::player::{MonsterFlags, Thing};
 use crate::dungeon::DUNGEON;
 use crate::game::PLAYER;
-use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::arena::ThingId;
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
 use crate::rip::death;
@@ -260,7 +260,7 @@ pub unsafe fn come_down() {
 
     // Undo the things (objects on the level).
     for id in crate::game::item_ids() {
-        if let Some((pos, otype)) = OBJECTS.with_object(id, |o| (o.o_pos, o.o_type)) {
+        if let Some((pos, otype)) = DUNGEON.objects.with_object(id, |o| (o.o_pos, o.o_type)) {
             if cansee(pos.y, pos.x) != 0 {
                 crate::draw::write_cell_glyph(
                     IVec2::new(pos.x, pos.y),
@@ -296,7 +296,7 @@ pub unsafe fn visuals(random: &mut Random) {
 
     // Change the things (objects).
     for id in crate::game::item_ids() {
-        if let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) {
+        if let Some(pos) = DUNGEON.objects.with_object(id, |o| o.o_pos) {
             if cansee(pos.y, pos.x) != 0 {
                 crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), rnd_thing(random) as char);
             }

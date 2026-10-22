@@ -19,7 +19,7 @@ use glam::IVec2;
 
 use crate::entity::player::ObjectFlags;
 use crate::game::globals::weap_info;
-use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::arena::{ThingArena, ThingId};
 use crate::item::things::{dropcheck_id, inv_name_id};
 
 const NO_WEAPON: i32 = -1;
@@ -134,7 +134,7 @@ pub unsafe fn missile(ydelta: i32, xdelta: i32, random: &mut Random) {
     };
     do_motion(obj, ydelta, xdelta);
 
-    let pos = OBJECTS.with_object(obj, |o| o.o_pos).unwrap_or(IVec2::ZERO);
+    let pos = crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_pos).unwrap_or(IVec2::ZERO);
     if !crate::game::monster_here(pos.y, pos.x) || hit_monster(pos.y, pos.x, obj, random) == 0 {
         fall(obj, true, random);
     }
@@ -143,7 +143,7 @@ pub unsafe fn missile(ydelta: i32, xdelta: i32, random: &mut Random) {
 /// Animates projectile movement until it hits blocking terrain or a door.
 pub unsafe fn do_motion(id: ThingId, ydelta: i32, xdelta: i32) -> IVec2 {
     let mut pos = hero();
-    let o_type = OBJECTS
+    let o_type = crate::dungeon::DUNGEON.objects
         .with_object(id, |o| o.o_type)
         .unwrap_or(ItemType::None);
 
@@ -170,22 +170,22 @@ pub unsafe fn do_motion(id: ThingId, ydelta: i32, xdelta: i32) -> IVec2 {
         break;
     }
 
-    OBJECTS.with_object_mut(id, |o| o.o_pos = pos);
+    crate::dungeon::DUNGEON.objects.with_object_mut(id, |o| o.o_pos = pos);
     pos
 }
 
 /// Drops an item near its current position or discards it if no floor slot is available.
 pub unsafe fn fall(id: ThingId, pr: bool, random: &mut Random) {
-    let Some(pos) = OBJECTS.with_object(id, |o| o.o_pos) else {
+    let Some(pos) = crate::dungeon::DUNGEON.objects.with_object(id, |o| o.o_pos) else {
         return;
     };
 
     if let Some(newpos) = fallpos(pos, random) {
         // Objects render from the `lvl_obj` list; no glyph write needed.
-        OBJECTS.with_object_mut(id, |o| o.o_pos = newpos);
+        crate::dungeon::DUNGEON.objects.with_object_mut(id, |o| o.o_pos = newpos);
 
         if cansee(newpos.y, newpos.x) != 0 {
-            let glyph = OBJECTS
+            let glyph = crate::dungeon::DUNGEON.objects
                 .with_object(id, |o| crate::draw::item_glyph(o.o_type))
                 .unwrap_or(')');
             if let Some(mid) = crate::game::monster_id_at(newpos.y, newpos.x) {
@@ -208,18 +208,28 @@ pub unsafe fn fall(id: ThingId, pr: bool, random: &mut Random) {
             endmsg();
             has_hit = 0;
         }
-        let which = OBJECTS.with_object(id, |o| o.o_which).unwrap_or(0);
+        let which = crate::dungeon::DUNGEON.objects.with_object(id, |o| o.o_which).unwrap_or(0);
         msg_str(&format!(
             "the {} vanishes as it hits the ground",
             weap_info[which as usize].oi_name
         ));
     }
 
-    let _ = OBJECTS.remove(id);
+    let _ = crate::dungeon::DUNGEON.objects.remove(id);
 }
 
 /// Initializes a weapon object with baseline damage, flags, and stack counts.
 pub unsafe fn init_weapon(id: ThingId, which: i32, random: &mut Random) {
+    init_weapon_in(&crate::dungeon::DUNGEON.objects, id, which, random);
+}
+
+/// Initialize a weapon in the supplied arena using the shared template.
+pub(crate) unsafe fn init_weapon_in(
+    objects: &ThingArena,
+    id: ThingId,
+    which: i32,
+    random: &mut Random,
+) {
     let Some(iwp) = INIT_DAM.get(which as usize).copied() else {
         return;
     };
@@ -236,7 +246,7 @@ pub unsafe fn init_weapon(id: ThingId, which: i32, random: &mut Random) {
         group += 1;
     }
 
-    OBJECTS.with_object_mut(id, |o| {
+    objects.with_object_mut(id, |o| {
         o.o_type = ItemType::Weapon(which);
         o.o_which = which;
         set_damage(&mut o.o_damage, iwp.iw_dam);
@@ -282,7 +292,7 @@ pub unsafe fn wield(random: &mut Random) {
         return;
     };
 
-    let is_armor = OBJECTS
+    let is_armor = crate::dungeon::DUNGEON.objects
         .with_object(obj, |o| matches!(o.o_type, ItemType::Armor(_)))
         .unwrap_or(false);
     if is_armor {
@@ -300,7 +310,7 @@ pub unsafe fn wield(random: &mut Random) {
     if terse == 0 {
         addmsg_str("you are now ");
     }
-    let packch = OBJECTS.with_object(obj, |o| o.o_packch).unwrap_or(0);
+    let packch = crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_packch).unwrap_or(0);
     msg_str(&format!("wielding {} ({})", sp, packch as char));
 }
 

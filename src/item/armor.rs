@@ -4,7 +4,7 @@
 use crate::daemon::{do_daemons, do_fuses};
 use crate::entity::player::ObjectFlags;
 use crate::game::PLAYER;
-use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
 use crate::item::rings::RingType;
@@ -34,7 +34,7 @@ pub unsafe fn wear(random: &mut Random) {
     }
 
     if !matches!(
-        OBJECTS.with_object(obj, |o| o.o_type),
+        crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_type),
         Some(ItemType::Armor(_))
     ) {
         msg_str("you can't wear that");
@@ -42,7 +42,7 @@ pub unsafe fn wear(random: &mut Random) {
     }
 
     waste_time(random);
-    OBJECTS.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::KNOW));
+    crate::dungeon::DUNGEON.objects.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::KNOW));
     let sp = inv_name_id(obj, true);
     PLAYER.set_armor_id(Some(obj));
     if terse == 0 {
@@ -73,7 +73,7 @@ pub unsafe fn take_off(random: &mut Random) {
     } else {
         addmsg_str("you used to be");
     }
-    let packch = OBJECTS.with_object(obj, |o| o.o_packch).unwrap_or(0);
+    let packch = crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_packch).unwrap_or(0);
     msg_str(&format!(
         " wearing {}) {}",
         packch as char,
@@ -94,7 +94,7 @@ pub unsafe fn rust_armor_id(arm: Option<ThingId>) {
     let Some(id) = arm else {
         return;
     };
-    let Some((typ, which, o_arm, prot)) = OBJECTS.with_object(id, |o| {
+    let Some((typ, which, o_arm, prot)) = crate::dungeon::DUNGEON.objects.with_object(id, |o| {
         (
             o.o_type,
             o.o_which,
@@ -113,7 +113,7 @@ pub unsafe fn rust_armor_id(arm: Option<ThingId>) {
             msg_str("the rust vanishes instantly");
         }
     } else {
-        OBJECTS.with_object_mut(id, |o| o.o_arm += 1);
+        crate::dungeon::DUNGEON.objects.with_object_mut(id, |o| o.o_arm += 1);
         if terse == 0 {
             msg_str("your armor appears to be weaker now. Oh my!");
         } else {

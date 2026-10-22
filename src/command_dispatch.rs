@@ -12,7 +12,7 @@ use crate::entity::player::{do_move, do_run, MonsterFlags, ObjectFlags, Thing};
 use crate::game::globals::{pot_info, ring_info, scr_info, ws_info};
 use crate::game::PLAYER;
 use crate::help::{help, identify};
-use crate::item::arena::{new_item_id, ThingId, OBJECTS};
+use crate::item::arena::{new_item_id, ThingId};
 use crate::item::armor::{take_off, wear};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{add_pack_id, get_item_id, inventory, pick_up, picky_inven};
@@ -504,7 +504,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                         ItemFilter::Category(ItemType::STICK),
                                     );
                                     if let Some(id) = item {
-                                        OBJECTS.with_object_mut(id, |o| o.o_arm = 10000);
+                                        DUNGEON.objects.with_object_mut(id, |o| o.o_arm = 10000);
                                     }
                                 }
                                 Command::WizardGear => {
@@ -516,7 +516,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                      */
                                     let sword = new_item_id();
                                     init_weapon(sword, TWOSWORD, &mut RNG.lock().unwrap());
-                                    OBJECTS.with_object_mut(sword, |o| {
+                                    DUNGEON.objects.with_object_mut(sword, |o| {
                                         o.o_hplus = 1;
                                         o.o_dplus = 1;
                                     });
@@ -526,7 +526,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                      * And his suit of armor
                                      */
                                     let armor = new_item_id();
-                                    OBJECTS.with_object_mut(armor, |o| {
+                                    DUNGEON.objects.with_object_mut(armor, |o| {
                                         o.o_type = ItemType::Armor(PLATE_MAIL);
                                         o.o_which = PLATE_MAIL;
                                         o.o_arm = -5;
@@ -812,7 +812,7 @@ pub unsafe fn call() {
     };
 
     let (otype, label, o_which) =
-        match OBJECTS.with_object(obj, |o| (o.o_type, o.o_label.clone(), o.o_which)) {
+        match DUNGEON.objects.with_object(obj, |o| (o.o_type, o.o_label.clone(), o.o_which)) {
             Some(v) => v,
             None => return,
         };
@@ -842,7 +842,7 @@ pub unsafe fn call() {
 
         let initial = label.clone().unwrap_or_default();
         if let Some(text) = read_line(&initial) {
-            OBJECTS.with_object_mut(obj, |o| o.o_label = Some(text));
+            DUNGEON.objects.with_object_mut(obj, |o| o.o_label = Some(text));
         }
         return;
     }
@@ -903,7 +903,7 @@ pub unsafe fn current(cur: Option<crate::item::arena::ThingId>, how: &str, where
             addmsg_str(&format!("you are {} (", how));
         }
         inv_describe = false as u8;
-        let packch = OBJECTS.with_object(id, |o| o.o_packch).unwrap_or(0);
+        let packch = DUNGEON.objects.with_object(id, |o| o.o_packch).unwrap_or(0);
         addmsg_str(&format!("{}) {}", packch as char, inv_name_id(id, true)));
         inv_describe = true as u8;
         if !where_.is_empty() {

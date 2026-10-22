@@ -4,7 +4,7 @@
 use std::io::Write;
 
 use crate::game::globals::{get_purse, monster_info, ALLSCORE, NUMSCORES, NUMNAME};
-use crate::item::arena::{with_object, OBJECTS};
+use crate::item::arena::with_object;
 use crate::item::item_type::ItemType;
 use crate::item::things::inv_name_id;
 use crate::machdep::{lock_sc, unlock_sc};

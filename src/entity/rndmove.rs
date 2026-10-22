@@ -35,8 +35,8 @@ pub unsafe fn rndmove_from(pos: IVec2, random: &mut Random) -> IVec2 {
     }
 
     // Refuse to step on a scroll of scare monster
-    for id in crate::item::arena::OBJECTS.ids() {
-        let at_pos = crate::item::arena::OBJECTS
+    for id in crate::dungeon::DUNGEON.objects.ids() {
+        let at_pos = crate::dungeon::DUNGEON.objects
             .with(id, |t| match t {
                 Thing::Object { data } => {
                     if data.o_pos.y == chosen.y && data.o_pos.x == chosen.x {

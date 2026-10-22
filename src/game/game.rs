@@ -182,7 +182,7 @@ pub fn passage_exits(passage: Option<usize>) -> Vec<IVec2> {
 /// Arena handles for the floor items of the live level, head first.
 ///
 /// This is the pointer-free accessor preferred by new code; callers look the
-/// object up through [`crate::item::arena::OBJECTS`] when needed.
+/// object up through [`Dungeon::objects`](crate::dungeon::Dungeon::objects) when needed.
 #[inline]
 pub fn item_ids() -> Vec<crate::item::arena::ThingId> {
     with_current_level(|level| {
@@ -190,7 +190,7 @@ pub fn item_ids() -> Vec<crate::item::arena::ThingId> {
             .items
             .iter()
             .copied()
-            .filter(|&id| crate::item::arena::OBJECTS.contains(id))
+            .filter(|&id| DUNGEON.objects.contains(id))
             .collect()
     })
 }

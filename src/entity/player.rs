@@ -519,7 +519,7 @@ pub fn free_pack_id(owner: crate::game::MonsterId) {
         })
         .unwrap_or_default();
     for id in pack {
-        let _ = crate::item::arena::OBJECTS.remove(id);
+        let _ = DUNGEON.objects.remove(id);
     }
 }
 
@@ -624,7 +624,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
             } else {
                 let arrow = new_item_id();
                 init_weapon(arrow, ARROW, &mut RNG.lock().unwrap());
-                crate::item::arena::OBJECTS.with_object_mut(arrow, |o| {
+                DUNGEON.objects.with_object_mut(arrow, |o| {
                     o.o_count = 1;
                     o.o_pos = PLAYER.pos();
                 });
@@ -933,8 +933,8 @@ mod tests {
         let a = new_item_id();
         let b = new_item_id();
         assert_eq!(allocated_count(), before + 2);
-        let _ = crate::item::arena::OBJECTS.remove(a);
-        let _ = crate::item::arena::OBJECTS.remove(b);
+        let _ = DUNGEON.objects.remove(a);
+        let _ = DUNGEON.objects.remove(b);
         assert_eq!(allocated_count(), before);
     }
 }

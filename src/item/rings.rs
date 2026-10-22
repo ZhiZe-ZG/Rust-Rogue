@@ -6,7 +6,7 @@ use crate::item::potions::invis_on;
 use crate::rnd::Random;
 
 use crate::game::PLAYER;
-use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
 use crate::item::things::{dropcheck_id, inv_name_id};
@@ -93,7 +93,7 @@ pub unsafe fn ring_on(random: &mut Random) {
         return;
     };
     if !matches!(
-        OBJECTS.with_object(obj, |o| o.o_type),
+        crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_type),
         Some(ItemType::Ring(_))
     ) {
         if terse == 0 {
@@ -136,7 +136,7 @@ pub unsafe fn ring_on(random: &mut Random) {
         PLAYER.set_right_ring_id(Some(obj));
     }
 
-    let (which, o_arm, packch) = OBJECTS
+    let (which, o_arm, packch) = crate::dungeon::DUNGEON.objects
         .with_object(obj, |o| (o.o_which, o.o_arm, o.o_packch))
         .unwrap_or((0, 0, 0));
 
@@ -189,7 +189,7 @@ pub unsafe fn ring_off(random: &mut Random) {
     };
 
     if dropcheck_id(obj, random) {
-        let packch = OBJECTS.with_object(obj, |o| o.o_packch).unwrap_or(0);
+        let packch = crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_packch).unwrap_or(0);
         msg_str(&format!(
             "was wearing {}({})",
             inv_name_id(obj, true),
@@ -260,7 +260,7 @@ pub unsafe fn ring_eat(hand: i32, random: &mut Random) -> i32 {
 /// Returns bracketed ring bonus text for known stat-modifier rings.
 #[allow(dead_code)]
 unsafe fn ring_num(id: ThingId) -> String {
-    let Some((know, which, o_arm)) = OBJECTS.with_object(id, |o| {
+    let Some((know, which, o_arm)) = crate::dungeon::DUNGEON.objects.with_object(id, |o| {
         (o.o_flags.contains(ObjectFlags::KNOW), o.o_which, o.o_arm)
     }) else {
         return String::new();

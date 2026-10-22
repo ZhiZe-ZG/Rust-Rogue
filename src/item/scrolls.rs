@@ -12,7 +12,7 @@ use crate::game::globals::{scr_info, weap_info};
 use crate::dungeon::DUNGEON;
 use crate::game::PLAYER;
 use crate::init::pick_color;
-use crate::item::arena::{ThingId, OBJECTS};
+use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::misc::{aggravate, call_it, choose_str};
@@ -130,7 +130,7 @@ pub unsafe fn read_scroll(random: &mut Random) {
     };
 
     if !matches!(
-        OBJECTS.with_object(obj, |o| o.o_type),
+        DUNGEON.objects.with_object(obj, |o| o.o_type),
         Some(ItemType::Scroll(_))
     ) {
         if terse == 0 {
@@ -145,7 +145,7 @@ pub unsafe fn read_scroll(random: &mut Random) {
         PLAYER.set_weapon_id(None);
     }
 
-    let (o_count, o_which) = OBJECTS
+    let (o_count, o_which) = DUNGEON.objects
         .with_object(obj, |o| (o.o_count, o.o_which))
         .unwrap_or((0, 0));
     let discardit = o_count == 1;
@@ -398,11 +398,11 @@ pub unsafe fn read_scroll(random: &mut Random) {
     look(true as u8, random);
     call_it(&mut scr_info[o_which as usize]);
     if discardit {
-        let _ = OBJECTS.remove(obj);
+        let _ = DUNGEON.objects.remove(obj);
     }
 }
 
 /// Uncurse an item.
 pub unsafe fn uncurse_id(id: ThingId) {
-    OBJECTS.with_object_mut(id, |o| o.o_flags.remove(ObjectFlags::CURSED));
+    DUNGEON.objects.with_object_mut(id, |o| o.o_flags.remove(ObjectFlags::CURSED));
 }
