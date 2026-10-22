@@ -105,11 +105,11 @@ use crate::game::globals::{
 };
 
 unsafe fn hero_pos() -> IVec2 {
-    crate::game::PLAYER.pos()
+    crate::dungeon::DUNGEON.player.pos()
 }
 
 unsafe fn proom_ptr() -> Option<usize> {
-    crate::game::PLAYER.room()
+    crate::dungeon::DUNGEON.player.room()
 }
 
 unsafe fn option_list() -> [OPTION; 9] {

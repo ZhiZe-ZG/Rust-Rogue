@@ -51,19 +51,19 @@ unsafe fn discard_item(id: ThingId) {
 
 /// The player's pack as arena handles, head first.
 pub unsafe fn pack_ptrs() -> Vec<ThingId> {
-    crate::game::PLAYER.pack()
+    DUNGEON.player.pack()
 }
 
 unsafe fn hero_coord() -> IVec2 {
-    crate::game::PLAYER.pos()
+    DUNGEON.player.pos()
 }
 
 unsafe fn proom() -> Option<usize> {
-    crate::game::PLAYER.room()
+    DUNGEON.player.room()
 }
 
 unsafe fn player_has(flag: MonsterFlags) -> bool {
-    crate::game::PLAYER.has_flag(flag)
+    DUNGEON.player.has_flag(flag)
 }
 
 unsafe fn floor_char_for_room() -> u8 {
@@ -105,7 +105,7 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
         return;
     }
 
-    let mut pack = crate::game::PLAYER.pack();
+    let mut pack = DUNGEON.player.pack();
 
     if pack.is_empty() {
         if !pack_room_id(from_floor, item_id) {
@@ -225,7 +225,7 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
     }
 
     with_object_mut(item_id, |o| o.o_flags.insert(ObjectFlags::FOUND));
-    crate::game::PLAYER.set_pack(pack);
+    DUNGEON.player.set_pack(pack);
 
     let item_dest = crate::entity::player::DestRef::Object(item_id);
     for id in DUNGEON.monster_list.ids() {
@@ -255,21 +255,21 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
 mod tests {
     use super::*;
     use crate::entity::player::{Thing, ThingObject};
-    use crate::game::{with_current_level_mut, PLAYER};
+    use crate::game::with_current_level_mut;
     use crate::misc::find_obj_id;
 
     #[test]
     fn pickup_transfers_floor_items_and_merges_only_distinct_objects() {
         unsafe {
-            let old_pack = PLAYER.pack();
+            let old_pack = DUNGEON.player.pack();
             let old_inpack = inpack;
             let old_pack_used = pack_used;
             let old_items = with_current_level_mut(|level| std::mem::take(&mut level.items));
-            PLAYER.set_pack(Vec::new());
+            DUNGEON.player.set_pack(Vec::new());
             inpack = 0;
             pack_used = [0; 26];
 
-            let pos = PLAYER.pos();
+            let pos = DUNGEON.player.pos();
             let food = DUNGEON.objects.insert(Thing::object(ThingObject {
                 o_type: ItemType::Food,
                 o_count: 1,
@@ -278,7 +278,7 @@ mod tests {
             }));
             with_current_level_mut(|level| level.add_item(food));
             add_pack_id(None, true);
-            assert_eq!(PLAYER.pack(), vec![food]);
+            assert_eq!(DUNGEON.player.pack(), vec![food]);
             assert_eq!(find_obj_id(pos.y, pos.x), None);
             assert_eq!({ inpack }, 1);
             assert!(DUNGEON.objects
@@ -287,7 +287,7 @@ mod tests {
 
             add_pack_id(None, true);
             assert_eq!(DUNGEON.objects.with_object(food, |obj| obj.o_count), Some(1));
-            assert_eq!(PLAYER.pack(), vec![food]);
+            assert_eq!(DUNGEON.player.pack(), vec![food]);
 
             let weapon = DUNGEON.objects.insert(Thing::object(ThingObject {
                 o_type: ItemType::Weapon(0),
@@ -297,7 +297,7 @@ mod tests {
             }));
             with_current_level_mut(|level| level.add_item(weapon));
             add_pack_id(None, true);
-            assert_eq!(PLAYER.pack(), vec![food, weapon]);
+            assert_eq!(DUNGEON.player.pack(), vec![food, weapon]);
             assert_eq!(find_obj_id(pos.y, pos.x), None);
             assert_eq!({ inpack }, 2);
             assert_eq!(DUNGEON.objects.with_object(food, |obj| obj.o_packch), Some(b'a'));
@@ -311,7 +311,7 @@ mod tests {
             }));
             with_current_level_mut(|level| level.add_item(more_food));
             add_pack_id(None, true);
-            assert_eq!(PLAYER.pack(), vec![food, weapon]);
+            assert_eq!(DUNGEON.player.pack(), vec![food, weapon]);
             assert_eq!(find_obj_id(pos.y, pos.x), None);
             assert_eq!(DUNGEON.objects.with_object(food, |obj| obj.o_count), Some(2));
             assert!(!DUNGEON.objects.contains(more_food));
@@ -319,7 +319,7 @@ mod tests {
 
             DUNGEON.objects.remove(food);
             DUNGEON.objects.remove(weapon);
-            PLAYER.set_pack(old_pack);
+            DUNGEON.player.set_pack(old_pack);
             inpack = old_inpack;
             pack_used = old_pack_used;
             with_current_level_mut(|level| level.items = old_items);
@@ -386,7 +386,7 @@ pub unsafe fn leave_pack_id(id: ThingId, newobj: bool, all: bool) -> Option<Thin
         if (packch as usize) >= b'a' as usize {
             pack_used[packch as usize - 'a' as usize] = false as u8;
         }
-        crate::game::PLAYER.remove_from_pack(id);
+        DUNGEON.player.remove_from_pack(id);
         Some(id)
     }
 }
@@ -481,7 +481,7 @@ pub unsafe fn pick_up(ch: u8) {
 pub unsafe fn get_item_id(purpose: &str, filter: ItemFilter) -> Option<ThingId> {
     let mut ch: i32;
 
-    if crate::game::PLAYER.pack().is_empty() {
+    if DUNGEON.player.pack().is_empty() {
         msg_str("you aren't carrying anything");
         return None;
     }
@@ -520,7 +520,7 @@ pub unsafe fn get_item_id(purpose: &str, filter: ItemFilter) -> Option<ThingId> 
             }
             continue;
         }
-        for id in crate::game::PLAYER.pack() {
+        for id in DUNGEON.player.pack() {
             if crate::item::arena::with_object(id, |o| o.o_packch) == Some(ch as u8) {
                 return Some(id);
             }
@@ -572,7 +572,7 @@ pub unsafe fn move_msg_id(id: ThingId) {
 }
 
 pub unsafe fn picky_inven() {
-    let pack = crate::game::PLAYER.pack();
+    let pack = DUNGEON.player.pack();
     if pack.is_empty() {
         msg_str("you aren't carrying anything");
     } else if pack.len() == 1 {

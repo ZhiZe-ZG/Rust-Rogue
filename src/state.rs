@@ -6,7 +6,7 @@
 //! as [RON] (Rust Object Notation), a human-readable self-describing format.
 //!
 //! The engine's live state is still held in process-wide safe owners
-//! ([`crate::game::PLAYER`], `Dungeon::monster_list`,
+//! (`DUNGEON.player`, `Dungeon::monster_list`,
 //! `Dungeon::monster_map`, [`crate::dungeon::DUNGEON`], the item
 //! arena and the many `static mut` globals). This module only *snapshots* that
 //! state into plain value types, and rebuilds it on restore. Pointers between
@@ -25,7 +25,7 @@ use crate::daemon::CDelayedAction;
 use crate::entity::monsters::MonsterType;
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingObject};
 use crate::dungeon::DUNGEON;
-use crate::game::{MonsterId, PLAYER};
+use crate::game::MonsterId;
 use crate::item::arena::ThingId;
 use crate::level::{LevelFlags, PassageLinks, RoomGraph};
 use crate::structure::{Passage, Room, Structure};
@@ -42,7 +42,7 @@ const MAXSCROLLS: usize = 18;
 pub enum DestRef {
     /// No chase target.
     None,
-    /// Chasing the hero (position read live from [`crate::game::PLAYER`]).
+    /// Chasing the hero (position read live from `DUNGEON.player`).
     Hero,
     /// Chasing the monster at this index in the monster list.
     Monster(usize),
@@ -332,10 +332,10 @@ unsafe fn build_snapshot() -> GameSnapshot {
     use crate::game::globals::*;
 
     // Player actor snapshot (without its pack, which is captured separately).
-    let hero_pack = PLAYER.pack();
+    let hero_pack = DUNGEON.player.pack();
     let level_items = crate::game::item_ids();
 
-    let mut player = PLAYER.with_monster(|data| {
+    let mut player = DUNGEON.player.with_monster(|data| {
         snapshot_actor(
             data.t_pos,
             data.t_turn,
@@ -360,7 +360,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         .collect();
 
     let player_pack = collect_objects(&hero_pack);
-    let eq = PLAYER.equipment();
+    let eq = DUNGEON.player.equipment();
     let equipment = EquipmentSnapshot {
         armor: list_index_of_id(&hero_pack, eq.armor_id()),
         left_ring: list_index_of_id(&hero_pack, eq.left_ring_id()),
@@ -812,7 +812,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     }
 
     // ── player ──────────────────────────────────────────────────────────
-    PLAYER.with_monster_mut(|data| {
+    DUNGEON.player.with_monster_mut(|data| {
         data.t_pos = s.player.t_pos;
         data.t_turn = s.player.t_turn;
         data.t_type = s.player.t_type;
@@ -824,16 +824,16 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
         data.t_dest = crate::entity::player::DestRef::None;
     });
     let player_pack = build_object_list(&s.player_pack);
-    PLAYER.set_pack(player_pack.clone());
-    PLAYER.set_weapon_id(None);
-    PLAYER.set_armor_id(None);
-    PLAYER.set_left_ring_id(None);
-    PLAYER.set_right_ring_id(None);
+    DUNGEON.player.set_pack(player_pack.clone());
+    DUNGEON.player.set_weapon_id(None);
+    DUNGEON.player.set_armor_id(None);
+    DUNGEON.player.set_left_ring_id(None);
+    DUNGEON.player.set_right_ring_id(None);
 
-    PLAYER.set_armor_id(resolve_id(&player_pack, s.equipment.armor));
-    PLAYER.set_left_ring_id(resolve_id(&player_pack, s.equipment.left_ring));
-    PLAYER.set_right_ring_id(resolve_id(&player_pack, s.equipment.right_ring));
-    PLAYER.set_weapon_id(resolve_id(&player_pack, s.equipment.weapon));
+    DUNGEON.player.set_armor_id(resolve_id(&player_pack, s.equipment.armor));
+    DUNGEON.player.set_left_ring_id(resolve_id(&player_pack, s.equipment.left_ring));
+    DUNGEON.player.set_right_ring_id(resolve_id(&player_pack, s.equipment.right_ring));
+    DUNGEON.player.set_weapon_id(resolve_id(&player_pack, s.equipment.weapon));
     crate::game::globals::last_pick = resolve_id(&player_pack, s.equipment.last_pick);
     crate::game::globals::l_last_pick = resolve_id(&player_pack, s.equipment.l_last_pick);
 

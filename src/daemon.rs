@@ -29,9 +29,9 @@ unsafe fn render_current_level(random: &mut Random) {
     let generation = crate::level::with_current_level(|level| level.generation());
     if LAST_RENDERED_LEVEL.swap(generation, Ordering::Relaxed) != generation {
         crate::ui::terminal::UI.clear();
-        let hero = crate::game::PLAYER.pos();
+        let hero = crate::dungeon::DUNGEON.player.pos();
         crate::draw::enter_room(hero, random);
-        if crate::game::PLAYER.has_flag(crate::entity::player::MonsterFlags::SEEMONST) {
+        if crate::dungeon::DUNGEON.player.has_flag(crate::entity::player::MonsterFlags::SEEMONST) {
             crate::item::potions::turn_see(false as u8, random);
         }
         crate::draw::write_cell_glyph(hero, '@');
@@ -71,7 +71,7 @@ impl Daemon {
     /// # Safety
     ///
     /// Every callback mutates process-wide game state through the global owners
-    /// (`PLAYER`, `DUNGEON.monster_list`, `DUNGEON`, ...); the game is
+    /// (`DUNGEON.player`, `DUNGEON.monster_list`, `DUNGEON`, ...); the game is
     /// single-threaded, so callers must not invoke this concurrently.
     pub unsafe fn run(self, arg: i32, random: &mut Random) {
         match self {

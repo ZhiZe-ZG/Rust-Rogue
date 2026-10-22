@@ -10,7 +10,6 @@ use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
 use crate::entity::player::{do_move, do_run, MonsterFlags, ObjectFlags, Thing};
 use crate::game::globals::{pot_info, ring_info, scr_info, ws_info};
-use crate::game::PLAYER;
 use crate::help::{help, identify};
 use crate::item::arena::{new_item_id, ThingId};
 use crate::item::armor::{take_off, wear};
@@ -82,12 +81,12 @@ use crate::game::globals::{
 
 #[inline]
 fn hero_pos() -> IVec2 {
-    crate::game::PLAYER.pos()
+    DUNGEON.player.pos()
 }
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
-    crate::game::PLAYER.has_flag(flag)
+    DUNGEON.player.has_flag(flag)
 }
 
 /// Copy a string slice into an owned [`String`].
@@ -433,13 +432,13 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         }
                     }
                     Command::CurrentWeapon => {
-                        current(PLAYER.equipment().weapon_id(), "wielding", "");
+                        current(DUNGEON.player.equipment().weapon_id(), "wielding", "");
                     }
                     Command::CurrentArmor => {
-                        current(PLAYER.equipment().armor_id(), "wearing", "");
+                        current(DUNGEON.player.equipment().armor_id(), "wearing", "");
                     }
                     Command::CurrentRings => {
-                        let eq = PLAYER.equipment();
+                        let eq = DUNGEON.player.equipment();
                         current(
                             eq.left_ring_id(),
                             "wearing",
@@ -470,7 +469,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                     msg_str(&format!("inpack = {}", get_inpack()));
                                 }
                                 Command::WizardInventory => {
-                                    let _ = inventory(&crate::game::PLAYER.pack(), ItemFilter::Any);
+                                    let _ = inventory(&DUNGEON.player.pack(), ItemFilter::Any);
                                 }
                                 Command::WizardIdentify => whatis(false as u8, ItemFilter::Any),
                                 Command::WizardDown => {
@@ -521,7 +520,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                         o.o_dplus = 1;
                                     });
                                     add_pack_id(Some(sword), true);
-                                    PLAYER.set_weapon_id(Some(sword));
+                                    DUNGEON.player.set_weapon_id(Some(sword));
                                     /*
                                      * And his suit of armor
                                      */
@@ -534,7 +533,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                         o.o_count = 1;
                                         o.o_group = 0;
                                     });
-                                    PLAYER.set_armor_id(Some(armor));
+                                    DUNGEON.player.set_armor_id(Some(armor));
                                     add_pack_id(Some(armor), true);
                                 }
                                 Command::WizardList => pr_list(),
@@ -577,7 +576,7 @@ unsafe fn read_command(command_state: &mut CommandState) -> (Command, bool) {
     if no_command != 0 {
         no_command -= 1;
         if no_command == 0 {
-            crate::game::PLAYER.add_flag(MonsterFlags::RUN);
+            DUNGEON.player.add_flag(MonsterFlags::RUN);
             msg_str("you can move again");
         }
         return (Command::Rest, false);

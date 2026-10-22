@@ -255,7 +255,7 @@ impl Dungeon {
     /// Place the hero on an open floor cell.
     fn place_hero(&self, random: &mut Random) {
         if let Some(pos) = self.find_floor(None, 0, true, random) {
-            crate::game::PLAYER.set_pos(pos);
+            self.player.set_pos(pos);
         }
     }
 

@@ -6,12 +6,12 @@ use crate::ui::terminal::UI;
 #[cfg(not(test))]
 use crate::{
     config::GameConfig,
+    dungeon::DUNGEON,
     game::{
         globals::{
             get_hungry_state, get_max_stats, get_mpos, get_purse, lower_msg_enabled,
             msg_esc_enabled, save_msg_enabled, set_huh_string, set_mpos, stat_msg_enabled,
         },
-        PLAYER,
     },
     ui::input::{readchar, wait_for},
 };
@@ -214,10 +214,10 @@ const STATE_NAMES: [&str; 4] = ["", "Hungry", "Weak", "Faint"];
 
 #[cfg(not(test))]
 pub(crate) fn status() {
-    let pstats = PLAYER.stats();
+    let pstats = DUNGEON.player.stats();
     let level = crate::game::current_depth();
     let max_hp = pstats.max_hit_points;
-    let temp = PLAYER.armor_value().unwrap_or(pstats.armor);
+    let temp = DUNGEON.player.armor_value().unwrap_or(pstats.armor);
 
     let hungry_state = get_hungry_state();
     let purse = get_purse();
@@ -307,7 +307,7 @@ pub(crate) fn status() {
 pub(crate) fn show_win(message: &str) {
     UI.move_cursor(IVec2::new(0, 0));
     UI.write_text(message);
-    let hero = PLAYER.pos();
+    let hero = DUNGEON.player.pos();
     UI.move_cursor(IVec2::new(hero.x, hero.y));
     refresh();
     wait_for(' ');

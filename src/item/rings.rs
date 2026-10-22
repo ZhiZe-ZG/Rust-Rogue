@@ -5,7 +5,6 @@ use crate::entity::player::ObjectFlags;
 use crate::item::potions::invis_on;
 use crate::rnd::Random;
 
-use crate::game::PLAYER;
 use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
@@ -108,7 +107,7 @@ pub unsafe fn ring_on(random: &mut Random) {
         return;
     }
 
-    let eq = PLAYER.equipment();
+    let eq = crate::dungeon::DUNGEON.player.equipment();
     let left_empty = eq.left_ring_id().is_none();
     let right_empty = eq.right_ring_id().is_none();
     let left_hand = if left_empty && right_empty {
@@ -131,9 +130,9 @@ pub unsafe fn ring_on(random: &mut Random) {
     };
 
     if left_hand {
-        PLAYER.set_left_ring_id(Some(obj));
+        crate::dungeon::DUNGEON.player.set_left_ring_id(Some(obj));
     } else {
-        PLAYER.set_right_ring_id(Some(obj));
+        crate::dungeon::DUNGEON.player.set_right_ring_id(Some(obj));
     }
 
     let (which, o_arm, packch) = crate::dungeon::DUNGEON.objects
@@ -155,7 +154,7 @@ pub unsafe fn ring_on(random: &mut Random) {
 
 /// Removes a worn ring from the chosen hand after passing drop constraints.
 pub unsafe fn ring_off(random: &mut Random) {
-    let eq = PLAYER.equipment();
+    let eq = crate::dungeon::DUNGEON.player.equipment();
     let left_empty = eq.left_ring_id().is_none();
     let right_empty = eq.right_ring_id().is_none();
     let left_hand = if left_empty && right_empty {
@@ -179,9 +178,9 @@ pub unsafe fn ring_off(random: &mut Random) {
 
     mpos = 0;
     let obj = if left_hand {
-        PLAYER.equipment().left_ring_id()
+        crate::dungeon::DUNGEON.player.equipment().left_ring_id()
     } else {
-        PLAYER.equipment().right_ring_id()
+        crate::dungeon::DUNGEON.player.equipment().right_ring_id()
     };
     let Some(obj) = obj else {
         msg_str("not wearing such a ring");
@@ -235,7 +234,7 @@ pub unsafe fn ring_eat(hand: i32, random: &mut Random) -> i32 {
         return 0;
     }
 
-    let ring_type = match PLAYER.equipment().ring_type(hand_idx) {
+    let ring_type = match crate::dungeon::DUNGEON.player.equipment().ring_type(hand_idx) {
         Some(ring_type) => ring_type,
         None => return 0,
     };

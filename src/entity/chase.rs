@@ -95,12 +95,12 @@ impl Mon {
 
 #[inline]
 fn hero_pos() -> IVec2 {
-    crate::game::PLAYER.pos()
+    DUNGEON.player.pos()
 }
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
-    crate::game::PLAYER.has_flag(flag)
+    DUNGEON.player.has_flag(flag)
 }
 
 /// Resolve a stored [`DestRef`] to the live coordinate it names.
@@ -256,7 +256,7 @@ pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
     }
     let ree = if m.dest == DestRef::Hero {
         // Find room of chasee
-        crate::game::PLAYER.room()
+        DUNGEON.player.room()
     } else {
         roomin(resolve_dest(m.dest))
     };
@@ -423,7 +423,7 @@ pub unsafe fn see_monst(id: MonsterId) -> u8 {
         }
         return true as u8;
     }
-    if m.room != crate::game::PLAYER.room() {
+    if m.room != DUNGEON.player.room() {
         return false as u8;
     }
     if crate::game::room_dark(m.room) {
@@ -667,7 +667,7 @@ pub unsafe fn cansee(y: i32, x: i32) -> u8 {
     // the coordinate and the room is lit or if it is close.
     let tp = IVec2 { x, y };
     let rer = roomin(tp);
-    if rer == crate::game::PLAYER.room() && !crate::game::room_dark(rer) {
+    if rer == DUNGEON.player.room() && !crate::game::room_dark(rer) {
         true as u8
     } else {
         false as u8
@@ -687,7 +687,7 @@ pub unsafe fn update_dest(id: MonsterId, random: &mut Random) {
         return;
     };
     let prob = monsters[m.typ.map_or(0, |k| k.index())].m_carry;
-    if prob <= 0 || m.room == crate::game::PLAYER.room() || see_monst(id) != false as u8 {
+    if prob <= 0 || m.room == DUNGEON.player.room() || see_monst(id) != false as u8 {
         crate::entity::player::set_monster_dest(id, DestRef::Hero);
         return;
     }

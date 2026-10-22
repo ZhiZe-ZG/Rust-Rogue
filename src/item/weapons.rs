@@ -8,7 +8,6 @@
 //! raw `*mut Thing` dereferences.
 use crate::entity::chase::cansee;
 use crate::entity::fight::fight;
-use crate::game::PLAYER;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::misc::{is_current_id, show_floor};
@@ -104,7 +103,7 @@ use crate::game::globals::{after, group, has_hit, terse};
 
 #[inline]
 fn hero() -> IVec2 {
-    crate::game::PLAYER.pos()
+    crate::dungeon::DUNGEON.player.pos()
 }
 
 #[inline]
@@ -278,14 +277,14 @@ pub fn num(n1: i32, n2: i32, obj_type: u8) -> String {
 /// Equips a selected weapon after validating curses and item type constraints.
 pub unsafe fn wield(random: &mut Random) {
     // Track the previously wielded weapon by arena handle (pointer-free).
-    let oweapon = PLAYER.equipment().weapon_id();
+    let oweapon = crate::dungeon::DUNGEON.player.equipment().weapon_id();
     if let Some(id) = oweapon {
         if !dropcheck_id(id, random) {
-            PLAYER.set_weapon_id(oweapon);
+            crate::dungeon::DUNGEON.player.set_weapon_id(oweapon);
             return;
         }
     }
-    PLAYER.set_weapon_id(oweapon);
+    crate::dungeon::DUNGEON.player.set_weapon_id(oweapon);
 
     let Some(obj) = get_item_id("wield", ItemFilter::Category(ItemType::WEAPON)) else {
         after = 0;
@@ -306,7 +305,7 @@ pub unsafe fn wield(random: &mut Random) {
     }
 
     let sp = inv_name_id(obj, true);
-    PLAYER.set_weapon_id(Some(obj));
+    crate::dungeon::DUNGEON.player.set_weapon_id(Some(obj));
     if terse == 0 {
         addmsg_str("you are now ");
     }

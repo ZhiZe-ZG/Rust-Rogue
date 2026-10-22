@@ -15,7 +15,7 @@ use crate::entity::monsters::MonsterType;
 use crate::entity::player::MonsterFlags;
 use crate::game::globals::{monsters, weap_info};
 use crate::dungeon::DUNGEON;
-use crate::game::{MonsterId, PLAYER};
+use crate::game::MonsterId;
 use crate::init::pick_color;
 use crate::item::arena::ThingId;
 use crate::item::armor::rust_armor_id;
@@ -136,7 +136,7 @@ fn monster_has_flag(id: MonsterId, flag: MonsterFlags) -> bool {
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
-    PLAYER.has_flag(flag)
+    DUNGEON.player.has_flag(flag)
 }
 
 // ─── Exported functions ───────────────────────────────────────────────────────
@@ -209,7 +209,7 @@ pub unsafe fn fight(mp: IVec2, weap: Option<ThingId>, thrown: u8, random: &mut R
                     data.t_flags.insert(MonsterFlags::HUH);
                 }
             });
-            PLAYER.remove_flag(MonsterFlags::CANHUH);
+            DUNGEON.player.remove_flag(MonsterFlags::CANHUH);
             endmsg();
             has_hit = false as u8;
             msg_str(&format!("your hands stop glowing {}", pick_color("red", random)));
@@ -268,7 +268,7 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
     }
 
     let mname = set_mname(tp, random);
-    let oldhp = PLAYER.stats().hit_points;
+    let oldhp = DUNGEON.player.stats().hit_points;
 
     if roll_em_to_hero(tp, None, false as u8, random) != 0 {
         if mon.typ != Some(MonsterType::IceMonster) {
@@ -281,17 +281,17 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
         }
         has_hit = false as u8;
 
-        if PLAYER.stats().hit_points <= 0 {
+        if DUNGEON.player.stats().hit_points <= 0 {
             death(mon.typ.map_or(0, |m| m.glyph()));
             if crate::startup::exit_requested() {
                 return 0;
             }
         } else if kamikaze == 0 {
-            let damage_dealt = oldhp - PLAYER.stats().hit_points;
+            let damage_dealt = oldhp - DUNGEON.player.stats().hit_points;
             if damage_dealt > max_hit {
                 max_hit = damage_dealt;
             }
-            if PLAYER.stats().hit_points <= max_hit {
+            if DUNGEON.player.stats().hit_points <= max_hit {
                 to_death = false as u8;
             }
         }
@@ -303,7 +303,7 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
                 rust_armor_id_from_player();
             } else if mtype == Some(MonsterType::IceMonster) {
                 // Ice monster: freeze player
-                PLAYER.remove_flag(MonsterFlags::RUN);
+                DUNGEON.player.remove_flag(MonsterFlags::RUN);
                 if no_command == 0 {
                     addmsg_str("you are frozen");
                     if terse == 0 {
@@ -347,13 +347,13 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
                 {
                     let fewer;
                     if mtype == Some(MonsterType::Wraith) {
-                        if PLAYER.stats().experience == 0 {
+                        if DUNGEON.player.stats().experience == 0 {
                             death(b'W' as u8);
                             if crate::startup::exit_requested() {
                                 return 0;
                             }
                         }
-                        PLAYER.with_stats_mut(|pstats| {
+                        DUNGEON.player.with_stats_mut(|pstats| {
                             pstats.level -= 1;
                             if pstats.level == 0 {
                                 pstats.experience = 0;
@@ -368,7 +368,7 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
                     }
                     {
                         let mut dead = false;
-                        PLAYER.with_stats_mut(|pstats| {
+                        DUNGEON.player.with_stats_mut(|pstats| {
                             pstats.hit_points -= fewer;
                             pstats.max_hit_points -= fewer;
                             if pstats.hit_points <= 0 {
@@ -389,7 +389,7 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
                 }
             } else if mtype == Some(MonsterType::VenusFlytrap) {
                 // Venus flytrap: holds the player, deals ongoing damage
-                PLAYER.add_flag(MonsterFlags::HELD);
+                DUNGEON.player.add_flag(MonsterFlags::HELD);
                 vf_hit += 1;
                 let text = format!("{}x1", vf_hit);
                 let bytes = text.as_bytes();
@@ -397,8 +397,8 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
                 let copy_len = bytes.len().min(damage.len() - 1);
                 damage[..copy_len].copy_from_slice(&bytes[..copy_len]);
                 damage[copy_len] = 0;
-                PLAYER.with_stats_mut(|stats| stats.hit_points -= 1);
-                if PLAYER.stats().hit_points <= 0 {
+                DUNGEON.player.with_stats_mut(|stats| stats.hit_points -= 1);
+                if DUNGEON.player.stats().hit_points <= 0 {
                     death(b'F' as u8);
                     if crate::startup::exit_requested() {
                         return 0;
@@ -426,8 +426,8 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
                 // Nymph: steals a magic item
                 let mut steal: Option<ThingId> = None;
                 let mut nobj: i32 = 0;
-                let eq = PLAYER.equipment();
-                for id in PLAYER.pack() {
+                let eq = DUNGEON.player.equipment();
+                for id in DUNGEON.player.pack() {
                     let equipped = eq.armor_id() == Some(id)
                         || eq.weapon_id() == Some(id)
                         || eq.left_ring_id() == Some(id)
@@ -460,8 +460,8 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
             has_hit = false as u8;
         }
         if mon.typ == Some(MonsterType::VenusFlytrap) {
-            PLAYER.with_stats_mut(|stats| stats.hit_points -= vf_hit);
-            if PLAYER.stats().hit_points <= 0 {
+            DUNGEON.player.with_stats_mut(|stats| stats.hit_points -= vf_hit);
+            if DUNGEON.player.stats().hit_points <= 0 {
                 death(mon.typ.map_or(0, |m| m.glyph()));
                 if crate::startup::exit_requested() {
                     return 0;
@@ -480,12 +480,12 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
 
 #[inline]
 fn iswearing(ring_type: RingType) -> bool {
-    PLAYER.wearing_ring(ring_type)
+    DUNGEON.player.wearing_ring(ring_type)
 }
 
 /// Corrode the hero's equipped armor (pointer-free).
 unsafe fn rust_armor_id_from_player() {
-    rust_armor_id(PLAYER.equipment().armor_id());
+    rust_armor_id(DUNGEON.player.equipment().armor_id());
 }
 
 /// set_mname:
@@ -560,7 +560,7 @@ pub unsafe fn roll_em(
 
 /// The hero attacks monster `thdef`.
 unsafe fn roll_em_hero_to(thdef: MonsterId, weap: Option<ThingId>, hurl: u8, random: &mut Random) -> i32 {
-    let att_stats = PLAYER.stats();
+    let att_stats = DUNGEON.player.stats();
     roll_em_impl(&att_stats, Some(thdef), false, weap, hurl, random)
 }
 
@@ -617,9 +617,9 @@ unsafe fn roll_em_impl(
 
     let mut hp = wr.hplus;
     let mut dp = wr.dplus;
-    if weap == PLAYER.weapon_id() {
+    if weap == DUNGEON.player.weapon_id() {
         // Ring bonuses, read through pointer-free equipment accessors.
-        let equipment = PLAYER.equipment();
+        let equipment = DUNGEON.player.equipment();
         for hand in 0..2usize {
             let arm = equipment.ring_arm(hand).unwrap_or(0);
             match equipment.ring_type(hand) {
@@ -631,11 +631,11 @@ unsafe fn roll_em_impl(
     }
     if hurl != 0 {
         if wr.misl
-            && PLAYER
+            && DUNGEON.player
                 .weapon_which()
                 .is_some_and(|which| which == wr.launch)
         {
-            let (whp, wdp) = PLAYER.weapon_hdplus().unwrap_or((0, 0));
+            let (whp, wdp) = DUNGEON.player.weapon_hdplus().unwrap_or((0, 0));
             return roll_em_inner(
                 att_stats,
                 thdef,
@@ -696,7 +696,7 @@ unsafe fn roll_em_inner(
 
     // Defender's armor class
     let mut def_arm = if def_is_hero {
-        PLAYER.stats().armor
+        DUNGEON.player.stats().armor
     } else {
         thdef
             .and_then(|id| {
@@ -709,7 +709,7 @@ unsafe fn roll_em_inner(
             .unwrap_or(0)
     };
     if def_is_hero {
-        let equipment = PLAYER.equipment();
+        let equipment = DUNGEON.player.equipment();
         if let Some(arm) = equipment.armor_arm() {
             def_arm = arm;
         }
@@ -737,7 +737,7 @@ unsafe fn roll_em_inner(
 
     if did_hit != 0 {
         if def_is_hero {
-            PLAYER.with_stats_mut(|stats| stats.hit_points -= total_damage);
+            DUNGEON.player.with_stats_mut(|stats| stats.hit_points -= total_damage);
         } else if let Some(id) = thdef {
             DUNGEON.monster_list.with_mut(id, |t| {
                 if let crate::entity::player::Thing::Monster { data } = t {
@@ -903,12 +903,12 @@ pub unsafe fn killed(tp: MonsterId, pr: u8, random: &mut Random) {
         return;
     };
     let gained = mon.stats.experience;
-    PLAYER.with_stats_mut(|stats| stats.experience += gained);
+    DUNGEON.player.with_stats_mut(|stats| stats.experience += gained);
 
     let mtype = mon.typ;
 
     if mtype == Some(MonsterType::VenusFlytrap) {
-        PLAYER.remove_flag(MonsterFlags::HELD);
+        DUNGEON.player.remove_flag(MonsterFlags::HELD);
         vf_hit = 0;
         // Reset damage string to "000x0"
         let damage = &mut monsters[(b'F' as usize) - (b'A' as usize)].m_stats.damage;

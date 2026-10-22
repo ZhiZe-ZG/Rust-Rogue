@@ -2,7 +2,6 @@
 //!
 //! Ported from `src/c/things.c` to Rust.
 use crate::dungeon::Dungeon;
-use crate::game::PLAYER;
 use crate::item::armor::waste_time;
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::misc::chg_str;
@@ -166,7 +165,7 @@ pub unsafe fn inv_name_id(id: crate::item::arena::ThingId, drop: bool) -> String
     };
 
     if inv_describe != 0 {
-        let eq = PLAYER.equipment();
+        let eq = crate::dungeon::DUNGEON.player.equipment();
         if Some(id) == eq.armor_id() {
             name.push_str(" (being worn)");
         }
@@ -186,7 +185,7 @@ pub unsafe fn inv_name_id(id: crate::item::arena::ThingId, drop: bool) -> String
 
 /// Pointer-free version of `dropcheck`: works on an arena [`ThingId`].
 pub unsafe fn dropcheck_id(id: crate::item::arena::ThingId, random: &mut Random) -> bool {
-    let eq = PLAYER.equipment();
+    let eq = crate::dungeon::DUNGEON.player.equipment();
     let is_weapon = eq.weapon_id() == Some(id);
     let is_armor = eq.armor_id() == Some(id);
     let is_left = eq.left_ring_id() == Some(id);
@@ -202,15 +201,15 @@ pub unsafe fn dropcheck_id(id: crate::item::arena::ThingId, random: &mut Random)
         return false;
     }
     if is_weapon {
-        PLAYER.set_weapon_id(None);
+        crate::dungeon::DUNGEON.player.set_weapon_id(None);
     } else if is_armor {
         waste_time(random);
-        PLAYER.set_armor_id(None);
+        crate::dungeon::DUNGEON.player.set_armor_id(None);
     } else {
         if is_left {
-            PLAYER.set_left_ring_id(None);
+            crate::dungeon::DUNGEON.player.set_left_ring_id(None);
         } else {
-            PLAYER.set_right_ring_id(None);
+            crate::dungeon::DUNGEON.player.set_right_ring_id(None);
         }
         let which = crate::item::arena::with_object(id, |o| o.o_which).unwrap_or(0);
         if which == 0 {

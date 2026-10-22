@@ -256,7 +256,7 @@ pub unsafe fn main_loop_step() {
      */
     parse_rogueopts();
 
-    let hero_pos = crate::game::PLAYER.pos();
+    let hero_pos = DUNGEON.player.pos();
     oldpos = hero_pos;
     oldrp = roomin(hero_pos);
     start_daemon(Daemon::UiRender, 0, AFTER);
@@ -359,7 +359,7 @@ unsafe fn run_startup(parameter: CommandLineParameter) -> Result<i32, StartupErr
     let mut restore_target = parameter.restore.or(parameter.save_file);
     if restore_target.as_deref() == Some("") {
         set_wizard_mode(1);
-        crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
+        DUNGEON.player.add_flag(MonsterFlags::SEEMONST);
         restore_target = None;
     }
 

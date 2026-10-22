@@ -3,7 +3,6 @@
 //! Ported from `src/c/armor.c` to Rust.
 use crate::daemon::{do_daemons, do_fuses};
 use crate::entity::player::ObjectFlags;
-use crate::game::PLAYER;
 use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
@@ -23,7 +22,7 @@ pub unsafe fn wear(random: &mut Random) {
         return;
     };
 
-    if PLAYER.equipment().armor_id().is_some() {
+    if crate::dungeon::DUNGEON.player.equipment().armor_id().is_some() {
         addmsg_str("you are already wearing some");
         if terse == 0 {
             addmsg_str(".  You'll have to take it off first");
@@ -44,7 +43,7 @@ pub unsafe fn wear(random: &mut Random) {
     waste_time(random);
     crate::dungeon::DUNGEON.objects.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::KNOW));
     let sp = inv_name_id(obj, true);
-    PLAYER.set_armor_id(Some(obj));
+    crate::dungeon::DUNGEON.player.set_armor_id(Some(obj));
     if terse == 0 {
         addmsg_str("you are now ");
     }
@@ -53,7 +52,7 @@ pub unsafe fn wear(random: &mut Random) {
 
 /// Removes currently worn armor after curse/drop checks.
 pub unsafe fn take_off(random: &mut Random) {
-    let Some(obj) = PLAYER.equipment().armor_id() else {
+    let Some(obj) = crate::dungeon::DUNGEON.player.equipment().armor_id() else {
         after = false as u8;
         if terse != 0 {
             msg_str("not wearing armor");
@@ -67,7 +66,7 @@ pub unsafe fn take_off(random: &mut Random) {
         return;
     }
 
-    PLAYER.set_armor_id(None);
+    crate::dungeon::DUNGEON.player.set_armor_id(None);
     if terse != 0 {
         addmsg_str("was");
     } else {
@@ -108,7 +107,7 @@ pub unsafe fn rust_armor_id(arm: Option<ThingId>) {
         return;
     }
 
-    if prot || PLAYER.wearing_ring(RingType::SustainArmor) {
+    if prot || crate::dungeon::DUNGEON.player.wearing_ring(RingType::SustainArmor) {
         if to_death == 0 {
             msg_str("the rust vanishes instantly");
         }

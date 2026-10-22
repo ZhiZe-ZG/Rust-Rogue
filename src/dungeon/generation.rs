@@ -22,7 +22,7 @@ impl Dungeon {
     unsafe fn reset_level(&self) {
         let depth = self.with_level_mut(|current| current.reset_for_new_level());
 
-        game::player_remove_flag(MonsterFlags::HELD);
+        self.player.remove_flag(MonsterFlags::HELD);
         self.record_max_depth(depth);
 
         self.monster_map.clear();
@@ -74,5 +74,25 @@ impl Dungeon {
 
         self.bump_no_food();
         self.populate_level(&mut RNG.lock().unwrap());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reset_level_clears_only_the_owning_players_held_flag() {
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        first.player.add_flag(MonsterFlags::HELD);
+        first.player.add_flag(MonsterFlags::BLIND);
+        second.player.add_flag(MonsterFlags::HELD);
+
+        unsafe { first.reset_level() };
+
+        assert!(!first.player.has_flag(MonsterFlags::HELD));
+        assert!(first.player.has_flag(MonsterFlags::BLIND));
+        assert!(second.player.has_flag(MonsterFlags::HELD));
     }
 }

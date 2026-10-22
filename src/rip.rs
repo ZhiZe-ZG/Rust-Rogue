@@ -349,7 +349,7 @@ pub unsafe fn total_winner() {
     crate::ui::terminal::UI.clear();
     crate::ui::terminal::UI.write_text_at(IVec2::new(0, 0), "   Worth  Item\n");
     let oldpurse = purse;
-    for id in crate::game::PLAYER.pack() {
+    for id in DUNGEON.player.pack() {
         let Some((item_type, o_count, packch)) =
             with_object(id, |o| (o.o_type, o.o_count, o.o_packch))
         else {

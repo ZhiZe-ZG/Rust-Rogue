@@ -10,7 +10,6 @@ use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game;
 use crate::game::globals::{scr_info, weap_info};
 use crate::dungeon::DUNGEON;
-use crate::game::PLAYER;
 use crate::init::pick_color;
 use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
@@ -106,17 +105,17 @@ use crate::game::globals::{no_command, terse};
 
 #[inline]
 fn hero() -> IVec2 {
-    crate::game::PLAYER.pos()
+    DUNGEON.player.pos()
 }
 
 #[inline]
 fn proom() -> Option<usize> {
-    crate::game::PLAYER.room()
+    DUNGEON.player.room()
 }
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
-    crate::game::PLAYER.has_flag(flag)
+    DUNGEON.player.has_flag(flag)
 }
 
 // Map reveal now lives in `crate::draw::map_cell_reveal`, operating directly
@@ -141,8 +140,8 @@ pub unsafe fn read_scroll(random: &mut Random) {
         return;
     }
 
-    if PLAYER.equipment().weapon_id() == Some(obj) {
-        PLAYER.set_weapon_id(None);
+    if DUNGEON.player.equipment().weapon_id() == Some(obj) {
+        DUNGEON.player.set_weapon_id(None);
     }
 
     let (o_count, o_which) = DUNGEON.objects
@@ -155,12 +154,12 @@ pub unsafe fn read_scroll(random: &mut Random) {
     let scroll_type = ScrollType::from_raw(o_which);
     match scroll_type {
         ScrollType::Confuse => {
-            crate::game::PLAYER.add_flag(MonsterFlags::CANHUH);
+            DUNGEON.player.add_flag(MonsterFlags::CANHUH);
             msg_str(&format!("your hands begin to glow {}", pick_color("red", random)));
         }
         ScrollType::Armor => {
             // Enchant the worn armor (pointer-free mutation via the arena).
-            let enchanted = PLAYER
+            let enchanted = DUNGEON.player
                 .with_armor_mut(|o| {
                     o.o_arm -= 1;
                     o.o_flags.remove(ObjectFlags::CURSED);
@@ -222,7 +221,7 @@ pub unsafe fn read_scroll(random: &mut Random) {
         ScrollType::Sleep => {
             scr_info[ScrollType::Sleep.index()].oi_know = true;
             no_command += random.rnd(SLEEPTIME) + 4;
-            crate::game::PLAYER.remove_flag(MonsterFlags::RUN);
+            DUNGEON.player.remove_flag(MonsterFlags::RUN);
             msg_str("you fall asleep");
         }
         ScrollType::CreateMonster => {
@@ -335,7 +334,7 @@ pub unsafe fn read_scroll(random: &mut Random) {
         }
         ScrollType::Enchant => {
             // Enchant the wielded weapon; only a real weapon qualifies.
-            let weapon_name = PLAYER
+            let weapon_name = DUNGEON.player
                 .with_weapon_mut(|o| {
                     if !matches!(o.o_type, ItemType::Weapon(_)) {
                         return None;
@@ -364,10 +363,10 @@ pub unsafe fn read_scroll(random: &mut Random) {
         }
         ScrollType::RemoveCurse => {
             // Lift the curse from every equipped object (pointer-free).
-            PLAYER.with_armor_mut(|o| o.o_flags.remove(ObjectFlags::CURSED));
-            PLAYER.with_weapon_mut(|o| o.o_flags.remove(ObjectFlags::CURSED));
-            PLAYER.with_ring_mut(0, |o| o.o_flags.remove(ObjectFlags::CURSED));
-            PLAYER.with_ring_mut(1, |o| o.o_flags.remove(ObjectFlags::CURSED));
+            DUNGEON.player.with_armor_mut(|o| o.o_flags.remove(ObjectFlags::CURSED));
+            DUNGEON.player.with_weapon_mut(|o| o.o_flags.remove(ObjectFlags::CURSED));
+            DUNGEON.player.with_ring_mut(0, |o| o.o_flags.remove(ObjectFlags::CURSED));
+            DUNGEON.player.with_ring_mut(1, |o| o.o_flags.remove(ObjectFlags::CURSED));
             msg_str(choose_str(
                 "you feel in touch with the Universal Onenes",
                 "you feel as if somebody is watching over you",
@@ -379,7 +378,7 @@ pub unsafe fn read_scroll(random: &mut Random) {
         }
         ScrollType::Protect => {
             // Mark the worn armor as protected (pointer-free).
-            let protected = PLAYER
+            let protected = DUNGEON.player
                 .with_armor_mut(|o| o.o_flags.insert(ObjectFlags::PROT))
                 .is_some();
             if protected {

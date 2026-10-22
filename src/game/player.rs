@@ -1,10 +1,10 @@
-//! Process-wide player actor and equipment state.
+//! Dungeon-owned player actor and equipment state.
 //!
 //! The legacy C engine kept the hero in a single global `player` variable and
 //! the equipped armor/rings/weapon in individual globals. This module groups
-//! them into one stable, process-lifetime owner:
+//! them into one owner within each dungeon:
 //!
-//! * [`PLAYER`] — the hero [`Thing`] plus the [`Equipment`] currently in use
+//! * [`Player`] — the hero [`Thing`] plus the [`Equipment`] currently in use
 //!   (the equipped objects themselves remain owned by the player's pack).
 //!
 //! The hero is stored behind an [`RwLock`] and reached only through scoped
@@ -25,7 +25,7 @@ use glam::IVec2;
 /// Interior-mutable slot holding an optional object handle.
 ///
 /// The game is single-threaded, but the slot is reachable through the
-/// process-wide [`PLAYER`] `static` (which must be `Sync`). The slot stores a
+/// process-wide [`crate::dungeon::DUNGEON`] (which must be `Sync`). The slot stores a
 /// pointer-free [`ThingId`] handle (never a raw `*mut Thing`), so a stale or
 /// freed equipment object resolves to `None` instead of dangling; a simple
 /// `Mutex` provides the required `Sync` without any `unsafe impl`.
@@ -114,7 +114,7 @@ impl Equipment {
     /// The `RingType` worn on `hand` (0 = left, 1 = right), if any.
     ///
     /// This is the pointer-free replacement for dereferencing
-    /// `PLAYER.left_ring()`/`right_ring()` and reading `o_which`.
+    /// the equipped ring handles and reading `o_which`.
     #[inline]
     pub fn ring_type(&self, hand: usize) -> Option<crate::item::rings::RingType> {
         let id = self.rings.get(hand)?.get()?;
@@ -177,7 +177,7 @@ impl Equipment {
     }
 }
 
-/// The zero-valued actor [`Thing`] used to seed the global player.
+/// The zero-valued actor [`Thing`] used to seed a dungeon's player.
 fn default_player() -> Thing {
     Thing::Monster {
         data: ThingMonster {
@@ -206,7 +206,7 @@ fn default_player() -> Thing {
 
 /// Borrow the actor payload of a hero `Thing`.
 ///
-/// The global player is always constructed as a monster, so the object arm is
+/// The player is always constructed as a monster, so the object arm is
 /// unreachable in practice.
 #[inline]
 fn hero_monster(thing: &Thing) -> &ThingMonster {
@@ -225,10 +225,10 @@ fn hero_monster_mut(thing: &mut Thing) -> &mut ThingMonster {
     }
 }
 
-/// A safe, process-wide owner for the hero actor and its equipment.
+/// A safe, dungeon-owned hero actor and its equipment.
 ///
 /// The game is single-threaded, but the player must be reachable from many
-/// modules as one stable, process-lifetime object. The hero [`Thing`] lives
+/// modules through its owning [`crate::dungeon::Dungeon`]. The hero [`Thing`] lives
 /// behind an `RwLock`; callers use the scoped [`Player::with`] /
 /// [`Player::with_mut`] closures or the value accessors below, so no raw hero
 /// pointer escapes the module. It replaces the legacy `#[no_mangle] static mut
@@ -239,7 +239,7 @@ pub struct Player {
 }
 
 impl Player {
-    const EMPTY: Self = Self {
+    pub(crate) const EMPTY: Self = Self {
         hero: RwLock::new(None),
         equipment: Equipment::EMPTY,
     };
@@ -500,13 +500,10 @@ impl Player {
     }
 }
 
-/// Process-wide owner of the player's actor and equipment.
-pub static PLAYER: Player = Player::EMPTY;
-
 /// Remove `flag` from the global player's actor flags.
 #[inline]
 pub fn player_remove_flag(flag: MonsterFlags) {
-    PLAYER.remove_flag(flag);
+    crate::dungeon::DUNGEON.player.remove_flag(flag);
 }
 
 #[cfg(test)]

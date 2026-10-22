@@ -42,12 +42,12 @@ pub fn is_wizard() -> bool {
 
 #[inline]
 fn hero() -> IVec2 {
-    crate::game::PLAYER.pos()
+    DUNGEON.player.pos()
 }
 
 #[inline]
 fn proom() -> Option<usize> {
-    crate::game::PLAYER.room()
+    DUNGEON.player.room()
 }
 
 #[inline]
@@ -82,7 +82,7 @@ fn master_enabled() -> bool {
 use crate::game::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hit};
 
 pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
-    let pack = crate::game::PLAYER.pack();
+    let pack = DUNGEON.player.pack();
     if pack.is_empty() {
         msg_str("you don't have anything in your pack to identify");
         return;
@@ -285,11 +285,11 @@ pub unsafe fn teleport(random: &mut Random) {
         hero = c;
         look(true as u8, random);
     }
-    crate::game::PLAYER.set_pos(hero);
+    DUNGEON.player.set_pos(hero);
     crate::draw::write_cell_glyph(hero, '@');
 
-    if crate::game::PLAYER.has_flag(MonsterFlags::HELD) {
-        crate::game::PLAYER.remove_flag(MonsterFlags::HELD);
+    if DUNGEON.player.has_flag(MonsterFlags::HELD) {
+        DUNGEON.player.remove_flag(MonsterFlags::HELD);
         vf_hit = 0;
         let dmg = b"000x0\0";
         let damage = &mut monsters[(b'F' - b'A') as usize].m_stats.damage;

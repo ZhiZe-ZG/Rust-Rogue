@@ -6,8 +6,9 @@
 //! * the **current level** — the [`Level`] singleton (tile map, flags, rooms,
 //!   passages, and floor items) for the live dungeon depth.
 //!
-//! The player actor and equipment live in [`crate::game::player`]; the live
-//! monster list and the per-cell monster occupancy grid are owned by the
+//! The player actor and equipment live in
+//! [`DUNGEON.player`](crate::dungeon::Dungeon::player), alongside the live
+//! monster list and the per-cell monster occupancy grid owned by the
 //! [`DUNGEON`](crate::dungeon::DUNGEON) singleton.
 //!
 //! Cell display glyphs and flat flags are no longer cached in a legacy per-cell

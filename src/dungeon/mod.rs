@@ -11,6 +11,7 @@ use std::sync::RwLock;
 
 use glam::IVec2;
 
+use crate::game::Player;
 use crate::item::arena::ThingArena;
 use crate::level::Level;
 use crate::rnd::Random;
@@ -25,7 +26,7 @@ pub use monster_list::{MonsterId, MonsterList};
 pub use monster_map::MonsterMap;
 
 /// Process-wide owner of the live dungeon level, its counters, and the live
-/// monsters and objects.
+/// monsters, objects, and player.
 ///
 /// Replaces the scattered process-wide globals of the legacy engine (the
 /// `CURRENT_LEVEL` singleton, the `max_level`/`no_food` counters, the
@@ -51,6 +52,8 @@ pub struct Dungeon {
     pub monster_map: MonsterMap,
     /// Generational arena owning the dungeon's live objects (including pack items).
     pub objects: ThingArena,
+    /// The hero actor and its equipped object handles.
+    pub player: Player,
 }
 
 impl Dungeon {
@@ -75,6 +78,7 @@ impl Dungeon {
             monster_list: MonsterList::new(),
             monster_map: MonsterMap::new(),
             objects: ThingArena::new(),
+            player: Player::EMPTY,
         }
     }
 
@@ -312,6 +316,37 @@ pub(crate) fn bump_no_food() {
 #[cfg(test)]
 mod tests {
     use super::Dungeon;
+
+    #[test]
+    fn players_are_owned_by_each_dungeon() {
+        use crate::entity::player::MonsterFlags;
+        use glam::IVec2;
+
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        let weapon = first.objects.new_item_id();
+        first.player.set_pos(IVec2::new(3, 4));
+        first.player.set_room(Some(2));
+        first.player.add_flag(MonsterFlags::BLIND);
+        first.player.with_stats_mut(|stats| stats.hit_points = 7);
+        first.player.push_pack_front(weapon);
+        first.player.set_weapon_id(Some(weapon));
+
+        assert_eq!(second.player.pos(), IVec2::ZERO);
+        assert_eq!(second.player.room(), None);
+        assert!(!second.player.has_flag(MonsterFlags::BLIND));
+        assert_eq!(second.player.stats().hit_points, 0);
+        assert!(second.player.pack().is_empty());
+        assert_eq!(second.player.weapon_id(), None);
+
+        second.player.set_pos(IVec2::new(5, 6));
+        assert_eq!(first.player.pos(), IVec2::new(3, 4));
+        assert_eq!(first.player.room(), Some(2));
+        assert!(first.player.has_flag(MonsterFlags::BLIND));
+        assert_eq!(first.player.stats().hit_points, 7);
+        assert_eq!(first.player.pack(), vec![weapon]);
+        assert_eq!(first.player.weapon_id(), Some(weapon));
+    }
 
     #[test]
     fn clear_items_removes_only_floor_objects_and_is_repeatable() {

@@ -11,7 +11,7 @@
 use crate::game::globals::{
     arm_info, pot_info, ring_info, scr_info, things, weap_info, ws_info, ObjInfo,
 };
-use crate::game::PLAYER;
+use crate::dungeon::DUNGEON;
 use crate::rnd::{Random, RNG};
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
@@ -258,7 +258,7 @@ use crate::game::globals::{a_class, food_left, max_stats};
 
 /// Roll up the starting player: give food, armor, weapons, and arrows.
 pub unsafe fn init_player() {
-    crate::game::PLAYER.set_stats(max_stats);
+    DUNGEON.player.set_stats(max_stats);
     food_left = HUNGERTIME;
 
     // Give her some food
@@ -278,7 +278,7 @@ pub unsafe fn init_player() {
         o.o_flags.insert(ObjectFlags::KNOW);
         o.o_count = 1;
     });
-    PLAYER.set_armor_id(Some(armor));
+    DUNGEON.player.set_armor_id(Some(armor));
     add_pack_id(Some(armor), true);
 
     // A +1 mace
@@ -290,7 +290,7 @@ pub unsafe fn init_player() {
         o.o_flags.insert(ObjectFlags::KNOW);
     });
     add_pack_id(Some(mace_id), true);
-    PLAYER.set_weapon_id(Some(mace_id));
+    DUNGEON.player.set_weapon_id(Some(mace_id));
 
     // A +1 bow
     let bow_id = new_item_id();
@@ -453,7 +453,7 @@ pub unsafe fn init_probs() {
 /// Return a random colour if the player is hallucinating, otherwise
 /// return the supplied colour unchanged.
 pub unsafe fn pick_color(col: &'static str, random: &mut Random) -> &'static str {
-    if crate::game::PLAYER.has_flag(MonsterFlags::HALU) {
+    if DUNGEON.player.has_flag(MonsterFlags::HALU) {
         crate::colors::random_color(random)
     } else {
         col

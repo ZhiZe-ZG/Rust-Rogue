@@ -4,7 +4,6 @@
 use crate::entity::monsters::{save, save_throw_id};
 use crate::entity::player::ObjectFlags;
 use crate::game::globals::ws_info;
-use crate::game::PLAYER;
 use crate::item::arena::{ThingArena, ThingId};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
@@ -74,7 +73,7 @@ use crate::game::globals::{after, delta, terse};
 
 #[inline]
 fn hero_pos() -> IVec2 {
-    crate::game::PLAYER.pos()
+    crate::dungeon::DUNGEON.player.pos()
 }
 
 #[inline]
@@ -165,7 +164,7 @@ pub unsafe fn do_zap(random: &mut Random) {
             msg_str("the corridor glows and then fades");
         }
         Some(StickType::Drain) => {
-            if crate::game::PLAYER.stats().hit_points < 2 {
+            if crate::dungeon::DUNGEON.player.stats().hit_points < 2 {
                 msg_str("you are too weak to use it");
                 return;
             }
@@ -190,7 +189,7 @@ pub unsafe fn do_zap(random: &mut Random) {
         Some(StickType::Missile) => {
             ws_info[StickType::Missile.index()].oi_know = true;
             let bolt = crate::item::arena::new_item_id();
-            let launch = PLAYER.weapon_which();
+            let launch = crate::dungeon::DUNGEON.player.weapon_which();
             crate::dungeon::DUNGEON.objects.with_object_mut(bolt, |o| {
                 o.o_type = ItemType::Weapon(FLAME);
                 o.o_which = FLAME;
@@ -256,7 +255,7 @@ pub unsafe fn do_zap(random: &mut Random) {
 /// drain:
 /// Reduce the hero's hit points and apply a simple draining effect.
 pub unsafe fn drain() {
-    crate::game::PLAYER.with_stats_mut(|stats| {
+    crate::dungeon::DUNGEON.player.with_stats_mut(|stats| {
         if stats.hit_points >= 2 {
             stats.hit_points /= 2;
         }
@@ -284,7 +283,7 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str, random: &mut Rand
     pos.x += dir.x;
     if hit_hero && ce_coord(pos, hero) != 0 {
         if save(VS_MAGIC, random) == 0 {
-            if (crate::game::PLAYER.stats().hit_points - random.roll(6, 6)) <= 0
+            if (crate::dungeon::DUNGEON.player.stats().hit_points - random.roll(6, 6)) <= 0
             {
                 death('b' as u8);
             }

@@ -70,12 +70,12 @@ use crate::game::globals::{
 
 #[inline]
 fn hero_pos() -> IVec2 {
-    crate::game::PLAYER.pos()
+    DUNGEON.player.pos()
 }
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
-    crate::game::PLAYER.has_flag(flag)
+    DUNGEON.player.has_flag(flag)
 }
 
 #[inline]
@@ -417,7 +417,7 @@ pub unsafe fn look(wakeup: u8, random: &mut Random) {
     if !(oldpos.x == hero.x && oldpos.y == hero.y) {
         erase_lamp(oldpos, oldrp);
         oldpos = hero;
-        oldrp = crate::game::PLAYER.room();
+        oldrp = DUNGEON.player.room();
     }
 
     ey = hero.y + 1;
@@ -509,7 +509,7 @@ pub unsafe fn look(wakeup: u8, random: &mut Random) {
             }
 
             crate::ui::terminal::UI.move_cursor(IVec2::new(x, y));
-            let player_room = crate::game::PLAYER.room();
+            let player_room = DUNGEON.player.room();
             if player_room.is_some()
                 && crate::game::room_dark(player_room)
                 && !crate::game::room_gone(player_room)
@@ -647,7 +647,7 @@ pub unsafe fn enter_room(cp: IVec2, random: &mut Random) {
         return;
     }
 
-    crate::game::PLAYER.set_room(rp);
+    DUNGEON.player.set_room(rp);
     DUNGEON.door_open(rp, random);
 
     if crate::game::room_dark(rp) || player_has(MonsterFlags::BLIND) {
@@ -706,7 +706,7 @@ pub unsafe fn enter_room(cp: IVec2, random: &mut Random) {
 /// leave_room:
 /// Code for when the hero exits a room.
 pub unsafe fn leave_room(cp: IVec2, random: &mut Random) {
-    let rp = crate::game::PLAYER.room();
+    let rp = DUNGEON.player.room();
     if rp.is_none() {
         return;
     }
@@ -725,7 +725,7 @@ pub unsafe fn leave_room(cp: IVec2, random: &mut Random) {
 
     let pnum = (flat_at(cp.y, cp.x) as u8 & F_PNUM as u8) as usize;
     if pnum < GameConfig::MAX_PASSAGES {
-        crate::game::PLAYER.set_room(None);
+        DUNGEON.player.set_room(None);
     }
 
     let (pos, size) = match crate::game::room_bounds(rp) {

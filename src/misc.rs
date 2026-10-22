@@ -6,7 +6,6 @@ use crate::config::GameConfig;
 use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
 use crate::game::globals::ObjInfo;
-use crate::game::PLAYER;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id, reset_last};
 use crate::rnd::{Random, RNG};
@@ -49,7 +48,7 @@ use crate::game::globals::{
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
-    PLAYER.has_flag(flag)
+    DUNGEON.player.has_flag(flag)
 }
 
 #[inline]
@@ -68,7 +67,7 @@ fn first_is_vowel(s: &str) -> bool {
 /// show_floor:
 /// Returns whether the floor of the player's room should be displayed.
 pub unsafe fn show_floor() -> bool {
-    let player_room = PLAYER.room();
+    let player_room = DUNGEON.player.room();
     if crate::game::room_dark(player_room)
         && !crate::game::room_gone(player_room)
         && !player_has(MonsterFlags::BLIND)
@@ -115,8 +114,8 @@ pub unsafe fn eat() {
         food_left = STOMACHSIZE;
     }
     hungry_state = 0;
-    if PLAYER.equipment().weapon_id() == Some(obj) {
-        PLAYER.set_weapon_id(None);
+    if DUNGEON.player.equipment().weapon_id() == Some(obj) {
+        DUNGEON.player.set_weapon_id(None);
     }
     let which = DUNGEON.objects.with_object(obj, |o| o.o_which).unwrap_or(0);
     if which == 1 {
@@ -129,7 +128,7 @@ pub unsafe fn eat() {
         random.rnd(100)
     } > 70
     {
-        PLAYER.with_stats_mut(|stats| stats.experience += 1);
+        DUNGEON.player.with_stats_mut(|stats| stats.experience += 1);
         msg_str("bummer, this food tastes awful");
     } else {
         msg_str("yum, that tasted good");
@@ -138,7 +137,7 @@ pub unsafe fn eat() {
 }
 
 pub unsafe fn check_level(random: &mut Random) {
-    let experience = PLAYER.stats().experience;
+    let experience = DUNGEON.player.stats().experience;
     let mut i: i32 = 0;
     while e_levels[i as usize] != 0 {
         if e_levels[i as usize] > experience {
@@ -147,11 +146,11 @@ pub unsafe fn check_level(random: &mut Random) {
         i += 1;
     }
     i += 1;
-    let olevel = PLAYER.level();
-    PLAYER.with_stats_mut(|stats| stats.level = i);
+    let olevel = DUNGEON.player.level();
+    DUNGEON.player.with_stats_mut(|stats| stats.level = i);
     if i > olevel {
         let add = random.roll(i - olevel, 10);
-        PLAYER.with_stats_mut(|stats| {
+        DUNGEON.player.with_stats_mut(|stats| {
             stats.max_hit_points += add;
             stats.hit_points += add;
         });
@@ -163,18 +162,18 @@ pub unsafe fn chg_str(amt: i32) {
     if amt == 0 {
         return;
     }
-    let mut new_strength = PLAYER.stats().strength as i32 + amt;
+    let mut new_strength = DUNGEON.player.stats().strength as i32 + amt;
     if new_strength < 3 {
         new_strength = 3;
     } else if new_strength > 31 {
         new_strength = 31;
     }
-    PLAYER.with_stats_mut(|stats| stats.strength = new_strength as u32);
-    let mut comp = PLAYER.stats().strength;
+    DUNGEON.player.with_stats_mut(|stats| stats.strength = new_strength as u32);
+    let mut comp = DUNGEON.player.stats().strength;
 
     // Subtract each worn ring's strength bonus (pointer-free read of `o_arm`).
     for hand in 0..2usize {
-        if let Some(bonus) = PLAYER.equipment().ring_arm(hand) {
+        if let Some(bonus) = DUNGEON.player.equipment().ring_arm(hand) {
             let reduced = comp as i32 - bonus;
             comp = if reduced < 3 { 3 } else { reduced as u32 };
         }
@@ -198,13 +197,13 @@ pub fn add_str(sp: &mut u32, amt: i32) {
 pub unsafe fn add_haste(potion: bool, random: &mut Random) -> bool {
     if player_has(MonsterFlags::HASTE) {
         no_command += random.rnd(8);
-        PLAYER.remove_flag(MonsterFlags::RUN | MonsterFlags::HASTE);
+        DUNGEON.player.remove_flag(MonsterFlags::RUN | MonsterFlags::HASTE);
         extinguish(Daemon::Nohaste);
         msg_str("you faint from exhaustion");
         return false;
     }
 
-    PLAYER.add_flag(MonsterFlags::HASTE);
+    DUNGEON.player.add_flag(MonsterFlags::HASTE);
     if potion {
         fuse(
             Daemon::Nohaste,
@@ -233,7 +232,7 @@ pub unsafe fn aggravate(random: &mut Random) {
 /// Whether the object `id` is currently equipped (worn/wielded), announcing so
 /// when it is.
 pub fn is_current_id(id: crate::item::arena::ThingId) -> bool {
-    let eq = PLAYER.equipment();
+    let eq = DUNGEON.player.equipment();
     if eq.armor_id() == Some(id)
         || eq.weapon_id() == Some(id)
         || eq.left_ring_id() == Some(id)

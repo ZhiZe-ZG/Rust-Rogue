@@ -10,7 +10,6 @@ use crate::draw::look;
 use crate::entity::chase::see_monst;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
 use crate::game::globals::{pot_info, ObjInfo};
-use crate::game::PLAYER;
 use crate::dungeon::DUNGEON;
 use crate::game::MonsterId;
 use crate::item::arena::ThingId;
@@ -121,12 +120,12 @@ unsafe fn pot_info_at(index: usize) -> &'static mut ObjInfo {
 
 #[inline]
 fn hero() -> IVec2 {
-    crate::game::PLAYER.pos()
+    DUNGEON.player.pos()
 }
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
-    crate::game::PLAYER.has_flag(flag)
+    DUNGEON.player.has_flag(flag)
 }
 
 #[inline]
@@ -209,7 +208,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool, random: &mut Random) {
 
     let t = spread(base_time, random);
     if !player_has(flags) {
-        crate::game::PLAYER.add_flag(flags);
+        DUNGEON.player.add_flag(flags);
         fuse(daemon, 0, t, AFTER);
         look(false as u8, random);
     } else {
@@ -243,8 +242,8 @@ pub unsafe fn quaff(random: &mut Random) {
         }
         return;
     }
-    if PLAYER.equipment().weapon_id() == Some(obj) {
-        PLAYER.set_weapon_id(None);
+    if DUNGEON.player.equipment().weapon_id() == Some(obj) {
+        DUNGEON.player.set_weapon_id(None);
     }
 
     let (o_count, o_which) = DUNGEON.objects
@@ -258,7 +257,7 @@ pub unsafe fn quaff(random: &mut Random) {
         PotionType::Confuse => do_pot_impl(PotionType::Confuse, if trip { false } else { true }, random),
         PotionType::Poison => {
             pot_info_at(PotionType::Poison.index()).oi_know = true;
-            if PLAYER.wearing_ring(RingType::SustainStrength) {
+            if DUNGEON.player.wearing_ring(RingType::SustainStrength) {
                 msg_str("you feel momentarily sick");
             } else {
                 chg_str(-(random.rnd(3) + 1));
@@ -268,7 +267,7 @@ pub unsafe fn quaff(random: &mut Random) {
         }
         PotionType::Healing => {
             pot_info_at(PotionType::Healing.index()).oi_know = true;
-            crate::game::PLAYER.with_stats_mut(|stats| {
+            DUNGEON.player.with_stats_mut(|stats| {
                 stats.hit_points += random.roll(stats.level, 4);
                 if stats.hit_points > stats.max_hit_points {
                     stats.max_hit_points += 1;
@@ -284,7 +283,7 @@ pub unsafe fn quaff(random: &mut Random) {
             msg_str("you feel stronger, now.  What bulging muscles!");
         }
         PotionType::MonsterFind => {
-            crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
+            DUNGEON.player.add_flag(MonsterFlags::SEEMONST);
             fuse(Daemon::TurnSee, true as u8 as i32, HUHDURATION, AFTER);
             if turn_see(false as u8, random) == 0 {
                 msg_str(&format!(
@@ -361,7 +360,7 @@ pub unsafe fn quaff(random: &mut Random) {
         }
         PotionType::ExtraHealing => {
             pot_info_at(PotionType::ExtraHealing.index()).oi_know = true;
-            crate::game::PLAYER.with_stats_mut(|stats| {
+            DUNGEON.player.with_stats_mut(|stats| {
                 stats.hit_points += random.roll(stats.level, 8);
                 if stats.hit_points > stats.max_hit_points {
                     if stats.hit_points > stats.max_hit_points + stats.level + 1 {
@@ -384,7 +383,7 @@ pub unsafe fn quaff(random: &mut Random) {
         }
         PotionType::Restore => {
             // Sum the `o_arm` bonus of each ring of add-strength (pointer-free).
-            let equipment = PLAYER.equipment();
+            let equipment = DUNGEON.player.equipment();
             let ring_bonus = |hand: usize| {
                 if equipment.ring_type(hand) == Some(RingType::AddStrength) {
                     equipment.ring_arm(hand).unwrap_or(0)
@@ -394,7 +393,7 @@ pub unsafe fn quaff(random: &mut Random) {
             };
             let left_bonus = ring_bonus(0);
             let right_bonus = ring_bonus(1);
-            crate::game::PLAYER.with_stats_mut(|stats| {
+            DUNGEON.player.with_stats_mut(|stats| {
                 if left_bonus != 0 {
                     add_str(&mut stats.strength, -left_bonus);
                 }
@@ -455,7 +454,7 @@ pub fn is_magic_id(id: ThingId) -> bool {
 /// invis_on:
 /// Turn on the ability to see invisible.
 pub unsafe fn invis_on() {
-    crate::game::PLAYER.add_flag(MonsterFlags::CANSEE);
+    DUNGEON.player.add_flag(MonsterFlags::CANSEE);
     for id in DUNGEON.monster_list.ids() {
         if thing_has(id, MonsterFlags::INVIS)
             && see_monst(id) != 0
@@ -509,9 +508,9 @@ pub unsafe fn turn_see(turn_off: u8, random: &mut Random) -> u8 {
     }
 
     if turn_off != 0 {
-        crate::game::PLAYER.remove_flag(MonsterFlags::SEEMONST);
+        DUNGEON.player.remove_flag(MonsterFlags::SEEMONST);
     } else {
-        crate::game::PLAYER.add_flag(MonsterFlags::SEEMONST);
+        DUNGEON.player.add_flag(MonsterFlags::SEEMONST);
     }
 
     if add_new != 0 {
@@ -554,8 +553,8 @@ pub unsafe fn seen_stairs() -> u8 {
 /// raise_level:
 /// The player just magically went up a level.
 pub unsafe fn raise_level(random: &mut Random) {
-    let level = crate::game::PLAYER.level();
-    crate::game::PLAYER.with_stats_mut(|stats| stats.experience = e_levels[level as usize - 1] + 1);
+    let level = DUNGEON.player.level();
+    DUNGEON.player.with_stats_mut(|stats| stats.experience = e_levels[level as usize - 1] + 1);
     check_level(random);
 }
 

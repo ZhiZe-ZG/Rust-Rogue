@@ -7,7 +7,6 @@ use crate::entity::chase::{dist, roomin, runto};
 use crate::entity::fight::set_mname;
 use crate::entity::player::DestRef;
 use crate::entity::player::{MonsterFlags, Thing, ThingMonster, ThingObject};
-use crate::game::PLAYER;
 use crate::dungeon::DUNGEON;
 use crate::game::MonsterId;
 use crate::item::rings::RingType;
@@ -208,12 +207,12 @@ fn has_flag(id: MonsterId, flag: MonsterFlags) -> bool {
 
 #[inline]
 fn player_has(flag: MonsterFlags) -> bool {
-    crate::game::PLAYER.has_flag(flag)
+    DUNGEON.player.has_flag(flag)
 }
 
 #[inline]
 fn iswearing(which: RingType) -> bool {
-    PLAYER.wearing_ring(which)
+    DUNGEON.player.wearing_ring(which)
 }
 
 /// Picks an appropriate monster kind for the current depth.
@@ -318,7 +317,7 @@ pub unsafe fn wanderer(random: &mut Random) {
 
     loop {
         cp = DUNGEON.find_floor(None, 0, true, random).unwrap_or(IVec2::ZERO);
-        if roomin(cp) != crate::game::PLAYER.room() {
+        if roomin(cp) != DUNGEON.player.room() {
             break;
         }
     }
@@ -389,8 +388,8 @@ pub unsafe fn wake_monster(y: i32, x: i32, random: &mut Random) -> Option<Monste
         && !has_flag(id, MonsterFlags::CANCELLED)
         && has_flag(id, MonsterFlags::RUN)
     {
-        let rp = crate::game::PLAYER.room();
-        let hero = crate::game::PLAYER.pos();
+        let rp = DUNGEON.player.room();
+        let hero = DUNGEON.player.pos();
         if (rp.is_some() && !crate::game::room_dark(rp)) || dist(y, x, hero.y, hero.x) < LAMPDIST {
             DUNGEON.monster_list.with_mut(id, |t| {
                 if let Thing::Monster { data } = t {
@@ -403,7 +402,7 @@ pub unsafe fn wake_monster(y: i32, x: i32, random: &mut Random) -> Option<Monste
                 } else {
                     fuse(Daemon::Unconfuse, 0, spread(HUHDURATION, random), AFTER);
                 }
-                crate::game::PLAYER.add_flag(MonsterFlags::HUH);
+                DUNGEON.player.add_flag(MonsterFlags::HUH);
                 let mname_str = set_mname(id, random);
                 addmsg_str(&mname_str);
                 if mname_str != "it" {
@@ -420,7 +419,7 @@ pub unsafe fn wake_monster(y: i32, x: i32, random: &mut Random) -> Option<Monste
                 data.t_flags.insert(MonsterFlags::RUN);
             }
         });
-        let pr = crate::game::PLAYER.room();
+        let pr = DUNGEON.player.room();
         if let Some(room) = pr {
             if crate::game::room_goldval(pr) != 0 {
                 crate::entity::player::set_monster_dest(id, DestRef::RoomGold(room));
@@ -485,12 +484,12 @@ pub unsafe fn save(which: i32, random: &mut Random) -> i32 {
     let mut adj = which;
     if which == VS_MAGIC {
         // Ring of protection lowers the save magic number by its `o_arm`.
-        let equipment = PLAYER.equipment();
+        let equipment = DUNGEON.player.equipment();
         for hand in 0..2usize {
             if equipment.ring_type(hand) == Some(RingType::Protection) {
                 adj -= equipment.ring_arm(hand).unwrap_or(0);
             }
         }
     }
-    save_throw_for_level(adj, PLAYER.level(), random)
+    save_throw_for_level(adj, DUNGEON.player.level(), random)
 }

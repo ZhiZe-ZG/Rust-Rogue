@@ -19,7 +19,6 @@ use crate::entity::chase::{cansee, see_monst};
 use crate::entity::monsters::{wanderer, MonsterType};
 use crate::entity::player::{MonsterFlags, Thing};
 use crate::dungeon::DUNGEON;
-use crate::game::PLAYER;
 use crate::item::arena::ThingId;
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
@@ -67,7 +66,7 @@ use crate::game::globals::between;
 
 /// Apply the effects of searching and teleportation rings.
 pub unsafe fn ring_effects(random: &mut Random) {
-    let equipment = PLAYER.equipment();
+    let equipment = DUNGEON.player.equipment();
     for hand in 0..2usize {
         match equipment.ring_type(hand) {
             Some(RingType::Searching) => crate::command_dispatch::search(random),
@@ -85,30 +84,30 @@ pub unsafe fn ring_effects(random: &mut Random) {
 /// doctor:
 /// A healing daemon that restores hit points after rest.
 pub unsafe fn doctor(random: &mut Random) {
-    let lv = PLAYER.level();
-    let ohp = PLAYER.stats().hit_points;
+    let lv = DUNGEON.player.level();
+    let ohp = DUNGEON.player.stats().hit_points;
     quiet += 1;
     if lv < 8 {
         if quiet + (lv << 1) > 20 {
-            PLAYER.with_stats_mut(|stats| stats.hit_points += 1);
+            DUNGEON.player.with_stats_mut(|stats| stats.hit_points += 1);
         }
     } else if quiet >= 3 {
-        PLAYER.with_stats_mut(|stats| {
+        DUNGEON.player.with_stats_mut(|stats| {
             stats.hit_points += random.rnd(lv - 7) + 1
         });
     }
     // A ring of regeneration adds an extra point on each hand it is worn.
     let regenerations = [0usize, 1]
         .into_iter()
-        .filter(|&hand| PLAYER.equipment().ring_type(hand) == Some(RingType::Regeneration))
+        .filter(|&hand| DUNGEON.player.equipment().ring_type(hand) == Some(RingType::Regeneration))
         .count() as i32;
     if regenerations != 0 {
-        PLAYER.with_stats_mut(|stats| stats.hit_points += regenerations);
+        DUNGEON.player.with_stats_mut(|stats| stats.hit_points += regenerations);
     }
-    if ohp != PLAYER.stats().hit_points {
-        let max = PLAYER.stats().max_hit_points;
-        if PLAYER.stats().hit_points > max {
-            PLAYER.with_stats_mut(|stats| stats.hit_points = max);
+    if ohp != DUNGEON.player.stats().hit_points {
+        let max = DUNGEON.player.stats().max_hit_points;
+        if DUNGEON.player.stats().hit_points > max {
+            DUNGEON.player.with_stats_mut(|stats| stats.hit_points = max);
         }
         quiet = 0;
     }
@@ -138,7 +137,7 @@ pub unsafe fn rollwand(random: &mut Random) {
 /// unconfuse:
 /// Release the poor player from his confusion.
 pub unsafe fn unconfuse() {
-    PLAYER.remove_flag(MonsterFlags::HUH);
+    DUNGEON.player.remove_flag(MonsterFlags::HUH);
     msg_str(&format!(
         "you feel less {} now",
         choose_str("trippy", "confused")
@@ -155,18 +154,18 @@ pub unsafe fn unsee() {
             }
         }
     }
-    PLAYER.remove_flag(MonsterFlags::CANSEE);
+    DUNGEON.player.remove_flag(MonsterFlags::CANSEE);
 }
 
 /// sight:
 /// He gets his sight back.
 pub unsafe fn sight(random: &mut Random) {
-    if PLAYER.has_flag(MonsterFlags::BLIND) {
+    if DUNGEON.player.has_flag(MonsterFlags::BLIND) {
         extinguish(Daemon::Sight);
-        PLAYER.remove_flag(MonsterFlags::BLIND);
-        let proom = PLAYER.room();
+        DUNGEON.player.remove_flag(MonsterFlags::BLIND);
+        let proom = DUNGEON.player.room();
         if !crate::game::room_gone(proom) {
-            let pos = PLAYER.pos();
+            let pos = DUNGEON.player.pos();
             enter_room(pos, random);
         }
         msg_str(choose_str(
@@ -179,7 +178,7 @@ pub unsafe fn sight(random: &mut Random) {
 /// nohaste:
 /// End the hasting.
 pub unsafe fn nohaste() {
-    PLAYER.remove_flag(MonsterFlags::HASTE);
+    DUNGEON.player.remove_flag(MonsterFlags::HASTE);
     msg_str("you feel yourself slowing down");
 }
 
@@ -237,7 +236,7 @@ pub unsafe fn stomach(random: &mut Random) {
     }
 
     if hungry_state != orig_hungry {
-        PLAYER.remove_flag(MonsterFlags::RUN);
+        DUNGEON.player.remove_flag(MonsterFlags::RUN);
         running = false as u8;
         to_death = false as u8;
         count = 0;
@@ -247,14 +246,14 @@ pub unsafe fn stomach(random: &mut Random) {
 /// come_down:
 /// Take the hero down off her acid trip.
 pub unsafe fn come_down() {
-    if !PLAYER.has_flag(MonsterFlags::HALU) {
+    if !DUNGEON.player.has_flag(MonsterFlags::HALU) {
         return;
     }
 
     kill_daemon(Daemon::Visuals);
-    PLAYER.remove_flag(MonsterFlags::HALU);
+    DUNGEON.player.remove_flag(MonsterFlags::HALU);
 
-    if PLAYER.has_flag(MonsterFlags::BLIND) {
+    if DUNGEON.player.has_flag(MonsterFlags::BLIND) {
         return;
     }
 
@@ -271,8 +270,8 @@ pub unsafe fn come_down() {
     }
 
     // Undo the monsters.
-    let seemonst = PLAYER.has_flag(MonsterFlags::SEEMONST);
-    let cansee_invis = PLAYER.has_flag(MonsterFlags::CANSEE);
+    let seemonst = DUNGEON.player.has_flag(MonsterFlags::SEEMONST);
+    let cansee_invis = DUNGEON.player.has_flag(MonsterFlags::CANSEE);
     for id in DUNGEON.monster_list.ids() {
         if let Some((pos, _disguise, _oldch, flags)) = monster_view(id) {
             if cansee(pos.y, pos.x) != 0 {
@@ -310,7 +309,7 @@ pub unsafe fn visuals(random: &mut Random) {
     }
 
     // Change the monsters.
-    let seemonst = PLAYER.has_flag(MonsterFlags::SEEMONST);
+    let seemonst = DUNGEON.player.has_flag(MonsterFlags::SEEMONST);
     for id in DUNGEON.monster_list.ids() {
         if let Some((pos, disguise, _oldch, _flags)) = monster_view(id) {
             let typ = DUNGEON.monster_list
@@ -335,7 +334,7 @@ pub unsafe fn visuals(random: &mut Random) {
 /// land:
 /// Land from a levitation potion.
 pub unsafe fn land() {
-    PLAYER.remove_flag(MonsterFlags::LEVIT);
+    DUNGEON.player.remove_flag(MonsterFlags::LEVIT);
     msg_str(choose_str(
         "bummer!  You've hit the ground",
         "you float gently to the ground",
