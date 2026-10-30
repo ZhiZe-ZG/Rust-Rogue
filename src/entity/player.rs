@@ -12,6 +12,7 @@ use crate::entity::fight::{fight, swing};
 use crate::entity::monsters::save;
 use crate::entity::monsters::MonsterType;
 use crate::game;
+use crate::game::globals;
 use crate::item::arena::new_item_id;
 use crate::item::armor::rust_armor_id;
 use crate::item::pack::floor_at;
@@ -563,7 +564,7 @@ pub unsafe fn turn_ok(y: i32, x: i32) -> u8 {
 #[inline]
 unsafe fn move_stuff(next_pos: &mut IVec2, fl: u8) {
     let hero = DUNGEON.player.pos();
-    crate::draw::write_cell_glyph(hero, floor_at() as char);
+    crate::draw::write_cell_glyph(hero, floor_at(&crate::dungeon::DUNGEON) as char);
     if (fl as u8 & F_PASS as u8) != 0 && crate::game::is_door_at(oldpos.y, oldpos.x) {
         draw_leave_room(*next_pos, &mut RNG.lock().unwrap());
     }
@@ -621,17 +622,26 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
                     TrapHit::Hit
                 };
             } else {
-                let arrow = new_item_id();
-                init_weapon(arrow, ARROW, &mut RNG.lock().unwrap());
+                let arrow = new_item_id(&DUNGEON.objects);
+                init_weapon(
+                    arrow,
+                    ARROW,
+                    &mut RNG.lock().unwrap(),
+                    &crate::dungeon::DUNGEON,
+                    &raw mut globals::group,
+                );
                 DUNGEON.objects.with_object_mut(arrow, |o| {
                     o.o_count = 1;
                     o.o_pos = DUNGEON.player.pos();
                 });
+                let weap_info = (&*(&raw const globals::weap_info)).clone();
                 fall(
                     arrow,
                     false,
-                    &mut *(&raw mut crate::game::globals::has_hit),
+                    &raw mut globals::has_hit,
                     &mut RNG.lock().unwrap(),
+                    &crate::dungeon::DUNGEON,
+                    &weap_info,
                 );
                 hit = TrapHit::Miss;
             }
@@ -669,7 +679,12 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
             if let Some(msg) = message {
                 msg_str(&msg);
             }
-            rust_armor_id(DUNGEON.player.equipment().armor_id());
+            rust_armor_id(
+                DUNGEON.player.equipment().armor_id(),
+                &crate::dungeon::DUNGEON,
+                to_death,
+                globals::terse,
+            );
         }
     }
 
@@ -914,8 +929,8 @@ mod tests {
     fn attach_detach_pack_preserves_order() {
         let _guard = serial();
         let owner = crate::game::DUNGEON.monster_list.spawn_actor();
-        let a = new_object_id();
-        let b = new_object_id();
+        let a = new_object_id(&DUNGEON.objects);
+        let b = new_object_id(&DUNGEON.objects);
 
         attach_pack_id(owner, a);
         attach_pack_id(owner, b);
@@ -933,12 +948,12 @@ mod tests {
     #[test]
     fn allocation_count_is_balanced() {
         let _guard = serial();
-        let before = allocated_count();
-        let a = new_item_id();
-        let b = new_item_id();
-        assert_eq!(allocated_count(), before + 2);
+        let before = allocated_count(&DUNGEON.objects);
+        let a = new_item_id(&DUNGEON.objects);
+        let b = new_item_id(&DUNGEON.objects);
+        assert_eq!(allocated_count(&DUNGEON.objects), before + 2);
         let _ = DUNGEON.objects.remove(a);
         let _ = DUNGEON.objects.remove(b);
-        assert_eq!(allocated_count(), before);
+        assert_eq!(allocated_count(&DUNGEON.objects), before);
     }
 }

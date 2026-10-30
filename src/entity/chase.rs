@@ -316,7 +316,7 @@ pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
                 if has_hit != 0 {
                     endmsg();
                 }
-                fire_bolt(m.pos, delta, "flame", random);
+                fire_bolt(m.pos, delta, "flame", random, &crate::dungeon::DUNGEON);
                 running = false as u8;
                 count = 0;
                 quiet = 0;
@@ -535,7 +535,7 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2, random: &mut Random) -> (u8, IVec2
                         // so we need to look it up to see what type it is.
                         let mut found_scare = false;
                         for obj_id in crate::game::item_ids() {
-                            let at_pos = crate::item::arena::with_object(obj_id, |data| {
+                            let at_pos = crate::item::arena::with_object(&DUNGEON.objects, obj_id, |data| {
                                 if data.o_pos.y == y && data.o_pos.x == x {
                                     Some(data.o_type)
                                 } else {
@@ -692,7 +692,7 @@ pub unsafe fn update_dest(id: MonsterId, random: &mut Random) {
         return;
     }
     for obj_id in crate::game::item_ids() {
-        let info = crate::item::arena::with_object(obj_id, |data| (data.o_type, data.o_pos));
+        let info = crate::item::arena::with_object(&DUNGEON.objects, obj_id, |data| (data.o_type, data.o_pos));
         let Some((otype, opos)) = info else {
             continue;
         };

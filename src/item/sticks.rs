@@ -1,9 +1,12 @@
 //! Wands and staves (the legacy `sticks`): zapping and their bolt effects.
 //!
 //! Ported from `src/c/sticks.c` to Rust.
+use crate::command::Command;
+use crate::direction::Direction;
 use crate::entity::monsters::{save, save_throw_id};
 use crate::entity::player::ObjectFlags;
-use crate::game::globals::ws_info;
+use crate::dungeon::Dungeon;
+use crate::game::globals::ObjInfo;
 use crate::item::arena::{ThingArena, ThingId};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
@@ -69,11 +72,9 @@ impl StickType {
 
 const MAXSTICKS: usize = StickType::COUNT;
 
-use crate::game::globals::{after, delta, terse};
-
 #[inline]
-fn hero_pos() -> IVec2 {
-    crate::dungeon::DUNGEON.player.pos()
+fn hero_pos(dungeon: &Dungeon) -> IVec2 {
+    dungeon.player.pos()
 }
 
 #[inline]
@@ -98,15 +99,15 @@ unsafe fn set_c_string(dst: &mut [u8], src: &str) {
 }
 
 #[inline]
-fn stick_type(id: ThingId) -> Option<StickType> {
-    crate::dungeon::DUNGEON.objects
+fn stick_type(id: ThingId, dungeon: &Dungeon) -> Option<StickType> {
+    dungeon.objects
         .with_object(id, |o| StickType::from_raw(o.o_which))
         .flatten()
 }
 
 /// Set up a new stick with the expected damage and charge values.
-pub unsafe fn fix_stick_id(id: ThingId, random: &mut Random) {
-    fix_stick_in(&crate::dungeon::DUNGEON.objects, id, random);
+pub unsafe fn fix_stick_id(id: ThingId, random: &mut Random, dungeon: &Dungeon) {
+    fix_stick_in(&dungeon.objects, id, random);
 }
 
 /// Set up a new stick in the supplied arena.
@@ -139,58 +140,90 @@ pub(crate) unsafe fn fix_stick_in(objects: &ThingArena, id: ThingId, random: &mu
 
 /// do_zap:
 /// Perform a zap with a wand or staff and apply a simplified effect.
-pub unsafe fn do_zap(random: &mut Random) {
-    let Some(obj) = get_item_id("zap with", ItemFilter::Category(ItemType::STICK)) else {
+///
+/// # Safety
+/// `ws_info` and `after` must remain valid throughout the call, and the metadata
+/// slice must contain every stick kind. No exclusive state borrow is retained
+/// while invoking helpers that may reenter the game.
+pub unsafe fn do_zap(
+    random: &mut Random,
+    dungeon: &Dungeon,
+    ws_info: *mut [ObjInfo],
+    after: *mut u8,
+    delta: IVec2,
+    terse: u8,
+    again: u8,
+    l_last_comm: Command,
+    l_last_dir: Direction,
+    l_last_pick: Option<ThingId>,
+    last_comm: *mut Command,
+    last_dir: *mut Direction,
+    last_pick: *mut Option<ThingId>,
+    mpos: *mut i32,
+    msg_esc: *mut u8,
+    n_objs: *mut i32,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+) {
+    // The live stick table stays raw while the selection prompt can reenter.
+    let ws_names = (&*ws_info).to_vec();
+    let Some(obj) = get_item_id("zap with", ItemFilter::Category(ItemType::STICK), dungeon, after, again, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc, n_objs, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, &ws_names) else {
         return;
     };
     if !matches!(
-        crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_type),
+        dungeon.objects.with_object(obj, |o| o.o_type),
         Some(ItemType::Stick(_))
     ) {
-        after = false as u8;
+        *after = false as u8;
         msg_str("you can't zap with that!");
         return;
     }
-    if crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_arm).unwrap_or(0) == 0 {
+    if dungeon.objects.with_object(obj, |o| o.o_arm).unwrap_or(0) == 0 {
         msg_str("nothing happens");
         return;
     }
 
-    let kind = stick_type(obj);
+    let kind = stick_type(obj, dungeon);
 
     match kind {
         Some(StickType::Light) => {
-            ws_info[StickType::Light.index()].oi_know = true;
+            (&mut *ws_info)[StickType::Light.index()].oi_know = true;
             msg_str("the corridor glows and then fades");
         }
         Some(StickType::Drain) => {
-            if crate::dungeon::DUNGEON.player.stats().hit_points < 2 {
+            if dungeon.player.stats().hit_points < 2 {
                 msg_str("you are too weak to use it");
                 return;
             }
-            drain();
+            drain(dungeon);
         }
         Some(StickType::Invis)
         | Some(StickType::Polymorph)
         | Some(StickType::TelAway)
         | Some(StickType::TelTo)
         | Some(StickType::Cancel) => {
-            let hero = hero_pos();
+            let hero = hero_pos(dungeon);
             let mut y = hero.y;
             let mut x = hero.x;
-            while crate::game::cell_is_walkable(y, x) {
+            while dungeon.monster_map.at(y as usize, x as usize).is_none()
+                && dungeon.with_level(|level| level.tile_at(y as usize, x as usize).is_walkable())
+            {
                 y += delta.y;
                 x += delta.x;
             }
-            if crate::game::monster_here(y, x) {
+            if dungeon.monster_map.at(y as usize, x as usize).is_some() {
                 msg_str("the spell takes effect");
             }
         }
         Some(StickType::Missile) => {
-            ws_info[StickType::Missile.index()].oi_know = true;
-            let bolt = crate::item::arena::new_item_id();
-            let launch = crate::dungeon::DUNGEON.player.weapon_which();
-            crate::dungeon::DUNGEON.objects.with_object_mut(bolt, |o| {
+            (&mut *ws_info)[StickType::Missile.index()].oi_know = true;
+            let bolt = crate::item::arena::new_item_id(&dungeon.objects);
+            let launch = dungeon.player.weapon_which();
+            dungeon.objects.with_object_mut(bolt, |o| {
                 o.o_type = ItemType::Weapon(FLAME);
                 o.o_which = FLAME;
                 set_c_string(&mut o.o_hurldmg, "1x4");
@@ -201,10 +234,10 @@ pub unsafe fn do_zap(random: &mut Random) {
                     o.o_launch = which;
                 }
             });
-            do_motion(bolt, delta.y, delta.x);
+            do_motion(bolt, delta.y, delta.x, dungeon, terse);
             let bolt_pos =
-                crate::item::arena::with_object(bolt, |o| o.o_pos).unwrap_or(IVec2::ZERO);
-            if let Some(mid) = crate::game::monster_id_at(bolt_pos.y, bolt_pos.x) {
+                crate::item::arena::with_object(&dungeon.objects, bolt, |o| o.o_pos).unwrap_or(IVec2::ZERO);
+            if let Some(mid) = dungeon.monster_map.at(bolt_pos.y as usize, bolt_pos.x as usize) {
                 if save_throw_id(VS_MAGIC, mid, random) == 0 {
                     hit_monster(bolt_pos.y, bolt_pos.x, bolt, random);
                 } else if terse != 0 {
@@ -217,17 +250,19 @@ pub unsafe fn do_zap(random: &mut Random) {
             } else {
                 msg_str("the missle vanishes with a puff of smoke");
             }
-            let _ = crate::dungeon::DUNGEON.objects.remove(bolt);
+            let _ = dungeon.objects.remove(bolt);
         }
         Some(StickType::HasteM) | Some(StickType::SlowM) => {
-            let hero = hero_pos();
+            let hero = hero_pos(dungeon);
             let mut y = hero.y;
             let mut x = hero.x;
-            while crate::game::cell_is_walkable(y, x) {
+            while dungeon.monster_map.at(y as usize, x as usize).is_none()
+                && dungeon.with_level(|level| level.tile_at(y as usize, x as usize).is_walkable())
+            {
                 y += delta.y;
                 x += delta.x;
             }
-            if crate::game::monster_here(y, x) {
+            if dungeon.monster_map.at(y as usize, x as usize).is_some() {
                 msg_str("the spell takes effect");
             }
         }
@@ -237,10 +272,10 @@ pub unsafe fn do_zap(random: &mut Random) {
                 Some(StickType::Fire) => "flame",
                 _ => "ice",
             };
-            let hero = hero_pos();
-            fire_bolt(hero, delta, name, random);
+            let hero = hero_pos(dungeon);
+            fire_bolt(hero, delta, name, random, dungeon);
             if let Some(kind) = kind {
-                ws_info[kind.index()].oi_know = true;
+                (&mut *ws_info)[kind.index()].oi_know = true;
             }
         }
         Some(StickType::Nop) => {}
@@ -249,13 +284,13 @@ pub unsafe fn do_zap(random: &mut Random) {
         }
     }
 
-    crate::dungeon::DUNGEON.objects.with_object_mut(obj, |o| o.o_arm -= 1);
+    dungeon.objects.with_object_mut(obj, |o| o.o_arm -= 1);
 }
 
 /// drain:
 /// Reduce the hero's hit points and apply a simple draining effect.
-pub unsafe fn drain() {
-    crate::dungeon::DUNGEON.player.with_stats_mut(|stats| {
+pub unsafe fn drain(dungeon: &Dungeon) {
+    dungeon.player.with_stats_mut(|stats| {
         if stats.hit_points >= 2 {
             stats.hit_points /= 2;
         }
@@ -265,13 +300,19 @@ pub unsafe fn drain() {
 
 /// fire_bolt:
 /// Fire a bolt in a given direction from a specific starting place.
-pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str, random: &mut Random) {
+pub unsafe fn fire_bolt(
+    start: IVec2,
+    dir: IVec2,
+    _name: &str,
+    random: &mut Random,
+    dungeon: &Dungeon,
+) {
     let mut pos = start;
-    let hero = hero_pos();
+    let hero = hero_pos(dungeon);
     let hit_hero = start != hero;
-    let bolt = crate::item::arena::new_item_id();
+    let bolt = crate::item::arena::new_item_id(&dungeon.objects);
 
-    crate::dungeon::DUNGEON.objects.with_object_mut(bolt, |o| {
+    dungeon.objects.with_object_mut(bolt, |o| {
         o.o_type = ItemType::Weapon(FLAME);
         o.o_which = FLAME;
         set_c_string(&mut o.o_hurldmg, "6x6");
@@ -283,8 +324,7 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str, random: &mut Rand
     pos.x += dir.x;
     if hit_hero && ce_coord(pos, hero) != 0 {
         if save(VS_MAGIC, random) == 0 {
-            if (crate::dungeon::DUNGEON.player.stats().hit_points - random.roll(6, 6)) <= 0
-            {
+            if (dungeon.player.stats().hit_points - random.roll(6, 6)) <= 0 {
                 death('b' as u8);
             }
             msg_str("the bolt hits");
@@ -292,7 +332,7 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str, random: &mut Rand
             msg_str("the bolt whizzes by you");
         }
     } else {
-        if let Some(mid) = crate::game::monster_id_at(pos.y, pos.x) {
+        if let Some(mid) = dungeon.monster_map.at(pos.y as usize, pos.x as usize) {
             if save_throw_id(VS_MAGIC, mid, random) == 0 {
                 hit_monster(pos.y, pos.x, bolt, random);
             } else {
@@ -303,7 +343,42 @@ pub unsafe fn fire_bolt(start: IVec2, dir: IVec2, _name: &str, random: &mut Rand
         }
     }
 
-    let _ = crate::dungeon::DUNGEON.objects.remove(bolt);
+    let _ = dungeon.objects.remove(bolt);
     crate::draw::write_cell_glyph(pos, '/');
     output::refresh();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drain_preserves_weak_heroes_and_halves_other_hit_points() {
+        let dungeon = Dungeon::empty();
+        let other = Dungeon::empty();
+        other.player.with_stats_mut(|stats| stats.hit_points = 19);
+
+        for (before, expected) in [(0, 0), (1, 1), (2, 1), (9, 4), (10, 5)] {
+            dungeon.player.with_stats_mut(|stats| stats.hit_points = before);
+            unsafe { drain(&dungeon); }
+            assert_eq!(dungeon.player.stats().hit_points, expected);
+            assert_eq!(other.player.stats().hit_points, 19);
+        }
+    }
+
+    #[test]
+    fn stick_lookup_uses_the_supplied_arena() {
+        let dungeon = Dungeon::empty();
+        let other = Dungeon::empty();
+        let id = dungeon.objects.new_item_id();
+        let other_id = other.objects.new_item_id();
+        assert_eq!(id, other_id);
+        dungeon.objects.with_object_mut(id, |o| o.o_which = StickType::Light as i32);
+        other.objects.with_object_mut(other_id, |o| o.o_which = StickType::Drain as i32);
+
+        assert_eq!(stick_type(id, &dungeon), Some(StickType::Light));
+        assert_eq!(stick_type(other_id, &other), Some(StickType::Drain));
+        dungeon.objects.remove(id);
+        assert_eq!(stick_type(id, &dungeon), None);
+    }
 }

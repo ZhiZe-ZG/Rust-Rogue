@@ -252,7 +252,7 @@ const SYLLS: &[&str] = &[
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
-use crate::game::globals::{a_class, food_left, max_stats};
+use crate::game::globals::{a_class, food_left, group, inpack, inv_describe, max_stats, pack_used, terse};
 
 // ─── Exported functions ───────────────────────────────────────────────────────
 
@@ -261,16 +261,26 @@ pub unsafe fn init_player() {
     DUNGEON.player.set_stats(max_stats);
     food_left = HUNGERTIME;
 
+    // Item callbacks must not retain borrows of mutable global metadata.
+    let arm_names = (&*(&raw const arm_info)).clone();
+    let pot_names = (&*(&raw const pot_info)).clone();
+    let ring_names = (&*(&raw const ring_info)).clone();
+    let scr_names = (&*(&raw const scr_info)).clone();
+    let weap_names = (&*(&raw const weap_info)).clone();
+    let ws_names = (&*(&raw const ws_info)).clone();
+
     // Give her some food
-    let food = new_item_id();
+    let food = new_item_id(&DUNGEON.objects);
     crate::dungeon::DUNGEON.objects.with_object_mut(food, |o| {
         o.o_type = ItemType::Food;
         o.o_count = 1;
     });
-    add_pack_id(Some(food), true);
+    add_pack_id(Some(food), true, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+        terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
+        &weap_names, &ws_names);
 
     // A suit of ring-mail armor
-    let armor = new_item_id();
+    let armor = new_item_id(&DUNGEON.objects);
     crate::dungeon::DUNGEON.objects.with_object_mut(armor, |o| {
         o.o_type = ItemType::Armor(RING_MAIL);
         o.o_which = RING_MAIL;
@@ -279,31 +289,37 @@ pub unsafe fn init_player() {
         o.o_count = 1;
     });
     DUNGEON.player.set_armor_id(Some(armor));
-    add_pack_id(Some(armor), true);
+    add_pack_id(Some(armor), true, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+        terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
+        &weap_names, &ws_names);
 
     // A +1 mace
-    let mace_id = new_item_id();
-    init_weapon(mace_id, MACE, &mut RNG.lock().unwrap());
+    let mace_id = new_item_id(&DUNGEON.objects);
+    init_weapon(mace_id, MACE, &mut RNG.lock().unwrap(), &DUNGEON, &raw mut group);
     crate::dungeon::DUNGEON.objects.with_object_mut(mace_id, |o| {
         o.o_hplus = 1;
         o.o_dplus = 1;
         o.o_flags.insert(ObjectFlags::KNOW);
     });
-    add_pack_id(Some(mace_id), true);
+    add_pack_id(Some(mace_id), true, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+        terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
+        &weap_names, &ws_names);
     DUNGEON.player.set_weapon_id(Some(mace_id));
 
     // A +1 bow
-    let bow_id = new_item_id();
-    init_weapon(bow_id, BOW, &mut RNG.lock().unwrap());
+    let bow_id = new_item_id(&DUNGEON.objects);
+    init_weapon(bow_id, BOW, &mut RNG.lock().unwrap(), &DUNGEON, &raw mut group);
     crate::dungeon::DUNGEON.objects.with_object_mut(bow_id, |o| {
         o.o_hplus = 1;
         o.o_flags.insert(ObjectFlags::KNOW);
     });
-    add_pack_id(Some(bow_id), true);
+    add_pack_id(Some(bow_id), true, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+        terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
+        &weap_names, &ws_names);
 
     // Arrows
-    let arrow_id = new_item_id();
-    init_weapon(arrow_id, ARROW, &mut RNG.lock().unwrap());
+    let arrow_id = new_item_id(&DUNGEON.objects);
+    init_weapon(arrow_id, ARROW, &mut RNG.lock().unwrap(), &DUNGEON, &raw mut group);
     crate::dungeon::DUNGEON.objects.with_object_mut(arrow_id, |o| {
         o.o_count = {
             let mut random = RNG.lock().unwrap();
@@ -311,7 +327,9 @@ pub unsafe fn init_player() {
         } + 25;
         o.o_flags.insert(ObjectFlags::KNOW);
     });
-    add_pack_id(Some(arrow_id), true);
+    add_pack_id(Some(arrow_id), true, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+        terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
+        &weap_names, &ws_names);
 }
 
 /// Assign a random colour from [`crate::colors::POTION_COLORS`] to each potion.

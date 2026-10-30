@@ -162,12 +162,12 @@ pub(crate) fn item_glyph(ty: crate::item::item_type::ItemType) -> char {
 /// The rendering glyph for a floor object handle (its kind's character).
 #[inline]
 pub(crate) fn obj_glyph(id: ThingId) -> char {
-    crate::item::arena::with_object(id, |o| item_glyph(o.o_type)).unwrap_or(' ')
+    crate::item::arena::with_object(&DUNGEON.objects, id, |o| item_glyph(o.o_type)).unwrap_or(' ')
 }
 
 pub(crate) unsafe fn cell_glyph(y: i32, x: i32) -> u8 {
     if let Some(id) = crate::misc::find_obj_id(y, x) {
-        if let Some(otype) = crate::item::arena::with_object(id, |data| data.o_type) {
+        if let Some(otype) = crate::item::arena::with_object(&DUNGEON.objects, id, |data| data.o_type) {
             return item_glyph(otype) as u8;
         }
     }

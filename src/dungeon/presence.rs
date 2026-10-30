@@ -36,7 +36,30 @@ impl Dungeon {
 
     /// Allocate a floor object at `pos` and link it into the level's item list.
     unsafe fn spawn_object_at(&self, pos: IVec2, random: &mut Random) -> ThingId {
-        let id = new_thing_in(self, random);
+        use crate::game::globals;
+
+        // Keep metadata independent of globals during item/helper reentry.
+        let things = (&*(&raw const globals::things)).clone();
+        let arm_info = (&*(&raw const globals::arm_info)).clone();
+        let pot_info = (&*(&raw const globals::pot_info)).clone();
+        let ring_info = (&*(&raw const globals::ring_info)).clone();
+        let scr_info = (&*(&raw const globals::scr_info)).clone();
+        let weap_info = (&*(&raw const globals::weap_info)).clone();
+        let ws_info = (&*(&raw const globals::ws_info)).clone();
+        let a_class = globals::a_class;
+        let id = new_thing_in(
+            self,
+            random,
+            &things,
+            &arm_info,
+            &pot_info,
+            &ring_info,
+            &scr_info,
+            &weap_info,
+            &ws_info,
+            &a_class,
+            &raw mut globals::group,
+        );
         self.objects.with_object_mut(id, |o| o.o_pos = pos);
         self.attach_floor(id);
         id

@@ -6,14 +6,21 @@
 //! hero [`crate::entity::player::ThingMonster`]; this module threads the stable
 //! raw handles produced by the item arena through the legacy order/stack merge
 //! algorithm of the C original.
+//!
+//! State pointers must remain valid and writable throughout each call. Callers
+//! must not retain exclusive references to their storage across UI/daemon
+//! reentry; the helpers only perform immediate raw reads and writes.
 
+use crate::command::Command;
+use crate::direction::Direction;
+use crate::dungeon::Dungeon;
 use crate::entity::player::{MonsterFlags, ObjectFlags};
-use crate::dungeon::DUNGEON;
+use crate::game::globals::ObjInfo;
 use crate::item::arena::{with_object, with_object_mut, ThingId};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::scrolls::ScrollType;
 use crate::item::things::{add_line, inv_name_id};
-use crate::misc::{find_obj_id, show_floor};
+use crate::misc::show_floor;
 use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
@@ -34,40 +41,35 @@ const CALLABLE: i32 = -1;
 const R_OR_S: i32 = -2;
 const ESCAPE: i32 = 27;
 
-use crate::game::globals::{
-    after, again, inpack, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick,
-    move_on, mpos, msg_esc, n_objs, pack_used, purse, terse,
-};
-
 /// Unlink `id` from the current level's floor-item list.
-unsafe fn detach_floor(id: ThingId) {
-    crate::game::with_current_level_mut(|level| level.remove_item(id));
+unsafe fn detach_floor(id: ThingId, dungeon: &Dungeon) {
+    dungeon.with_level_mut(|level| level.remove_item(id));
 }
 
 /// Discard the object `id` from the item arena.
-unsafe fn discard_item(id: ThingId) {
-    let _ = DUNGEON.objects.remove(id);
+unsafe fn discard_item(id: ThingId, dungeon: &Dungeon) {
+    let _ = dungeon.objects.remove(id);
 }
 
 /// The player's pack as arena handles, head first.
-pub unsafe fn pack_ptrs() -> Vec<ThingId> {
-    DUNGEON.player.pack()
+pub unsafe fn pack_ptrs(dungeon: &Dungeon) -> Vec<ThingId> {
+    dungeon.player.pack()
 }
 
-unsafe fn hero_coord() -> IVec2 {
-    DUNGEON.player.pos()
+unsafe fn hero_coord(dungeon: &Dungeon) -> IVec2 {
+    dungeon.player.pos()
 }
 
-unsafe fn proom() -> Option<usize> {
-    DUNGEON.player.room()
+unsafe fn proom(dungeon: &Dungeon) -> Option<usize> {
+    dungeon.player.room()
 }
 
-unsafe fn player_has(flag: MonsterFlags) -> bool {
-    DUNGEON.player.has_flag(flag)
+unsafe fn player_has(flag: MonsterFlags, dungeon: &Dungeon) -> bool {
+    dungeon.player.has_flag(flag)
 }
 
-unsafe fn floor_char_for_room() -> u8 {
-    if crate::game::room_gone(proom()) {
+unsafe fn floor_char_for_room(dungeon: &Dungeon) -> u8 {
+    if dungeon.with_level(|level| level.room_gone(proom(dungeon))) {
         PASSAGE
     } else if show_floor() {
         FLOOR
@@ -76,13 +78,36 @@ unsafe fn floor_char_for_room() -> u8 {
     }
 }
 
+/// Find the floor object at the hero's cell without consulting the singleton.
+fn floor_item(dungeon: &Dungeon) -> Option<ThingId> {
+    let pos = dungeon.player.pos();
+    let items = dungeon.with_level(|level| level.items.clone());
+    items.into_iter().find(|&id| {
+        with_object(&dungeon.objects, id, |o| o.o_pos == pos).unwrap_or(false)
+    })
+}
+
 /// Pointer-free core of `add_pack`: `item` is `None` when picking up the
 /// object on the hero's floor cell.
-pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
+pub unsafe fn add_pack_id(
+    mut item: Option<ThingId>,
+    silent: bool,
+    dungeon: &Dungeon,
+    inpack: *mut i32,
+    pack_used: *mut [u8; 26],
+    terse: u8,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) {
     let mut from_floor = false;
 
     if item.is_none() {
-        item = find_obj_id(hero_coord().y, hero_coord().x);
+        item = floor_item(dungeon);
         if item.is_none() {
             return;
         }
@@ -90,33 +115,33 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
     }
     let mut item_id = item.expect("item resolved above");
 
-    let is_scare_dust = with_object(item_id, |o| {
+    let is_scare_dust = with_object(&dungeon.objects, item_id, |o| {
         matches!(o.o_type, ItemType::Scroll(ScrollType::Scare))
             && o.o_flags.contains(ObjectFlags::FOUND)
     })
     .unwrap_or(false);
     if is_scare_dust {
-        detach_floor(item_id);
+        detach_floor(item_id, dungeon);
         // The object is removed from the floor list, so the terrain glyph
         // shows automatically via draw.
-        crate::draw::write_cell_glyph(hero_coord(), floor_char_for_room() as char);
-        discard_item(item_id);
+        crate::draw::write_cell_glyph(hero_coord(dungeon), floor_char_for_room(dungeon) as char);
+        discard_item(item_id, dungeon);
         msg_str("the scroll turns to dust as you pick it up");
         return;
     }
 
-    let mut pack = DUNGEON.player.pack();
+    let mut pack = dungeon.player.pack();
 
     if pack.is_empty() {
-        if !pack_room_id(from_floor, item_id) {
+        if !pack_room_id(from_floor, item_id, dungeon, inpack, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) {
             return;
         }
-        with_object_mut(item_id, |o| o.o_packch = pack_char());
+        with_object_mut(&dungeon.objects, item_id, |o| o.o_packch = pack_char(pack_used));
         pack.push(item_id);
     } else {
-        let item_type = with_object(item_id, |o| o.o_type).unwrap_or(ItemType::None);
-        let item_which = with_object(item_id, |o| o.o_which).unwrap_or(0);
-        let item_group = with_object(item_id, |o| o.o_group).unwrap_or(0);
+        let item_type = with_object(&dungeon.objects, item_id, |o| o.o_type).unwrap_or(ItemType::None);
+        let item_which = with_object(&dungeon.objects, item_id, |o| o.o_which).unwrap_or(0);
+        let item_group = with_object(&dungeon.objects, item_id, |o| o.o_group).unwrap_or(0);
         let n = pack.len();
 
         // Walk the pack exactly as the C list traversal did, tracking the
@@ -124,9 +149,9 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
         let mut lp: Option<usize> = None;
         let mut op = 0usize;
         let mut merged = false;
-        let cat_of = |id: ThingId| with_object(id, |o| o.o_type).unwrap_or(ItemType::None);
-        let which_of = |id: ThingId| with_object(id, |o| o.o_which).unwrap_or(0);
-        let group_of = |id: ThingId| with_object(id, |o| o.o_group).unwrap_or(0);
+        let cat_of = |id: ThingId| with_object(&dungeon.objects, id, |o| o.o_type).unwrap_or(ItemType::None);
+        let which_of = |id: ThingId| with_object(&dungeon.objects, id, |o| o.o_which).unwrap_or(0);
+        let group_of = |id: ThingId| with_object(&dungeon.objects, id, |o| o.o_group).unwrap_or(0);
         'outer: while op < n {
             if !cat_of(pack[op]).same_category(item_type) {
                 lp = Some(op);
@@ -155,11 +180,11 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
                     item_type,
                     ItemType::Food | ItemType::Potion(_) | ItemType::Scroll(_)
                 ) {
-                    if !pack_room_id(from_floor, item_id) {
+                    if !pack_room_id(from_floor, item_id, dungeon, inpack, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) {
                         return;
                     }
-                    with_object_mut(opp, |o| o.o_count += 1);
-                    discard_item(item_id);
+                    with_object_mut(&dungeon.objects, opp, |o| o.o_count += 1);
+                    discard_item(item_id, dungeon);
                     item_id = opp;
                     lp = None;
                     merged = true;
@@ -189,14 +214,14 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
                             && which_of(o) == item_which
                             && group_of(o) == item_group
                         {
-                            let item_count = with_object(item_id, |x| x.o_count).unwrap_or(0);
-                            with_object_mut(o, |x| x.o_count += item_count);
-                            inpack -= 1;
-                            if !pack_room_id(from_floor, item_id) {
+                            let item_count = with_object(&dungeon.objects, item_id, |x| x.o_count).unwrap_or(0);
+                            with_object_mut(&dungeon.objects, o, |x| x.o_count += item_count);
+                            *inpack -= 1;
+                            if !pack_room_id(from_floor, item_id, dungeon, inpack, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) {
                                 return;
                             }
-                            with_object_mut(o, |x| x.o_count += 1);
-                            discard_item(item_id);
+                            with_object_mut(&dungeon.objects, o, |x| x.o_count += 1);
+                            discard_item(item_id, dungeon);
                             item_id = o;
                             lp = None;
                             merged = true;
@@ -214,38 +239,42 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
         if !merged {
             if let Some(pos) = lp {
                 if pos + 1 <= pack.len() {
-                    if !pack_room_id(from_floor, item_id) {
+                    if !pack_room_id(from_floor, item_id, dungeon, inpack, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) {
                         return;
                     }
-                    with_object_mut(item_id, |o| o.o_packch = pack_char());
+                    with_object_mut(&dungeon.objects, item_id, |o| o.o_packch = pack_char(pack_used));
                     pack.insert(pos + 1, item_id);
                 }
             }
         }
     }
 
-    with_object_mut(item_id, |o| o.o_flags.insert(ObjectFlags::FOUND));
-    DUNGEON.player.set_pack(pack);
+    with_object_mut(&dungeon.objects, item_id, |o| o.o_flags.insert(ObjectFlags::FOUND));
+    dungeon.player.set_pack(pack);
 
     let item_dest = crate::entity::player::DestRef::Object(item_id);
-    for id in DUNGEON.monster_list.ids() {
-        if crate::entity::player::monster_dest(id) == item_dest {
-            crate::entity::player::set_monster_dest_hero(id);
-        }
+    for id in dungeon.monster_list.ids() {
+        dungeon.monster_list.with_mut(id, |thing| {
+            if let crate::entity::player::Thing::Monster { data } = thing {
+                if data.t_dest == item_dest {
+                    data.t_dest = crate::entity::player::DestRef::Hero;
+                }
+            }
+        });
     }
 
-    if matches!(with_object(item_id, |o| o.o_type), Some(ItemType::Amulet)) {
-        crate::dungeon::DUNGEON.set_amulet(true);
+    if matches!(with_object(&dungeon.objects, item_id, |o| o.o_type), Some(ItemType::Amulet)) {
+        dungeon.set_amulet(true);
     }
 
     if !silent {
         if terse == 0 {
             addmsg_str("you now have ");
         }
-        let packch = with_object(item_id, |o| o.o_packch).unwrap_or(0);
+        let packch = with_object(&dungeon.objects, item_id, |o| o.o_packch).unwrap_or(0);
         msg_str(&format!(
             "{} ({})",
-            inv_name_id(item_id, terse == 0),
+            inv_name_id(item_id, terse == 0, dungeon, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info),
             packch as char,
         ));
     }
@@ -255,81 +284,155 @@ pub unsafe fn add_pack_id(mut item: Option<ThingId>, silent: bool) {
 mod tests {
     use super::*;
     use crate::entity::player::{Thing, ThingObject};
-    use crate::game::with_current_level_mut;
-    use crate::misc::find_obj_id;
+
+    #[test]
+    fn pack_letters_only_update_the_supplied_bitmap() {
+        let mut used = [0; 26];
+        let mut other = [0; 26];
+        unsafe {
+            assert_eq!(pack_char(&mut other), b'a');
+            for letter in b'a'..=b'z' {
+                assert_eq!(pack_char(&mut used), letter);
+            }
+            assert_eq!(used, [1; 26]);
+            // Preserve the legacy fallback when no free letter remains.
+            assert_eq!(pack_char(&mut used), b'a');
+        }
+        assert_eq!(other[0], 1);
+        assert_eq!(&other[1..], &[0; 25]);
+    }
+
+    #[test]
+    fn reset_last_restores_each_supplied_repeat_slot() {
+        let dungeon = Dungeon::empty();
+        let id = dungeon.objects.new_item_id();
+        let mut command = Command::Inventory;
+        let mut direction = Direction::None;
+        let mut pick = None;
+        let saved_command = Command::Drop;
+        let saved_direction = Direction::North;
+        unsafe {
+            reset_last(saved_command, saved_direction, Some(id), &mut command, &mut direction, &mut pick);
+        }
+        assert_eq!(command, saved_command);
+        assert_eq!(direction, saved_direction);
+        assert_eq!(pick, Some(id));
+    }
+
+    #[test]
+    fn leaving_a_stack_threads_pack_count_selection_and_letters() {
+        let dungeon = Dungeon::empty();
+        let other = Dungeon::empty();
+        let id = dungeon.objects.insert(Thing::object(ThingObject {
+            o_type: ItemType::Food,
+            o_count: 2,
+            o_packch: b'c',
+            ..ThingObject::default()
+        }));
+        dungeon.player.set_pack(vec![id]);
+        let mut inpack = 2;
+        let mut last_pick = None;
+        let mut pack_used = [0; 26];
+        pack_used[2] = 1;
+
+        unsafe {
+            let split = leave_pack_id(id, true, false, &dungeon, &mut inpack, &mut last_pick, &mut pack_used).unwrap();
+            assert_ne!(split, id);
+            assert_eq!(dungeon.objects.with_object(split, |o| o.o_count), Some(1));
+            assert_eq!(dungeon.objects.with_object(id, |o| o.o_count), Some(1));
+            assert_eq!(dungeon.player.pack(), vec![id]);
+            assert_eq!(inpack, 1);
+            assert_eq!(last_pick, Some(id));
+            assert_eq!(pack_used[2], 1);
+
+            assert_eq!(leave_pack_id(id, false, false, &dungeon, &mut inpack, &mut last_pick, &mut pack_used), Some(id));
+            assert_eq!(inpack, 0);
+            assert_eq!(last_pick, None);
+            assert_eq!(pack_used[2], 0);
+            assert!(dungeon.player.pack().is_empty());
+            assert!(other.objects.is_empty());
+            assert!(other.player.pack().is_empty());
+
+            dungeon.objects.remove(id);
+            assert_eq!(leave_pack_id(id, false, false, &dungeon, &mut inpack, &mut last_pick, &mut pack_used), None);
+            assert_eq!(inpack, 0);
+        }
+    }
 
     #[test]
     fn pickup_transfers_floor_items_and_merges_only_distinct_objects() {
         unsafe {
-            let old_pack = DUNGEON.player.pack();
-            let old_inpack = inpack;
-            let old_pack_used = pack_used;
-            let old_items = with_current_level_mut(|level| std::mem::take(&mut level.items));
-            DUNGEON.player.set_pack(Vec::new());
-            inpack = 0;
-            pack_used = [0; 26];
-
-            let pos = DUNGEON.player.pos();
-            let food = DUNGEON.objects.insert(Thing::object(ThingObject {
+            let dungeon = Dungeon::empty();
+            let mut inpack = 0;
+            let mut pack_used = [0; 26];
+            // Silent, successful pickups never consult the naming tables.
+            let pos = dungeon.player.pos();
+            let food = dungeon.objects.insert(Thing::object(ThingObject {
                 o_type: ItemType::Food,
                 o_count: 1,
                 o_pos: pos,
                 ..ThingObject::default()
             }));
-            with_current_level_mut(|level| level.add_item(food));
-            add_pack_id(None, true);
-            assert_eq!(DUNGEON.player.pack(), vec![food]);
-            assert_eq!(find_obj_id(pos.y, pos.x), None);
-            assert_eq!({ inpack }, 1);
-            assert!(DUNGEON.objects
+            dungeon.with_level_mut(|level| level.add_item(food));
+            add_pack_id(None, true, &dungeon, &mut inpack, &mut pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
+            assert_eq!(dungeon.player.pack(), vec![food]);
+            assert_eq!(floor_item(&dungeon), None);
+            assert_eq!(inpack, 1);
+            assert!(dungeon.objects
                 .with_object(food, |obj| obj.o_flags.contains(ObjectFlags::FOUND))
                 .unwrap());
 
-            add_pack_id(None, true);
-            assert_eq!(DUNGEON.objects.with_object(food, |obj| obj.o_count), Some(1));
-            assert_eq!(DUNGEON.player.pack(), vec![food]);
+            add_pack_id(None, true, &dungeon, &mut inpack, &mut pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
+            assert_eq!(dungeon.objects.with_object(food, |obj| obj.o_count), Some(1));
+            assert_eq!(dungeon.player.pack(), vec![food]);
 
-            let weapon = DUNGEON.objects.insert(Thing::object(ThingObject {
+            let weapon = dungeon.objects.insert(Thing::object(ThingObject {
                 o_type: ItemType::Weapon(0),
                 o_count: 1,
                 o_pos: pos,
                 ..ThingObject::default()
             }));
-            with_current_level_mut(|level| level.add_item(weapon));
-            add_pack_id(None, true);
-            assert_eq!(DUNGEON.player.pack(), vec![food, weapon]);
-            assert_eq!(find_obj_id(pos.y, pos.x), None);
-            assert_eq!({ inpack }, 2);
-            assert_eq!(DUNGEON.objects.with_object(food, |obj| obj.o_packch), Some(b'a'));
-            assert_eq!(DUNGEON.objects.with_object(weapon, |obj| obj.o_packch), Some(b'b'));
+            dungeon.with_level_mut(|level| level.add_item(weapon));
+            add_pack_id(None, true, &dungeon, &mut inpack, &mut pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
+            assert_eq!(dungeon.player.pack(), vec![food, weapon]);
+            assert_eq!(floor_item(&dungeon), None);
+            assert_eq!(inpack, 2);
+            assert_eq!(dungeon.objects.with_object(food, |obj| obj.o_packch), Some(b'a'));
+            assert_eq!(dungeon.objects.with_object(weapon, |obj| obj.o_packch), Some(b'b'));
 
-            let more_food = DUNGEON.objects.insert(Thing::object(ThingObject {
+            let more_food = dungeon.objects.insert(Thing::object(ThingObject {
                 o_type: ItemType::Food,
                 o_count: 1,
                 o_pos: pos,
                 ..ThingObject::default()
             }));
-            with_current_level_mut(|level| level.add_item(more_food));
-            add_pack_id(None, true);
-            assert_eq!(DUNGEON.player.pack(), vec![food, weapon]);
-            assert_eq!(find_obj_id(pos.y, pos.x), None);
-            assert_eq!(DUNGEON.objects.with_object(food, |obj| obj.o_count), Some(2));
-            assert!(!DUNGEON.objects.contains(more_food));
-            assert_eq!({ inpack }, 3);
-
-            DUNGEON.objects.remove(food);
-            DUNGEON.objects.remove(weapon);
-            DUNGEON.player.set_pack(old_pack);
-            inpack = old_inpack;
-            pack_used = old_pack_used;
-            with_current_level_mut(|level| level.items = old_items);
+            dungeon.with_level_mut(|level| level.add_item(more_food));
+            add_pack_id(None, true, &dungeon, &mut inpack, &mut pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
+            assert_eq!(dungeon.player.pack(), vec![food, weapon]);
+            assert_eq!(floor_item(&dungeon), None);
+            assert_eq!(dungeon.objects.with_object(food, |obj| obj.o_count), Some(2));
+            assert!(!dungeon.objects.contains(more_food));
+            assert_eq!(inpack, 3);
         }
     }
 }
 
 /// Pointer-free core of `pack_room`: returns whether the object fits.
-pub unsafe fn pack_room_id(from_floor: bool, id: ThingId) -> bool {
-    if inpack + 1 > MAXPACK {
+pub unsafe fn pack_room_id(
+    from_floor: bool,
+    id: ThingId,
+    dungeon: &Dungeon,
+    inpack: *mut i32,
+    terse: u8,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) -> bool {
+    if *inpack + 1 > MAXPACK {
         if terse == 0 {
             addmsg_str("there's ");
         }
@@ -339,20 +442,20 @@ pub unsafe fn pack_room_id(from_floor: bool, id: ThingId) -> bool {
         }
         endmsg();
         if from_floor {
-            move_msg_id(id);
+            move_msg_id(id, dungeon, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info);
         }
-        inpack = MAXPACK;
+        *inpack = MAXPACK;
         return false;
     }
 
     if from_floor {
-        detach_floor(id);
+        detach_floor(id, dungeon);
         // The object is removed from the floor list, so the terrain glyph
         // shows automatically via draw.
-        crate::draw::write_cell_glyph(hero_coord(), floor_char_for_room() as char);
+        crate::draw::write_cell_glyph(hero_coord(dungeon), floor_char_for_room(dungeon) as char);
     }
 
-    inpack += 1;
+    *inpack += 1;
     true
 }
 
@@ -362,71 +465,93 @@ pub unsafe fn pack_room_id(from_floor: bool, id: ThingId) -> bool {
 /// the handle to use for the departed object: the original `id` when the whole
 /// stack leaves the pack, or a freshly allocated copy carrying one item when a
 /// stack of more than one is being split (`newobj`).
-pub unsafe fn leave_pack_id(id: ThingId, newobj: bool, all: bool) -> Option<ThingId> {
+pub unsafe fn leave_pack_id(
+    id: ThingId,
+    newobj: bool,
+    all: bool,
+    dungeon: &Dungeon,
+    inpack: *mut i32,
+    last_pick: *mut Option<ThingId>,
+    pack_used: *mut [u8; 26],
+) -> Option<ThingId> {
     let (count, group, packch) =
-        crate::item::arena::with_object(id, |o| (o.o_count, o.o_group, o.o_packch))?;
+        crate::item::arena::with_object(&dungeon.objects, id, |o| (o.o_count, o.o_group, o.o_packch))?;
 
-    inpack -= 1;
+    *inpack -= 1;
     if count > 1 && !all {
-        last_pick = Some(id);
-        DUNGEON.objects.with_object_mut(id, |o| o.o_count -= 1);
+        *last_pick = Some(id);
+        dungeon.objects.with_object_mut(id, |o| o.o_count -= 1);
         if group != 0 {
-            inpack += 1;
+            *inpack += 1;
         }
         if newobj {
-            let cloned = DUNGEON.objects.with(id, |thing| thing.clone())?;
-            let copy = DUNGEON.objects.insert(cloned);
-            DUNGEON.objects.with_object_mut(copy, |o| o.o_count = 1);
+            let cloned = dungeon.objects.with(id, |thing| thing.clone())?;
+            let copy = dungeon.objects.insert(cloned);
+            dungeon.objects.with_object_mut(copy, |o| o.o_count = 1);
             Some(copy)
         } else {
             Some(id)
         }
     } else {
-        last_pick = None;
+        *last_pick = None;
         if (packch as usize) >= b'a' as usize {
-            pack_used[packch as usize - 'a' as usize] = false as u8;
+            (*pack_used)[packch as usize - 'a' as usize] = false as u8;
         }
-        DUNGEON.player.remove_from_pack(id);
+        dungeon.player.remove_from_pack(id);
         Some(id)
     }
 }
 
-pub unsafe fn pack_char() -> u8 {
+pub unsafe fn pack_char(pack_used: *mut [u8; 26]) -> u8 {
     // `pack_used` is a 26-entry array (one slot per letter); index it directly so
-    // no shared reference to the mutable static is created.
+    // no reference is held across reentrant helper calls.
     for i in 0..26 {
-        if pack_used[i] == 0 {
-            pack_used[i] = true as u8;
+        if (*pack_used)[i] == 0 {
+            (*pack_used)[i] = true as u8;
             return (b'a' + i as u8) as u8;
         }
     }
     b'a' as u8
 }
 
-pub unsafe fn inventory(items: &[ThingId], filter: ItemFilter) -> u8 {
-    n_objs = 0;
+pub unsafe fn inventory(
+    items: &[ThingId],
+    filter: ItemFilter,
+    dungeon: &Dungeon,
+    msg_esc: *mut u8,
+    n_objs: *mut i32,
+    terse: u8,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) -> u8 {
+    *n_objs = 0;
     let any = filter == ItemFilter::Any;
 
     for &id in items {
-        let Some((otyp, packch)) = with_object(id, |o| (o.o_type, o.o_packch)) else {
+        let Some((otyp, packch)) = with_object(&dungeon.objects, id, |o| (o.o_type, o.o_packch)) else {
             continue;
         };
         if !filter.matches(otyp) {
             continue;
         }
 
-        n_objs += 1;
-        msg_esc = 1;
+        *n_objs += 1;
+        *msg_esc = 1;
         let format = if packch == 0 {
             "%s".to_string()
         } else {
             format!("{}) %s", packch as char)
         };
-        let _ = add_line(&format, &inv_name_id(id, false));
-        msg_esc = 0;
+        let _ = add_line(&format, &inv_name_id(id, false, dungeon, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info));
+        *msg_esc = 0;
     }
 
-    if n_objs == 0 {
+    if *n_objs == 0 {
         if terse != 0 {
             msg_str(if any {
                 "empty handed"
@@ -446,14 +571,29 @@ pub unsafe fn inventory(items: &[ThingId], filter: ItemFilter) -> u8 {
     true as u8
 }
 
-pub unsafe fn pick_up(ch: u8) {
-    let obj = find_obj_id(hero_coord().y, hero_coord().x);
-    if player_has(MonsterFlags::LEVIT) {
+pub unsafe fn pick_up(
+    ch: u8,
+    dungeon: &Dungeon,
+    inpack: *mut i32,
+    move_on: u8,
+    pack_used: *mut [u8; 26],
+    purse: *mut i32,
+    terse: u8,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) {
+    let obj = floor_item(dungeon);
+    if player_has(MonsterFlags::LEVIT, dungeon) {
         return;
     }
     if move_on != 0 {
         if let Some(id) = obj {
-            move_msg_id(id);
+            move_msg_id(id, dungeon, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info);
         }
     } else {
         match ch as i32 {
@@ -461,15 +601,15 @@ pub unsafe fn pick_up(ch: u8) {
                 let Some(id) = obj else {
                     return;
                 };
-                money(with_object(id, |o| o.o_arm).unwrap_or(0));
-                detach_floor(id);
-                discard_item(id);
-                if proom().is_some() {
-                    crate::game::set_room_goldval(proom(), 0);
+                money(with_object(&dungeon.objects, id, |o| o.o_arm).unwrap_or(0), dungeon, purse, terse);
+                detach_floor(id, dungeon);
+                discard_item(id, dungeon);
+                if proom(dungeon).is_some() {
+                    dungeon.with_level_mut(|level| level.set_room_goldval(proom(dungeon), 0));
                 }
             }
             ARMOR | POTION | FOOD | WEAPON | SCROLL | AMULET | RING | STICK => {
-                add_pack_id(None, false);
+                add_pack_id(None, false, dungeon, inpack, pack_used, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info);
             }
             _ => {}
         }
@@ -478,16 +618,39 @@ pub unsafe fn pick_up(ch: u8) {
 
 /// Pointer-free version of `get_item`: resolves the player's selection to an
 /// arena [`ThingId`] (or `None` when the player cancels / carries nothing).
-pub unsafe fn get_item_id(purpose: &str, filter: ItemFilter) -> Option<ThingId> {
+pub unsafe fn get_item_id(
+    purpose: &str,
+    filter: ItemFilter,
+    dungeon: &Dungeon,
+    after: *mut u8,
+    again: u8,
+    l_last_comm: Command,
+    l_last_dir: Direction,
+    l_last_pick: Option<ThingId>,
+    last_comm: *mut Command,
+    last_dir: *mut Direction,
+    last_pick: *mut Option<ThingId>,
+    mpos: *mut i32,
+    msg_esc: *mut u8,
+    n_objs: *mut i32,
+    terse: u8,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) -> Option<ThingId> {
     let mut ch: i32;
 
-    if DUNGEON.player.pack().is_empty() {
+    if dungeon.player.pack().is_empty() {
         msg_str("you aren't carrying anything");
         return None;
     }
 
     if again != 0 {
-        if let Some(id) = last_pick {
+        if let Some(id) = *last_pick {
             return Some(id);
         }
         msg_str("you ran out");
@@ -504,24 +667,24 @@ pub unsafe fn get_item_id(purpose: &str, filter: ItemFilter) -> Option<ThingId> 
         }
         msg_str("? (* for list): ");
         ch = readchar();
-        mpos = 0;
+        *mpos = 0;
         if ch == ESCAPE {
-            reset_last();
-            after = false as u8;
+            reset_last(l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick);
+            *after = false as u8;
             msg_str("");
             return None;
         }
-        n_objs = 1;
+        *n_objs = 1;
         if ch == '*' as i32 {
-            mpos = 0;
-            if inventory(&pack_ptrs(), filter) == 0 {
-                after = false as u8;
+            *mpos = 0;
+            if inventory(&pack_ptrs(dungeon), filter, dungeon, msg_esc, n_objs, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) == 0 {
+                *after = false as u8;
                 return None;
             }
             continue;
         }
-        for id in DUNGEON.player.pack() {
-            if crate::item::arena::with_object(id, |o| o.o_packch) == Some(ch as u8) {
+        for id in dungeon.player.pack() {
+            if crate::item::arena::with_object(&dungeon.objects, id, |o| o.o_packch) == Some(ch as u8) {
                 return Some(id);
             }
         }
@@ -532,10 +695,10 @@ pub unsafe fn get_item_id(purpose: &str, filter: ItemFilter) -> Option<ThingId> 
     }
 }
 
-pub unsafe fn money(value: i32) {
-    purse += value;
+pub unsafe fn money(value: i32, dungeon: &Dungeon, purse: *mut i32, terse: u8) {
+    *purse += value;
     // The gold object was discarded, so the terrain glyph shows via draw.
-    crate::draw::write_cell_glyph(hero_coord(), floor_char_for_room() as char);
+    crate::draw::write_cell_glyph(hero_coord(dungeon), floor_char_for_room(dungeon) as char);
     if value > 0 {
         if terse == 0 {
             addmsg_str("you found ");
@@ -544,54 +707,83 @@ pub unsafe fn money(value: i32) {
     }
 }
 
-pub unsafe fn floor_ch() -> u8 {
-    floor_char_for_room()
+pub unsafe fn floor_ch(dungeon: &Dungeon) -> u8 {
+    floor_char_for_room(dungeon)
 }
 
-pub unsafe fn floor_at() -> u8 {
-    let ch = crate::draw::cell_glyph(hero_coord().y, hero_coord().x);
+pub unsafe fn floor_at(dungeon: &Dungeon) -> u8 {
+    let ch = crate::draw::cell_glyph(hero_coord(dungeon).y, hero_coord(dungeon).x);
     if ch == FLOOR {
-        floor_char_for_room()
+        floor_char_for_room(dungeon)
     } else {
         ch
     }
 }
 
-pub unsafe fn reset_last() {
-    last_comm = l_last_comm;
-    last_dir = l_last_dir;
-    last_pick = l_last_pick;
+pub unsafe fn reset_last(
+    l_last_comm: Command,
+    l_last_dir: Direction,
+    l_last_pick: Option<ThingId>,
+    last_comm: *mut Command,
+    last_dir: *mut Direction,
+    last_pick: *mut Option<ThingId>,
+) {
+    *last_comm = l_last_comm;
+    *last_dir = l_last_dir;
+    *last_pick = l_last_pick;
 }
 
 /// Pointer-free core of `move_msg`: works on an arena handle.
-pub unsafe fn move_msg_id(id: ThingId) {
+pub unsafe fn move_msg_id(
+    id: ThingId,
+    dungeon: &Dungeon,
+    terse: u8,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) {
     if terse == 0 {
         addmsg_str("you ");
     }
-    msg_str(&format!("moved onto {}", inv_name_id(id, true)));
+    msg_str(&format!("moved onto {}", inv_name_id(id, true, dungeon, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info)));
 }
 
-pub unsafe fn picky_inven() {
-    let pack = DUNGEON.player.pack();
+pub unsafe fn picky_inven(
+    dungeon: &Dungeon,
+    mpos: *mut i32,
+    terse: u8,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) {
+    let pack = dungeon.player.pack();
     if pack.is_empty() {
         msg_str("you aren't carrying anything");
     } else if pack.len() == 1 {
-        msg_str(&format!("a) {}", inv_name_id(pack[0], false)));
+        msg_str(&format!("a) {}", inv_name_id(pack[0], false, dungeon, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info)));
     } else {
         msg_str(if terse != 0 {
             "item: "
         } else {
             "which item do you wish to inventory: "
         });
-        mpos = 0;
+        *mpos = 0;
         let mch = readchar() as u8;
         if mch as i32 == ESCAPE {
             msg_str("");
             return;
         }
         for id in &pack {
-            if with_object(*id, |o| o.o_packch) == Some(mch) {
-                msg_str(&format!("{}) {}", mch as char, inv_name_id(*id, false)));
+            if with_object(&dungeon.objects, *id, |o| o.o_packch) == Some(mch) {
+                msg_str(&format!("{}) {}", mch as char, inv_name_id(*id, false, dungeon, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info)));
                 return;
             }
         }
@@ -602,6 +794,21 @@ pub unsafe fn picky_inven() {
     }
 }
 
-unsafe fn pick_up_char(ch: u8) {
-    pick_up(ch);
+unsafe fn pick_up_char(
+    ch: u8,
+    dungeon: &Dungeon,
+    inpack: *mut i32,
+    move_on: u8,
+    pack_used: *mut [u8; 26],
+    purse: *mut i32,
+    terse: u8,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) {
+    pick_up(ch, dungeon, inpack, move_on, pack_used, purse, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info);
 }

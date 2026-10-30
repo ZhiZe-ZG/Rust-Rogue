@@ -351,7 +351,7 @@ pub unsafe fn total_winner() {
     let oldpurse = purse;
     for id in DUNGEON.player.pack() {
         let Some((item_type, o_count, packch)) =
-            with_object(id, |o| (o.o_type, o.o_count, o.o_packch))
+            with_object(&DUNGEON.objects, id, |o| (o.o_type, o.o_count, o.o_packch))
         else {
             continue;
         };
@@ -362,7 +362,24 @@ pub unsafe fn total_winner() {
         if worth < 0 {
             worth = 0;
         }
-        let item_name = inv_name_id(id, false);
+        let arm_info = (&*(&raw const crate::game::globals::arm_info)).clone();
+        let pot_info = (&*(&raw const crate::game::globals::pot_info)).clone();
+        let ring_info = (&*(&raw const crate::game::globals::ring_info)).clone();
+        let scr_info = (&*(&raw const crate::game::globals::scr_info)).clone();
+        let weap_info = (&*(&raw const crate::game::globals::weap_info)).clone();
+        let ws_info = (&*(&raw const crate::game::globals::ws_info)).clone();
+        let item_name = inv_name_id(
+            id,
+            false,
+            &DUNGEON,
+            crate::game::globals::inv_describe,
+            &arm_info,
+            &pot_info,
+            &ring_info,
+            &scr_info,
+            &weap_info,
+            &ws_info,
+        );
         let line = format!("{} ) {:5}  {}\n", packch as u8, worth, item_name);
         crate::ui::terminal::UI.write_text(&line);
         purse += worth;

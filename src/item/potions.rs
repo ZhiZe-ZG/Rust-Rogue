@@ -1,16 +1,18 @@
 //! Potions and quaffing.
 //!
 //! Ported from `src/c/potions.c` to Rust.
+use crate::command::Command;
+use crate::direction::Direction;
 use crate::rnd::Random;
 
 use crate::daemon::{fuse, lengthen, start_daemon, Daemon};
 use crate::daemons::{come_down, sight};
 use crate::draw::look;
+use crate::dungeon::Dungeon;
 
 use crate::entity::chase::see_monst;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
-use crate::game::globals::{pot_info, ObjInfo};
-use crate::dungeon::DUNGEON;
+use crate::game::globals::ObjInfo;
 use crate::game::MonsterId;
 use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
@@ -18,6 +20,7 @@ use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::item::rings::RingType;
 use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
 use crate::ui::output::{msg_str, show_win};
+use crate::ui::terminal::UiState;
 use glam::IVec2;
 
 /// Potion and status-effect handling.
@@ -105,32 +108,19 @@ const HEALTIME: i32 = 30;
 const BEFORE: i32 = 1;
 const AFTER: i32 = 2;
 
-/// Process-wide game state and UI flags read by the potion effects.
-use crate::game::globals::{after, e_levels, max_stats, terse};
-
-/// A mutable reference to the static `pot_info` entry at `index`.
-///
-/// Confined to this module: the returned reference lets the quaff logic update
-/// the `oi_know` flag in place. (The game is single-threaded and the table is
-/// only ever touched through this accessor.)
 #[inline]
-unsafe fn pot_info_at(index: usize) -> &'static mut ObjInfo {
-    &mut pot_info[index]
+fn hero(dungeon: &Dungeon) -> IVec2 {
+    dungeon.player.pos()
 }
 
 #[inline]
-fn hero() -> IVec2 {
-    DUNGEON.player.pos()
+fn player_has(flag: MonsterFlags, dungeon: &Dungeon) -> bool {
+    dungeon.player.has_flag(flag)
 }
 
 #[inline]
-fn player_has(flag: MonsterFlags) -> bool {
-    DUNGEON.player.has_flag(flag)
-}
-
-#[inline]
-fn thing_has(id: MonsterId, flag: MonsterFlags) -> bool {
-    DUNGEON.monster_list
+fn thing_has(id: MonsterId, flag: MonsterFlags, dungeon: &Dungeon) -> bool {
+    dungeon.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_flags.contains(flag),
             Thing::Object { .. } => false,
@@ -139,13 +129,20 @@ fn thing_has(id: MonsterId, flag: MonsterFlags) -> bool {
 }
 
 #[inline]
-fn moat(y: i32, x: i32) -> Option<MonsterId> {
-    crate::game::monster_id_at(y, x)
+fn moat(y: i32, x: i32, dungeon: &Dungeon) -> Option<MonsterId> {
+    dungeon.monster_map.at(y as usize, x as usize)
 }
 
 /// Shared implementation for potion effects that need the normal fuse/flag
 /// setup and knowledge tracking used by the C version.
-unsafe fn do_pot_impl(potion: PotionType, knowit: bool, random: &mut Random) {
+unsafe fn do_pot_impl(
+    potion: PotionType,
+    knowit: bool,
+    random: &mut Random,
+    dungeon: &Dungeon,
+    pot_info: *mut [ObjInfo],
+    fruit: &str,
+) {
     let (flags, daemon, base_time, high_msg, straight_msg): (
         MonsterFlags,
         Option<Daemon>,
@@ -153,10 +150,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool, random: &mut Random) {
         String,
         String,
     ) = {
-        let taste = format!(
-            "this potion tastes like {} juice",
-            crate::game::globals::fruit()
-        );
+        let taste = format!("this potion tastes like {} juice", fruit);
         match potion {
             PotionType::Confuse => (
                 MonsterFlags::HUH,
@@ -197,7 +191,7 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool, random: &mut Random) {
         }
     };
 
-    pot_info_at(potion.index()).oi_know = knowit;
+    (&mut *pot_info)[potion.index()].oi_know = knowit;
 
     let Some(daemon) = daemon else {
         return;
@@ -207,14 +201,14 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool, random: &mut Random) {
     }
 
     let t = spread(base_time, random);
-    if !player_has(flags) {
-        DUNGEON.player.add_flag(flags);
+    if !player_has(flags, dungeon) {
+        dungeon.player.add_flag(flags);
         fuse(daemon, 0, t, AFTER);
         look(false as u8, random);
     } else {
         lengthen(daemon, t);
     }
-    let chosen = if player_has(MonsterFlags::HALU) {
+    let chosen = if player_has(MonsterFlags::HALU, dungeon) {
         high_msg
     } else {
         straight_msg
@@ -224,15 +218,51 @@ unsafe fn do_pot_impl(potion: PotionType, knowit: bool, random: &mut Random) {
 
 /// quaff:
 /// Quaff a potion from the pack.
-pub unsafe fn quaff(random: &mut Random) {
-    let Some(obj) = get_item_id("quaff", ItemFilter::Category(ItemType::POTION)) else {
+///
+/// # Safety
+/// `pot_info` and `after` must remain valid throughout the call. The metadata
+/// slice must contain every potion kind. Raw pointers keep borrows short across
+/// helpers that can reenter game state (including `call_it`).
+pub(crate) unsafe fn quaff(
+    random: &mut Random,
+    dungeon: &Dungeon,
+    ui: &UiState,
+    pot_info: *mut [ObjInfo],
+    after: *mut u8,
+    terse: u8,
+    max_strength: u32,
+    e_levels: &[i32],
+    fruit: &str,
+    again: u8,
+    inpack: *mut i32,
+    l_last_comm: Command,
+    l_last_dir: Direction,
+    l_last_pick: Option<ThingId>,
+    last_comm: *mut Command,
+    last_dir: *mut Direction,
+    last_pick: *mut Option<ThingId>,
+    mpos: *mut i32,
+    msg_esc: *mut u8,
+    n_objs: *mut i32,
+    pack_used: *mut [u8; 26],
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) {
+    // Input/output can reenter metadata updates. Borrow an owned snapshot for
+    // naming rather than the mutable potion table across those callbacks.
+    let pot_names = (&*pot_info).to_vec();
+    let Some(obj) = get_item_id("quaff", ItemFilter::Category(ItemType::POTION), dungeon, after, again, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc, n_objs, terse, inv_describe, arm_info, &pot_names, ring_info, scr_info, weap_info, ws_info) else {
         return;
     };
     let mut show = false;
-    let trip = player_has(MonsterFlags::HALU);
+    let trip = player_has(MonsterFlags::HALU, dungeon);
 
     if !matches!(
-        DUNGEON.objects.with_object(obj, |o| o.o_type),
+        dungeon.objects.with_object(obj, |o| o.o_type),
         Some(ItemType::Potion(_))
     ) {
         if terse == 0 {
@@ -242,22 +272,22 @@ pub unsafe fn quaff(random: &mut Random) {
         }
         return;
     }
-    if DUNGEON.player.equipment().weapon_id() == Some(obj) {
-        DUNGEON.player.set_weapon_id(None);
+    if dungeon.player.equipment().weapon_id() == Some(obj) {
+        dungeon.player.set_weapon_id(None);
     }
 
-    let (o_count, o_which) = DUNGEON.objects
+    let (o_count, o_which) = dungeon.objects
         .with_object(obj, |o| (o.o_count, o.o_which))
         .unwrap_or((0, 0));
     let discardit = o_count == 1;
-    leave_pack_id(obj, false, false);
+    leave_pack_id(obj, false, false, dungeon, inpack, last_pick, pack_used);
 
     let potion = PotionType::from_raw(o_which);
     match potion {
-        PotionType::Confuse => do_pot_impl(PotionType::Confuse, if trip { false } else { true }, random),
+        PotionType::Confuse => do_pot_impl(PotionType::Confuse, !trip, random, dungeon, pot_info, fruit),
         PotionType::Poison => {
-            pot_info_at(PotionType::Poison.index()).oi_know = true;
-            if DUNGEON.player.wearing_ring(RingType::SustainStrength) {
+            (&mut *pot_info)[PotionType::Poison.index()].oi_know = true;
+            if dungeon.player.wearing_ring(RingType::SustainStrength) {
                 msg_str("you feel momentarily sick");
             } else {
                 chg_str(-(random.rnd(3) + 1));
@@ -266,8 +296,8 @@ pub unsafe fn quaff(random: &mut Random) {
             }
         }
         PotionType::Healing => {
-            pot_info_at(PotionType::Healing.index()).oi_know = true;
-            DUNGEON.player.with_stats_mut(|stats| {
+            (&mut *pot_info)[PotionType::Healing.index()].oi_know = true;
+            dungeon.player.with_stats_mut(|stats| {
                 stats.hit_points += random.roll(stats.level, 4);
                 if stats.hit_points > stats.max_hit_points {
                     stats.max_hit_points += 1;
@@ -278,14 +308,14 @@ pub unsafe fn quaff(random: &mut Random) {
             msg_str("you begin to feel better");
         }
         PotionType::Strength => {
-            pot_info_at(PotionType::Strength.index()).oi_know = true;
+            (&mut *pot_info)[PotionType::Strength.index()].oi_know = true;
             chg_str(1);
             msg_str("you feel stronger, now.  What bulging muscles!");
         }
         PotionType::MonsterFind => {
-            DUNGEON.player.add_flag(MonsterFlags::SEEMONST);
+            dungeon.player.add_flag(MonsterFlags::SEEMONST);
             fuse(Daemon::TurnSee, true as u8 as i32, HUHDURATION, AFTER);
-            if turn_see(false as u8, random) == 0 {
+            if turn_see(false as u8, random, dungeon) == 0 {
                 msg_str(&format!(
                     "you have a {} feeling for a moment, then it passes",
                     choose_str("normal", "strange")
@@ -293,21 +323,25 @@ pub unsafe fn quaff(random: &mut Random) {
             }
         }
         PotionType::TrapFind => {
-            let floor = crate::game::item_ids();
+            let floor = dungeon.with_level(|level| {
+                level.items.iter().copied()
+                    .filter(|&id| dungeon.objects.contains(id))
+                    .collect::<Vec<_>>()
+            });
             if !floor.is_empty() {
-                crate::ui::terminal::UI.clear();
+                ui.clear();
                 for id in floor {
-                    if is_magic_id(id) {
+                    if is_magic_id(id, dungeon) {
                         show = true;
-                        if let Some(pos) = DUNGEON.objects.with_object(id, |o| o.o_pos) {
-                            crate::ui::terminal::UI.move_cursor(IVec2::new(pos.x, pos.y));
+                        if let Some(pos) = dungeon.objects.with_object(id, |o| o.o_pos) {
+                            ui.move_cursor(IVec2::new(pos.x, pos.y));
                             crate::draw::write_cell_glyph(pos, MAGIC as u8 as char);
                         }
-                        pot_info_at(PotionType::TrapFind.index()).oi_know = true;
+                        (&mut *pot_info)[PotionType::TrapFind.index()].oi_know = true;
                     }
                 }
-                for id in DUNGEON.monster_list.ids() {
-                    let (mp_pos, pack) = DUNGEON.monster_list
+                for id in dungeon.monster_list.ids() {
+                    let (mp_pos, pack) = dungeon.monster_list
                         .with(id, |t| match t {
                             Thing::Monster { data } => (Some(data.t_pos), data.t_pack.clone()),
                             Thing::Object { .. } => (None, Vec::new()),
@@ -317,16 +351,16 @@ pub unsafe fn quaff(random: &mut Random) {
                         continue;
                     };
                     for pack_id in pack {
-                        if is_magic_id(pack_id) {
+                        if is_magic_id(pack_id, dungeon) {
                             show = true;
-                            crate::ui::terminal::UI.move_cursor(IVec2::new(mp_pos.x, mp_pos.y));
+                            ui.move_cursor(IVec2::new(mp_pos.x, mp_pos.y));
                             crate::draw::write_cell_glyph(mp_pos, MAGIC as u8 as char);
                         }
                     }
                 }
             }
             if show {
-                pot_info_at(PotionType::TrapFind.index()).oi_know = true;
+                (&mut *pot_info)[PotionType::TrapFind.index()].oi_know = true;
                 show_win("You sense the presence of magic on this level.--More--");
             } else {
                 msg_str(&format!(
@@ -337,30 +371,30 @@ pub unsafe fn quaff(random: &mut Random) {
         }
         PotionType::Lsd => {
             if !trip {
-                if player_has(MonsterFlags::SEEMONST) {
-                    turn_see(false as u8, random);
+                if player_has(MonsterFlags::SEEMONST, dungeon) {
+                    turn_see(false as u8, random, dungeon);
                 }
                 start_daemon(Daemon::Visuals, 0, BEFORE);
-                DUNGEON.set_seen_stairs(seen_stairs() != 0);
+                dungeon.set_seen_stairs(seen_stairs(dungeon) != 0);
             }
-            do_pot_impl(PotionType::Lsd, true, random);
+            do_pot_impl(PotionType::Lsd, true, random, dungeon, pot_info, fruit);
         }
         PotionType::SeeInvisible => {
-            show = player_has(MonsterFlags::CANSEE);
-            do_pot_impl(PotionType::SeeInvisible, false, random);
+            show = player_has(MonsterFlags::CANSEE, dungeon);
+            do_pot_impl(PotionType::SeeInvisible, false, random, dungeon, pot_info, fruit);
             if !show {
-                invis_on();
+                invis_on(dungeon);
             }
             sight(random);
         }
         PotionType::Raise => {
-            pot_info_at(PotionType::Raise.index()).oi_know = true;
+            (&mut *pot_info)[PotionType::Raise.index()].oi_know = true;
             msg_str("you suddenly feel much more skillful");
-            raise_level(random);
+            raise_level(random, dungeon, e_levels);
         }
         PotionType::ExtraHealing => {
-            pot_info_at(PotionType::ExtraHealing.index()).oi_know = true;
-            DUNGEON.player.with_stats_mut(|stats| {
+            (&mut *pot_info)[PotionType::ExtraHealing.index()].oi_know = true;
+            dungeon.player.with_stats_mut(|stats| {
                 stats.hit_points += random.roll(stats.level, 8);
                 if stats.hit_points > stats.max_hit_points {
                     if stats.hit_points > stats.max_hit_points + stats.level + 1 {
@@ -375,15 +409,15 @@ pub unsafe fn quaff(random: &mut Random) {
             msg_str("you begin to feel much better");
         }
         PotionType::Haste => {
-            pot_info_at(PotionType::Haste.index()).oi_know = true;
-            after = false as u8;
+            (&mut *pot_info)[PotionType::Haste.index()].oi_know = true;
+            *after = false as u8;
             if add_haste(true, random) {
                 msg_str("you feel yourself moving much faster");
             }
         }
         PotionType::Restore => {
             // Sum the `o_arm` bonus of each ring of add-strength (pointer-free).
-            let equipment = DUNGEON.player.equipment();
+            let equipment = dungeon.player.equipment();
             let ring_bonus = |hand: usize| {
                 if equipment.ring_type(hand) == Some(RingType::AddStrength) {
                     equipment.ring_arm(hand).unwrap_or(0)
@@ -393,15 +427,15 @@ pub unsafe fn quaff(random: &mut Random) {
             };
             let left_bonus = ring_bonus(0);
             let right_bonus = ring_bonus(1);
-            DUNGEON.player.with_stats_mut(|stats| {
+            dungeon.player.with_stats_mut(|stats| {
                 if left_bonus != 0 {
                     add_str(&mut stats.strength, -left_bonus);
                 }
                 if right_bonus != 0 {
                     add_str(&mut stats.strength, -right_bonus);
                 }
-                if stats.strength < max_stats.strength {
-                    stats.strength = max_stats.strength;
+                if stats.strength < max_strength {
+                    stats.strength = max_strength;
                 }
                 if left_bonus != 0 {
                     add_str(&mut stats.strength, left_bonus);
@@ -412,23 +446,28 @@ pub unsafe fn quaff(random: &mut Random) {
             });
             msg_str("hey, this tastes great.  It make you feel warm all over");
         }
-        PotionType::Blind => do_pot_impl(PotionType::Blind, true, random),
-        PotionType::Levitate => do_pot_impl(PotionType::Levitate, true, random),
-        _ => {
-            msg_str("what an odd tasting potion!");
-            return;
-        }
+        PotionType::Blind => do_pot_impl(PotionType::Blind, true, random, dungeon, pot_info, fruit),
+        PotionType::Levitate => do_pot_impl(PotionType::Levitate, true, random, dungeon, pot_info, fruit),
     }
 
-    call_it(pot_info_at(o_which as usize));
+    // `call_it` retains its argument across input. Never lend it an exclusive
+    // reference into the shared table; commit only the resulting guess.
+    let mut info = (&*pot_info)[o_which as usize].clone();
+    call_it(&mut info);
+    let current = &mut (&mut *pot_info)[o_which as usize];
+    if current.oi_know {
+        current.oi_guess = None;
+    } else if current.oi_guess.is_none() {
+        current.oi_guess = info.oi_guess;
+    }
     if discardit {
-        let _ = DUNGEON.objects.remove(obj);
+        let _ = dungeon.objects.remove(obj);
     }
 }
 
 /// Whether the object `id` radiates magic (pointer-free).
-pub fn is_magic_id(id: ThingId) -> bool {
-    let Some((typ, prot, o_arm, o_hplus, o_dplus)) = DUNGEON.objects.with_object(id, |o| {
+pub fn is_magic_id(id: ThingId, dungeon: &Dungeon) -> bool {
+    let Some((typ, prot, o_arm, o_hplus, o_dplus)) = dungeon.objects.with_object(id, |o| {
         (
             o.o_type,
             o.o_flags.contains(ObjectFlags::PROT),
@@ -453,14 +492,14 @@ pub fn is_magic_id(id: ThingId) -> bool {
 
 /// invis_on:
 /// Turn on the ability to see invisible.
-pub unsafe fn invis_on() {
-    DUNGEON.player.add_flag(MonsterFlags::CANSEE);
-    for id in DUNGEON.monster_list.ids() {
-        if thing_has(id, MonsterFlags::INVIS)
+pub unsafe fn invis_on(dungeon: &Dungeon) {
+    dungeon.player.add_flag(MonsterFlags::CANSEE);
+    for id in dungeon.monster_list.ids() {
+        if thing_has(id, MonsterFlags::INVIS, dungeon)
             && see_monst(id) != 0
-            && !player_has(MonsterFlags::HALU)
+            && !player_has(MonsterFlags::HALU, dungeon)
         {
-            if let Some(pos) = DUNGEON.monster_list
+            if let Some(pos) = dungeon.monster_list
                 .with(id, |t| match t {
                     Thing::Monster { data } => Some(data.t_pos),
                     Thing::Object { .. } => None,
@@ -475,11 +514,11 @@ pub unsafe fn invis_on() {
 
 /// turn_see:
 /// Put on or off seeing monsters on this level.
-pub unsafe fn turn_see(turn_off: u8, random: &mut Random) -> u8 {
+pub unsafe fn turn_see(turn_off: u8, random: &mut Random, dungeon: &Dungeon) -> u8 {
     let mut add_new = 0;
 
-    for id in DUNGEON.monster_list.ids() {
-        if let Some((pos, oldch)) = DUNGEON.monster_list
+    for id in dungeon.monster_list.ids() {
+        if let Some((pos, oldch)) = dungeon.monster_list
             .with(id, |t| match t {
                 Thing::Monster { data } => Some((data.t_pos, data.t_oldch)),
                 Thing::Object { .. } => None,
@@ -492,7 +531,7 @@ pub unsafe fn turn_see(turn_off: u8, random: &mut Random) -> u8 {
                     crate::draw::write_cell_glyph(pos, oldch as char);
                 }
             } else {
-                let glyph = if !player_has(MonsterFlags::HALU) {
+                let glyph = if !player_has(MonsterFlags::HALU, dungeon) {
                     crate::draw::monster_type_glyph(id)
                 } else {
                     crate::draw::hallucination_glyph(random)
@@ -508,9 +547,9 @@ pub unsafe fn turn_see(turn_off: u8, random: &mut Random) -> u8 {
     }
 
     if turn_off != 0 {
-        DUNGEON.player.remove_flag(MonsterFlags::SEEMONST);
+        dungeon.player.remove_flag(MonsterFlags::SEEMONST);
     } else {
-        DUNGEON.player.add_flag(MonsterFlags::SEEMONST);
+        dungeon.player.add_flag(MonsterFlags::SEEMONST);
     }
 
     if add_new != 0 {
@@ -522,27 +561,27 @@ pub unsafe fn turn_see(turn_off: u8, random: &mut Random) -> u8 {
 
 /// seen_stairs:
 /// Return true if the player has seen the stairs.
-pub unsafe fn seen_stairs() -> u8 {
-    let stairs = crate::game::stairs();
+pub unsafe fn seen_stairs(dungeon: &Dungeon) -> u8 {
+    let stairs = dungeon.stairs();
 
     if crate::draw::screen_glyph_at(stairs) as i32 == STAIRS {
         return 1;
     }
-    if hero().x == stairs.x && hero().y == stairs.y {
+    if hero(dungeon).x == stairs.x && hero(dungeon).y == stairs.y {
         return 1;
     }
 
-    if let Some(tp) = moat(stairs.y, stairs.x) {
-        if see_monst(tp) != 0 && thing_has(tp, MonsterFlags::RUN) {
+    if let Some(tp) = moat(stairs.y, stairs.x, dungeon) {
+        if see_monst(tp) != 0 && thing_has(tp, MonsterFlags::RUN, dungeon) {
             return 1;
         }
-        let oldch = DUNGEON.monster_list
+        let oldch = dungeon.monster_list
             .with(tp, |t| match t {
                 Thing::Monster { data } => data.t_oldch as i32,
                 Thing::Object { .. } => 0,
             })
             .unwrap_or(0);
-        if player_has(MonsterFlags::SEEMONST) && oldch == STAIRS {
+        if player_has(MonsterFlags::SEEMONST, dungeon) && oldch == STAIRS {
             return 1;
         }
     }
@@ -552,14 +591,64 @@ pub unsafe fn seen_stairs() -> u8 {
 
 /// raise_level:
 /// The player just magically went up a level.
-pub unsafe fn raise_level(random: &mut Random) {
-    let level = DUNGEON.player.level();
-    DUNGEON.player.with_stats_mut(|stats| stats.experience = e_levels[level as usize - 1] + 1);
+pub unsafe fn raise_level(random: &mut Random, dungeon: &Dungeon, e_levels: &[i32]) {
+    let level = dungeon.player.level();
+    dungeon.player.with_stats_mut(|stats| stats.experience = e_levels[level as usize - 1] + 1);
     check_level(random);
 }
 
 /// do_pot:
 /// Do a potion with the standard fuse/flag setup.
-unsafe fn do_pot(type_id: i32, knowit: bool, random: &mut Random) {
-    do_pot_impl(PotionType::from_raw(type_id), knowit, random);
+unsafe fn do_pot(
+    type_id: i32,
+    knowit: bool,
+    random: &mut Random,
+    dungeon: &Dungeon,
+    pot_info: *mut [ObjInfo],
+    fruit: &str,
+) {
+    do_pot_impl(PotionType::from_raw(type_id), knowit, random, dungeon, pot_info, fruit);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn magic_detection_uses_the_supplied_dungeon() {
+        let dungeon = Dungeon::empty();
+        let other = Dungeon::empty();
+        let id = dungeon.objects.new_item_id();
+        let other_id = other.objects.new_item_id();
+        assert_eq!(id, other_id);
+        dungeon.objects.with_object_mut(id, |o| o.o_type = ItemType::POTION);
+        other.objects.with_object_mut(other_id, |o| o.o_type = ItemType::Food);
+
+        assert!(is_magic_id(id, &dungeon));
+        assert!(!is_magic_id(other_id, &other));
+        dungeon.objects.remove(id);
+        assert!(!is_magic_id(id, &dungeon));
+    }
+
+    #[test]
+    fn magic_detection_preserves_equipment_rules() {
+        let dungeon = Dungeon::empty();
+        let id = dungeon.objects.new_item_id();
+        dungeon.objects.with_object_mut(id, |o| {
+            o.o_type = ItemType::Armor(0);
+            o.o_arm = 0;
+            o.o_flags = ObjectFlags::NONE;
+        });
+        assert!(!is_magic_id(id, &dungeon));
+        dungeon.objects.with_object_mut(id, |o| o.o_flags.insert(ObjectFlags::PROT));
+        assert!(is_magic_id(id, &dungeon));
+        dungeon.objects.with_object_mut(id, |o| {
+            o.o_type = ItemType::Weapon(0);
+            o.o_hplus = 0;
+            o.o_dplus = -1;
+        });
+        assert!(is_magic_id(id, &dungeon));
+        dungeon.objects.with_object_mut(id, |o| o.o_dplus = 0);
+        assert!(!is_magic_id(id, &dungeon));
+    }
 }

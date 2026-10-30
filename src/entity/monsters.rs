@@ -18,6 +18,7 @@ use crate::ui::terminal;
 use glam::IVec2;
 
 use crate::game::globals::monsters;
+use crate::game::globals;
 
 const LAMPDIST: i32 = 3;
 const HUHDURATION: i32 = 20;
@@ -446,7 +447,27 @@ pub unsafe fn give_pack_id(id: MonsterId, random: &mut Random) {
     if crate::game::current_depth() >= crate::dungeon::max_depth()
         && random.rnd(100) < carry
     {
-        let item = new_thing_id(random);
+        let things = (&*(&raw const globals::things)).clone();
+        let arm_info = (&*(&raw const globals::arm_info)).clone();
+        let pot_info = (&*(&raw const globals::pot_info)).clone();
+        let ring_info = (&*(&raw const globals::ring_info)).clone();
+        let scr_info = (&*(&raw const globals::scr_info)).clone();
+        let weap_info = (&*(&raw const globals::weap_info)).clone();
+        let ws_info = (&*(&raw const globals::ws_info)).clone();
+        let a_class = globals::a_class;
+        let item = new_thing_id(
+            random,
+            &crate::dungeon::DUNGEON,
+            &things,
+            &arm_info,
+            &pot_info,
+            &ring_info,
+            &scr_info,
+            &weap_info,
+            &ws_info,
+            &a_class,
+            &raw mut globals::group,
+        );
         DUNGEON.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_pack.insert(0, item);

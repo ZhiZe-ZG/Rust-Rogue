@@ -214,7 +214,9 @@ pub unsafe fn stomach(random: &mut Random) {
         msg_str(choose_str("You freak out", "You faint"));
     } else {
         let oldfood = food_left;
-        food_left -= ring_eat(LEFT as i32, random) + ring_eat(RIGHT as i32, random) + 1 - DUNGEON.has_amulet() as i32;
+        food_left -= ring_eat(LEFT as i32, random, &DUNGEON)
+            + ring_eat(RIGHT as i32, random, &DUNGEON)
+            + 1 - DUNGEON.has_amulet() as i32;
 
         if food_left < MORETIME && oldfood >= MORETIME {
             hungry_state = 2;

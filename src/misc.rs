@@ -6,6 +6,7 @@ use crate::config::GameConfig;
 use crate::daemon::{extinguish, fuse, Daemon};
 use crate::entity::chase::runto;
 use crate::game::globals::ObjInfo;
+use crate::game::globals;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id, reset_last};
 use crate::rnd::{Random, RNG};
@@ -81,7 +82,7 @@ pub unsafe fn show_floor() -> bool {
 pub fn find_obj_id(y: i32, x: i32) -> Option<crate::item::arena::ThingId> {
     for id in crate::game::item_ids() {
         let hit =
-            crate::item::arena::with_object(id, |data| data.o_pos.y == y && data.o_pos.x == x)
+            crate::item::arena::with_object(&DUNGEON.objects, id, |data| data.o_pos.y == y && data.o_pos.x == x)
                 .unwrap_or(false);
         if hit {
             return Some(id);
@@ -91,7 +92,37 @@ pub fn find_obj_id(y: i32, x: i32) -> Option<crate::item::arena::ThingId> {
 }
 
 pub unsafe fn eat() {
-    let Some(obj) = get_item_id("eat", ItemFilter::Category(ItemType::Food)) else {
+    // Selection may reenter UI/daemons; borrow only local metadata snapshots.
+    let arm_info = (&*(&raw const globals::arm_info)).clone();
+    let pot_info = (&*(&raw const globals::pot_info)).clone();
+    let ring_info = (&*(&raw const globals::ring_info)).clone();
+    let scr_info = (&*(&raw const globals::scr_info)).clone();
+    let weap_info = (&*(&raw const globals::weap_info)).clone();
+    let ws_info = (&*(&raw const globals::ws_info)).clone();
+    let Some(obj) = get_item_id(
+        "eat",
+        ItemFilter::Category(ItemType::Food),
+        &DUNGEON,
+        &raw mut globals::after,
+        globals::again,
+        globals::l_last_comm,
+        globals::l_last_dir,
+        globals::l_last_pick,
+        &raw mut globals::last_comm,
+        &raw mut globals::last_dir,
+        &raw mut globals::last_pick,
+        &raw mut globals::mpos,
+        &raw mut globals::msg_esc,
+        &raw mut globals::n_objs,
+        globals::terse,
+        globals::inv_describe,
+        &arm_info,
+        &pot_info,
+        &ring_info,
+        &scr_info,
+        &weap_info,
+        &ws_info,
+    ) else {
         return;
     };
     if !matches!(DUNGEON.objects.with_object(obj, |o| o.o_type), Some(ItemType::Food)) {
@@ -133,7 +164,15 @@ pub unsafe fn eat() {
     } else {
         msg_str("yum, that tasted good");
     }
-    leave_pack_id(obj, false, false);
+    leave_pack_id(
+        obj,
+        false,
+        false,
+        &DUNGEON,
+        &raw mut globals::inpack,
+        &raw mut globals::last_pick,
+        &raw mut globals::pack_used,
+    );
 }
 
 pub unsafe fn check_level(random: &mut Random) {
@@ -274,7 +313,14 @@ pub unsafe fn get_dir() -> u8 {
                 }
                 Command::Escape => {
                     last_dir = crate::direction::Direction::None;
-                    reset_last();
+                    reset_last(
+                        globals::l_last_comm,
+                        globals::l_last_dir,
+                        globals::l_last_pick,
+                        &raw mut globals::last_comm,
+                        &raw mut globals::last_dir,
+                        &raw mut globals::last_pick,
+                    );
                     return false as u8;
                 }
                 _ => {

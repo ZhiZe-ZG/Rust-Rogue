@@ -1,7 +1,11 @@
 //! Rings: putting them on, taking them off, and their magical effects.
 //!
 //! Ported from `src/c/rings.c` to Rust.
+use crate::command::Command;
+use crate::direction::Direction;
+use crate::dungeon::Dungeon;
 use crate::entity::player::ObjectFlags;
+use crate::game::globals::ObjInfo;
 use crate::item::potions::invis_on;
 use crate::rnd::Random;
 
@@ -84,15 +88,39 @@ const USES: [i32; RingType::COUNT] = [
     1,  // SustainArmor
 ];
 
-use crate::game::globals::{mpos, terse};
-
 /// Prompts for a ring and equips it on an available hand, applying immediate ring effects.
-pub unsafe fn ring_on(random: &mut Random) {
-    let Some(obj) = get_item_id("put on", ItemFilter::Category(ItemType::RING)) else {
+///
+/// # Safety
+/// `mpos` must remain writable without an overlapping exclusive reference
+/// across reentrant input and message calls.
+pub unsafe fn ring_on(
+    random: &mut Random,
+    dungeon: &Dungeon,
+    terse: u8,
+    mpos: *mut i32,
+    after: *mut u8,
+    again: u8,
+    l_last_comm: Command,
+    l_last_dir: Direction,
+    l_last_pick: Option<ThingId>,
+    last_comm: *mut Command,
+    last_dir: *mut Direction,
+    last_pick: *mut Option<ThingId>,
+    msg_esc: *mut u8,
+    n_objs: *mut i32,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) {
+    let Some(obj) = get_item_id("put on", ItemFilter::Category(ItemType::RING), dungeon, after, again, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc, n_objs, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) else {
         return;
     };
     if !matches!(
-        crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_type),
+        dungeon.objects.with_object(obj, |o| o.o_type),
         Some(ItemType::Ring(_))
     ) {
         if terse == 0 {
@@ -107,11 +135,11 @@ pub unsafe fn ring_on(random: &mut Random) {
         return;
     }
 
-    let eq = crate::dungeon::DUNGEON.player.equipment();
+    let eq = dungeon.player.equipment();
     let left_empty = eq.left_ring_id().is_none();
     let right_empty = eq.right_ring_id().is_none();
     let left_hand = if left_empty && right_empty {
-        let hand = gethand();
+        let hand = gethand(terse, mpos);
         if hand < 0 {
             return;
         }
@@ -130,18 +158,18 @@ pub unsafe fn ring_on(random: &mut Random) {
     };
 
     if left_hand {
-        crate::dungeon::DUNGEON.player.set_left_ring_id(Some(obj));
+        dungeon.player.set_left_ring_id(Some(obj));
     } else {
-        crate::dungeon::DUNGEON.player.set_right_ring_id(Some(obj));
+        dungeon.player.set_right_ring_id(Some(obj));
     }
 
-    let (which, o_arm, packch) = crate::dungeon::DUNGEON.objects
+    let (which, o_arm, packch) = dungeon.objects
         .with_object(obj, |o| (o.o_which, o.o_arm, o.o_packch))
         .unwrap_or((0, 0, 0));
 
     match RingType::from_raw(which) {
         Some(RingType::AddStrength) => chg_str(o_arm),
-        Some(RingType::SeeInvisible) => invis_on(),
+        Some(RingType::SeeInvisible) => invis_on(dungeon),
         Some(RingType::Aggravate) => aggravate(random),
         _ => {}
     }
@@ -149,12 +177,27 @@ pub unsafe fn ring_on(random: &mut Random) {
     if terse == 0 {
         addmsg_str("you are now wearing ");
     }
-    msg_str(&format!("{} ({})", inv_name_id(obj, true), packch as char));
+    msg_str(&format!("{} ({})", inv_name_id(obj, true, dungeon, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info), packch as char));
 }
 
 /// Removes a worn ring from the chosen hand after passing drop constraints.
-pub unsafe fn ring_off(random: &mut Random) {
-    let eq = crate::dungeon::DUNGEON.player.equipment();
+///
+/// # Safety
+/// `mpos` has the same writable, reentrant-storage requirements as in `ring_on`.
+pub unsafe fn ring_off(
+    random: &mut Random,
+    dungeon: &Dungeon,
+    terse: u8,
+    mpos: *mut i32,
+    inv_describe: u8,
+    arm_info: &[ObjInfo],
+    pot_info: &[ObjInfo],
+    ring_info: &[ObjInfo],
+    scr_info: &[ObjInfo],
+    weap_info: &[ObjInfo],
+    ws_info: &[ObjInfo],
+) {
+    let eq = dungeon.player.equipment();
     let left_empty = eq.left_ring_id().is_none();
     let right_empty = eq.right_ring_id().is_none();
     let left_hand = if left_empty && right_empty {
@@ -169,36 +212,40 @@ pub unsafe fn ring_off(random: &mut Random) {
     } else if right_empty {
         true
     } else {
-        let hand = gethand();
+        let hand = gethand(terse, mpos);
         if hand < 0 {
             return;
         }
         hand as usize == LEFT
     };
 
-    mpos = 0;
+    *mpos = 0;
     let obj = if left_hand {
-        crate::dungeon::DUNGEON.player.equipment().left_ring_id()
+        dungeon.player.equipment().left_ring_id()
     } else {
-        crate::dungeon::DUNGEON.player.equipment().right_ring_id()
+        dungeon.player.equipment().right_ring_id()
     };
     let Some(obj) = obj else {
         msg_str("not wearing such a ring");
         return;
     };
 
-    if dropcheck_id(obj, random) {
-        let packch = crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_packch).unwrap_or(0);
+    if dropcheck_id(obj, random, dungeon) {
+        let packch = dungeon.objects.with_object(obj, |o| o.o_packch).unwrap_or(0);
         msg_str(&format!(
             "was wearing {}({})",
-            inv_name_id(obj, true),
+            inv_name_id(obj, true, dungeon, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info),
             packch as char,
         ));
     }
 }
 
 /// Asks which hand the player means and returns LEFT, RIGHT, or -1 on escape.
-pub unsafe fn gethand() -> i32 {
+///
+/// # Safety
+/// `mpos` must remain writable for the call. Do not retain an exclusive
+/// reference to its storage while input/message callbacks can access it.
+pub unsafe fn gethand(terse: u8, mpos: *mut i32) -> i32 {
     loop {
         if terse != 0 {
             msg_str("left or right ring? ");
@@ -211,7 +258,7 @@ pub unsafe fn gethand() -> i32 {
             return -1;
         }
 
-        mpos = 0;
+        *mpos = 0;
         if c == b'l' || c == b'L' {
             return LEFT as i32;
         }
@@ -228,13 +275,13 @@ pub unsafe fn gethand() -> i32 {
 }
 
 /// Computes per-turn food impact for the ring on the given hand.
-pub unsafe fn ring_eat(hand: i32, random: &mut Random) -> i32 {
+pub unsafe fn ring_eat(hand: i32, random: &mut Random, dungeon: &Dungeon) -> i32 {
     let hand_idx = hand as usize;
     if hand_idx > RIGHT {
         return 0;
     }
 
-    let ring_type = match crate::dungeon::DUNGEON.player.equipment().ring_type(hand_idx) {
+    let ring_type = match dungeon.player.equipment().ring_type(hand_idx) {
         Some(ring_type) => ring_type,
         None => return 0,
     };
@@ -258,8 +305,8 @@ pub unsafe fn ring_eat(hand: i32, random: &mut Random) -> i32 {
 
 /// Returns bracketed ring bonus text for known stat-modifier rings.
 #[allow(dead_code)]
-unsafe fn ring_num(id: ThingId) -> String {
-    let Some((know, which, o_arm)) = crate::dungeon::DUNGEON.objects.with_object(id, |o| {
+unsafe fn ring_num(id: ThingId, dungeon: &Dungeon) -> String {
+    let Some((know, which, o_arm)) = dungeon.objects.with_object(id, |o| {
         (o.o_flags.contains(ObjectFlags::KNOW), o.o_which, o.o_arm)
     }) else {
         return String::new();
@@ -282,7 +329,28 @@ unsafe fn ring_num(id: ThingId) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::RingType;
+    use super::{ring_num, RingType};
+    use crate::dungeon::Dungeon;
+    use crate::entity::player::ObjectFlags;
+
+    #[test]
+    fn ring_bonus_uses_only_the_supplied_dungeon() {
+        let dungeon = Dungeon::empty();
+        let id = dungeon.objects.new_object_id();
+        dungeon.objects.with_object_mut(id, |o| {
+            o.o_which = RingType::Protection as i32;
+            o.o_arm = -2;
+        });
+        unsafe {
+            assert_eq!(ring_num(id, &dungeon), "");
+            dungeon.objects.with_object_mut(id, |o| o.o_flags.insert(ObjectFlags::KNOW));
+            assert_eq!(ring_num(id, &dungeon), " [-2]");
+            dungeon.objects.with_object_mut(id, |o| o.o_which = RingType::Adornment as i32);
+            assert_eq!(ring_num(id, &dungeon), "");
+            dungeon.objects.remove(id);
+            assert_eq!(ring_num(id, &dungeon), "");
+        }
+    }
 
     #[test]
     fn ring_types_match_the_legacy_ids() {

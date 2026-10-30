@@ -234,38 +234,38 @@ impl Default for ThingArena {
 }
 
 /// Allocate an object (item) thing in the arena and return its [`ThingId`].
-pub fn new_object_id() -> ThingId {
-    crate::dungeon::DUNGEON.objects.new_object_id()
+pub fn new_object_id(objects: &ThingArena) -> ThingId {
+    objects.new_object_id()
 }
 
 /// Allocate an object thing and return its [`ThingId`] handle.
-pub fn new_item_id() -> ThingId {
-    crate::dungeon::DUNGEON.objects.new_item_id()
+pub fn new_item_id(objects: &ThingArena) -> ThingId {
+    objects.new_item_id()
 }
 
-/// Number of live objects tracked by the global arena.
-pub fn allocated_count() -> i32 {
-    crate::dungeon::DUNGEON.objects.allocated_count()
+/// Number of live objects tracked by the supplied arena.
+pub fn allocated_count(objects: &ThingArena) -> i32 {
+    objects.allocated_count()
 }
 
-/// Whether `id` still refers to a live object in the global arena.
+/// Whether `id` still refers to a live object in the supplied arena.
 #[inline]
-pub fn contains(id: ThingId) -> bool {
-    crate::dungeon::DUNGEON.objects.contains(id)
+pub fn contains(objects: &ThingArena, id: ThingId) -> bool {
+    objects.contains(id)
 }
 
 /// Immutably access the object payload behind `id` (`None` for a stale handle
 /// or a non-object).
 #[inline]
-pub fn with_object<R>(id: ThingId, operation: impl FnOnce(&ThingObject) -> R) -> Option<R> {
-    crate::dungeon::DUNGEON.objects.with_object(id, operation)
+pub fn with_object<R>(objects: &ThingArena, id: ThingId, operation: impl FnOnce(&ThingObject) -> R) -> Option<R> {
+    objects.with_object(id, operation)
 }
 
 /// Mutably access the object payload behind `id` (`None` for a stale handle or
 /// a non-object).
 #[inline]
-pub fn with_object_mut<R>(id: ThingId, operation: impl FnOnce(&mut ThingObject) -> R) -> Option<R> {
-    crate::dungeon::DUNGEON.objects.with_object_mut(id, operation)
+pub fn with_object_mut<R>(objects: &ThingArena, id: ThingId, operation: impl FnOnce(&mut ThingObject) -> R) -> Option<R> {
+    objects.with_object_mut(id, operation)
 }
 
 #[cfg(test)]

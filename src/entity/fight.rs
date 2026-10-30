@@ -13,6 +13,7 @@ use crate::entity::chase::{runto, see_monst};
 use crate::entity::monsters::save;
 use crate::entity::monsters::MonsterType;
 use crate::entity::player::MonsterFlags;
+use crate::game::globals;
 use crate::game::globals::{monsters, weap_info};
 use crate::dungeon::DUNGEON;
 use crate::game::MonsterId;
@@ -300,7 +301,12 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
             let mtype = mon.typ;
             if mtype == Some(MonsterType::Aquator) {
                 // Aquator: corrode armor
-                rust_armor_id_from_player();
+                rust_armor_id(
+                    DUNGEON.player.equipment().armor_id(),
+                    &crate::dungeon::DUNGEON,
+                    to_death,
+                    terse,
+                );
             } else if mtype == Some(MonsterType::IceMonster) {
                 // Ice monster: freeze player
                 DUNGEON.player.remove_flag(MonsterFlags::RUN);
@@ -435,7 +441,7 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
                     if equipped {
                         continue;
                     }
-                    if is_magic_id(id) {
+                    if is_magic_id(id, &crate::dungeon::DUNGEON) {
                         nobj += 1;
                         if random.rnd(nobj) == 0
                         {
@@ -445,8 +451,34 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
                 }
                 if let Some(steal) = steal {
                     remove_mon(mon.pos, tp, false as u8, random);
-                    leave_pack_id(steal, false, false);
-                    msg_str(&format!("she stole {}!", inv_name_id(steal, true)));
+                    leave_pack_id(
+                        steal,
+                        false,
+                        false,
+                        &crate::dungeon::DUNGEON,
+                        &raw mut globals::inpack,
+                        &raw mut globals::last_pick,
+                        &raw mut globals::pack_used,
+                    );
+                    let arm_info = (&*(&raw const globals::arm_info)).clone();
+                    let pot_info = (&*(&raw const globals::pot_info)).clone();
+                    let ring_info = (&*(&raw const globals::ring_info)).clone();
+                    let scr_info = (&*(&raw const globals::scr_info)).clone();
+                    let weap_names = (&*(&raw const globals::weap_info)).clone();
+                    let ws_info = (&*(&raw const globals::ws_info)).clone();
+                    let name = inv_name_id(
+                        steal,
+                        true,
+                        &crate::dungeon::DUNGEON,
+                        globals::inv_describe,
+                        &arm_info,
+                        &pot_info,
+                        &ring_info,
+                        &scr_info,
+                        &weap_names,
+                        &ws_info,
+                    );
+                    msg_str(&format!("she stole {name}!"));
                     let _ = DUNGEON.objects.remove(steal);
                     count = 0;
                     return -1;
@@ -481,11 +513,6 @@ pub unsafe fn attack(tp: MonsterId, random: &mut Random) -> i32 {
 #[inline]
 fn iswearing(ring_type: RingType) -> bool {
     DUNGEON.player.wearing_ring(ring_type)
-}
-
-/// Corrode the hero's equipped armor (pointer-free).
-unsafe fn rust_armor_id_from_player() {
-    rust_armor_id(DUNGEON.player.equipment().armor_id());
 }
 
 /// set_mname:
@@ -599,7 +626,7 @@ unsafe fn roll_em_impl(
     let dplus: i32;
 
     let Some(wr) = weap.and_then(|id| {
-        crate::item::arena::with_object(id, |o| WeaponRoll {
+        crate::item::arena::with_object(&DUNGEON.objects, id, |o| WeaponRoll {
             hplus: o.o_hplus,
             dplus: o.o_dplus,
             damage: o.o_damage,
@@ -767,7 +794,7 @@ pub unsafe fn thunk(weap: Option<ThingId>, mname: Option<&str>, noend: u8) {
         return;
     }
     let weapon_name = weap.and_then(|id| {
-        crate::item::arena::with_object(id, |o| {
+        crate::item::arena::with_object(&DUNGEON.objects, id, |o| {
             (matches!(o.o_type, ItemType::Weapon(_)), o.o_which)
         })
         .filter(|(is_weapon, _)| *is_weapon)
@@ -846,7 +873,7 @@ pub unsafe fn bounce(weap: Option<ThingId>, mname: Option<&str>, noend: u8) {
         return;
     }
     let weapon_name = weap.and_then(|id| {
-        crate::item::arena::with_object(id, |o| {
+        crate::item::arena::with_object(&DUNGEON.objects, id, |o| {
             (matches!(o.o_type, ItemType::Weapon(_)), o.o_which)
         })
         .filter(|(is_weapon, _)| *is_weapon)
@@ -873,11 +900,19 @@ pub unsafe fn remove_mon(mp: IVec2, tp: MonsterId, waskill: u8, random: &mut Ran
     let pack = crate::entity::player::monster_pack(tp);
     crate::entity::player::set_monster_pack(tp, Vec::new());
     for id in pack {
-        if crate::item::arena::with_object_mut(id, |o| o.o_pos = drop_pos).is_none() {
+        if crate::item::arena::with_object_mut(&DUNGEON.objects, id, |o| o.o_pos = drop_pos).is_none() {
             continue;
         }
         if waskill != 0 {
-            fall(id, false, &mut *(&raw mut has_hit), random);
+            let weap_names = (&*(&raw const globals::weap_info)).clone();
+            fall(
+                id,
+                false,
+                &raw mut has_hit,
+                random,
+                &crate::dungeon::DUNGEON,
+                &weap_names,
+            );
         } else {
             let _ = DUNGEON.objects.remove(id);
         }
@@ -916,8 +951,8 @@ pub unsafe fn killed(tp: MonsterId, pr: u8, random: &mut Random) {
     } else if mtype == Some(MonsterType::Leprechaun) {
         let tp_room = mon.room;
         let level = crate::game::current_depth();
-        if tp_room.is_some() && fallpos(mon.pos, random).is_some() && level >= crate::dungeon::max_depth() {
-            let gold = crate::item::arena::new_item_id();
+        if tp_room.is_some() && fallpos(mon.pos, random, &crate::dungeon::DUNGEON).is_some() && level >= crate::dungeon::max_depth() {
+            let gold = crate::item::arena::new_item_id(&DUNGEON.objects);
             DUNGEON.objects.with_object_mut(gold, |o| {
                 o.o_type = ItemType::Gold;
                 // o_goldval is #define'd to o_arm

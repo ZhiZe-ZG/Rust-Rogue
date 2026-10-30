@@ -32,7 +32,7 @@ unsafe fn render_current_level(random: &mut Random) {
         let hero = crate::dungeon::DUNGEON.player.pos();
         crate::draw::enter_room(hero, random);
         if crate::dungeon::DUNGEON.player.has_flag(crate::entity::player::MonsterFlags::SEEMONST) {
-            crate::item::potions::turn_see(false as u8, random);
+            crate::item::potions::turn_see(false as u8, random, &crate::dungeon::DUNGEON);
         }
         crate::draw::write_cell_glyph(hero, '@');
         crate::ui::output::refresh();
@@ -87,7 +87,7 @@ impl Daemon {
             Daemon::Visuals => crate::daemons::visuals(random),
             Daemon::UiRender => render_current_level(random),
             Daemon::TurnSee => {
-                let _ = crate::item::potions::turn_see(arg as u8, random);
+                let _ = crate::item::potions::turn_see(arg as u8, random, &crate::dungeon::DUNGEON);
             }
             Daemon::ComeDown => crate::daemons::come_down(),
             Daemon::Land => crate::daemons::land(),

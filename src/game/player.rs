@@ -514,8 +514,8 @@ mod tests {
     #[test]
     fn ring_accessors_keep_hands_independent() {
         let equipment = Equipment::EMPTY;
-        let left = crate::item::arena::new_object_id();
-        let right = crate::item::arena::new_object_id();
+        let left = crate::item::arena::new_object_id(&crate::dungeon::DUNGEON.objects);
+        let right = crate::item::arena::new_object_id(&crate::dungeon::DUNGEON.objects);
 
         equipment.set_left_ring_id(Some(left));
         equipment.set_right_ring_id(Some(right));

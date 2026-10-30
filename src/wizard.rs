@@ -8,7 +8,7 @@ use crate::config::GameConfig;
 use crate::draw::{self, enter_room, leave_room, look};
 use crate::entity::chase::roomin;
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
-use crate::game::globals::{monsters, pot_info, ring_info, scr_info, ws_info, ObjInfo};
+use crate::game::globals::{arm_info, monsters, pot_info, ring_info, scr_info, weap_info, ws_info, ObjInfo};
 use crate::item::arena::{new_item_id, ThingId};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{add_pack_id, floor_at, get_item_id};
@@ -79,7 +79,11 @@ fn master_enabled() -> bool {
     crate::game::globals::master_mode_enabled != 0
 }
 
-use crate::game::globals::{a_class, count, mpos, n_objs, no_move, running, vf_hit};
+use crate::game::globals::{
+    a_class, after, again, count, group, inpack, inv_describe, l_last_comm,
+    l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc,
+    n_objs, no_move, pack_used, running, terse, vf_hit,
+};
 
 pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
     let pack = DUNGEON.player.pack();
@@ -90,7 +94,17 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
 
     let mut obj: Option<ThingId> = None;
     loop {
-        obj = get_item_id("identify", filter);
+        let arm_names = (&*(&raw const arm_info)).clone();
+        let pot_names = (&*(&raw const pot_info)).clone();
+        let ring_names = (&*(&raw const ring_info)).clone();
+        let scr_names = (&*(&raw const scr_info)).clone();
+        let weap_names = (&*(&raw const weap_info)).clone();
+        let ws_names = (&*(&raw const ws_info)).clone();
+        obj = get_item_id("identify", filter, &DUNGEON, &raw mut after,
+            again, l_last_comm, l_last_dir, l_last_pick, &raw mut last_comm,
+            &raw mut last_dir, &raw mut last_pick, &raw mut mpos,
+            &raw mut msg_esc, &raw mut n_objs, terse, inv_describe,
+            &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names);
         if insist != 0 {
             if n_objs == 0 {
                 return;
@@ -128,7 +142,15 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
         _ => {}
     }
 
-    msg_str(&inv_name_id(obj, false));
+    // Refresh snapshots after identification changes the live tables.
+    let arm_names = (&*(&raw const arm_info)).clone();
+    let pot_names = (&*(&raw const pot_info)).clone();
+    let ring_names = (&*(&raw const ring_info)).clone();
+    let scr_names = (&*(&raw const scr_info)).clone();
+    let weap_names = (&*(&raw const weap_info)).clone();
+    let ws_names = (&*(&raw const ws_info)).clone();
+    msg_str(&inv_name_id(obj, false, &DUNGEON, inv_describe, &arm_names,
+        &pot_names, &ring_names, &scr_names, &weap_names, &ws_names));
 }
 
 pub unsafe fn set_know_id(id: ThingId, info: &mut [ObjInfo]) {
@@ -159,7 +181,7 @@ pub unsafe fn create_obj() {
         return;
     }
 
-    let obj = new_item_id();
+    let obj = new_item_id(&DUNGEON.objects);
     let mut ch: i32;
 
     msg_str("type of item: ");
@@ -196,7 +218,7 @@ pub unsafe fn create_obj() {
             }
             if matches!(otype, ItemType::Weapon(_)) {
                 let w = DUNGEON.objects.with_object(obj, |o| o.o_which).unwrap_or(0);
-                init_weapon(obj, w, &mut RNG.lock().unwrap());
+                init_weapon(obj, w, &mut RNG.lock().unwrap(), &DUNGEON, &raw mut group);
                 if bless == ('-' as u8) {
                     DUNGEON.objects.with_object_mut(obj, |o| {
                         o.o_hplus -= {
@@ -260,7 +282,7 @@ pub unsafe fn create_obj() {
             }
         }
         ItemType::Stick(_) => {
-            fix_stick_id(obj, &mut RNG.lock().unwrap());
+            fix_stick_id(obj, &mut RNG.lock().unwrap(), &DUNGEON);
         }
         ItemType::Gold => {
             msg_str("how much?");
@@ -269,14 +291,22 @@ pub unsafe fn create_obj() {
         _ => {}
     }
 
-    add_pack_id(Some(obj), false);
+    let arm_names = (&*(&raw const arm_info)).clone();
+    let pot_names = (&*(&raw const pot_info)).clone();
+    let ring_names = (&*(&raw const ring_info)).clone();
+    let scr_names = (&*(&raw const scr_info)).clone();
+    let weap_names = (&*(&raw const weap_info)).clone();
+    let ws_names = (&*(&raw const ws_info)).clone();
+    add_pack_id(Some(obj), false, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+        terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
+        &weap_names, &ws_names);
 }
 
 pub unsafe fn teleport(random: &mut Random) {
     let mut c = DUNGEON.find_floor(None, 0, true, random).unwrap_or(IVec2::ZERO);
     let mut hero = hero();
 
-    crate::draw::write_cell_glyph(hero, floor_at() as char);
+    crate::draw::write_cell_glyph(hero, floor_at(&DUNGEON) as char);
     if roomin(c) != proom() {
         leave_room(hero, random);
         hero = c;
@@ -338,7 +368,7 @@ mod tests {
     #[test]
     fn set_know_marks_object_known() {
         unsafe {
-            let id = crate::item::arena::new_item_id();
+            let id = crate::item::arena::new_item_id(&DUNGEON.objects);
             DUNGEON.objects.with_object_mut(id, |o| {
                 o.o_type = ItemType::SCROLL;
                 o.o_which = 0;
@@ -355,7 +385,7 @@ mod tests {
 
             set_know_id(id, &mut info[..]);
             assert_eq!(info[0].oi_know, true);
-            assert!(crate::item::arena::with_object(id, |o| {
+            assert!(crate::item::arena::with_object(&DUNGEON.objects, id, |o| {
                 o.o_flags.contains(ObjectFlags::KNOW)
             })
             .unwrap());

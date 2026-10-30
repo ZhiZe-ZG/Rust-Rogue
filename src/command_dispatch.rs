@@ -9,7 +9,7 @@ use crate::direction::Direction;
 use crate::draw::{add_pass, look};
 use crate::entity::chase::{diag_ok, see_monst};
 use crate::entity::player::{do_move, do_run, MonsterFlags, ObjectFlags, Thing};
-use crate::game::globals::{pot_info, ring_info, scr_info, ws_info};
+use crate::game::globals::{arm_info, pot_info, ring_info, scr_info, weap_info, ws_info};
 use crate::help::{help, identify};
 use crate::item::arena::{new_item_id, ThingId};
 use crate::item::armor::{take_off, wear};
@@ -69,6 +69,7 @@ impl Default for CommandState {
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
 use crate::game::globals::{
+    e_levels, group, inpack, max_stats, msg_esc, n_objs, pack_used,
     after, again, count, delta, dir_ch, door_stop, firstmove, get_food_left, get_inpack, has_hit,
     inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
     last_pick, lastscore, max_hit, move_on, mpos, no_command, p_colors, purse, q_comm,
@@ -177,12 +178,20 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
             // The C code uses `goto over` from a few arms; we emulate it with
             // a labelled loop: arms that re-dispatch set `ch` and `continue`.
             'dispatch: loop {
+                // Item/UI callbacks may mutate the live metadata. Never lend
+                // those tables across a reentrant command.
+                let arm_names = (&*(&raw const arm_info)).clone();
+                let pot_names = (&*(&raw const pot_info)).clone();
+                let ring_names = (&*(&raw const ring_info)).clone();
+                let scr_names = (&*(&raw const scr_info)).clone();
+                let weap_names = (&*(&raw const weap_info)).clone();
+                let ws_names = (&*(&raw const ws_info)).clone();
                 match command {
                     Command::Pickup => {
                         let hero = hero_pos();
                         let mut found_obj: Option<ThingId> = None;
                         for obj in crate::game::item_ids() {
-                            if crate::item::arena::with_object(obj, |o| {
+                            if crate::item::arena::with_object(&DUNGEON.objects, obj, |o| {
                                 o.o_pos.y == hero.y && o.o_pos.x == hero.x
                             })
                             .unwrap_or(false)
@@ -195,9 +204,12 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         if let Some(obj) = found_obj {
                             if levit_check() == 0 {
                                 let code =
-                                    crate::item::arena::with_object(obj, |o| o.o_type.code())
+                                    crate::item::arena::with_object(&DUNGEON.objects, obj, |o| o.o_type.code())
                                         .unwrap_or(0);
-                                pick_up(code as u8);
+                                pick_up(code as u8, &DUNGEON, &raw mut inpack, move_on,
+                                    &raw mut pack_used, &raw mut purse, terse, inv_describe,
+                                    &arm_names, &pot_names, &ring_names, &scr_names,
+                                    &weap_names, &ws_names);
                             }
                         } else {
                             if terse == 0 {
@@ -278,6 +290,12 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 delta.x,
                                 &raw mut has_hit,
                                 &mut RNG.lock().unwrap(),
+                                &DUNGEON, terse, &weap_names, &raw mut after, again,
+                                &raw mut inpack, l_last_comm, l_last_dir, l_last_pick,
+                                &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+                                &raw mut mpos, &raw mut msg_esc, &raw mut n_objs,
+                                &raw mut pack_used, inv_describe, &arm_names, &pot_names,
+                                &ring_names, &scr_names, &ws_names,
                             );
                         }
                     }
@@ -291,7 +309,18 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             continue 'dispatch;
                         }
                     }
-                    Command::Quaff => quaff(&mut RNG.lock().unwrap()),
+                    Command::Quaff => {
+                        let levels = e_levels;
+                        let fruit = crate::game::globals::fruit();
+                        quaff(&mut RNG.lock().unwrap(), &DUNGEON, &crate::ui::terminal::UI,
+                            &raw mut pot_info as *mut [_], &raw mut after, terse,
+                            max_stats.strength, &levels, &fruit, again, &raw mut inpack,
+                            l_last_comm, l_last_dir, l_last_pick, &raw mut last_comm,
+                            &raw mut last_dir, &raw mut last_pick, &raw mut mpos,
+                            &raw mut msg_esc, &raw mut n_objs, &raw mut pack_used,
+                            inv_describe, &arm_names, &ring_names, &scr_names,
+                            &weap_names, &ws_names);
+                    }
                     Command::Quit => {
                         after = false as u8;
                         q_comm = true as u8;
@@ -300,20 +329,53 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                     }
                     Command::Inventory => {
                         after = false as u8;
-                        inventory(&crate::item::pack::pack_ptrs(), ItemFilter::Any);
+                        inventory(&crate::item::pack::pack_ptrs(&DUNGEON), ItemFilter::Any,
+                            &DUNGEON, &raw mut msg_esc, &raw mut n_objs, terse,
+                            inv_describe, &arm_names, &pot_names, &ring_names,
+                            &scr_names, &weap_names, &ws_names);
                     }
                     Command::InventorySelect => {
                         after = false as u8;
-                        picky_inven();
+                        picky_inven(&DUNGEON, &raw mut mpos, terse, inv_describe,
+                            &arm_names, &pot_names, &ring_names, &scr_names,
+                            &weap_names, &ws_names);
                     }
-                    Command::Drop => drop(&mut RNG.lock().unwrap()),
-                    Command::ReadScroll => read_scroll(&mut RNG.lock().unwrap()),
+                    Command::Drop => drop(&mut RNG.lock().unwrap(), &DUNGEON,
+                        &raw mut after, again, &raw mut inpack, l_last_comm, l_last_dir,
+                        l_last_pick, &raw mut last_comm, &raw mut last_dir,
+                        &raw mut last_pick, &raw mut mpos, &raw mut msg_esc,
+                        &raw mut n_objs, &raw mut pack_used, terse, inv_describe,
+                        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
+                    Command::ReadScroll => read_scroll(&mut RNG.lock().unwrap(), &DUNGEON,
+                        &crate::ui::terminal::UI, &raw mut scr_info as *mut [_],
+                        &weap_names, &raw mut no_command, terse, &raw mut after,
+                        again, &raw mut inpack, l_last_comm, l_last_dir, l_last_pick,
+                        &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+                        &raw mut mpos, &raw mut msg_esc, &raw mut n_objs,
+                        &raw mut pack_used, inv_describe, &arm_names, &pot_names,
+                        &ring_names, &ws_names),
                     Command::Eat => eat(),
-                    Command::Wield => wield(&mut RNG.lock().unwrap()),
-                    Command::Wear => wear(&mut RNG.lock().unwrap()),
-                    Command::TakeOff => take_off(&mut RNG.lock().unwrap()),
-                    Command::RingOn => ring_on(&mut RNG.lock().unwrap()),
-                    Command::RingOff => ring_off(&mut RNG.lock().unwrap()),
+                    Command::Wield => wield(&mut RNG.lock().unwrap(), &DUNGEON, terse,
+                        &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
+                        &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+                        &raw mut mpos, &raw mut msg_esc, &raw mut n_objs, inv_describe,
+                        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
+                    Command::Wear => wear(&mut RNG.lock().unwrap(), &DUNGEON, terse,
+                        &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
+                        &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+                        &raw mut mpos, &raw mut msg_esc, &raw mut n_objs, inv_describe,
+                        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
+                    Command::TakeOff => take_off(&mut RNG.lock().unwrap(), &DUNGEON,
+                        terse, &raw mut after, inv_describe, &arm_names, &pot_names,
+                        &ring_names, &scr_names, &weap_names, &ws_names),
+                    Command::RingOn => ring_on(&mut RNG.lock().unwrap(), &DUNGEON,
+                        terse, &raw mut mpos, &raw mut after, again, l_last_comm,
+                        l_last_dir, l_last_pick, &raw mut last_comm, &raw mut last_dir,
+                        &raw mut last_pick, &raw mut msg_esc, &raw mut n_objs, inv_describe,
+                        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
+                    Command::RingOff => ring_off(&mut RNG.lock().unwrap(), &DUNGEON,
+                        terse, &raw mut mpos, inv_describe, &arm_names, &pot_names,
+                        &ring_names, &scr_names, &weap_names, &ws_names),
                     Command::Options => {
                         option();
                         after = false as u8;
@@ -341,7 +403,13 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                     Command::Search => search(&mut RNG.lock().unwrap()),
                     Command::Zap => {
                         if get_dir() != 0 {
-                            do_zap(&mut RNG.lock().unwrap());
+                            do_zap(&mut RNG.lock().unwrap(), &DUNGEON,
+                                &raw mut ws_info as *mut [_], &raw mut after, delta, terse,
+                                again, l_last_comm, l_last_dir, l_last_pick,
+                                &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+                                &raw mut mpos, &raw mut msg_esc, &raw mut n_objs,
+                                inv_describe, &arm_names, &pot_names, &ring_names,
+                                &scr_names, &weap_names);
                         } else {
                             after = false as u8;
                         }
@@ -406,11 +474,11 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         if MASTER {
                             if crate::wizard::is_wizard() {
                                 crate::wizard::set_wizard_mode(0);
-                                turn_see(true as u8, &mut RNG.lock().unwrap());
+                                turn_see(true as u8, &mut RNG.lock().unwrap(), &DUNGEON);
                                 msg_str("not wizard any more");
                             } else {
                                 crate::wizard::set_wizard_mode(1);
-                                turn_see(false as u8, &mut RNG.lock().unwrap());
+                                turn_see(false as u8, &mut RNG.lock().unwrap(), &DUNGEON);
                                 msg_str(&format!(
                                     "you are suddenly as smart as Ken Arnold in dungeon #{}",
                                     1234
@@ -474,7 +542,10 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                     msg_str(&format!("inpack = {}", get_inpack()));
                                 }
                                 Command::WizardInventory => {
-                                    let _ = inventory(&DUNGEON.player.pack(), ItemFilter::Any);
+                                    let _ = inventory(&DUNGEON.player.pack(), ItemFilter::Any,
+                                        &DUNGEON, &raw mut msg_esc, &raw mut n_objs, terse,
+                                        inv_describe, &arm_names, &pot_names, &ring_names,
+                                        &scr_names, &weap_names, &ws_names);
                                 }
                                 Command::WizardIdentify => whatis(false as u8, ItemFilter::Any),
                                 Command::WizardDown => {
@@ -500,36 +571,46 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                         true as u8
                                     } else {
                                         false as u8
-                                    }, &mut RNG.lock().unwrap());
+                                    }, &mut RNG.lock().unwrap(), &DUNGEON);
                                 }
                                 Command::WizardCharge => {
                                     let item = get_item_id(
                                         "charge",
                                         ItemFilter::Category(ItemType::STICK),
+                                        &DUNGEON, &raw mut after, again, l_last_comm,
+                                        l_last_dir, l_last_pick, &raw mut last_comm,
+                                        &raw mut last_dir, &raw mut last_pick, &raw mut mpos,
+                                        &raw mut msg_esc, &raw mut n_objs, terse, inv_describe,
+                                        &arm_names, &pot_names, &ring_names, &scr_names,
+                                        &weap_names, &ws_names,
                                     );
                                     if let Some(id) = item {
                                         DUNGEON.objects.with_object_mut(id, |o| o.o_arm = 10000);
                                     }
                                 }
                                 Command::WizardGear => {
+                                    let levels = e_levels;
                                     for _ in 0..9 {
-                                        raise_level(&mut RNG.lock().unwrap());
+                                        raise_level(&mut RNG.lock().unwrap(), &DUNGEON, &levels);
                                     }
                                     /*
                                      * Give him a sword (+1,+1)
                                      */
-                                    let sword = new_item_id();
-                                    init_weapon(sword, TWOSWORD, &mut RNG.lock().unwrap());
+                                    let sword = new_item_id(&DUNGEON.objects);
+                                    init_weapon(sword, TWOSWORD, &mut RNG.lock().unwrap(),
+                                        &DUNGEON, &raw mut group);
                                     DUNGEON.objects.with_object_mut(sword, |o| {
                                         o.o_hplus = 1;
                                         o.o_dplus = 1;
                                     });
-                                    add_pack_id(Some(sword), true);
+                                    add_pack_id(Some(sword), true, &DUNGEON, &raw mut inpack,
+                                        &raw mut pack_used, terse, inv_describe, &arm_names,
+                                        &pot_names, &ring_names, &scr_names, &weap_names, &ws_names);
                                     DUNGEON.player.set_weapon_id(Some(sword));
                                     /*
                                      * And his suit of armor
                                      */
-                                    let armor = new_item_id();
+                                    let armor = new_item_id(&DUNGEON.objects);
                                     DUNGEON.objects.with_object_mut(armor, |o| {
                                         o.o_type = ItemType::Armor(PLATE_MAIL);
                                         o.o_which = PLATE_MAIL;
@@ -539,7 +620,9 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                         o.o_group = 0;
                                     });
                                     DUNGEON.player.set_armor_id(Some(armor));
-                                    add_pack_id(Some(armor), true);
+                                    add_pack_id(Some(armor), true, &DUNGEON, &raw mut inpack,
+                                        &raw mut pack_used, terse, inv_describe, &arm_names,
+                                        &pot_names, &ring_names, &scr_names, &weap_names, &ws_names);
                                 }
                                 Command::WizardList => pr_list(),
                                 _ => illcom(command),
@@ -561,7 +644,15 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
          * If he ran into something to take, let him pick it up.
          */
         if take != 0 {
-            pick_up(take);
+            let arm_names = (&*(&raw const arm_info)).clone();
+            let pot_names = (&*(&raw const pot_info)).clone();
+            let ring_names = (&*(&raw const ring_info)).clone();
+            let scr_names = (&*(&raw const scr_info)).clone();
+            let weap_names = (&*(&raw const weap_info)).clone();
+            let ws_names = (&*(&raw const ws_info)).clone();
+            pick_up(take, &DUNGEON, &raw mut inpack, move_on, &raw mut pack_used,
+                &raw mut purse, terse, inv_describe, &arm_names, &pot_names,
+                &ring_names, &scr_names, &weap_names, &ws_names);
         }
         if running == 0 {
             door_stop = false as u8;
@@ -811,7 +902,17 @@ pub unsafe fn levit_check() -> u8 {
 /// Uses globals: ring_info, r_stones, pot_info, p_colors, scr_info,
 /// s_names, ws_info, ws_made, terse, prbuf.
 pub unsafe fn call() {
-    let Some(obj) = get_item_id("call", ItemFilter::Callable) else {
+    let arm_names = (&*(&raw const arm_info)).clone();
+    let pot_names = (&*(&raw const pot_info)).clone();
+    let ring_names = (&*(&raw const ring_info)).clone();
+    let scr_names = (&*(&raw const scr_info)).clone();
+    let weap_names = (&*(&raw const weap_info)).clone();
+    let ws_names = (&*(&raw const ws_info)).clone();
+    let Some(obj) = get_item_id("call", ItemFilter::Callable, &DUNGEON,
+        &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
+        &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+        &raw mut mpos, &raw mut msg_esc, &raw mut n_objs, terse, inv_describe,
+        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names) else {
         return;
     };
 
@@ -852,14 +953,16 @@ pub unsafe fn call() {
     }
 
     // Magic items keep their call-name in the obj-info table entry.
-    let op = match otype {
-        ItemType::Ring(_) => &mut ring_info[..],
-        ItemType::Potion(_) => &mut pot_info[..],
-        ItemType::Scroll(_) => &mut scr_info[..],
-        _ => &mut ws_info[..],
+    // Keep the live table raw while prompts can reenter metadata updates.
+    let op: *mut [crate::game::globals::ObjInfo] = match otype {
+        ItemType::Ring(_) => &raw mut ring_info as *mut [_],
+        ItemType::Potion(_) => &raw mut pot_info as *mut [_],
+        ItemType::Scroll(_) => &raw mut scr_info as *mut [_],
+        _ => &raw mut ws_info as *mut [_],
     };
 
     let which = o_which as usize;
+    let info = (&*op)[which].clone();
     let mut elsewise: String = match otype {
         ItemType::Ring(_) => cstr_at(r_stones[which]),
         ItemType::Potion(_) => cstr_at(p_colors[which]),
@@ -867,16 +970,16 @@ pub unsafe fn call() {
         _ => cstr_at(ws_made[which]),
     };
 
-    if let Some(guess) = &op[which].oi_guess {
+    if let Some(guess) = &info.oi_guess {
         elsewise = guess.clone();
     }
 
-    if op[which].oi_know {
+    if info.oi_know {
         msg_str("that has already been identified");
         return;
     }
 
-    if op[which].oi_guess.is_some() {
+    if info.oi_guess.is_some() {
         if terse == 0 {
             addmsg_str("Was ");
         }
@@ -890,7 +993,7 @@ pub unsafe fn call() {
     }
 
     if let Some(text) = read_line(&elsewise) {
-        op[which].oi_guess = Some(text);
+        (&mut *op)[which].oi_guess = Some(text);
     }
 }
 
@@ -907,8 +1010,16 @@ pub unsafe fn current(cur: Option<crate::item::arena::ThingId>, how: &str, where
             addmsg_str(&format!("you are {} (", how));
         }
         inv_describe = false as u8;
+        let arm_names = (&*(&raw const arm_info)).clone();
+        let pot_names = (&*(&raw const pot_info)).clone();
+        let ring_names = (&*(&raw const ring_info)).clone();
+        let scr_names = (&*(&raw const scr_info)).clone();
+        let weap_names = (&*(&raw const weap_info)).clone();
+        let ws_names = (&*(&raw const ws_info)).clone();
         let packch = DUNGEON.objects.with_object(id, |o| o.o_packch).unwrap_or(0);
-        addmsg_str(&format!("{}) {}", packch as char, inv_name_id(id, true)));
+        addmsg_str(&format!("{}) {}", packch as char, inv_name_id(id, true,
+            &DUNGEON, inv_describe, &arm_names, &pot_names, &ring_names,
+            &scr_names, &weap_names, &ws_names)));
         inv_describe = true as u8;
         if !where_.is_empty() {
             addmsg_str(&format!(" {}", where_));
@@ -934,11 +1045,18 @@ pub unsafe fn current(cur: Option<crate::item::arena::ThingId>, how: &str, where
 /// Uses globals: lvl_obj, mlist.
 pub unsafe fn pr_list() {
     for obj in crate::game::item_ids() {
-        let otype = crate::item::arena::with_object(obj, |o| o.o_type).unwrap_or(ItemType::None);
+        let arm_names = (&*(&raw const arm_info)).clone();
+        let pot_names = (&*(&raw const pot_info)).clone();
+        let ring_names = (&*(&raw const ring_info)).clone();
+        let scr_names = (&*(&raw const scr_info)).clone();
+        let weap_names = (&*(&raw const weap_info)).clone();
+        let ws_names = (&*(&raw const ws_info)).clone();
+        let otype = crate::item::arena::with_object(&DUNGEON.objects, obj, |o| o.o_type).unwrap_or(ItemType::None);
         msg_str(&format!(
             "{}) {}",
             crate::draw::item_glyph(otype),
-            inv_name_id(obj, false)
+            inv_name_id(obj, false, &DUNGEON, inv_describe, &arm_names,
+                &pot_names, &ring_names, &scr_names, &weap_names, &ws_names)
         ));
     }
 }
