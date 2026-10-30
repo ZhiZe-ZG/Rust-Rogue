@@ -30,8 +30,6 @@ use crate::item::arena::ThingId;
 use crate::level::{LevelFlags, PassageLinks, RoomGraph};
 use crate::structure::{Passage, Room, Structure};
 
-/// Number of generated scroll names persisted (legacy `MAXSCROLLS`).
-const MAXSCROLLS: usize = 18;
 
 // ─── Snapshot value types ────────────────────────────────────────────────────
 
@@ -468,9 +466,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         whoami: crate::game::globals::whoami(),
         fruit: crate::game::globals::fruit(),
         home: crate::game::globals::get_home(),
-        scroll_names: (0..MAXSCROLLS)
-            .map(crate::game::globals::scroll_name)
-            .collect(),
+        scroll_names: DUNGEON.scroll_names(),
         inv_t_names: crate::game::globals::inv_t_names(),
         trap_names: crate::game::globals::trap_names(),
         p_colors: p_colors.iter().map(|c| (*c).to_string()).collect(),
@@ -614,9 +610,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     crate::game::globals::set_whoami(s.whoami);
     crate::game::globals::set_fruit(s.fruit);
     crate::game::globals::set_home(s.home);
-    for (i, name) in s.scroll_names.iter().enumerate() {
-        crate::game::globals::set_scroll_name(i, name.clone());
-    }
+    DUNGEON.set_scroll_names(s.scroll_names);
     for (i, name) in s.inv_t_names.iter().enumerate() {
         crate::game::globals::set_inv_t_name(i, name.clone());
     }

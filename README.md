@@ -51,6 +51,7 @@ Callers outside these modules still obtain dependencies from the singleton owner
 - The live `monster_list` and per-cell `monster_map`.
 - `player`: the hero actor and its equipment, defined by `Player` in [src/game/player.rs](src/game/player.rs).
 - `objects`: the generational `ThingArena` in [src/item/arena.rs](src/item/arena.rs), shared by floor items, player inventory, monster packs, and equipment handles.
+- `scroll_names`: randomly generated scroll labels behind an `RwLock`, accessed through `scroll_name()`, `scroll_names()`, and their setters. Each dungeon has independent names that persist across level changes and save/restore.
 
 It also owns atomic fields for `max_level` (deepest dungeon depth), `no_food` (food-generation counter), `ntraps`, `seenstairs`, and `amulet`. These are not standalone globals. Use methods such as `max_depth()`, `seen_stairs()`, `set_seen_stairs()`, and `has_amulet()`.
 
@@ -160,9 +161,7 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `FILE_NAME`: current save filename.
 - `HUH`: message history buffer.
 - `PRBUF`: shared scratch string buffer.
-- `SCROLL_NAMES`: generated scroll names.
 - `INV_T_NAMES`: inventory display style names.
-- `TRAP_NAMES`: immutable constant array of eight trap names; no initialization or locking is needed.
 
 ### Other singleton owners and local state
 

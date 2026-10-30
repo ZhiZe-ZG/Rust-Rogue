@@ -1417,9 +1417,6 @@ pub fn set_prbuf(value: String) {
 // (`DUNGEON.monster_list`, `DUNGEON.objects`, `DUNGEON.player`). Callers
 // read/write through the small accessors below.
 
-/// Generated scroll names (one per scroll kind), previously `char *s_names[]`.
-pub static SCROLL_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
-
 /// Inventory display style names, previously `char *inv_t_name[]`.
 pub static INV_T_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
@@ -1437,35 +1434,6 @@ pub const TRAP_NAMES: [&str; 8] = [
 
 fn lock<T>(cell: &Mutex<T>) -> MutexGuard<'_, T> {
     cell.lock().unwrap_or_else(|poison| poison.into_inner())
-}
-
-/// Replace the scroll names with `total` entries produced by `fill`.
-pub fn set_scroll_names(total: usize, fill: impl Fn(usize) -> String) {
-    let mut names = lock(&SCROLL_NAMES);
-    names.clear();
-    names.reserve(total);
-    for i in 0..total {
-        names.push(fill(i));
-    }
-}
-
-/// Set the scroll name at `index`.
-pub fn set_scroll_name(index: usize, name: String) {
-    let mut names = lock(&SCROLL_NAMES);
-    if names.len() <= index {
-        names.resize_with(index + 1, String::new);
-    }
-    names[index] = name;
-}
-
-/// Get the scroll name at `index` (empty string when unset).
-pub fn scroll_name(index: usize) -> String {
-    lock(&SCROLL_NAMES).get(index).cloned().unwrap_or_default()
-}
-
-/// Number of scroll names currently stored.
-pub fn scroll_name_count() -> usize {
-    lock(&SCROLL_NAMES).len()
 }
 
 /// Install the default inventory display style names.

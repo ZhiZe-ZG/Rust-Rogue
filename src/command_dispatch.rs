@@ -988,7 +988,7 @@ pub unsafe fn call() {
     let mut elsewise: String = match otype {
         ItemType::Ring(_) => cstr_at(r_stones[which]),
         ItemType::Potion(_) => cstr_at(p_colors[which]),
-        ItemType::Scroll(_) => crate::game::globals::scroll_name(which),
+        ItemType::Scroll(_) => DUNGEON.scroll_name(which),
         _ => cstr_at(ws_made[which]),
     };
 

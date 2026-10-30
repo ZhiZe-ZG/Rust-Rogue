@@ -36,6 +36,8 @@ pub use monster_map::MonsterMap;
 pub struct Dungeon {
     /// The live [`Level`], created lazily on first access.
     level: RwLock<Option<Level>>,
+    /// Generated scroll labels, shared across levels within this game.
+    scroll_names: RwLock<Vec<String>>,
     /// Highest dungeon depth reached so far.
     max_level: AtomicI32,
     /// Whether food generation is disabled.
@@ -70,6 +72,7 @@ impl Dungeon {
     pub const fn empty() -> Self {
         Self {
             level: RwLock::new(None),
+            scroll_names: RwLock::new(Vec::new()),
             max_level: AtomicI32::new(0),
             no_food: AtomicI32::new(0),
             ntraps: AtomicI32::new(0),
@@ -80,6 +83,36 @@ impl Dungeon {
             objects: ThingArena::new(),
             player: Player::EMPTY,
         }
+    }
+
+    /// Replace all generated scroll names, including when restoring a game.
+    pub fn set_scroll_names(&self, names: Vec<String>) {
+        *self.scroll_names.write().unwrap_or_else(|poison| poison.into_inner()) = names;
+    }
+
+    /// Set a scroll name, extending the table with empty names if needed.
+    pub fn set_scroll_name(&self, index: usize, name: String) {
+        let mut names = self.scroll_names.write().unwrap_or_else(|poison| poison.into_inner());
+        if names.len() <= index {
+            names.resize_with(index + 1, String::new);
+        }
+        names[index] = name;
+    }
+
+    /// A scroll name, or an empty string when the index is unset.
+    pub fn scroll_name(&self, index: usize) -> String {
+        self.scroll_names.read().unwrap_or_else(|poison| poison.into_inner())
+            .get(index).cloned().unwrap_or_default()
+    }
+
+    /// Owned copies of all scroll names for saving without retaining a lock.
+    pub fn scroll_names(&self) -> Vec<String> {
+        self.scroll_names.read().unwrap_or_else(|poison| poison.into_inner()).clone()
+    }
+
+    /// Number of generated scroll names currently stored.
+    pub fn scroll_name_count(&self) -> usize {
+        self.scroll_names.read().unwrap_or_else(|poison| poison.into_inner()).len()
     }
 
     /// Ensure the live level exists, initializing it on first access.
@@ -316,6 +349,35 @@ pub(crate) fn bump_no_food() {
 #[cfg(test)]
 mod tests {
     use super::Dungeon;
+
+    #[test]
+    fn scroll_names_are_owned_by_each_dungeon() {
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        assert_eq!(first.scroll_name_count(), 0);
+        assert_eq!(first.scroll_name(usize::MAX), "");
+
+        first.set_scroll_names(vec!["foo bar".to_owned(), "baz".to_owned()]);
+        second.set_scroll_name(2, "quux".to_owned());
+        assert_eq!(first.scroll_name(0), "foo bar");
+        assert_eq!(first.scroll_name_count(), 2);
+        assert_eq!(second.scroll_names(), vec!["", "", "quux"]);
+
+        let mut snapshot = first.scroll_names();
+        snapshot[0] = "changed".to_owned();
+        assert_eq!(first.scroll_name(0), "foo bar");
+
+        // A shorter restored table replaces old entries rather than leaving
+        // labels from the previous game behind.
+        let restored = Dungeon::empty();
+        restored.set_scroll_names(snapshot.clone());
+        assert_eq!(restored.scroll_names(), snapshot);
+        first.set_scroll_names(vec!["replacement".to_owned()]);
+        assert_eq!(first.scroll_name(1), "");
+        first.with_level_mut(|level| level.depth = 2);
+        assert_eq!(first.scroll_name(0), "replacement");
+        assert_eq!(second.scroll_name(2), "quux");
+    }
 
     #[test]
     fn players_are_owned_by_each_dungeon() {

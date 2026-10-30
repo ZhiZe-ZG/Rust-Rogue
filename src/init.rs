@@ -356,10 +356,10 @@ pub unsafe fn init_colors() {
 /// Generate random pronounceable names for each scroll.
 ///
 /// Builds each name as an owned Rust [`String`] and stores it in
-/// [`crate::game::globals::SCROLL_NAMES`], preserving the syllable, word-count, and
+/// [`crate::dungeon::Dungeon`], preserving the syllable, word-count, and
 /// `MAXNAME` length limits of the original C routine.
 pub unsafe fn init_names() {
-    crate::game::globals::set_scroll_names(MAXSCROLLS, |_| {
+    let names = (0..MAXSCROLLS).map(|_| {
         let mut name = String::new();
         let mut nwords = {
             let mut random = RNG.lock().unwrap();
@@ -387,7 +387,8 @@ pub unsafe fn init_names() {
         // Back up over the trailing space.
         name.pop();
         name
-    });
+    }).collect();
+    crate::dungeon::DUNGEON.set_scroll_names(names);
 }
 
 /// Assign a random stone setting to each ring type.
