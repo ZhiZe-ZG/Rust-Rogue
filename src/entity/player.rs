@@ -627,7 +627,12 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
                     o.o_count = 1;
                     o.o_pos = DUNGEON.player.pos();
                 });
-                fall(arrow, false, &mut RNG.lock().unwrap());
+                fall(
+                    arrow,
+                    false,
+                    &mut *(&raw mut crate::game::globals::has_hit),
+                    &mut RNG.lock().unwrap(),
+                );
                 hit = TrapHit::Miss;
             }
         }

@@ -99,7 +99,7 @@ const INIT_DAM: [InitWeap; MAXWEAPONS] = [
     },
 ];
 
-use crate::game::globals::{after, group, has_hit, terse};
+use crate::game::globals::{after, group, terse};
 
 #[inline]
 fn hero() -> IVec2 {
@@ -120,7 +120,11 @@ fn set_damage(dst: &mut [u8; 8], src: &[u8]) {
 }
 
 /// Throws a selected weapon in the provided direction and resolves impact/fall behavior.
-pub unsafe fn missile(ydelta: i32, xdelta: i32, random: &mut Random) {
+///
+/// # Safety
+/// `has_hit` must point to a valid, writable hit-message flag. It is passed as a
+/// raw pointer because combat may update the same flag before the item falls.
+pub unsafe fn missile(ydelta: i32, xdelta: i32, has_hit: *mut u8, random: &mut Random) {
     let Some(id) = get_item_id("throw", ItemFilter::Category(ItemType::WEAPON)) else {
         return;
     };
@@ -135,7 +139,7 @@ pub unsafe fn missile(ydelta: i32, xdelta: i32, random: &mut Random) {
 
     let pos = crate::dungeon::DUNGEON.objects.with_object(obj, |o| o.o_pos).unwrap_or(IVec2::ZERO);
     if !crate::game::monster_here(pos.y, pos.x) || hit_monster(pos.y, pos.x, obj, random) == 0 {
-        fall(obj, true, random);
+        fall(obj, true, &mut *has_hit, random);
     }
 }
 
@@ -174,7 +178,7 @@ pub unsafe fn do_motion(id: ThingId, ydelta: i32, xdelta: i32) -> IVec2 {
 }
 
 /// Drops an item near its current position or discards it if no floor slot is available.
-pub unsafe fn fall(id: ThingId, pr: bool, random: &mut Random) {
+pub unsafe fn fall(id: ThingId, pr: bool, has_hit: &mut u8, random: &mut Random) {
     let Some(pos) = crate::dungeon::DUNGEON.objects.with_object(id, |o| o.o_pos) else {
         return;
     };
@@ -203,9 +207,9 @@ pub unsafe fn fall(id: ThingId, pr: bool, random: &mut Random) {
     }
 
     if pr {
-        if has_hit != 0 {
+        if *has_hit != 0 {
             endmsg();
-            has_hit = 0;
+            *has_hit = 0;
         }
         let which = crate::dungeon::DUNGEON.objects.with_object(id, |o| o.o_which).unwrap_or(0);
         msg_str(&format!(

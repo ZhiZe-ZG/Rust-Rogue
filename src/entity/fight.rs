@@ -877,7 +877,7 @@ pub unsafe fn remove_mon(mp: IVec2, tp: MonsterId, waskill: u8, random: &mut Ran
             continue;
         }
         if waskill != 0 {
-            fall(id, false, random);
+            fall(id, false, &mut *(&raw mut has_hit), random);
         } else {
             let _ = DUNGEON.objects.remove(id);
         }

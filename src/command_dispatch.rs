@@ -273,7 +273,12 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         if get_dir() == 0 {
                             after = false as u8;
                         } else {
-                            missile(delta.y, delta.x, &mut RNG.lock().unwrap());
+                            missile(
+                                delta.y,
+                                delta.x,
+                                &raw mut has_hit,
+                                &mut RNG.lock().unwrap(),
+                            );
                         }
                     }
                     Command::Again => {
