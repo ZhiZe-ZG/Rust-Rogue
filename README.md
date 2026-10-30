@@ -31,6 +31,18 @@ The CLI is defined in [src/command_line_parameter.rs](src/command_line_parameter
 
 This repository still has a number of process-wide Rust globals and singleton owners. They are the current refactor targets if the goal is to move away from legacy C-style global state and make state ownership more explicit.
 
+### Explicit dependencies in item and entity code
+
+Functions in [src/item/mod.rs](src/item/mod.rs) and [src/entity/mod.rs](src/entity/mod.rs) no longer directly access mutable process-wide globals. Each dependency is passed separately through function parameters; there is no aggregate context object. This changes how state is accessed, not where the remaining globals are stored.
+
+- Dungeon, player, monster, and object storage is supplied through `&Dungeon` or `&ThingArena` parameters.
+- Random draws use a supplied `&mut Random`, rather than locking `RNG` inside these modules.
+- Flags and counters such as `has_hit`, `running`, `count`, `inpack`, and `group`, and tables such as `monsters` and the item metadata arrays, are explicit parameters. UI-dependent item operations also receive their UI owner.
+- Values and shared references are used where appropriate. Reentrant mutable state is passed through individual raw pointers so an exclusive reference is not held across combat, input, or daemon callbacks. Callers must keep that storage valid and avoid conflicting borrows; immutable metadata snapshots are used where callbacks could otherwise mutate a borrowed table.
+- Constants such as `terse` and immutable lookup tables remain available directly. `entity::player` retains a compatibility re-export of `nh`, but does not directly read or write that global.
+
+Callers outside these modules still obtain dependencies from the singleton owners and [src/game/globals.rs](src/game/globals.rs). External gameplay, rendering, message, and equipment helpers can still access globals internally, so passing a separate dungeon does not yet make the entire engine instance-independent or thread-safe. Parameterized `check_level()` and `chg_str()` implementations in [src/entity/player.rs](src/entity/player.rs) coexist with legacy singleton-backed versions in [src/misc.rs](src/misc.rs).
+
 ### Dungeon-owned state
 
 `DUNGEON` in [src/dungeon/mod.rs](src/dungeon/mod.rs) owns:
@@ -63,7 +75,7 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `fight_flush`: requests a fight/flush update after combat resolution.
 - `firstmove`: indicates the first move in the current turn cycle.
 - `got_ltc`: records whether terminal control characters were captured.
-- `has_hit`: flag set when a hit occurs during combat.
+- `has_hit`: tracks a pending abbreviated combat message so subsequent output can append to or finish it; it is not the attack-success result.
 - `in_shell`: whether the game is in the shell/command mode.
 - `inv_describe`: controls whether inventory items are described in detail.
 - `jump`: suppresses intermediate screen updates during running.
@@ -123,8 +135,8 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 #### Runtime tables and arrays
 
 - `between`: counter used to pace wandering monster generation.
-- `group`: monster-group counter used during weapon initialization.
-- `nh`: next hero position used by movement/save logic.
+- `group`: stack-group identifier counter used during weapon initialization.
+- `nh`: legacy next-hero-position state retained for save compatibility; also re-exported by `entity::player`. Current movement computes its next position locally.
 - `D_LIST`: delayed-action daemon/fuse table.
 - `ROOM_GOLD`: stable per-room gold positions for chase targets.
 - `monsters`: monster prototype table used for monster metadata and stats.
@@ -170,7 +182,7 @@ Former chase-coordinate, name-buffer, random-move return, and material-use scrat
 
 ### Randomness and runtime options
 
-`Random` owns a plain `StdRng`; synchronization belongs to the shared `RNG`, not the generator's fields. `rnd()`, `roll()`, and `set_seed()` are methods taking `&mut self`. Level/maze generation, item generation, random colors, trap messages, and many gameplay effects receive `&mut Random` explicitly. Callers at the application boundary lock `RNG` and pass that generator onward; code already using the borrowed generator must not lock `RNG` again.
+`Random` owns a plain `StdRng`; synchronization belongs to the shared `RNG`, not the generator's fields. `rnd()`, `roll()`, and `set_seed()` are methods taking `&mut self`. Level/maze generation, item generation, random colors, trap messages, and item/entity gameplay effects receive `&mut Random` explicitly. Callers at the application boundary lock `RNG` and pass that generator onward; code already using the borrowed generator must not lock `RNG` again.
 
 The runtime options in [src/options.rs](src/options.rs) are `flush`, `jump`, `seefloor`, `passgo`, `tombstone`, `inven`, `name`, `fruit`, and `file`. `terse` is no longer an option.
 
