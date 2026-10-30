@@ -1423,8 +1423,17 @@ pub static SCROLL_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// Inventory display style names, previously `char *inv_t_name[]`.
 pub static INV_T_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-/// Trap kind names, previously `char *tr_name[]`.
-pub static TRAP_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// Fixed trap kind names, indexed by the legacy trap-kind discriminants.
+pub const TRAP_NAMES: [&str; 8] = [
+    "a trapdoor",
+    "an arrow trap",
+    "a sleeping gas trap",
+    "a beartrap",
+    "a teleport trap",
+    "a poison dart trap",
+    "a rust trap",
+    "a mysterious trap",
+];
 
 fn lock<T>(cell: &Mutex<T>) -> MutexGuard<'_, T> {
     cell.lock().unwrap_or_else(|poison| poison.into_inner())
@@ -1488,36 +1497,37 @@ pub fn inv_t_names() -> Vec<String> {
     lock(&INV_T_NAMES).clone()
 }
 
-/// Install the default trap names (one per trap kind).
-pub fn init_trap_names() {
-    let mut names = lock(&TRAP_NAMES);
-    *names = vec![
-        "a trapdoor".to_owned(),
-        "an arrow trap".to_owned(),
-        "a sleeping gas trap".to_owned(),
-        "a beartrap".to_owned(),
-        "a teleport trap".to_owned(),
-        "a poison dart trap".to_owned(),
-        "a rust trap".to_owned(),
-        "a mysterious trap".to_owned(),
-    ];
-}
-
 /// The trap name at `index` (empty string when out of range).
 pub fn trap_name(index: usize) -> String {
-    lock(&TRAP_NAMES).get(index).cloned().unwrap_or_default()
+    TRAP_NAMES.get(index).copied().unwrap_or_default().to_owned()
 }
 
-/// Set the trap name at `index`.
-pub fn set_trap_name(index: usize, name: String) {
-    let mut names = lock(&TRAP_NAMES);
-    if names.len() <= index {
-        names.resize_with(index + 1, String::new);
-    }
-    names[index] = name;
-}
-
-/// A snapshot clone of all trap names.
+/// Owned copies of the fixed trap names for legacy snapshot compatibility.
 pub fn trap_names() -> Vec<String> {
-    lock(&TRAP_NAMES).clone()
+    TRAP_NAMES.iter().map(|name| (*name).to_owned()).collect()
+}
+
+#[cfg(test)]
+mod trap_name_tests {
+    use super::{trap_name, trap_names, TRAP_NAMES};
+
+    #[test]
+    fn fixed_names_are_available_without_initialization() {
+        assert_eq!(TRAP_NAMES.len(), crate::tile::TrapType::Mystery as usize + 1);
+        for (index, name) in TRAP_NAMES.iter().enumerate() {
+            assert_eq!(trap_name(index), *name);
+        }
+        assert_eq!(trap_name(0), "a trapdoor");
+        assert_eq!(trap_name(7), "a mysterious trap");
+        assert_eq!(trap_name(8), "");
+        assert_eq!(trap_name(usize::MAX), "");
+    }
+
+    #[test]
+    fn changing_a_snapshot_cannot_change_trap_names() {
+        let mut names = trap_names();
+        names[0] = "custom trap".to_owned();
+        assert_eq!(trap_name(0), "a trapdoor");
+        assert_eq!(trap_names()[0], "a trapdoor");
+    }
 }

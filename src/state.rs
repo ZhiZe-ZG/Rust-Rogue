@@ -154,6 +154,8 @@ pub struct GameSnapshot {
     pub home: String,
     pub scroll_names: Vec<String>,
     pub inv_t_names: Vec<String>,
+    /// Retained for save compatibility; restoration ignores these fixed names.
+    #[serde(default)]
     pub trap_names: Vec<String>,
     pub p_colors: Vec<String>,
     pub r_stones: Vec<String>,
@@ -618,9 +620,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     for (i, name) in s.inv_t_names.iter().enumerate() {
         crate::game::globals::set_inv_t_name(i, name.clone());
     }
-    for (i, name) in s.trap_names.iter().enumerate() {
-        crate::game::globals::set_trap_name(i, name.clone());
-    }
+    // Legacy trap_names are accepted but cannot override the fixed table.
     for (i, name) in s.p_colors.iter().enumerate() {
         if i < p_colors.len() {
             p_colors[i] = resolve_static_str(name, &crate::colors::POTION_COLORS);

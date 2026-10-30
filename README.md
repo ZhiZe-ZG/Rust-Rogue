@@ -162,7 +162,7 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `PRBUF`: shared scratch string buffer.
 - `SCROLL_NAMES`: generated scroll names.
 - `INV_T_NAMES`: inventory display style names.
-- `TRAP_NAMES`: trap naming strings.
+- `TRAP_NAMES`: immutable constant array of eight trap names; no initialization or locking is needed.
 
 ### Other singleton owners and local state
 
@@ -219,6 +219,8 @@ The runtime options in [src/options.rs](src/options.rs) are `flush`, `jump`, `se
 [src/save.rs](src/save.rs) writes the header `ROGUE-RON 1\n`, followed by a Serde/RON `GameSnapshot` defined in [src/state.rs](src/state.rs). This is a Rust snapshot format, not the original C binary save format. Item references and chase targets are encoded as indices or explicit reference variants rather than serialized memory addresses.
 
 The snapshot adapts runtime ownership to saved fields: `seenstairs`, `amulet`, `ntraps`, `max_level`, and `no_food` are saved from `DUNGEON`, while depth is stored in the level snapshot. Daemons and the `between`/`group` counters are also persisted. Terminal resources, rendering caches, open file handles, and command-loop-local bookkeeping are not. Some output-related globals, including message flags and `mpos`, are persisted; not all UI-related state is transient.
+
+The `trap_names` snapshot field is retained for compatibility and written with the fixed trap names. Older saved names are accepted but ignored during restoration; customized trap names in old saves no longer override `TRAP_NAMES`. A missing `trap_names` field is also accepted.
 
 The hero, pack, and equipment are read from `DUNGEON.player`, and item records are read from `DUNGEON.objects`. Restoration allocates fresh arena handles and reconnects saved item references. The snapshot retains a `terse` field for format compatibility, but restoring it does not change the fixed verbose output mode. The saved `seed` field is not a serialized copy of the live `StdRng` state.
 
