@@ -20,8 +20,8 @@ use crate::ui::output;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
 
-use crate::entity::player::ObjectFlags;
-use crate::game::globals::ObjInfo;
+use crate::entity::player::{cell_glyph, ObjectFlags, Stats};
+use crate::game::globals::{MonsterInfo, ObjInfo};
 use crate::item::arena::{ThingArena, ThingId};
 use crate::item::things::{dropcheck_id, inv_name_id};
 
@@ -108,8 +108,8 @@ fn hero(dungeon: &Dungeon) -> IVec2 {
 }
 
 #[inline]
-unsafe fn chat(y: i32, x: i32) -> i32 {
-    crate::draw::cell_glyph(y, x) as u8 as i32
+unsafe fn chat(y: i32, x: i32, dungeon: &Dungeon) -> i32 {
+    cell_glyph(y, x, dungeon) as i32
 }
 
 /// Copy a legacy NUL-terminated damage spec into a fixed buffer, zero-filling.
@@ -123,8 +123,9 @@ fn set_damage(dst: &mut [u8; 8], src: &[u8]) {
 /// Throws a selected weapon in the provided direction and resolves impact/fall behavior.
 ///
 /// # Safety
-/// `has_hit` must point to a valid, writable hit-message flag. It is passed as a
-/// raw pointer because combat may update the same flag before the item falls.
+/// State/table pointers must remain valid throughout reentrant combat and UI
+/// calls, without conflicting live references. `weap_info` must contain all ten
+/// weapon entries, including the transient bolt entry.
 pub unsafe fn missile(
     ydelta: i32,
     xdelta: i32,
@@ -152,11 +153,20 @@ pub unsafe fn missile(
     ring_info: &[ObjInfo],
     scr_info: &[ObjInfo],
     ws_info: &[ObjInfo],
+    count: *mut i32,
+    quiet: *mut i32,
+    to_death: *mut u8,
+    kamikaze: *mut u8,
+    vf_hit: *mut i32,
+    fight_flush: *const u8,
+    monsters: *mut [MonsterInfo; 26],
+    e_levels: *const [i32; 21],
+    max_stats: *mut Stats,
 ) {
     let Some(id) = get_item_id("throw", ItemFilter::Category(ItemType::WEAPON), dungeon, after, again, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc, n_objs, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) else {
         return;
     };
-    if !dropcheck_id(id, random, dungeon) || is_current_id(id) {
+    if !dropcheck_id(id, random, dungeon, max_stats) || is_current_id(id) {
         return;
     }
 
@@ -166,9 +176,16 @@ pub unsafe fn missile(
     do_motion(obj, ydelta, xdelta, dungeon, terse);
 
     let pos = dungeon.objects.with_object(obj, |o| o.o_pos).unwrap_or(IVec2::ZERO);
-    if dungeon.monster_map.at(pos.y as usize, pos.x as usize).is_none()
-        || hit_monster(pos.y, pos.x, obj, random) == 0
-    {
+    let hit = if dungeon.monster_map.at(pos.y as usize, pos.x as usize).is_some() {
+        // Keep an owned naming snapshot across reentrant combat.
+        let combat_weap_info: [ObjInfo; 10] = std::array::from_fn(|i| weap_info[i].clone());
+        hit_monster(pos.y, pos.x, obj, random, dungeon, count, quiet,
+            has_hit, to_death, kamikaze, vf_hit, fight_flush, monsters,
+            &combat_weap_info, e_levels) != 0
+    } else {
+        false
+    };
+    if !hit {
         fall(obj, true, has_hit, random, dungeon, weap_info);
     }
 }
@@ -182,8 +199,8 @@ pub unsafe fn do_motion(id: ThingId, ydelta: i32, xdelta: i32, dungeon: &Dungeon
 
     loop {
         let h = hero(dungeon);
-        if (pos.x != h.x || pos.y != h.y) && cansee(pos.y, pos.x) != 0 && terse == 0 {
-            let mut ch = chat(pos.y, pos.x);
+        if (pos.x != h.x || pos.y != h.y) && cansee(pos.y, pos.x, dungeon) != 0 && terse == 0 {
+            let mut ch = chat(pos.y, pos.x, dungeon);
             if ch == FLOOR && !show_floor() {
                 ch = ' ' as i32;
             }
@@ -199,7 +216,7 @@ pub unsafe fn do_motion(id: ThingId, ydelta: i32, xdelta: i32, dungeon: &Dungeon
                     && !level.is_door_at(pos.y as usize, pos.x as usize)
             });
         if walkable {
-            if cansee(pos.y, pos.x) != 0 && terse == 0 {
+            if cansee(pos.y, pos.x, dungeon) != 0 && terse == 0 {
                 crate::draw::write_cell_glyph(pos, crate::draw::item_glyph(o_type));
                 output::refresh();
             }
@@ -233,7 +250,7 @@ pub unsafe fn fall(
         // Objects render from the `lvl_obj` list; no glyph write needed.
         dungeon.objects.with_object_mut(id, |o| o.o_pos = newpos);
 
-        if cansee(newpos.y, newpos.x) != 0 {
+        if cansee(newpos.y, newpos.x, dungeon) != 0 {
             let glyph = dungeon.objects
                 .with_object(id, |o| crate::draw::item_glyph(o.o_type))
                 .unwrap_or(')');
@@ -325,9 +342,30 @@ pub(crate) unsafe fn init_weapon_in(
 }
 
 /// Resolves thrown-weapon combat against the target tile.
-pub unsafe fn hit_monster(y: i32, x: i32, id: ThingId, random: &mut Random) -> i32 {
+///
+/// # Safety
+/// All state/table pointers must remain valid throughout combat, including
+/// reentrant calls, with no conflicting references to mutable state.
+pub unsafe fn hit_monster(
+    y: i32,
+    x: i32,
+    id: ThingId,
+    random: &mut Random,
+    dungeon: &Dungeon,
+    count: *mut i32,
+    quiet: *mut i32,
+    has_hit: *mut u8,
+    to_death: *mut u8,
+    kamikaze: *mut u8,
+    vf_hit: *mut i32,
+    fight_flush: *const u8,
+    monsters: *mut [MonsterInfo; 26],
+    weap_info: *const [ObjInfo; 10],
+    e_levels: *const [i32; 21],
+) -> i32 {
     let mp = IVec2 { x, y };
-    fight(mp, Some(id), true as u8, random)
+    fight(mp, Some(id), true as u8, random, dungeon, count, quiet, has_hit,
+        to_death, kamikaze, vf_hit, fight_flush, monsters, weap_info, e_levels)
 }
 
 /// Formats signed enchantment numbers for armor and weapons.
@@ -366,11 +404,12 @@ pub unsafe fn wield(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
+    max_stats: *mut Stats,
 ) {
     // Track the previously wielded weapon by arena handle (pointer-free).
     let oweapon = dungeon.player.equipment().weapon_id();
     if let Some(id) = oweapon {
-        if !dropcheck_id(id, random, dungeon) {
+        if !dropcheck_id(id, random, dungeon, max_stats) {
             dungeon.player.set_weapon_id(oweapon);
             return;
         }
@@ -415,7 +454,7 @@ pub unsafe fn fallpos(pos: IVec2, random: &mut Random, dungeon: &Dungeon) -> Opt
             if y == h.y && x == h.x {
                 continue;
             }
-            let ch = chat(y, x);
+            let ch = chat(y, x, dungeon);
             if ch == FLOOR || ch == PASSAGE {
                 cnt += 1;
                 if random.rnd(cnt) == 0 {
@@ -429,8 +468,39 @@ pub unsafe fn fallpos(pos: IVec2, random: &mut Random, dungeon: &Dungeon) -> Opt
 
 #[cfg(test)]
 mod tests {
-    use super::{hero, num, set_damage, WEAPON};
+    use super::{chat, hero, hit_monster, num, set_damage, MonsterInfo, ObjInfo, ThingId, WEAPON};
     use crate::dungeon::Dungeon;
+    use crate::entity::player::{Thing, ThingObject};
+    use crate::item::item_type::ItemType;
+    use crate::rnd::Random;
+    use glam::IVec2;
+
+    #[test]
+    fn thrown_combat_exposes_all_entity_dependencies() {
+        let _: unsafe fn(
+            i32, i32, ThingId, &mut Random, &Dungeon, *mut i32, *mut i32,
+            *mut u8, *mut u8, *mut u8, *mut i32, *const u8,
+            *mut [MonsterInfo; 26], *const [ObjInfo; 10], *const [i32; 21],
+        ) -> i32 = hit_monster;
+    }
+
+    #[test]
+    fn projectile_terrain_reads_only_the_supplied_dungeon() {
+        let dungeon = Dungeon::empty();
+        let other = Dungeon::empty();
+        let pos = IVec2::new(4, 4);
+        let item = dungeon.objects.insert(Thing::object(ThingObject {
+            o_type: ItemType::Food,
+            o_pos: pos,
+            ..ThingObject::default()
+        }));
+        dungeon.with_level_mut(|level| level.add_item(item));
+
+        unsafe {
+            assert_eq!(chat(pos.y, pos.x, &dungeon), b':' as i32);
+            assert_eq!(chat(pos.y, pos.x, &other), b' ' as i32);
+        }
+    }
 
     #[test]
     fn enchantment_numbers_preserve_signs_and_weapon_pairs() {

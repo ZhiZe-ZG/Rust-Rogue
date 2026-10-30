@@ -779,7 +779,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
             }
         });
         let pack = build_object_list(&snap.t_pack);
-        crate::entity::player::set_monster_pack(id, pack);
+        crate::entity::player::set_monster_pack(id, pack, &DUNGEON);
         monster_ids.push(id);
     }
 
@@ -808,7 +808,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
                 crate::entity::player::DestRef::Monster,
             ),
         };
-        crate::entity::player::set_monster_dest(id, live);
+        crate::entity::player::set_monster_dest(id, live, &DUNGEON);
     }
 
     // ── player ──────────────────────────────────────────────────────────

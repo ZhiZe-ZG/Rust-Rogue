@@ -3,6 +3,7 @@
 //! Split out from the movement logic originally found in `src/c/move.c`.
 use glam::IVec2;
 
+use crate::dungeon::Dungeon;
 use crate::entity::chase::diag_ok;
 use crate::entity::player::Thing;
 use crate::item::scrolls::ScrollType;
@@ -15,8 +16,8 @@ const SCROLL: u8 = b'?' as u8;
 ///
 /// Standing still is a valid outcome. Returns the chosen coordinate; the caller
 /// owns it, so no pointer is stored in a shared slot.
-pub unsafe fn rndmove_from(pos: IVec2, random: &mut Random) -> IVec2 {
-    let mut chosen = IVec2 {
+pub unsafe fn rndmove_from(pos: IVec2, random: &mut Random, dungeon: &Dungeon) -> IVec2 {
+    let chosen = IVec2 {
         y: pos.y + random.rnd(3) - 1,
         x: pos.x + random.rnd(3) - 1,
     };
@@ -26,17 +27,21 @@ pub unsafe fn rndmove_from(pos: IVec2, random: &mut Random) -> IVec2 {
         return chosen;
     }
 
-    if diag_ok(pos, chosen) == 0 {
+    if diag_ok(pos, chosen, dungeon) == 0 {
         return pos;
     }
 
-    if !crate::game::cell_is_walkable(chosen.y, chosen.x) {
+    if dungeon.monster_map.at(chosen.y as usize, chosen.x as usize).is_some()
+        || !dungeon.with_level(|level| {
+            level.tile_at(chosen.y as usize, chosen.x as usize).is_walkable()
+        })
+    {
         return pos;
     }
 
     // Refuse to step on a scroll of scare monster
-    for id in crate::dungeon::DUNGEON.objects.ids() {
-        let at_pos = crate::dungeon::DUNGEON.objects
+    for id in dungeon.objects.ids() {
+        let at_pos = dungeon.objects
             .with(id, |t| match t {
                 Thing::Object { data } => {
                     if data.o_pos.y == chosen.y && data.o_pos.x == chosen.x {
@@ -61,6 +66,6 @@ pub unsafe fn rndmove_from(pos: IVec2, random: &mut Random) -> IVec2 {
 
 /// rndmove:
 /// Move in a random direction if the monster/person is confused.
-pub unsafe fn rndmove(pos: IVec2, random: &mut Random) -> IVec2 {
-    rndmove_from(pos, random)
+pub unsafe fn rndmove(pos: IVec2, random: &mut Random, dungeon: &Dungeon) -> IVec2 {
+    rndmove_from(pos, random, dungeon)
 }

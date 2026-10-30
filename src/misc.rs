@@ -263,7 +263,7 @@ pub unsafe fn aggravate(random: &mut Random) {
             })
             .flatten()
         {
-            runto(pos, random);
+            runto(pos, random, &DUNGEON, &raw const globals::monsters);
         }
     }
 }

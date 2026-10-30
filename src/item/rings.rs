@@ -4,7 +4,7 @@
 use crate::command::Command;
 use crate::direction::Direction;
 use crate::dungeon::Dungeon;
-use crate::entity::player::ObjectFlags;
+use crate::entity::player::{chg_str, ObjectFlags, Stats};
 use crate::game::globals::ObjInfo;
 use crate::item::potions::invis_on;
 use crate::rnd::Random;
@@ -14,7 +14,7 @@ use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
 use crate::item::things::{dropcheck_id, inv_name_id};
 use crate::item::weapons::num;
-use crate::misc::{aggravate, chg_str, is_current_id};
+use crate::misc::{aggravate, is_current_id};
 use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, msg_str};
 
@@ -115,6 +115,7 @@ pub unsafe fn ring_on(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
+    max_stats: *mut Stats,
 ) {
     let Some(obj) = get_item_id("put on", ItemFilter::Category(ItemType::RING), dungeon, after, again, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc, n_objs, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) else {
         return;
@@ -168,7 +169,7 @@ pub unsafe fn ring_on(
         .unwrap_or((0, 0, 0));
 
     match RingType::from_raw(which) {
-        Some(RingType::AddStrength) => chg_str(o_arm),
+        Some(RingType::AddStrength) => chg_str(o_arm, dungeon, max_stats),
         Some(RingType::SeeInvisible) => invis_on(dungeon),
         Some(RingType::Aggravate) => aggravate(random),
         _ => {}
@@ -196,6 +197,7 @@ pub unsafe fn ring_off(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
+    max_stats: *mut Stats,
 ) {
     let eq = dungeon.player.equipment();
     let left_empty = eq.left_ring_id().is_none();
@@ -230,7 +232,7 @@ pub unsafe fn ring_off(
         return;
     };
 
-    if dropcheck_id(obj, random, dungeon) {
+    if dropcheck_id(obj, random, dungeon, max_stats) {
         let packch = dungeon.objects.with_object(obj, |o| o.o_packch).unwrap_or(0);
         msg_str(&format!(
             "was wearing {}({})",

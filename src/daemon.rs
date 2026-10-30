@@ -16,7 +16,7 @@
 //! dropped the argument, which was undefined behaviour for callbacks such as
 //! `turn_see`).
 
-use crate::game::globals::D_LIST;
+use crate::game::globals::{self, D_LIST};
 use crate::rnd::Random;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -78,7 +78,37 @@ impl Daemon {
             Daemon::Rollwand => crate::daemons::rollwand(random),
             Daemon::Doctor => crate::daemons::doctor(random),
             Daemon::Stomach => crate::daemons::stomach(random),
-            Daemon::Runners => crate::entity::chase::runners(random),
+            Daemon::Runners => crate::entity::chase::runners(
+                random,
+                &crate::dungeon::DUNGEON,
+                &raw mut globals::delta,
+                &raw mut globals::running,
+                &raw mut globals::count,
+                &raw mut globals::quiet,
+                &raw mut globals::to_death,
+                &raw mut globals::kamikaze,
+                &raw mut globals::has_hit,
+                &raw mut globals::max_hit,
+                &raw mut globals::no_command,
+                &raw mut globals::vf_hit,
+                &raw mut globals::purse,
+                &raw const globals::fight_flush,
+                &raw const globals::e_levels,
+                &raw mut globals::monsters,
+                &raw mut globals::inpack,
+                &raw mut globals::last_pick,
+                &raw mut globals::pack_used,
+                &raw const globals::inv_describe,
+                &raw const globals::arm_info,
+                &raw const globals::pot_info,
+                &raw const globals::ring_info,
+                &raw const globals::scr_info,
+                &raw const globals::weap_info,
+                &raw const globals::ws_info,
+                &raw const globals::see_floor,
+                &raw const globals::ROOM_GOLD,
+                &raw mut globals::max_stats,
+            ),
             Daemon::Swander => crate::daemons::swander(),
             Daemon::Nohaste => crate::daemons::nohaste(),
             Daemon::Unconfuse => crate::daemons::unconfuse(),

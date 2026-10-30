@@ -11,14 +11,14 @@ use crate::draw::look;
 use crate::dungeon::Dungeon;
 
 use crate::entity::chase::see_monst;
-use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
+use crate::entity::player::{check_level, chg_str, MonsterFlags, ObjectFlags, Stats, Thing};
 use crate::game::globals::ObjInfo;
 use crate::game::MonsterId;
 use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::{get_item_id, leave_pack_id};
 use crate::item::rings::RingType;
-use crate::misc::{add_haste, add_str, call_it, check_level, chg_str, choose_str, spread};
+use crate::misc::{add_haste, add_str, call_it, choose_str, spread};
 use crate::ui::output::{msg_str, show_win};
 use crate::ui::terminal::UiState;
 use glam::IVec2;
@@ -220,9 +220,10 @@ unsafe fn do_pot_impl(
 /// Quaff a potion from the pack.
 ///
 /// # Safety
-/// `pot_info` and `after` must remain valid throughout the call. The metadata
-/// slice must contain every potion kind. Raw pointers keep borrows short across
-/// helpers that can reenter game state (including `call_it`).
+/// `pot_info`, `after`, and `max_stats` must remain valid throughout the call,
+/// without conflicting live references. The metadata slice must contain every
+/// potion kind and `e_levels` all 21 experience entries. Raw pointers keep
+/// borrows short across helpers that can reenter game state (including `call_it`).
 pub(crate) unsafe fn quaff(
     random: &mut Random,
     dungeon: &Dungeon,
@@ -251,6 +252,7 @@ pub(crate) unsafe fn quaff(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
+    max_stats: *mut Stats,
 ) {
     // Input/output can reenter metadata updates. Borrow an owned snapshot for
     // naming rather than the mutable potion table across those callbacks.
@@ -290,7 +292,7 @@ pub(crate) unsafe fn quaff(
             if dungeon.player.wearing_ring(RingType::SustainStrength) {
                 msg_str("you feel momentarily sick");
             } else {
-                chg_str(-(random.rnd(3) + 1));
+                chg_str(-(random.rnd(3) + 1), dungeon, max_stats);
                 msg_str("you feel very sick now");
                 come_down();
             }
@@ -309,7 +311,7 @@ pub(crate) unsafe fn quaff(
         }
         PotionType::Strength => {
             (&mut *pot_info)[PotionType::Strength.index()].oi_know = true;
-            chg_str(1);
+            chg_str(1, dungeon, max_stats);
             msg_str("you feel stronger, now.  What bulging muscles!");
         }
         PotionType::MonsterFind => {
@@ -496,17 +498,17 @@ pub unsafe fn invis_on(dungeon: &Dungeon) {
     dungeon.player.add_flag(MonsterFlags::CANSEE);
     for id in dungeon.monster_list.ids() {
         if thing_has(id, MonsterFlags::INVIS, dungeon)
-            && see_monst(id) != 0
+            && see_monst(id, dungeon) != 0
             && !player_has(MonsterFlags::HALU, dungeon)
         {
-            if let Some(pos) = dungeon.monster_list
+            if let Some((pos, glyph)) = dungeon.monster_list
                 .with(id, |t| match t {
-                    Thing::Monster { data } => Some(data.t_pos),
+                    Thing::Monster { data } => Some((data.t_pos, data.t_disguise as char)),
                     Thing::Object { .. } => None,
                 })
                 .flatten()
             {
-                crate::draw::write_cell_glyph(pos, crate::draw::monster_glyph(id));
+                crate::draw::write_cell_glyph(pos, glyph);
             }
         }
     }
@@ -518,21 +520,25 @@ pub unsafe fn turn_see(turn_off: u8, random: &mut Random, dungeon: &Dungeon) -> 
     let mut add_new = 0;
 
     for id in dungeon.monster_list.ids() {
-        if let Some((pos, oldch)) = dungeon.monster_list
+        if let Some((pos, oldch, type_glyph)) = dungeon.monster_list
             .with(id, |t| match t {
-                Thing::Monster { data } => Some((data.t_pos, data.t_oldch)),
+                Thing::Monster { data } => Some((
+                    data.t_pos,
+                    data.t_oldch,
+                    data.t_type.map_or(' ', |kind| kind.glyph() as char),
+                )),
                 Thing::Object { .. } => None,
             })
             .flatten()
         {
-            let can_see = see_monst(id) != 0;
+            let can_see = see_monst(id, dungeon) != 0;
             if turn_off != 0 {
                 if !can_see {
                     crate::draw::write_cell_glyph(pos, oldch as char);
                 }
             } else {
                 let glyph = if !player_has(MonsterFlags::HALU, dungeon) {
-                    crate::draw::monster_type_glyph(id)
+                    type_glyph
                 } else {
                     crate::draw::hallucination_glyph(random)
                 };
@@ -572,7 +578,7 @@ pub unsafe fn seen_stairs(dungeon: &Dungeon) -> u8 {
     }
 
     if let Some(tp) = moat(stairs.y, stairs.x, dungeon) {
-        if see_monst(tp) != 0 && thing_has(tp, MonsterFlags::RUN, dungeon) {
+        if see_monst(tp, dungeon) != 0 && thing_has(tp, MonsterFlags::RUN, dungeon) {
             return 1;
         }
         let oldch = dungeon.monster_list
@@ -591,10 +597,12 @@ pub unsafe fn seen_stairs(dungeon: &Dungeon) -> u8 {
 
 /// raise_level:
 /// The player just magically went up a level.
+/// `e_levels` must contain all 21 experience entries, including the terminator.
 pub unsafe fn raise_level(random: &mut Random, dungeon: &Dungeon, e_levels: &[i32]) {
+    let e_levels: [i32; 21] = std::array::from_fn(|i| e_levels[i]);
     let level = dungeon.player.level();
     dungeon.player.with_stats_mut(|stats| stats.experience = e_levels[level as usize - 1] + 1);
-    check_level(random);
+    check_level(random, dungeon, &e_levels);
 }
 
 /// do_pot:

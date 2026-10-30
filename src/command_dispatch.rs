@@ -70,6 +70,7 @@ impl Default for CommandState {
 
 use crate::game::globals::{
     e_levels, group, inpack, max_stats, msg_esc, n_objs, pack_used,
+    fight_flush, monsters, no_move, oldpos, passgo, quiet, vf_hit,
     after, again, count, delta, dir_ch, door_stop, firstmove, get_food_left, get_inpack, has_hit,
     inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
     last_pick, lastscore, max_hit, move_on, mpos, no_command, p_colors, purse, q_comm,
@@ -225,9 +226,21 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                     Command::Shell => shell(),
                     Command::Move(direction) => {
                         let movement_delta = direction.delta();
-                        do_move(movement_delta.y, movement_delta.x);
+                        do_move(
+                            movement_delta.y, movement_delta.x, &DUNGEON,
+                            &mut RNG.lock().unwrap(), &raw mut firstmove, &raw mut no_move,
+                            &raw mut after, &raw mut running, &raw mut to_death,
+                            &raw const passgo, &raw mut runch, &raw const oldpos,
+                            &raw mut take, &raw mut count, &raw mut no_command,
+                            &raw mut group, &raw mut has_hit, &raw const weap_info,
+                            &terse, &raw mut max_stats, &raw mut quiet,
+                            &raw mut kamikaze, &raw mut vf_hit, &raw const fight_flush,
+                            &raw mut monsters, &raw const e_levels,
+                        );
                     }
-                    Command::Run(direction) => do_run(direction),
+                    Command::Run(direction) => do_run(
+                        direction, &raw mut running, &raw mut after, &raw mut runch,
+                    ),
                     Command::RunPrefix(direction) => {
                         if !player_has(MonsterFlags::BLIND) {
                             door_stop = true as u8;
@@ -256,7 +269,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             let no_monster = match mp {
                                 None => true,
                                 Some(id) => {
-                                    see_monst(id) == 0 && !player_has(MonsterFlags::SEEMONST)
+                                    see_monst(id, &DUNGEON) == 0 && !player_has(MonsterFlags::SEEMONST)
                                 }
                             };
                             if no_monster {
@@ -265,7 +278,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 }
                                 msg_str("no monster there");
                                 after = false as u8;
-                            } else if diag_ok(hero_pos(), delta) != 0 {
+                            } else if diag_ok(hero_pos(), delta, &DUNGEON) != 0 {
                                 to_death = true as u8;
                                 max_hit = 0;
                                 if let Some(id) = mp {
@@ -296,6 +309,9 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 &raw mut mpos, &raw mut msg_esc, &raw mut n_objs,
                                 &raw mut pack_used, inv_describe, &arm_names, &pot_names,
                                 &ring_names, &scr_names, &ws_names,
+                                &raw mut count, &raw mut quiet, &raw mut to_death,
+                                &raw mut kamikaze, &raw mut vf_hit, &raw const fight_flush,
+                                &raw mut monsters, &raw const e_levels, &raw mut max_stats,
                             );
                         }
                     }
@@ -319,7 +335,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             &raw mut last_dir, &raw mut last_pick, &raw mut mpos,
                             &raw mut msg_esc, &raw mut n_objs, &raw mut pack_used,
                             inv_describe, &arm_names, &ring_names, &scr_names,
-                            &weap_names, &ws_names);
+                            &weap_names, &ws_names, &raw mut max_stats);
                     }
                     Command::Quit => {
                         after = false as u8;
@@ -345,7 +361,8 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         l_last_pick, &raw mut last_comm, &raw mut last_dir,
                         &raw mut last_pick, &raw mut mpos, &raw mut msg_esc,
                         &raw mut n_objs, &raw mut pack_used, terse, inv_describe,
-                        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
+                        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
+                        &raw mut max_stats),
                     Command::ReadScroll => read_scroll(&mut RNG.lock().unwrap(), &DUNGEON,
                         &crate::ui::terminal::UI, &raw mut scr_info as *mut [_],
                         &weap_names, &raw mut no_command, terse, &raw mut after,
@@ -353,13 +370,14 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
                         &raw mut mpos, &raw mut msg_esc, &raw mut n_objs,
                         &raw mut pack_used, inv_describe, &arm_names, &pot_names,
-                        &ring_names, &ws_names),
+                        &ring_names, &ws_names, &raw const monsters),
                     Command::Eat => eat(),
                     Command::Wield => wield(&mut RNG.lock().unwrap(), &DUNGEON, terse,
                         &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
                         &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
                         &raw mut mpos, &raw mut msg_esc, &raw mut n_objs, inv_describe,
-                        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
+                        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
+                        &raw mut max_stats),
                     Command::Wear => wear(&mut RNG.lock().unwrap(), &DUNGEON, terse,
                         &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
                         &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
@@ -367,15 +385,16 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
                     Command::TakeOff => take_off(&mut RNG.lock().unwrap(), &DUNGEON,
                         terse, &raw mut after, inv_describe, &arm_names, &pot_names,
-                        &ring_names, &scr_names, &weap_names, &ws_names),
+                        &ring_names, &scr_names, &weap_names, &ws_names, &raw mut max_stats),
                     Command::RingOn => ring_on(&mut RNG.lock().unwrap(), &DUNGEON,
                         terse, &raw mut mpos, &raw mut after, again, l_last_comm,
                         l_last_dir, l_last_pick, &raw mut last_comm, &raw mut last_dir,
                         &raw mut last_pick, &raw mut msg_esc, &raw mut n_objs, inv_describe,
-                        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
+                        &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
+                        &raw mut max_stats),
                     Command::RingOff => ring_off(&mut RNG.lock().unwrap(), &DUNGEON,
                         terse, &raw mut mpos, inv_describe, &arm_names, &pot_names,
-                        &ring_names, &scr_names, &weap_names, &ws_names),
+                        &ring_names, &scr_names, &weap_names, &ws_names, &raw mut max_stats),
                     Command::Options => {
                         option();
                         after = false as u8;
@@ -409,7 +428,10 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
                                 &raw mut mpos, &raw mut msg_esc, &raw mut n_objs,
                                 inv_describe, &arm_names, &pot_names, &ring_names,
-                                &scr_names, &weap_names);
+                                &scr_names, &weap_names, &raw mut count, &raw mut quiet,
+                                &raw mut has_hit, &raw mut to_death, &raw mut kamikaze,
+                                &raw mut vf_hit, &raw const fight_flush, &raw mut monsters,
+                                &raw const e_levels);
                         } else {
                             after = false as u8;
                         }

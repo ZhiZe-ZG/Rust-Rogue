@@ -19,7 +19,6 @@ use crate::entity::chase::{cansee, see_monst};
 use crate::entity::monsters::{wanderer, MonsterType};
 use crate::entity::player::{MonsterFlags, Thing};
 use crate::dungeon::DUNGEON;
-use crate::item::arena::ThingId;
 use crate::item::rings::{ring_eat, RingType};
 use crate::misc::{choose_str, rnd_thing, spread};
 use crate::rip::death;
@@ -126,7 +125,12 @@ pub unsafe fn rollwand(random: &mut Random) {
     if between >= 4 {
         if random.roll(1, 6) == 4
         {
-            wanderer(random);
+            wanderer(
+                random,
+                &DUNGEON,
+                &raw const crate::game::globals::monsters,
+                crate::wizard::is_wizard(),
+            );
             kill_daemon(Daemon::Rollwand);
             fuse(Daemon::Swander, 0, spread(70, random), BEFORE);
         }
@@ -149,7 +153,7 @@ pub unsafe fn unconfuse() {
 pub unsafe fn unsee() {
     for id in DUNGEON.monster_list.ids() {
         if let Some((pos, _disguise, oldch, flags)) = monster_view(id) {
-            if flags.contains(MonsterFlags::INVIS) && see_monst(id) != 0 {
+            if flags.contains(MonsterFlags::INVIS) && see_monst(id, &DUNGEON) != 0 {
                 crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), oldch as char);
             }
         }
@@ -262,7 +266,7 @@ pub unsafe fn come_down() {
     // Undo the things (objects on the level).
     for id in crate::game::item_ids() {
         if let Some((pos, otype)) = DUNGEON.objects.with_object(id, |o| (o.o_pos, o.o_type)) {
-            if cansee(pos.y, pos.x) != 0 {
+            if cansee(pos.y, pos.x, &DUNGEON) != 0 {
                 crate::draw::write_cell_glyph(
                     IVec2::new(pos.x, pos.y),
                     crate::draw::item_glyph(otype),
@@ -276,7 +280,7 @@ pub unsafe fn come_down() {
     let cansee_invis = DUNGEON.player.has_flag(MonsterFlags::CANSEE);
     for id in DUNGEON.monster_list.ids() {
         if let Some((pos, _disguise, _oldch, flags)) = monster_view(id) {
-            if cansee(pos.y, pos.x) != 0 {
+            if cansee(pos.y, pos.x, &DUNGEON) != 0 {
                 if !flags.contains(MonsterFlags::INVIS) || cansee_invis {
                     crate::draw::write_cell_glyph(pos, crate::draw::monster_glyph(id));
                 }
@@ -298,7 +302,7 @@ pub unsafe fn visuals(random: &mut Random) {
     // Change the things (objects).
     for id in crate::game::item_ids() {
         if let Some(pos) = DUNGEON.objects.with_object(id, |o| o.o_pos) {
-            if cansee(pos.y, pos.x) != 0 {
+            if cansee(pos.y, pos.x, &DUNGEON) != 0 {
                 crate::draw::write_cell_glyph(IVec2::new(pos.x, pos.y), rnd_thing(random) as char);
             }
         }
@@ -306,7 +310,7 @@ pub unsafe fn visuals(random: &mut Random) {
 
     // Change the stairs.
     let stairs = crate::game::stairs();
-    if !DUNGEON.seen_stairs() && cansee(stairs.y, stairs.x) != 0 {
+    if !DUNGEON.seen_stairs() && cansee(stairs.y, stairs.x, &DUNGEON) != 0 {
         crate::draw::write_cell_glyph(stairs, rnd_thing(random) as char);
     }
 
@@ -320,7 +324,7 @@ pub unsafe fn visuals(random: &mut Random) {
                     Thing::Object { .. } => None,
                 })
                 .flatten();
-            if see_monst(id) != 0 {
+            if see_monst(id, &DUNGEON) != 0 {
                 if typ == Some(MonsterType::Xeroc) && disguise != b'X' {
                     crate::draw::write_cell_glyph(pos, rnd_thing(random) as char);
                 } else {

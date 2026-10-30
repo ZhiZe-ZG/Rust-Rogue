@@ -31,7 +31,7 @@ impl Dungeon {
     /// Free the monsters and floor items of the previous level.
     unsafe fn clear_previous_level_items(&self) {
         for id in self.monster_list.ids() {
-            crate::entity::player::free_pack_id(id);
+            crate::entity::player::free_pack_id(id, self);
         }
         self.monster_list.clear();
         self.clear_items();
@@ -52,7 +52,13 @@ impl Dungeon {
         for y in pos.y..y_end {
             for x in pos.x..x_end {
                 if winat(y, x).is_ascii_uppercase() {
-                    wake_monster(y, x, random);
+                    wake_monster(
+                        y,
+                        x,
+                        random,
+                        self,
+                        &raw const crate::game::globals::monsters,
+                    );
                 }
             }
         }

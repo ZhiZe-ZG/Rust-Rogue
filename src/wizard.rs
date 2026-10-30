@@ -307,7 +307,7 @@ pub unsafe fn teleport(random: &mut Random) {
     let mut hero = hero();
 
     crate::draw::write_cell_glyph(hero, floor_at(&DUNGEON) as char);
-    if roomin(c) != proom() {
+    if roomin(c, &DUNGEON) != proom() {
         leave_room(hero, random);
         hero = c;
         enter_room(hero, random);

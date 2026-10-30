@@ -6,7 +6,7 @@ use crate::direction::Direction;
 use crate::entity::monsters::{save, save_throw_id};
 use crate::entity::player::ObjectFlags;
 use crate::dungeon::Dungeon;
-use crate::game::globals::ObjInfo;
+use crate::game::globals::{MonsterInfo, ObjInfo};
 use crate::item::arena::{ThingArena, ThingId};
 use crate::item::item_type::{ItemFilter, ItemType};
 use crate::item::pack::get_item_id;
@@ -142,9 +142,9 @@ pub(crate) unsafe fn fix_stick_in(objects: &ThingArena, id: ThingId, random: &mu
 /// Perform a zap with a wand or staff and apply a simplified effect.
 ///
 /// # Safety
-/// `ws_info` and `after` must remain valid throughout the call, and the metadata
-/// slice must contain every stick kind. No exclusive state borrow is retained
-/// while invoking helpers that may reenter the game.
+/// State/table pointers must remain valid throughout reentrant combat and UI
+/// calls, without conflicting live references. Metadata slices must contain
+/// every kind, including the ten weapon entries used by transient bolts.
 pub unsafe fn do_zap(
     random: &mut Random,
     dungeon: &Dungeon,
@@ -168,6 +168,15 @@ pub unsafe fn do_zap(
     ring_info: &[ObjInfo],
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
+    count: *mut i32,
+    quiet: *mut i32,
+    has_hit: *mut u8,
+    to_death: *mut u8,
+    kamikaze: *mut u8,
+    vf_hit: *mut i32,
+    fight_flush: *const u8,
+    monsters: *mut [MonsterInfo; 26],
+    e_levels: *const [i32; 21],
 ) {
     // The live stick table stays raw while the selection prompt can reenter.
     let ws_names = (&*ws_info).to_vec();
@@ -238,8 +247,12 @@ pub unsafe fn do_zap(
             let bolt_pos =
                 crate::item::arena::with_object(&dungeon.objects, bolt, |o| o.o_pos).unwrap_or(IVec2::ZERO);
             if let Some(mid) = dungeon.monster_map.at(bolt_pos.y as usize, bolt_pos.x as usize) {
-                if save_throw_id(VS_MAGIC, mid, random) == 0 {
-                    hit_monster(bolt_pos.y, bolt_pos.x, bolt, random);
+                if save_throw_id(VS_MAGIC, mid, random, dungeon) == 0 {
+                    let combat_weap_info: [ObjInfo; 10] =
+                        std::array::from_fn(|i| weap_info[i].clone());
+                    hit_monster(bolt_pos.y, bolt_pos.x, bolt, random, dungeon,
+                        count, quiet, has_hit, to_death, kamikaze, vf_hit,
+                        fight_flush, monsters, &combat_weap_info, e_levels);
                 } else if terse != 0 {
                     msg_str("missle vanishes");
                 } else {
@@ -273,7 +286,11 @@ pub unsafe fn do_zap(
                 _ => "ice",
             };
             let hero = hero_pos(dungeon);
-            fire_bolt(hero, delta, name, random, dungeon);
+            let combat_weap_info: [ObjInfo; 10] =
+                std::array::from_fn(|i| weap_info[i].clone());
+            fire_bolt(hero, delta, name, random, dungeon, count, quiet, has_hit,
+                to_death, kamikaze, vf_hit, fight_flush, monsters,
+                &combat_weap_info, e_levels);
             if let Some(kind) = kind {
                 (&mut *ws_info)[kind.index()].oi_know = true;
             }
@@ -300,12 +317,26 @@ pub unsafe fn drain(dungeon: &Dungeon) {
 
 /// fire_bolt:
 /// Fire a bolt in a given direction from a specific starting place.
+///
+/// # Safety
+/// All state/table pointers must remain valid throughout reentrant combat,
+/// without live references conflicting with writes to mutable state.
 pub unsafe fn fire_bolt(
     start: IVec2,
     dir: IVec2,
     _name: &str,
     random: &mut Random,
     dungeon: &Dungeon,
+    count: *mut i32,
+    quiet: *mut i32,
+    has_hit: *mut u8,
+    to_death: *mut u8,
+    kamikaze: *mut u8,
+    vf_hit: *mut i32,
+    fight_flush: *const u8,
+    monsters: *mut [MonsterInfo; 26],
+    weap_info: *const [ObjInfo; 10],
+    e_levels: *const [i32; 21],
 ) {
     let mut pos = start;
     let hero = hero_pos(dungeon);
@@ -323,7 +354,7 @@ pub unsafe fn fire_bolt(
     pos.y += dir.y;
     pos.x += dir.x;
     if hit_hero && ce_coord(pos, hero) != 0 {
-        if save(VS_MAGIC, random) == 0 {
+        if save(VS_MAGIC, random, dungeon) == 0 {
             if (dungeon.player.stats().hit_points - random.roll(6, 6)) <= 0 {
                 death('b' as u8);
             }
@@ -333,8 +364,10 @@ pub unsafe fn fire_bolt(
         }
     } else {
         if let Some(mid) = dungeon.monster_map.at(pos.y as usize, pos.x as usize) {
-            if save_throw_id(VS_MAGIC, mid, random) == 0 {
-                hit_monster(pos.y, pos.x, bolt, random);
+            if save_throw_id(VS_MAGIC, mid, random, dungeon) == 0 {
+                hit_monster(pos.y, pos.x, bolt, random, dungeon, count, quiet,
+                    has_hit, to_death, kamikaze, vf_hit, fight_flush, monsters,
+                    weap_info, e_levels);
             } else {
                 msg_str("the bolt misses");
             }
@@ -351,6 +384,15 @@ pub unsafe fn fire_bolt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bolt_combat_exposes_all_entity_dependencies() {
+        let _: unsafe fn(
+            IVec2, IVec2, &str, &mut Random, &Dungeon, *mut i32, *mut i32,
+            *mut u8, *mut u8, *mut u8, *mut i32, *const u8,
+            *mut [MonsterInfo; 26], *const [ObjInfo; 10], *const [i32; 21],
+        ) = fire_bolt;
+    }
 
     #[test]
     fn drain_preserves_weak_heroes_and_halves_other_hit_points() {

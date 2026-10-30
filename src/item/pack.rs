@@ -286,6 +286,23 @@ mod tests {
     use crate::entity::player::{Thing, ThingObject};
 
     #[test]
+    fn floor_access_uses_only_the_supplied_dungeon() {
+        let dungeon = Dungeon::empty();
+        let other = Dungeon::empty();
+        let item = dungeon.objects.insert(Thing::object(ThingObject {
+            o_type: ItemType::Food,
+            o_pos: dungeon.player.pos(),
+            ..ThingObject::default()
+        }));
+        dungeon.with_level_mut(|level| level.add_item(item));
+
+        unsafe {
+            assert_eq!(floor_at(&dungeon), b':');
+            assert_eq!(floor_at(&other), b' ');
+        }
+    }
+
+    #[test]
     fn pack_letters_only_update_the_supplied_bitmap() {
         let mut used = [0; 26];
         let mut other = [0; 26];
@@ -712,7 +729,7 @@ pub unsafe fn floor_ch(dungeon: &Dungeon) -> u8 {
 }
 
 pub unsafe fn floor_at(dungeon: &Dungeon) -> u8 {
-    let ch = crate::draw::cell_glyph(hero_coord(dungeon).y, hero_coord(dungeon).x);
+    let ch = crate::entity::player::cell_glyph(hero_coord(dungeon).y, hero_coord(dungeon).x, dungeon);
     if ch == FLOOR {
         floor_char_for_room(dungeon)
     } else {

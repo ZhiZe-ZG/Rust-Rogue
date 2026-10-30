@@ -10,11 +10,10 @@ use crate::direction::Direction;
 use crate::dungeon::Dungeon;
 use crate::item::armor::waste_time;
 use crate::item::pack::{get_item_id, leave_pack_id};
-use crate::misc::chg_str;
 use crate::rnd::Random;
 use crate::ui::output::msg_str;
 
-use crate::entity::player::ObjectFlags;
+use crate::entity::player::{chg_str, ObjectFlags, Stats};
 use crate::game::globals::ObjInfo;
 use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
@@ -207,7 +206,16 @@ pub unsafe fn inv_name_id(
 }
 
 /// Pointer-free version of `dropcheck`: works on an arena [`ThingId`].
-pub unsafe fn dropcheck_id(id: ThingId, random: &mut Random, dungeon: &Dungeon) -> bool {
+///
+/// # Safety
+/// `max_stats` must remain valid and writable across reentrant helpers, with no
+/// overlapping references to its storage.
+pub unsafe fn dropcheck_id(
+    id: ThingId,
+    random: &mut Random,
+    dungeon: &Dungeon,
+    max_stats: *mut Stats,
+) -> bool {
     let eq = dungeon.player.equipment();
     let is_weapon = eq.weapon_id() == Some(id);
     let is_armor = eq.armor_id() == Some(id);
@@ -237,7 +245,7 @@ pub unsafe fn dropcheck_id(id: ThingId, random: &mut Random, dungeon: &Dungeon) 
         let which = crate::item::arena::with_object(&dungeon.objects, id, |o| o.o_which).unwrap_or(0);
         if which == 0 {
             let arm = crate::item::arena::with_object(&dungeon.objects, id, |o| o.o_arm).unwrap_or(0);
-            chg_str(-arm);
+            chg_str(-arm, dungeon, max_stats);
         }
     }
     true
@@ -417,11 +425,12 @@ pub unsafe fn drop(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
+    max_stats: *mut Stats,
 ) {
     let Some(id) = get_item_id("drop", ItemFilter::Any, dungeon, after, again, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc, n_objs, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) else {
         return;
     };
-    if !dropcheck_id(id, random, dungeon) {
+    if !dropcheck_id(id, random, dungeon, max_stats) {
         return;
     }
     let all = crate::item::arena::with_object(&dungeon.objects, id, |o| o.o_type.drop_whole_stack_by_default())
@@ -465,6 +474,11 @@ fn set_order(order: &mut [i32], random: &mut Random) {
 mod tests {
     use super::*;
     use crate::entity::player::{Thing, ThingObject};
+
+    #[test]
+    fn equipment_checks_expose_the_strength_dependency() {
+        let _: unsafe fn(ThingId, &mut Random, &Dungeon, *mut Stats) -> bool = dropcheck_id;
+    }
 
     #[test]
     fn inventory_name_uses_supplied_tables_and_equipment() {

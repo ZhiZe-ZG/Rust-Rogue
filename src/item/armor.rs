@@ -5,7 +5,7 @@ use crate::command::Command;
 use crate::daemon::{do_daemons, do_fuses};
 use crate::direction::Direction;
 use crate::dungeon::Dungeon;
-use crate::entity::player::ObjectFlags;
+use crate::entity::player::{ObjectFlags, Stats};
 use crate::game::globals::ObjInfo;
 use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
@@ -93,6 +93,7 @@ pub unsafe fn take_off(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
+    max_stats: *mut Stats,
 ) {
     let Some(obj) = dungeon.player.equipment().armor_id() else {
         *after = false as u8;
@@ -104,7 +105,7 @@ pub unsafe fn take_off(
         return;
     };
 
-    if !dropcheck_id(obj, random, dungeon) {
+    if !dropcheck_id(obj, random, dungeon, max_stats) {
         return;
     }
 

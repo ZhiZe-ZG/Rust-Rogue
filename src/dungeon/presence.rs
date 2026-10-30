@@ -7,8 +7,7 @@
 //! [`ThingId`] handles and monsters by [`MonsterId`] handles. This replaces the
 //! legacy process-wide `static mut` game globals (`amulet`, `ntraps`,
 //! `seenstairs`) with counters on the [`Dungeon`] itself. Floor objects are
-//! allocated in this dungeon's arena; legacy monster helpers still use the
-//! process-wide dungeon.
+//! allocated in this dungeon's arena; monster helpers use this same dungeon.
 
 use glam::IVec2;
 
@@ -16,6 +15,7 @@ use crate::config::GameConfig;
 use crate::entity::chase::roomin;
 use crate::entity::monsters::{give_pack_id, new_monster_id, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
+use crate::game::globals;
 use crate::item::arena::ThingId;
 use crate::item::item_type::ItemType;
 use crate::item::things::new_thing_in;
@@ -104,13 +104,34 @@ impl Dungeon {
         while nm > 0 {
             if let Some(pos) = self.find_floor(Some(idx), GameConfig::MAX_PLACEMENT_ATTEMPTS, true, random) {
                 let id = self.monster_list.spawn_actor();
-                new_monster_id(id, randmonster(false, random), pos, random);
+                new_monster_id(
+                    id,
+                    randmonster(false, random, self),
+                    pos,
+                    random,
+                    self,
+                    &raw const globals::monsters,
+                );
                 self.monster_list.with_mut(id, |t| {
                     if let Thing::Monster { data } = t {
                         data.t_flags.insert(MonsterFlags::MEAN);
                     }
                 });
-                give_pack_id(id, random);
+                give_pack_id(
+                    id,
+                    random,
+                    self,
+                    &raw const globals::monsters,
+                    &raw const globals::things,
+                    &raw const globals::arm_info,
+                    &raw const globals::pot_info,
+                    &raw const globals::ring_info,
+                    &raw const globals::scr_info,
+                    &raw const globals::weap_info,
+                    &raw const globals::ws_info,
+                    &raw const globals::a_class,
+                    &raw mut globals::group,
+                );
             }
             nm -= 1;
         }
@@ -157,8 +178,29 @@ impl Dungeon {
             {
                 let id = self.monster_list.spawn_actor();
                 if let Some(pos) = self.find_floor(Some(i), 0, true, random) {
-                    new_monster_id(id, randmonster(false, random), pos, random);
-                    give_pack_id(id, random);
+                    new_monster_id(
+                        id,
+                        randmonster(false, random, self),
+                        pos,
+                        random,
+                        self,
+                        &raw const globals::monsters,
+                    );
+                    give_pack_id(
+                        id,
+                        random,
+                        self,
+                        &raw const globals::monsters,
+                        &raw const globals::things,
+                        &raw const globals::arm_info,
+                        &raw const globals::pot_info,
+                        &raw const globals::ring_info,
+                        &raw const globals::scr_info,
+                        &raw const globals::weap_info,
+                        &raw const globals::ws_info,
+                        &raw const globals::a_class,
+                        &raw mut globals::group,
+                    );
                 }
             }
         }
@@ -269,7 +311,7 @@ impl Dungeon {
         for id in ids {
             self.monster_list.with_mut(id, |t| {
                 if let Thing::Monster { data } = t {
-                    data.t_room = roomin(data.t_pos);
+                    data.t_room = roomin(data.t_pos, self);
                 }
             });
         }

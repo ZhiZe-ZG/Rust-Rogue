@@ -2,27 +2,29 @@
 //!
 //! Ported from `src/c/move.c` to Rust, together with the shared `THING`,
 //! `PLACE`, and `COORD` layouts the rest of the port relies on.
+//!
+//! Raw dependency pointers must be valid and initialized for the entire call,
+//! including reentrant helpers. Callers must serialize access and must not keep
+//! references to those slots alive across calls that can mutate them.
 use crate::config::GameConfig;
 use crate::draw::{
-    enter_room as draw_enter_room, flat_at, leave_room as draw_leave_room, turnref as draw_turnref,
-    winat,
+    enter_room as draw_enter_room, leave_room as draw_leave_room, turnref as draw_turnref,
 };
 use crate::entity::chase::{diag_ok, roomin};
 use crate::entity::fight::{fight, swing};
 use crate::entity::monsters::save;
 use crate::entity::monsters::MonsterType;
-use crate::game;
-use crate::game::globals;
+use crate::game::globals::{MonsterInfo, ObjInfo};
 use crate::item::arena::new_item_id;
 use crate::item::armor::rust_armor_id;
 use crate::item::pack::floor_at;
 use crate::item::rings::RingType;
 use crate::item::weapons::{fall, init_weapon};
-use crate::dungeon::DUNGEON;
+use crate::dungeon::Dungeon;
 use crate::machdep::flush_type;
-use crate::misc::{chg_str, spread};
+use crate::misc::spread;
 use crate::rip::death;
-use crate::rnd::RNG;
+use crate::rnd::Random;
 use crate::tile::{TrapHit, TrapType};
 use crate::ui::output::msg_str;
 use crate::wizard::teleport;
@@ -306,7 +308,7 @@ pub enum DestRef {
     /// No chase target.
     #[default]
     None,
-    /// Chasing the hero (position read live from `DUNGEON.player`).
+    /// Chasing the hero (position read live from the supplied dungeon).
     Hero,
     /// Chasing the live monster with this id.
     Monster(crate::game::MonsterId),
@@ -440,8 +442,8 @@ impl Default for ThingObject {
 
 /// Read the actor's chase destination (a stable [`DestRef`] handle).
 #[inline]
-pub fn monster_dest(id: crate::game::MonsterId) -> DestRef {
-    crate::game::DUNGEON.monster_list
+pub fn monster_dest(id: crate::game::MonsterId, dungeon: &Dungeon) -> DestRef {
+    dungeon.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_dest,
             Thing::Object { .. } => DestRef::None,
@@ -451,8 +453,8 @@ pub fn monster_dest(id: crate::game::MonsterId) -> DestRef {
 
 /// Set the actor's chase destination.
 #[inline]
-pub fn set_monster_dest(id: crate::game::MonsterId, value: DestRef) {
-    crate::game::DUNGEON.monster_list.with_mut(id, |t| {
+pub fn set_monster_dest(id: crate::game::MonsterId, value: DestRef, dungeon: &Dungeon) {
+    dungeon.monster_list.with_mut(id, |t| {
         if let Thing::Monster { data } = t {
             data.t_dest = value;
         }
@@ -461,20 +463,20 @@ pub fn set_monster_dest(id: crate::game::MonsterId, value: DestRef) {
 
 /// Whether the actor is chasing the hero.
 #[inline]
-pub fn is_monster_dest_hero(id: crate::game::MonsterId) -> bool {
-    matches!(monster_dest(id), DestRef::Hero)
+pub fn is_monster_dest_hero(id: crate::game::MonsterId, dungeon: &Dungeon) -> bool {
+    matches!(monster_dest(id, dungeon), DestRef::Hero)
 }
 
 /// Make the actor chase the hero (clearing any stored destination).
 #[inline]
-pub fn set_monster_dest_hero(id: crate::game::MonsterId) {
-    set_monster_dest(id, DestRef::Hero);
+pub fn set_monster_dest_hero(id: crate::game::MonsterId, dungeon: &Dungeon) {
+    set_monster_dest(id, DestRef::Hero, dungeon);
 }
 
 /// The actor's pack as arena handles, head first.
 #[inline]
-pub fn monster_pack(id: crate::game::MonsterId) -> Vec<ThingId> {
-    crate::game::DUNGEON.monster_list
+pub fn monster_pack(id: crate::game::MonsterId, dungeon: &Dungeon) -> Vec<ThingId> {
+    dungeon.monster_list
         .with(id, |t| match t {
             Thing::Monster { data } => data.t_pack.clone(),
             Thing::Object { .. } => Vec::new(),
@@ -484,8 +486,8 @@ pub fn monster_pack(id: crate::game::MonsterId) -> Vec<ThingId> {
 
 /// Replace the actor's pack with `pack`.
 #[inline]
-pub fn set_monster_pack(id: crate::game::MonsterId, pack: Vec<ThingId>) {
-    crate::game::DUNGEON.monster_list.with_mut(id, |t| {
+pub fn set_monster_pack(id: crate::game::MonsterId, pack: Vec<ThingId>, dungeon: &Dungeon) {
+    dungeon.monster_list.with_mut(id, |t| {
         if let Thing::Monster { data } = t {
             data.t_pack = pack;
         }
@@ -493,8 +495,8 @@ pub fn set_monster_pack(id: crate::game::MonsterId, pack: Vec<ThingId>) {
 }
 
 /// Prepend the object `item` to the actor `owner`'s pack.
-pub fn attach_pack_id(owner: crate::game::MonsterId, item: ThingId) {
-    crate::game::DUNGEON.monster_list.with_mut(owner, |t| {
+pub fn attach_pack_id(owner: crate::game::MonsterId, item: ThingId, dungeon: &Dungeon) {
+    dungeon.monster_list.with_mut(owner, |t| {
         if let Thing::Monster { data } = t {
             data.t_pack.insert(0, item);
         }
@@ -502,8 +504,8 @@ pub fn attach_pack_id(owner: crate::game::MonsterId, item: ThingId) {
 }
 
 /// Unlink the object `item` from the actor `owner`'s pack.
-pub fn detach_pack_id(owner: crate::game::MonsterId, item: ThingId) {
-    crate::game::DUNGEON.monster_list.with_mut(owner, |t| {
+pub fn detach_pack_id(owner: crate::game::MonsterId, item: ThingId, dungeon: &Dungeon) {
+    dungeon.monster_list.with_mut(owner, |t| {
         if let Thing::Monster { data } = t {
             data.t_pack.retain(|&x| x != item);
         }
@@ -511,31 +513,120 @@ pub fn detach_pack_id(owner: crate::game::MonsterId, item: ThingId) {
 }
 
 /// Drop every item in the actor `owner`'s pack.
-pub fn free_pack_id(owner: crate::game::MonsterId) {
-    let pack = crate::game::DUNGEON.monster_list
+pub fn free_pack_id(owner: crate::game::MonsterId, dungeon: &Dungeon) {
+    let pack = dungeon.monster_list
         .with_mut(owner, |t| match t {
             Thing::Monster { data } => std::mem::take(&mut data.t_pack),
             Thing::Object { .. } => Vec::new(),
         })
         .unwrap_or_default();
     for id in pack {
-        let _ = DUNGEON.objects.remove(id);
+        let _ = dungeon.objects.remove(id);
     }
 }
 
 /// Remove the monster `id` from the live monster list.
-pub fn discard_monster(id: crate::game::MonsterId) {
-    let _ = crate::game::DUNGEON.monster_list.remove(id);
+pub fn discard_monster(id: crate::game::MonsterId, dungeon: &Dungeon) {
+    let _ = dungeon.monster_list.remove(id);
 }
 
-use crate::game::globals::{
-    after, count, delta, door_stop, firstmove, jump, move_on, no_command, no_move, oldpos, passgo,
-    runch, running, take, to_death,
-};
-
 #[inline]
-fn player_has(flag: MonsterFlags) -> bool {
-    DUNGEON.player.has_flag(flag)
+fn player_has(flag: MonsterFlags, dungeon: &Dungeon) -> bool {
+    dungeon.player.has_flag(flag)
+}
+
+/// Rendering glyph from the supplied model, without a monster overlay.
+pub(crate) fn cell_glyph(y: i32, x: i32, dungeon: &Dungeon) -> u8 {
+    let items = dungeon.with_level(|level| level.items.clone());
+    for id in items {
+        if let Some(glyph) = dungeon.objects.with_object(id, |object| {
+            (object.o_pos == IVec2::new(x, y)).then(|| crate::draw::item_glyph(object.o_type) as u8)
+        }).flatten() {
+            return glyph;
+        }
+    }
+    dungeon.with_level(|level| {
+        use crate::tile::Tile;
+        let pos = IVec2::new(x, y);
+        let idx = y as usize * GameConfig::LEVEL_WIDTH + x as usize;
+        let wall = || {
+            let is_wall = |pos| matches!(level.map.get(pos), Some(Tile::Wall | Tile::HiddenDoor | Tile::Door));
+            if y > 0 && is_wall(pos - IVec2::Y) && is_wall(pos + IVec2::Y) {
+                V_WALL
+            } else {
+                H_WALL
+            }
+        };
+        match level.map.get(pos).unwrap_or(Tile::Empty) {
+            Tile::Empty => SPACE,
+            Tile::Floor => FLOOR,
+            Tile::Wall => wall(),
+            Tile::HiddenDoor if !level.flags.real[idx] => wall(),
+            Tile::HiddenDoor | Tile::Door => DOOR,
+            Tile::Passage => PASSAGE,
+            Tile::Stairs => STAIRS,
+            Tile::Trap(_) if level.flags.seen[idx] => TRAP,
+            Tile::Trap(_) => FLOOR,
+        }
+    })
+}
+
+fn winat(y: i32, x: i32, dungeon: &Dungeon) -> u8 {
+    dungeon.monster_map.at(y as usize, x as usize)
+        .and_then(|id| dungeon.monster_list.with(id, |thing| match thing {
+            Thing::Monster { data } => Some(data.t_disguise),
+            Thing::Object { .. } => None,
+        }).flatten())
+        .unwrap_or_else(|| cell_glyph(y, x, dungeon))
+}
+
+fn flat_at(y: i32, x: i32, dungeon: &Dungeon) -> u8 {
+    dungeon.with_level(|level| {
+        let idx = y as usize * GameConfig::LEVEL_WIDTH + x as usize;
+        let mut flags = level.flags.passnum[idx] & crate::draw::F_PNUM;
+        if level.flags.passage[idx] { flags |= F_PASS; }
+        if level.flags.seen[idx] { flags |= crate::draw::F_SEEN; }
+        if level.flags.real[idx] { flags |= F_REAL; }
+        flags | (level.tile_at(y as usize, x as usize).trap() as u8 & crate::draw::F_TMASK)
+    })
+}
+
+/// Update the supplied hero's experience level and hit points.
+///
+/// `e_levels` must point to a valid, zero-terminated experience table.
+pub unsafe fn check_level(random: &mut Random, dungeon: &Dungeon, e_levels: *const [i32; 21]) {
+    let experience = dungeon.player.stats().experience;
+    let mut level = 0;
+    while level < 21 && (*e_levels)[level] != 0 && (*e_levels)[level] <= experience {
+        level += 1;
+    }
+    let level = level as i32 + 1;
+    let old_level = dungeon.player.level();
+    dungeon.player.with_stats_mut(|stats| stats.level = level);
+    if level > old_level {
+        let add = random.roll(level - old_level, 10);
+        dungeon.player.with_stats_mut(|stats| {
+            stats.max_hit_points += add;
+            stats.hit_points += add;
+        });
+        msg_str(&format!("welcome to level {level}"));
+    }
+}
+
+/// Change the supplied hero's strength and update its unmodified maximum.
+pub unsafe fn chg_str(amt: i32, dungeon: &Dungeon, max_stats: *mut Stats) {
+    if amt == 0 { return; }
+    let strength = (dungeon.player.stats().strength as i32 + amt).clamp(3, 31) as u32;
+    dungeon.player.with_stats_mut(|stats| stats.strength = strength);
+    let mut unmodified = strength;
+    for hand in 0..2 {
+        if let Some(bonus) = dungeon.player.equipment().ring_arm(hand) {
+            unmodified = (unmodified as i32 - bonus).max(3) as u32;
+        }
+    }
+    if unmodified > (*max_stats).strength {
+        (*max_stats).strength = unmodified;
+    }
 }
 
 #[inline]
@@ -550,9 +641,9 @@ unsafe fn is_upper(ch: u8) -> bool {
 
 /// turn_ok:
 /// Decide whether it is legal to turn onto the given space.
-pub unsafe fn turn_ok(y: i32, x: i32) -> u8 {
-    let flags = flat_at(y, x) as u8;
-    if crate::game::is_door_at(y, x)
+pub unsafe fn turn_ok(y: i32, x: i32, dungeon: &Dungeon) -> u8 {
+    let flags = flat_at(y, x, dungeon) as u8;
+    if dungeon.with_level(|level| level.is_door_at(y as usize, x as usize))
         || (flags & (F_REAL as u8 | F_PASS as u8)) == (F_REAL as u8 | F_PASS as u8)
     {
         true as u8
@@ -562,13 +653,15 @@ pub unsafe fn turn_ok(y: i32, x: i32) -> u8 {
 }
 
 #[inline]
-unsafe fn move_stuff(next_pos: &mut IVec2, fl: u8) {
-    let hero = DUNGEON.player.pos();
-    crate::draw::write_cell_glyph(hero, floor_at(&crate::dungeon::DUNGEON) as char);
-    if (fl as u8 & F_PASS as u8) != 0 && crate::game::is_door_at(oldpos.y, oldpos.x) {
-        draw_leave_room(*next_pos, &mut RNG.lock().unwrap());
+unsafe fn move_stuff(next_pos: &mut IVec2, fl: u8, dungeon: &Dungeon, random: &mut Random, oldpos: *const IVec2) {
+    let hero = dungeon.player.pos();
+    crate::draw::write_cell_glyph(hero, floor_at(dungeon) as char);
+    if (fl as u8 & F_PASS as u8) != 0
+        && dungeon.with_level(|level| level.is_door_at((*oldpos).y as usize, (*oldpos).x as usize))
+    {
+        draw_leave_room(*next_pos, random);
     }
-    DUNGEON.player.set_pos(*next_pos);
+    dungeon.player.set_pos(*next_pos);
 }
 
 /// Applies the trap at the given map cell, returning the trap kind that fired.
@@ -577,17 +670,31 @@ unsafe fn move_stuff(next_pos: &mut IVec2, fl: u8) {
 /// levitating, no trap effect applies. Uses the C engine helpers (`msg`,
 /// `roll`, `spread`, `teleport`, ...) exactly as the legacy `be_trapped` did,
 /// but is callable only from Rust.
-pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
+pub unsafe fn be_trapped(
+    pos: IVec2,
+    dungeon: &Dungeon,
+    random: &mut Random,
+    running: *mut u8,
+    count: *mut i32,
+    no_move: *mut i32,
+    no_command: *mut i32,
+    group: *mut i32,
+    has_hit: *mut u8,
+    weap_info: *const [ObjInfo; 10],
+    to_death: *const u8,
+    terse: *const u8,
+    max_stats: *mut Stats,
+) -> TrapType {
     let trap =
-        crate::level::with_current_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
+        dungeon.with_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
 
-    if DUNGEON.player.has_flag(MonsterFlags::LEVIT) {
+    if dungeon.player.has_flag(MonsterFlags::LEVIT) {
         return TrapType::Rust;
     }
 
-    running = false as u8;
-    count = 0;
-    crate::level::with_current_level_mut(|current| {
+    *running = false as u8;
+    *count = 0;
+    dungeon.with_level_mut(|current| {
         current.reveal_trap(pos.y as usize, pos.x as usize);
     });
 
@@ -595,95 +702,88 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
 
     match trap {
         TrapType::Door => {
-            crate::game::set_current_depth(crate::game::current_depth() + 1);
-            DUNGEON.new_level();
+            dungeon.set_current_depth(dungeon.current_depth() + 1);
+            dungeon.new_level();
         }
         TrapType::Bear => {
-            no_move += spread(3, &mut RNG.lock().unwrap());
+            *no_move += spread(3, random);
         }
         TrapType::Mystery => {}
         TrapType::Sleep => {
-            no_command += spread(5, &mut RNG.lock().unwrap());
-            DUNGEON.player.remove_flag(MonsterFlags::RUN);
+            *no_command += spread(5, random);
+            dungeon.player.remove_flag(MonsterFlags::RUN);
         }
         TrapType::Arrow => {
-            let stats = DUNGEON.player.stats();
-            let hit_roll = swing(stats.level - 1, stats.armor, 1, &mut RNG.lock().unwrap());
+            let stats = dungeon.player.stats();
+            let hit_roll = swing(stats.level - 1, stats.armor, 1, random);
             if hit_roll != 0 {
-                DUNGEON.player.with_stats_mut(|stats| {
-                    stats.hit_points -= {
-                        let mut random = RNG.lock().unwrap();
-                        random.roll(1, 6)
-                    }
+                let damage = random.roll(1, 6);
+                dungeon.player.with_stats_mut(|stats| {
+                    stats.hit_points -= damage;
                 });
-                hit = if DUNGEON.player.stats().hit_points <= 0 {
+                hit = if dungeon.player.stats().hit_points <= 0 {
                     TrapHit::Kill
                 } else {
                     TrapHit::Hit
                 };
             } else {
-                let arrow = new_item_id(&DUNGEON.objects);
+                let arrow = new_item_id(&dungeon.objects);
                 init_weapon(
                     arrow,
                     ARROW,
-                    &mut RNG.lock().unwrap(),
-                    &crate::dungeon::DUNGEON,
-                    &raw mut globals::group,
+                    random,
+                    dungeon,
+                    group,
                 );
-                DUNGEON.objects.with_object_mut(arrow, |o| {
+                dungeon.objects.with_object_mut(arrow, |o| {
                     o.o_count = 1;
-                    o.o_pos = DUNGEON.player.pos();
+                    o.o_pos = dungeon.player.pos();
                 });
-                let weap_info = (&*(&raw const globals::weap_info)).clone();
+                let weap_info = (*weap_info).clone();
                 fall(
                     arrow,
                     false,
-                    &raw mut globals::has_hit,
-                    &mut RNG.lock().unwrap(),
-                    &crate::dungeon::DUNGEON,
+                    has_hit,
+                    random,
+                    dungeon,
                     &weap_info,
                 );
                 hit = TrapHit::Miss;
             }
         }
         TrapType::Teleport => {
-            teleport(&mut RNG.lock().unwrap());
+            teleport(random);
         }
         TrapType::Dart => {
-            let stats = DUNGEON.player.stats();
-            let hit_roll = swing(stats.level + 1, stats.armor, 1, &mut RNG.lock().unwrap());
+            let stats = dungeon.player.stats();
+            let hit_roll = swing(stats.level + 1, stats.armor, 1, random);
             if hit_roll == 0 {
                 hit = TrapHit::Miss;
             } else {
-                DUNGEON.player.with_stats_mut(|stats| {
-                    stats.hit_points -= {
-                        let mut random = RNG.lock().unwrap();
-                        random.roll(1, 4)
-                    }
+                let damage = random.roll(1, 4);
+                dungeon.player.with_stats_mut(|stats| {
+                    stats.hit_points -= damage;
                 });
-                if DUNGEON.player.stats().hit_points <= 0 {
+                if dungeon.player.stats().hit_points <= 0 {
                     hit = TrapHit::Kill;
                 } else {
-                    if !DUNGEON.player.wearing_ring(RingType::SustainStrength) && save(VS_POISON, &mut RNG.lock().unwrap()) == 0 {
-                        chg_str(-1);
+                    if !dungeon.player.wearing_ring(RingType::SustainStrength) && save(VS_POISON, random, dungeon) == 0 {
+                        chg_str(-1, dungeon, max_stats);
                     }
                     hit = TrapHit::Hit;
                 }
             }
         }
         TrapType::Rust => {
-            let message = {
-                let mut random = RNG.lock().unwrap();
-                trap.msg(hit, &mut random)
-            };
+            let message = trap.msg(hit, random);
             if let Some(msg) = message {
                 msg_str(&msg);
             }
             rust_armor_id(
-                DUNGEON.player.equipment().armor_id(),
-                &crate::dungeon::DUNGEON,
-                to_death,
-                globals::terse,
+                dungeon.player.equipment().armor_id(),
+                dungeon,
+                *to_death,
+                *terse,
             );
         }
     }
@@ -691,10 +791,7 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
     // Send the message after the effect for every trap except `Rust`, which
     // prints its message before applying the effect above.
     if trap != TrapType::Rust {
-        let message = {
-            let mut random = RNG.lock().unwrap();
-            trap.msg(hit, &mut random)
-        };
+        let message = trap.msg(hit, random);
         if let Some(msg) = message {
             msg_str(&msg);
         }
@@ -716,47 +813,50 @@ pub unsafe fn be_trapped(pos: IVec2) -> TrapType {
 }
 
 #[inline]
-unsafe fn try_passgo_turn(dy: &mut i32, dx: &mut i32) -> bool {
-    let current_room = DUNGEON.player.room();
-    if passgo == 0
-        || running == 0
+unsafe fn try_passgo_turn(
+    dy: &mut i32, dx: &mut i32, dungeon: &Dungeon,
+    passgo: *const u8, running: *const u8, runch: *mut crate::direction::Direction,
+) -> bool {
+    let current_room = dungeon.player.room();
+    if *passgo == 0
+        || *running == 0
         || current_room.is_none()
-        || !crate::game::room_gone(current_room)
-        || player_has(MonsterFlags::BLIND)
+        || !dungeon.with_level(|level| level.room_gone(current_room))
+        || player_has(MonsterFlags::BLIND, dungeon)
     {
         return false;
     }
 
-    let hero = DUNGEON.player.pos();
-    if runch == crate::direction::Direction::West || runch == crate::direction::Direction::East {
-        let b1 = hero.y != 1 && turn_ok(hero.y - 1, hero.x) != 0;
-        let b2 = hero.y != GameConfig::SCREEN_LINES - 2 && turn_ok(hero.y + 1, hero.x) != 0;
+    let hero = dungeon.player.pos();
+    if *runch == crate::direction::Direction::West || *runch == crate::direction::Direction::East {
+        let b1 = hero.y != 1 && turn_ok(hero.y - 1, hero.x, dungeon) != 0;
+        let b2 = hero.y != GameConfig::SCREEN_LINES - 2 && turn_ok(hero.y + 1, hero.x, dungeon) != 0;
         if !(b1 ^ b2) {
             return false;
         }
         if b1 {
-            runch = crate::direction::Direction::North;
+            *runch = crate::direction::Direction::North;
             *dy = -1;
         } else {
-            runch = crate::direction::Direction::South;
+            *runch = crate::direction::Direction::South;
             *dy = 1;
         }
         *dx = 0;
         draw_turnref();
         true
-    } else if runch == crate::direction::Direction::South
-        || runch == crate::direction::Direction::North
+    } else if *runch == crate::direction::Direction::South
+        || *runch == crate::direction::Direction::North
     {
-        let b1 = hero.x != 0 && turn_ok(hero.y, hero.x - 1) != 0;
-        let b2 = hero.x != GameConfig::SCREEN_COLS - 1 && turn_ok(hero.y, hero.x + 1) != 0;
+        let b1 = hero.x != 0 && turn_ok(hero.y, hero.x - 1, dungeon) != 0;
+        let b2 = hero.x != GameConfig::SCREEN_COLS - 1 && turn_ok(hero.y, hero.x + 1, dungeon) != 0;
         if !(b1 ^ b2) {
             return false;
         }
         if b1 {
-            runch = crate::direction::Direction::West;
+            *runch = crate::direction::Direction::West;
             *dx = -1;
         } else {
-            runch = crate::direction::Direction::East;
+            *runch = crate::direction::Direction::East;
             *dx = 1;
         }
         *dy = 0;
@@ -775,40 +875,68 @@ pub use crate::game::globals::nh;
 
 /// do_run:
 /// Start the hero running in the chosen direction.
-pub unsafe fn do_run(direction: crate::direction::Direction) {
-    running = true as u8;
-    after = false as u8;
-    runch = direction;
+pub unsafe fn do_run(
+    direction: crate::direction::Direction,
+    running: *mut u8,
+    after: *mut u8,
+    runch: *mut crate::direction::Direction,
+) {
+    *running = true as u8;
+    *after = false as u8;
+    *runch = direction;
 }
 
 /// do_move:
 /// Check to see that a move is legal. If it is, handle the consequences.
-pub unsafe fn do_move(dy: i32, dx: i32) {
+pub unsafe fn do_move(
+    dy: i32,
+    dx: i32,
+    dungeon: &Dungeon,
+    random: &mut Random,
+    firstmove: *mut u8,
+    no_move: *mut i32,
+    after: *mut u8,
+    running: *mut u8,
+    to_death: *mut u8,
+    passgo: *const u8,
+    runch: *mut crate::direction::Direction,
+    oldpos: *const IVec2,
+    take: *mut u8,
+    count: *mut i32,
+    no_command: *mut i32,
+    group: *mut i32,
+    has_hit: *mut u8,
+    weap_info: *const [ObjInfo; 10],
+    terse: *const u8,
+    max_stats: *mut Stats,
+    quiet: *mut i32,
+    kamikaze: *mut u8,
+    vf_hit: *mut i32,
+    fight_flush: *const u8,
+    monsters: *mut [MonsterInfo; 26],
+    e_levels: *const [i32; 21],
+) {
     let mut next_pos = IVec2 { x: 0, y: 0 };
     let mut current_dy = dy;
     let mut current_dx = dx;
-    let hero = DUNGEON.player.pos();
+    let hero = dungeon.player.pos();
     let mut ch: u8;
     let fl: u8;
 
-    firstmove = false as u8;
-    if no_move != 0 {
-        no_move -= 1;
+    *firstmove = false as u8;
+    if *no_move != 0 {
+        *no_move -= 1;
         msg_str("you are still stuck in the bear trap");
         return;
     }
 
-    if player_has(MonsterFlags::HUH)
-        && {
-            let mut random = RNG.lock().unwrap();
-            random.rnd(5)
-        } != 0
+    if player_has(MonsterFlags::HUH, dungeon) && random.rnd(5) != 0
     {
-        next_pos = crate::entity::rndmove::rndmove_from(hero, &mut RNG.lock().unwrap());
+        next_pos = crate::entity::rndmove::rndmove_from(hero, random, dungeon);
         if coord_eq(next_pos, hero) {
-            after = false as u8;
-            running = false as u8;
-            to_death = false as u8;
+            *after = false as u8;
+            *running = false as u8;
+            *to_death = false as u8;
             return;
         }
     } else {
@@ -822,90 +950,96 @@ pub unsafe fn do_move(dy: i32, dx: i32) {
             || next_pos.y <= 0
             || next_pos.y >= GameConfig::SCREEN_LINES - 1
         {
-            if try_passgo_turn(&mut current_dy, &mut current_dx) {
+            if try_passgo_turn(&mut current_dy, &mut current_dx, dungeon, passgo, running, runch) {
                 next_pos.y = hero.y + current_dy;
                 next_pos.x = hero.x + current_dx;
                 continue;
             }
-            running = false as u8;
-            after = false as u8;
+            *running = false as u8;
+            *after = false as u8;
             return;
         }
         break;
     }
 
-    if diag_ok(hero, next_pos) == 0 {
-        after = false as u8;
-        running = false as u8;
+    if diag_ok(hero, next_pos, dungeon) == 0 {
+        *after = false as u8;
+        *running = false as u8;
         return;
     }
 
-    if running != 0 && coord_eq(hero, next_pos) {
-        running = false as u8;
+    if *running != 0 && coord_eq(hero, next_pos) {
+        *running = false as u8;
     }
 
-    fl = flat_at(next_pos.y, next_pos.x);
-    ch = winat(next_pos.y, next_pos.x);
+    fl = flat_at(next_pos.y, next_pos.x, dungeon);
+    ch = winat(next_pos.y, next_pos.x, dungeon);
 
     if (fl as u8 & F_REAL as u8) == 0 && ch == FLOOR {
-        if !player_has(MonsterFlags::LEVIT) {
-            crate::level::with_current_level_mut(|level| {
+        if !player_has(MonsterFlags::LEVIT, dungeon) {
+            dungeon.with_level_mut(|level| {
                 level.reveal_trap(next_pos.y as usize, next_pos.x as usize);
             });
             ch = TRAP;
         }
-    } else if player_has(MonsterFlags::HELD) && ch != b'F' as u8 {
+    } else if player_has(MonsterFlags::HELD, dungeon) && ch != b'F' as u8 {
         msg_str("you are being held");
         return;
     }
     match ch {
         SPACE | H_WALL | V_WALL => {
-            running = false as u8;
-            after = false as u8;
+            *running = false as u8;
+            *after = false as u8;
         }
         DOOR => {
-            running = false as u8;
-            if (flat_at(hero.y, hero.x) as u8 & F_PASS as u8) != 0 {
-                draw_enter_room(next_pos, &mut RNG.lock().unwrap());
+            *running = false as u8;
+            if (flat_at(hero.y, hero.x, dungeon) as u8 & F_PASS as u8) != 0 {
+                draw_enter_room(next_pos, random);
             }
-            move_stuff(&mut next_pos, fl);
+            move_stuff(&mut next_pos, fl, dungeon, random, oldpos);
         }
         TRAP => {
-            let trap = be_trapped(next_pos);
+            let trap = be_trapped(next_pos, dungeon, random, running, count, no_move,
+                no_command, group, has_hit, weap_info, to_death, terse, max_stats);
             if trap == TrapType::Door || trap == TrapType::Teleport {
                 return;
             }
-            move_stuff(&mut next_pos, fl);
+            move_stuff(&mut next_pos, fl, dungeon, random, oldpos);
         }
         PASSAGE => {
-            DUNGEON.player.set_room(roomin(hero));
-            move_stuff(&mut next_pos, fl);
+            dungeon.player.set_room(roomin(hero, dungeon));
+            move_stuff(&mut next_pos, fl, dungeon, random, oldpos);
         }
         FLOOR => {
             if (fl as u8 & F_REAL as u8) == 0 {
-                be_trapped(DUNGEON.player.pos());
+                be_trapped(dungeon.player.pos(), dungeon, random, running, count, no_move,
+                    no_command, group, has_hit, weap_info, to_death, terse, max_stats);
             }
-            move_stuff(&mut next_pos, fl);
+            move_stuff(&mut next_pos, fl, dungeon, random, oldpos);
         }
         STAIRS => {
-            DUNGEON.set_seen_stairs(true);
-            running = false as u8;
-            if is_upper(ch) || game::monster_here(next_pos.y, next_pos.x) {
-                fight(next_pos, DUNGEON.player.weapon_id(), false as u8, &mut RNG.lock().unwrap());
+            dungeon.set_seen_stairs(true);
+            *running = false as u8;
+            if is_upper(ch) || dungeon.monster_map.at(next_pos.y as usize, next_pos.x as usize).is_some() {
+                fight(next_pos, dungeon.player.weapon_id(), false as u8, random, dungeon,
+                    count, quiet, has_hit, to_death, kamikaze, vf_hit, fight_flush,
+                    monsters, weap_info, e_levels);
             } else {
-                take = ch;
-                move_stuff(&mut next_pos, fl);
+                *take = ch;
+                move_stuff(&mut next_pos, fl, dungeon, random, oldpos);
             }
         }
         _ => {
-            running = false as u8;
-            if is_upper(ch) || game::monster_here(next_pos.y, next_pos.x) {
-                fight(next_pos, DUNGEON.player.weapon_id(), false as u8, &mut RNG.lock().unwrap());
+            *running = false as u8;
+            if is_upper(ch) || dungeon.monster_map.at(next_pos.y as usize, next_pos.x as usize).is_some() {
+                fight(next_pos, dungeon.player.weapon_id(), false as u8, random, dungeon,
+                    count, quiet, has_hit, to_death, kamikaze, vf_hit, fight_flush,
+                    monsters, weap_info, e_levels);
             } else {
                 if ch != STAIRS {
-                    take = ch;
+                    *take = ch;
                 }
-                move_stuff(&mut next_pos, fl);
+                move_stuff(&mut next_pos, fl, dungeon, random, oldpos);
             }
         }
     }
@@ -916,9 +1050,7 @@ mod tests {
     use super::*;
     use crate::item::arena::{allocated_count, new_item_id, new_object_id};
 
-    /// Serialise the arena assertions; the arena and its counter are process
-    /// globals, so the tests must not interleave allocation/free from several
-    /// threads.
+    /// Retained test serialization; all model state below is dungeon-local.
     fn serial() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         LOCK.lock().unwrap_or_else(|poison| poison.into_inner())
@@ -928,32 +1060,85 @@ mod tests {
     #[test]
     fn attach_detach_pack_preserves_order() {
         let _guard = serial();
-        let owner = crate::game::DUNGEON.monster_list.spawn_actor();
-        let a = new_object_id(&DUNGEON.objects);
-        let b = new_object_id(&DUNGEON.objects);
+        let dungeon = crate::dungeon::Dungeon::empty();
+        let owner = dungeon.monster_list.spawn_actor();
+        let a = new_object_id(&dungeon.objects);
+        let b = new_object_id(&dungeon.objects);
 
-        attach_pack_id(owner, a);
-        attach_pack_id(owner, b);
-        assert_eq!(monster_pack(owner), vec![b, a]);
+        attach_pack_id(owner, a, &dungeon);
+        attach_pack_id(owner, b, &dungeon);
+        assert_eq!(monster_pack(owner, &dungeon), vec![b, a]);
 
-        detach_pack_id(owner, b);
-        assert_eq!(monster_pack(owner), vec![a]);
+        detach_pack_id(owner, b, &dungeon);
+        assert_eq!(monster_pack(owner, &dungeon), vec![a]);
 
-        free_pack_id(owner);
-        assert!(monster_pack(owner).is_empty());
-        let _ = crate::game::DUNGEON.monster_list.remove(owner);
+        free_pack_id(owner, &dungeon);
+        assert!(monster_pack(owner, &dungeon).is_empty());
+        assert!(!dungeon.objects.contains(a));
+        assert!(dungeon.objects.contains(b));
+        let _ = dungeon.monster_list.remove(owner);
+    }
+
+    #[test]
+    fn destinations_and_packs_are_dungeon_local() {
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        let a = first.monster_list.spawn_actor();
+        let b = second.monster_list.spawn_actor();
+        let item = new_object_id(&first.objects);
+
+        set_monster_dest_hero(a, &first);
+        attach_pack_id(a, item, &first);
+        assert!(is_monster_dest_hero(a, &first));
+        assert_eq!(monster_dest(b, &second), DestRef::None);
+        assert!(monster_pack(b, &second).is_empty());
+
+        set_monster_dest(b, DestRef::RoomGold(2), &second);
+        set_monster_pack(b, Vec::new(), &second);
+        free_pack_id(a, &first);
+        discard_monster(a, &first);
+        assert_eq!(monster_dest(b, &second), DestRef::RoomGold(2));
+        assert_eq!(monster_pack(b, &second), Vec::<ThingId>::new());
+        assert!(first.monster_list.ids().is_empty());
+        assert_eq!(second.monster_list.ids(), vec![b]);
+    }
+
+    #[test]
+    fn running_and_strength_use_supplied_state() {
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        first.player.with_stats_mut(|stats| stats.strength = 10);
+        second.player.with_stats_mut(|stats| stats.strength = 19);
+        let mut maximum = Stats::default();
+        let mut running = 0;
+        let mut after = 1;
+        let mut direction = crate::direction::Direction::West;
+        unsafe {
+            do_run(crate::direction::Direction::North, &raw mut running, &raw mut after, &raw mut direction);
+            chg_str(30, &first, &raw mut maximum);
+        }
+        assert_eq!(running, 1);
+        assert_eq!(after, 0);
+        assert!(direction == crate::direction::Direction::North);
+        assert_eq!(first.player.stats().strength, 31);
+        assert_eq!(maximum.strength, 31);
+        assert_eq!(second.player.stats().strength, 19);
+        unsafe { chg_str(-50, &first, &raw mut maximum); }
+        assert_eq!(first.player.stats().strength, 3);
+        assert_eq!(maximum.strength, 31);
     }
 
     /// Allocating and discarding objects keeps the tracked count balanced.
     #[test]
     fn allocation_count_is_balanced() {
         let _guard = serial();
-        let before = allocated_count(&DUNGEON.objects);
-        let a = new_item_id(&DUNGEON.objects);
-        let b = new_item_id(&DUNGEON.objects);
-        assert_eq!(allocated_count(&DUNGEON.objects), before + 2);
-        let _ = DUNGEON.objects.remove(a);
-        let _ = DUNGEON.objects.remove(b);
-        assert_eq!(allocated_count(&DUNGEON.objects), before);
+        let dungeon = crate::dungeon::Dungeon::empty();
+        let before = allocated_count(&dungeon.objects);
+        let a = new_item_id(&dungeon.objects);
+        let b = new_item_id(&dungeon.objects);
+        assert_eq!(allocated_count(&dungeon.objects), before + 2);
+        let _ = dungeon.objects.remove(a);
+        let _ = dungeon.objects.remove(b);
+        assert_eq!(allocated_count(&dungeon.objects), before);
     }
 }

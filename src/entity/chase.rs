@@ -3,17 +3,23 @@
 //! Monsters are addressed by [`MonsterId`] and reached through scoped
 //! `Dungeon::monster_list` access, never raw pointers. Functions that need several
 //! fields snapshot the monster into a small local value, compute with that,
-//! and write the result back through `DUNGEON.monster_list.with_mut` — which keeps the
-//! monster lock unheld while other locked state (e.g. the level) is read.
+//! and write the result back through the supplied dungeon's monster list.
+//! Dependencies are individual parameters, never an aggregate context.
+//!
+//! # Safety
+//! Raw state/table parameters must remain valid and initialized throughout the
+//! call, including reentrant helpers. Access must be serialized, with no live
+//! references conflicting with writes. Only short-lived table reads are made.
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
 use crate::entity::monsters::MonsterType;
-use crate::entity::player::{DestRef, MonsterFlags, Thing};
+use crate::entity::player::{cell_glyph, DestRef, MonsterFlags, Stats, Thing};
 use crate::entity::rndmove::rndmove;
-use crate::game::globals::monsters;
-use crate::dungeon::DUNGEON;
+use crate::game::globals::{MonsterInfo, ObjInfo};
+use crate::dungeon::Dungeon;
 use crate::game::MonsterId;
+use crate::item::arena::ThingId;
 use crate::item::item_type::ItemType;
 use crate::item::scrolls::ScrollType;
 use crate::item::sticks::fire_bolt;
@@ -39,8 +45,6 @@ const LAMPDIST: i32 = 3;
 /// enable the wizard/debug diagnostics.
 const MASTER: bool = false;
 
-use crate::game::globals::{count, delta, has_hit, kamikaze, quiet, running, see_floor, to_death};
-
 /// A snapshot of the actor fields `chase.c` reads and writes.
 #[derive(Clone)]
 struct Mon {
@@ -55,8 +59,8 @@ struct Mon {
 
 impl Mon {
     /// Read the monster `id` into a snapshot (or `None` when it is gone).
-    fn get(id: MonsterId) -> Option<Mon> {
-        DUNGEON.monster_list
+    fn get(id: MonsterId, dungeon: &Dungeon) -> Option<Mon> {
+        dungeon.monster_list
             .with(id, |t| match t {
                 Thing::Monster { data } => Some(Mon {
                     pos: data.t_pos,
@@ -79,8 +83,8 @@ impl Mon {
     }
 
     /// Write the snapshot's mutable fields back onto the monster `id`.
-    fn set(&self, id: MonsterId) {
-        DUNGEON.monster_list.with_mut(id, |t| {
+    fn set(&self, id: MonsterId, dungeon: &Dungeon) {
+        dungeon.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_pos = self.pos;
                 data.t_turn = self.turn;
@@ -94,13 +98,29 @@ impl Mon {
 }
 
 #[inline]
-fn hero_pos() -> IVec2 {
-    DUNGEON.player.pos()
+fn hero_pos(dungeon: &Dungeon) -> IVec2 {
+    dungeon.player.pos()
 }
 
 #[inline]
-fn player_has(flag: MonsterFlags) -> bool {
-    DUNGEON.player.has_flag(flag)
+fn player_has(flag: MonsterFlags, dungeon: &Dungeon) -> bool {
+    dungeon.player.has_flag(flag)
+}
+
+/// Read a visible monster's disguise from its owning dungeon.
+fn monster_glyph(id: MonsterId, dungeon: &Dungeon) -> char {
+    dungeon.monster_list.with(id, |thing| match thing {
+        Thing::Monster { data } => data.t_disguise as char,
+        Thing::Object { .. } => ' ',
+    }).unwrap_or(' ')
+}
+
+/// Read a sensed monster's real identity from its owning dungeon.
+fn monster_type_glyph(id: MonsterId, dungeon: &Dungeon) -> char {
+    dungeon.monster_list.with(id, |thing| match thing {
+        Thing::Monster { data } => data.t_type.map_or(' ', |kind| kind.glyph() as char),
+        Thing::Object { .. } => ' ',
+    }).unwrap_or(' ')
 }
 
 /// Resolve a stored [`DestRef`] to the live coordinate it names.
@@ -108,23 +128,31 @@ fn player_has(flag: MonsterFlags) -> bool {
 /// Every handle is looked up in its owning container; an unresolvable handle
 /// (freed monster/item, out-of-range room) falls back to the hero's position.
 #[inline]
-fn resolve_dest(dest: DestRef) -> IVec2 {
+unsafe fn resolve_dest(
+    dest: DestRef,
+    dungeon: &Dungeon,
+    room_gold: *const [IVec2; GameConfig::MAX_ROOMS],
+) -> IVec2 {
     match dest {
-        DestRef::None | DestRef::Hero => hero_pos(),
-        DestRef::Monster(id) => DUNGEON.monster_list
+        DestRef::None | DestRef::Hero => hero_pos(dungeon),
+        DestRef::Monster(id) => dungeon.monster_list
             .with(id, |t| match t {
                 Thing::Monster { data, .. } => data.t_pos,
-                Thing::Object { .. } => hero_pos(),
+                Thing::Object { .. } => hero_pos(dungeon),
             })
-            .unwrap_or_else(hero_pos),
-        DestRef::Object(id) => DUNGEON.objects
+            .unwrap_or_else(|| hero_pos(dungeon)),
+        DestRef::Object(id) => dungeon.objects
             .with(id, |t| match t {
                 Thing::Object { data, .. } => data.o_pos,
-                Thing::Monster { .. } => hero_pos(),
+                Thing::Monster { .. } => hero_pos(dungeon),
             })
-            .unwrap_or_else(hero_pos),
+            .unwrap_or_else(|| hero_pos(dungeon)),
         DestRef::RoomGold(r) => {
-            unsafe { crate::game::room_gold_pos(Some(r)) }.unwrap_or_else(hero_pos)
+            if r < GameConfig::MAX_ROOMS {
+                (*room_gold)[r]
+            } else {
+                hero_pos(dungeon)
+            }
         }
     }
 }
@@ -135,67 +163,173 @@ fn coord_eq(a: IVec2, b: IVec2) -> bool {
 }
 
 #[inline]
-unsafe fn flat_at(y: i32, x: i32) -> u8 {
-    crate::draw::flat_at(y, x)
+unsafe fn flat_at(y: i32, x: i32, dungeon: &Dungeon) -> u8 {
+    dungeon.with_level(|level| {
+        let idx = y as usize * GameConfig::LEVEL_WIDTH + x as usize;
+        let mut flags = level.flags.passnum[idx] & F_PNUM;
+        if level.flags.passage[idx] {
+            flags |= F_PASS;
+        }
+        if level.flags.seen[idx] {
+            flags |= crate::draw::F_SEEN;
+        }
+        if level.flags.real[idx] {
+            flags |= crate::draw::F_REAL;
+        }
+        flags | (level.tile_at(y as usize, x as usize).trap() as u8 & crate::draw::F_TMASK)
+    })
+}
+
+#[inline]
+fn tile_at(y: i32, x: i32, dungeon: &Dungeon) -> crate::tile::Tile {
+    dungeon.with_level(|level| level.tile_at(y as usize, x as usize))
+}
+
+#[inline]
+fn cell_is_walkable(y: i32, x: i32, dungeon: &Dungeon) -> bool {
+    dungeon.monster_map.at(y as usize, x as usize).is_none()
+        && tile_at(y, x, dungeon).is_walkable()
+}
+
+fn item_ids(dungeon: &Dungeon) -> Vec<ThingId> {
+    let items = dungeon.with_level(|level| level.items.clone());
+    items.into_iter().filter(|&id| dungeon.objects.contains(id)).collect()
 }
 
 /// runners:
 /// Make all the running monsters move.
 ///
 /// Uses globals: mlist, hero, to_death, has_hit.
-pub unsafe fn runners(random: &mut Random) {
-    for id in DUNGEON.monster_list.ids() {
-        let Some(m) = Mon::get(id) else {
+pub unsafe fn runners(
+    random: &mut Random,
+    dungeon: &Dungeon,
+    delta: *mut IVec2,
+    running: *mut u8,
+    count: *mut i32,
+    quiet: *mut i32,
+    to_death: *mut u8,
+    kamikaze: *mut u8,
+    has_hit: *mut u8,
+    max_hit: *mut i32,
+    no_command: *mut i32,
+    vf_hit: *mut i32,
+    purse: *mut i32,
+    fight_flush: *const u8,
+    e_levels: *const [i32; 21],
+    monsters: *mut [MonsterInfo; 26],
+    inpack: *mut i32,
+    last_pick: *mut Option<ThingId>,
+    pack_used: *mut [u8; 26],
+    inv_describe: *const u8,
+    arm_info: *const [ObjInfo; 8],
+    pot_info: *const [ObjInfo; 14],
+    ring_info: *const [ObjInfo; 14],
+    scr_info: *const [ObjInfo; 18],
+    weap_info: *const [ObjInfo; 10],
+    ws_info: *const [ObjInfo; 14],
+    see_floor: *const u8,
+    room_gold: *const [IVec2; GameConfig::MAX_ROOMS],
+    max_stats: *mut Stats,
+) {
+    for id in dungeon.monster_list.ids() {
+        let Some(m) = Mon::get(id, dungeon) else {
             continue;
         };
         if !m.has(MonsterFlags::HELD) && m.has(MonsterFlags::RUN) {
             let orig_pos = m.pos;
             let wastarget = m.has(MonsterFlags::TARGET);
-            if move_monst(id, random) == -1 {
+            if move_monst(id, random, dungeon, delta, running, count, quiet,
+                to_death, kamikaze, has_hit, max_hit, no_command, vf_hit, purse,
+                fight_flush, e_levels, monsters, inpack, last_pick, pack_used,
+                inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info,
+                ws_info, see_floor, room_gold, max_stats) == -1 {
                 continue;
             }
-            let m = Mon::get(id).unwrap_or(m);
-            let hero = hero_pos();
+            let m = Mon::get(id, dungeon).unwrap_or(m);
+            let hero = hero_pos(dungeon);
             if m.has(MonsterFlags::FLY) && dist(hero.y, hero.x, m.pos.y, m.pos.x) >= 3 {
-                move_monst(id, random);
+                move_monst(id, random, dungeon, delta, running, count, quiet,
+                    to_death, kamikaze, has_hit, max_hit, no_command, vf_hit, purse,
+                    fight_flush, e_levels, monsters, inpack, last_pick, pack_used,
+                    inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info,
+                    ws_info, see_floor, room_gold, max_stats);
             }
-            let m = Mon::get(id).unwrap_or(m);
+            let m = Mon::get(id, dungeon).unwrap_or(m);
             if wastarget && !coord_eq(orig_pos, m.pos) {
-                DUNGEON.monster_list.with_mut(id, |t| {
+                dungeon.monster_list.with_mut(id, |t| {
                     if let Thing::Monster { data } = t {
                         data.t_flags.remove(MonsterFlags::TARGET);
                     }
                 });
-                to_death = false as u8;
+                *to_death = false as u8;
             }
         }
     }
-    if has_hit != 0 {
+    if *has_hit != 0 {
         endmsg();
-        has_hit = false as u8;
+        *has_hit = false as u8;
     }
 }
 
 /// move_monst:
 /// Execute a single turn of running for a monster
-pub unsafe fn move_monst(id: MonsterId, random: &mut Random) -> i32 {
-    let Some(m) = Mon::get(id) else {
+pub unsafe fn move_monst(
+    id: MonsterId,
+    random: &mut Random,
+    dungeon: &Dungeon,
+    delta: *mut IVec2,
+    running: *mut u8,
+    count: *mut i32,
+    quiet: *mut i32,
+    to_death: *mut u8,
+    kamikaze: *mut u8,
+    has_hit: *mut u8,
+    max_hit: *mut i32,
+    no_command: *mut i32,
+    vf_hit: *mut i32,
+    purse: *mut i32,
+    fight_flush: *const u8,
+    e_levels: *const [i32; 21],
+    monsters: *mut [MonsterInfo; 26],
+    inpack: *mut i32,
+    last_pick: *mut Option<ThingId>,
+    pack_used: *mut [u8; 26],
+    inv_describe: *const u8,
+    arm_info: *const [ObjInfo; 8],
+    pot_info: *const [ObjInfo; 14],
+    ring_info: *const [ObjInfo; 14],
+    scr_info: *const [ObjInfo; 18],
+    weap_info: *const [ObjInfo; 10],
+    ws_info: *const [ObjInfo; 14],
+    see_floor: *const u8,
+    room_gold: *const [IVec2; GameConfig::MAX_ROOMS],
+    max_stats: *mut Stats,
+) -> i32 {
+    let Some(m) = Mon::get(id, dungeon) else {
         return 0;
     };
     if !m.has(MonsterFlags::SLOW) || m.turn {
-        if do_chase(id, random) == -1 {
+        if do_chase(id, random, dungeon, delta, running, count, quiet,
+            to_death, kamikaze, has_hit, max_hit, no_command, vf_hit, purse,
+            fight_flush, e_levels, monsters, inpack, last_pick, pack_used,
+            inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info,
+            ws_info, see_floor, room_gold, max_stats) == -1 {
             return -1;
         }
     }
-    let Some(m) = Mon::get(id) else {
+    let Some(m) = Mon::get(id, dungeon) else {
         return 0;
     };
     if m.has(MonsterFlags::HASTE) {
-        if do_chase(id, random) == -1 {
+        if do_chase(id, random, dungeon, delta, running, count, quiet,
+            to_death, kamikaze, has_hit, max_hit, no_command, vf_hit, purse,
+            fight_flush, e_levels, monsters, inpack, last_pick, pack_used,
+            inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info,
+            ws_info, see_floor, room_gold, max_stats) == -1 {
             return -1;
         }
     }
-    DUNGEON.monster_list.with_mut(id, |t| {
+    dungeon.monster_list.with_mut(id, |t| {
         if let Thing::Monster { data } = t {
             data.t_turn = !data.t_turn;
         }
@@ -208,30 +342,37 @@ pub unsafe fn move_monst(id: MonsterId, random: &mut Random) -> i32 {
 /// all the relevant state.
 ///
 /// Uses globals: places (via moat), player, see_monst (function).
-pub unsafe fn relocate(id: MonsterId, new_loc: IVec2, random: &mut Random) {
-    let Some(mut m) = Mon::get(id) else {
+pub unsafe fn relocate(
+    id: MonsterId,
+    new_loc: IVec2,
+    random: &mut Random,
+    dungeon: &Dungeon,
+    see_floor: *const u8,
+    monsters: *const [MonsterInfo; 26],
+) {
+    let Some(mut m) = Mon::get(id, dungeon) else {
         return;
     };
     if !coord_eq(new_loc, m.pos) {
         crate::draw::write_cell_glyph(m.pos, m.oldch as char);
-        m.room = roomin(new_loc);
-        set_oldch(id, new_loc);
-        m.oldch = Mon::get(id).map(|x| x.oldch).unwrap_or(m.oldch);
+        m.room = roomin(new_loc, dungeon);
+        set_oldch(id, new_loc, dungeon, see_floor);
+        m.oldch = Mon::get(id, dungeon).map(|x| x.oldch).unwrap_or(m.oldch);
         let oroom = m.room;
-        crate::game::clear_monster(m.pos.y, m.pos.x);
+        dungeon.monster_map.set(m.pos.y as usize, m.pos.x as usize, None);
 
         if oroom != m.room {
-            update_dest(id, random);
-            m.dest = Mon::get(id).map(|x| x.dest).unwrap_or(m.dest);
+            update_dest(id, random, dungeon, monsters);
+            m.dest = Mon::get(id, dungeon).map(|x| x.dest).unwrap_or(m.dest);
         }
         m.pos = new_loc;
-        m.set(id);
-        crate::game::set_monster_id(new_loc.y, new_loc.x, Some(id));
+        m.set(id, dungeon);
+        dungeon.monster_map.set(new_loc.y as usize, new_loc.x as usize, Some(id));
     }
-    if see_monst(id) != false as u8 {
-        crate::draw::write_cell_glyph(new_loc, crate::draw::monster_glyph(id));
-    } else if player_has(MonsterFlags::SEEMONST) {
-        crate::draw::write_reverse_video_cell_glyph(new_loc, crate::draw::monster_type_glyph(id));
+    if see_monst(id, dungeon) != false as u8 {
+        crate::draw::write_cell_glyph(new_loc, monster_glyph(id, dungeon));
+    } else if player_has(MonsterFlags::SEEMONST, dungeon) {
+        crate::draw::write_reverse_video_cell_glyph(new_loc, monster_type_glyph(id, dungeon));
     }
 }
 
@@ -240,8 +381,39 @@ pub unsafe fn relocate(id: MonsterId, new_loc: IVec2, random: &mut Random) {
 ///
 /// Uses globals: hero, proom, passages, places (via flat/chat/moat),
 /// delta, running, count, quiet, to_death, kamikaze, lvl_obj.
-pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
-    let Some(mut m) = Mon::get(id) else {
+pub unsafe fn do_chase(
+    id: MonsterId,
+    random: &mut Random,
+    dungeon: &Dungeon,
+    delta: *mut IVec2,
+    running: *mut u8,
+    count: *mut i32,
+    quiet: *mut i32,
+    to_death: *mut u8,
+    kamikaze: *mut u8,
+    has_hit: *mut u8,
+    max_hit: *mut i32,
+    no_command: *mut i32,
+    vf_hit: *mut i32,
+    purse: *mut i32,
+    fight_flush: *const u8,
+    e_levels: *const [i32; 21],
+    monsters: *mut [MonsterInfo; 26],
+    inpack: *mut i32,
+    last_pick: *mut Option<ThingId>,
+    pack_used: *mut [u8; 26],
+    inv_describe: *const u8,
+    arm_info: *const [ObjInfo; 8],
+    pot_info: *const [ObjInfo; 14],
+    ring_info: *const [ObjInfo; 14],
+    scr_info: *const [ObjInfo; 18],
+    weap_info: *const [ObjInfo; 10],
+    ws_info: *const [ObjInfo; 14],
+    see_floor: *const u8,
+    room_gold: *const [IVec2; GameConfig::MAX_ROOMS],
+    max_stats: *mut Stats,
+) -> i32 {
+    let Some(mut m) = Mon::get(id, dungeon) else {
         return 0;
     };
     let mut mindist: i32 = 32767;
@@ -250,18 +422,18 @@ pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
     let door: bool;
 
     let rer = m.room; // Find room of chaser
-    if m.has(MonsterFlags::GREED) && crate::game::room_goldval(rer) == 0 {
+    if m.has(MonsterFlags::GREED) && dungeon.with_level(|level| level.room_goldval(rer)) == 0 {
         m.dest = DestRef::Hero; // If gold has been taken, run after hero
-        m.set(id);
+        m.set(id, dungeon);
     }
     let ree = if m.dest == DestRef::Hero {
         // Find room of chasee
-        DUNGEON.player.room()
+        dungeon.player.room()
     } else {
-        roomin(resolve_dest(m.dest))
+        roomin(resolve_dest(m.dest, dungeon, room_gold), dungeon)
     };
     // We don't count doors as inside rooms for this routine
-    door = crate::game::is_door_at(m.pos.y, m.pos.x);
+    door = dungeon.with_level(|level| level.is_door_at(m.pos.y as usize, m.pos.x as usize));
     // If the object of our desire is in a different room,
     // and we are not in a corridor, run to the door nearest to
     // our goal.
@@ -272,8 +444,8 @@ pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
     let mut this = IVec2::ZERO;
     loop {
         if loop_rer != loop_ree {
-            let dest = resolve_dest(m.dest);
-            let exits = crate::game::room_exits(loop_rer);
+            let dest = resolve_dest(m.dest, dungeon, room_gold);
+            let exits = dungeon.with_level(|level| level.room_exits(loop_rer));
             for cp in exits.iter() {
                 curdist = dist(dest.y, dest.x, cp.y, cp.x);
                 if curdist < mindist {
@@ -282,8 +454,8 @@ pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
                 }
             }
             if loop_door {
-                let pnum = (flat_at(m.pos.y, m.pos.x) & F_PNUM) as usize;
-                let passage_exits = crate::game::passage_exits(Some(pnum));
+                let pnum = (flat_at(m.pos.y, m.pos.x, dungeon) & F_PNUM) as usize;
+                let passage_exits = dungeon.with_level(|level| level.passage_exits(Some(pnum)));
                 for cp in passage_exits.iter() {
                     curdist = dist(dest.y, dest.x, cp.y, cp.x);
                     if curdist < mindist {
@@ -296,11 +468,11 @@ pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
                 continue;
             }
         } else {
-            this = resolve_dest(m.dest);
+            this = resolve_dest(m.dest, dungeon, room_gold);
             // For dragons check and see if (a) the hero is on a straight
             // line from it, and (b) that it is within shooting distance,
             // but outside of striking range.
-            let hero = hero_pos();
+            let hero = hero_pos(dungeon);
             if m.typ == Some(MonsterType::Dragon)
                 && (m.pos.y == hero.y
                     || m.pos.x == hero.x
@@ -311,18 +483,20 @@ pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
             {
                 let dy = hero.y - m.pos.y;
                 let dx = hero.x - m.pos.x;
-                delta.y = sign(dy);
-                delta.x = sign(dx);
-                if has_hit != 0 {
+                (*delta).y = sign(dy);
+                (*delta).x = sign(dx);
+                if *has_hit != 0 {
                     endmsg();
                 }
-                fire_bolt(m.pos, delta, "flame", random, &crate::dungeon::DUNGEON);
-                running = false as u8;
-                count = 0;
-                quiet = 0;
-                if to_death != 0 && !m.has(MonsterFlags::TARGET) {
-                    to_death = false as u8;
-                    kamikaze = false as u8;
+                fire_bolt(m.pos, *delta, "flame", random, dungeon, count, quiet,
+                    has_hit, to_death, kamikaze, vf_hit, fight_flush, monsters,
+                    weap_info, e_levels);
+                *running = false as u8;
+                *count = 0;
+                *quiet = 0;
+                if *to_death != 0 && !m.has(MonsterFlags::TARGET) {
+                    *to_death = false as u8;
+                    *kamikaze = false as u8;
                 }
                 return 0;
             }
@@ -333,19 +507,22 @@ pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
     // This now contains what we want to run to this time
     // so we run to it.  If we hit it we either want to fight it
     // or stop running.
-    let (keep_chasing, ch_ret) = chase(id, this, random);
+    let (keep_chasing, ch_ret) = chase(id, this, random, dungeon);
     if keep_chasing == false as u8 {
-        if coord_eq(this, hero_pos()) {
-            return attack(id, random);
-        } else if coord_eq(this, resolve_dest(m.dest)) {
-            for obj_id in crate::game::item_ids() {
+        if coord_eq(this, hero_pos(dungeon)) {
+            return attack(id, random, dungeon, running, count, quiet, to_death,
+                kamikaze, has_hit, max_hit, no_command, vf_hit, purse, fight_flush,
+                e_levels, monsters, inpack, last_pick, pack_used, inv_describe,
+                arm_info, pot_info, ring_info, scr_info, weap_info, ws_info, max_stats);
+        } else if coord_eq(this, resolve_dest(m.dest, dungeon, room_gold)) {
+            for obj_id in item_ids(dungeon) {
                 if m.dest == DestRef::Object(obj_id) {
-                    crate::game::with_current_level_mut(|level| level.remove_item(obj_id));
-                    crate::entity::player::attach_pack_id(id, obj_id);
+                    dungeon.with_level_mut(|level| level.remove_item(obj_id));
+                    crate::entity::player::attach_pack_id(id, obj_id, dungeon);
                     // Objects render from the level item list; the floor glyph
                     // under a picked-up object is then the terrain char.
-                    update_dest(id, random);
-                    m.dest = Mon::get(id).map(|x| x.dest).unwrap_or(m.dest);
+                    update_dest(id, random, dungeon, monsters);
+                    m.dest = Mon::get(id, dungeon).map(|x| x.dest).unwrap_or(m.dest);
                     break;
                 }
             }
@@ -356,11 +533,11 @@ pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
     } else if m.typ == Some(MonsterType::VenusFlytrap) {
         return 0;
     }
-    relocate(id, ch_ret, random);
+    relocate(id, ch_ret, random, dungeon, see_floor, monsters);
     // And stop running if need be
-    let m = Mon::get(id).unwrap_or(m);
-    if stoprun && coord_eq(m.pos, resolve_dest(m.dest)) {
-        DUNGEON.monster_list.with_mut(id, |t| {
+    let m = Mon::get(id, dungeon).unwrap_or(m);
+    if stoprun && coord_eq(m.pos, resolve_dest(m.dest, dungeon, room_gold)) {
+        dungeon.monster_list.with_mut(id, |t| {
             if let Thing::Monster { data } = t {
                 data.t_flags.remove(MonsterFlags::RUN);
             }
@@ -373,8 +550,8 @@ pub unsafe fn do_chase(id: MonsterId, random: &mut Random) -> i32 {
 /// Set the oldch character for the monster
 ///
 /// Uses globals: player, hero, see_floor, places (via chat).
-pub unsafe fn set_oldch(id: MonsterId, cp: IVec2) {
-    let Some(m) = Mon::get(id) else {
+pub unsafe fn set_oldch(id: MonsterId, cp: IVec2, dungeon: &Dungeon, see_floor: *const u8) {
+    let Some(m) = Mon::get(id, dungeon) else {
         return;
     };
     if coord_eq(m.pos, cp) {
@@ -383,14 +560,14 @@ pub unsafe fn set_oldch(id: MonsterId, cp: IVec2) {
 
     let sch = m.oldch;
     let mut newch = crate::draw::screen_glyph_at(cp) as u8 & 0x7f;
-    if !player_has(MonsterFlags::BLIND) {
-        if (sch == FLOOR as u8 || newch == FLOOR as u8) && crate::game::room_dark(m.room) {
+    if !player_has(MonsterFlags::BLIND, dungeon) {
+        if (sch == FLOOR as u8 || newch == FLOOR as u8) && dungeon.with_level(|level| level.room_dark(m.room)) {
             newch = b' ';
-        } else if dist(cp.y, cp.x, hero_pos().y, hero_pos().x) <= LAMPDIST && see_floor != 0 {
-            newch = crate::draw::cell_glyph(cp.y, cp.x) as u8;
+        } else if dist(cp.y, cp.x, hero_pos(dungeon).y, hero_pos(dungeon).x) <= LAMPDIST && *see_floor != 0 {
+            newch = cell_glyph(cp.y, cp.x, dungeon);
         }
     }
-    DUNGEON.monster_list.with_mut(id, |t| {
+    dungeon.monster_list.with_mut(id, |t| {
         if let Thing::Monster { data } = t {
             data.t_oldch = newch;
         }
@@ -401,32 +578,32 @@ pub unsafe fn set_oldch(id: MonsterId, cp: IVec2) {
 /// Return true as u8 if the hero can see the monster
 ///
 /// Uses globals: player, hero, proom, places (via chat).
-pub unsafe fn see_monst(id: MonsterId) -> u8 {
-    let Some(m) = Mon::get(id) else {
+pub unsafe fn see_monst(id: MonsterId, dungeon: &Dungeon) -> u8 {
+    let Some(m) = Mon::get(id, dungeon) else {
         return false as u8;
     };
-    if player_has(MonsterFlags::BLIND) {
+    if player_has(MonsterFlags::BLIND, dungeon) {
         return false as u8;
     }
-    if m.has(MonsterFlags::INVIS) && !player_has(MonsterFlags::CANSEE) {
+    if m.has(MonsterFlags::INVIS) && !player_has(MonsterFlags::CANSEE, dungeon) {
         return false as u8;
     }
     let y = m.pos.y;
     let x = m.pos.x;
-    if dist(y, x, hero_pos().y, hero_pos().x) < LAMPDIST {
-        if y != hero_pos().y
-            && x != hero_pos().x
-            && !crate::game::tile_at(y, hero_pos().x).is_walkable()
-            && !crate::game::tile_at(hero_pos().y, x).is_walkable()
+    if dist(y, x, hero_pos(dungeon).y, hero_pos(dungeon).x) < LAMPDIST {
+        if y != hero_pos(dungeon).y
+            && x != hero_pos(dungeon).x
+            && !tile_at(y, hero_pos(dungeon).x, dungeon).is_walkable()
+            && !tile_at(hero_pos(dungeon).y, x, dungeon).is_walkable()
         {
             return false as u8;
         }
         return true as u8;
     }
-    if m.room != DUNGEON.player.room() {
+    if m.room != dungeon.player.room() {
         return false as u8;
     }
-    if crate::game::room_dark(m.room) {
+    if dungeon.with_level(|level| level.room_dark(m.room)) {
         false as u8
     } else {
         true as u8
@@ -437,10 +614,15 @@ pub unsafe fn see_monst(id: MonsterId) -> u8 {
 /// Set a monster running after the hero.
 ///
 /// Uses globals: places (via moat).
-pub unsafe fn runto(runner: IVec2, random: &mut Random) {
+pub unsafe fn runto(
+    runner: IVec2,
+    random: &mut Random,
+    dungeon: &Dungeon,
+    monsters: *const [MonsterInfo; 26],
+) {
     // If we couldn't find him, something is funny.
     // (C guarded this with `#ifdef MASTER`; always report in the Rust port.)
-    let Some(id) = crate::game::monster_id_at(runner.y, runner.x) else {
+    let Some(id) = dungeon.monster_map.at(runner.y as usize, runner.x as usize) else {
         if MASTER {
             msg_str(&format!(
                 "couldn't find monster in runto at ({},{})",
@@ -450,13 +632,13 @@ pub unsafe fn runto(runner: IVec2, random: &mut Random) {
         return;
     };
     // Start the beastie running
-    DUNGEON.monster_list.with_mut(id, |t| {
+    dungeon.monster_list.with_mut(id, |t| {
         if let Thing::Monster { data } = t {
             data.t_flags.insert(MonsterFlags::RUN);
             data.t_flags.remove(MonsterFlags::HELD);
         }
     });
-    update_dest(id, random);
+    update_dest(id, random, dungeon, monsters);
 }
 
 /// chase:
@@ -466,8 +648,8 @@ pub unsafe fn runto(runner: IVec2, random: &mut Random) {
 /// the second is the coordinate the chaser should relocate to (C's `ch_ret`).
 ///
 /// Uses globals: hero, lvl_obj, places (via moat/chat/winat).
-pub unsafe fn chase(id: MonsterId, ee: IVec2, random: &mut Random) -> (u8, IVec2) {
-    let Some(m) = Mon::get(id) else {
+pub unsafe fn chase(id: MonsterId, ee: IVec2, random: &mut Random, dungeon: &Dungeon) -> (u8, IVec2) {
+    let Some(m) = Mon::get(id, dungeon) else {
         return (false as u8, IVec2::ZERO);
     };
     let mut curdist: i32;
@@ -490,12 +672,12 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2, random: &mut Random) -> (u8, IVec2
             && random.rnd(2) == 0)
     {
         // get a valid random move
-        ch_ret = rndmove(m.pos, random);
+        ch_ret = rndmove(m.pos, random, dungeon);
         curdist = dist_cp(ch_ret, ee);
         // Small chance that it will become un-confused
         if random.rnd(20) == 0
         {
-            DUNGEON.monster_list.with_mut(id, |t| {
+            dungeon.monster_list.with_mut(id, |t| {
                 if let Thing::Monster { data } = t {
                     data.t_flags.remove(MonsterFlags::HUH);
                 }
@@ -526,16 +708,16 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2, random: &mut Random) -> (u8, IVec2
                 let mut y = er.y - 1;
                 while y <= ey {
                     tryp.y = y;
-                    if diag_ok(er, tryp) == false as u8 {
+                    if diag_ok(er, tryp, dungeon) == false as u8 {
                         y += 1;
                         continue;
                     }
-                    if crate::game::cell_is_walkable(y, x) {
+                    if cell_is_walkable(y, x, dungeon) {
                         // If it is a scroll, it might be a scare monster scroll
                         // so we need to look it up to see what type it is.
                         let mut found_scare = false;
-                        for obj_id in crate::game::item_ids() {
-                            let at_pos = crate::item::arena::with_object(&DUNGEON.objects, obj_id, |data| {
+                        for obj_id in item_ids(dungeon) {
+                            let at_pos = crate::item::arena::with_object(&dungeon.objects, obj_id, |data| {
                                 if data.o_pos.y == y && data.o_pos.x == x {
                                     Some(data.o_type)
                                 } else {
@@ -553,8 +735,8 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2, random: &mut Random) -> (u8, IVec2
                             continue;
                         }
                         // It can also be a Xeroc, which we shouldn't step on.
-                        let xeroc = crate::game::monster_id_at(y, x).is_some_and(|mid| {
-                            DUNGEON.monster_list
+                        let xeroc = dungeon.monster_map.at(y as usize, x as usize).is_some_and(|mid| {
+                            dungeon.monster_list
                                 .with(mid, |t| match t {
                                     Thing::Monster { data } => {
                                         data.t_type == Some(MonsterType::Xeroc)
@@ -589,7 +771,7 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2, random: &mut Random) -> (u8, IVec2
             x += 1;
         }
     }
-    if curdist != 0 && !coord_eq(ch_ret, hero_pos()) {
+    if curdist != 0 && !coord_eq(ch_ret, hero_pos(dungeon)) {
         (true as u8, ch_ret)
     } else {
         (false as u8, ch_ret)
@@ -601,8 +783,8 @@ pub unsafe fn chase(id: MonsterId, ee: IVec2, random: &mut Random) -> (u8, IVec2
 /// `None` without reporting an invalid location.
 ///
 /// Uses globals: places (via flat), passages, rooms, msg.
-pub unsafe fn roomin(cp: IVec2) -> Option<usize> {
-    let (room, is_passage) = crate::game::with_current_level(|level| {
+pub unsafe fn roomin(cp: IVec2, dungeon: &Dungeon) -> Option<usize> {
+    let (room, is_passage) = dungeon.with_level(|level| {
         (
             level.room_at(cp.y, cp.x),
             level.tile_at(cp.y as usize, cp.x as usize) == crate::tile::Tile::Passage,
@@ -623,7 +805,7 @@ pub unsafe fn roomin(cp: IVec2) -> Option<usize> {
 /// Check to see if the move is legal if it is diagonal
 ///
 /// Uses globals: places (via chat).
-pub unsafe fn diag_ok(sp: IVec2, ep: IVec2) -> u8 {
+pub unsafe fn diag_ok(sp: IVec2, ep: IVec2, dungeon: &Dungeon) -> u8 {
     if ep.x < 0
         || ep.x >= GameConfig::SCREEN_COLS
         || ep.y <= 0
@@ -634,8 +816,8 @@ pub unsafe fn diag_ok(sp: IVec2, ep: IVec2) -> u8 {
     if ep.x == sp.x || ep.y == sp.y {
         return true as u8;
     }
-    if crate::game::tile_at(ep.y, sp.x).is_walkable()
-        && crate::game::tile_at(sp.y, ep.x).is_walkable()
+    if tile_at(ep.y, sp.x, dungeon).is_walkable()
+        && tile_at(sp.y, ep.x, dungeon).is_walkable()
     {
         true as u8
     } else {
@@ -647,16 +829,16 @@ pub unsafe fn diag_ok(sp: IVec2, ep: IVec2) -> u8 {
 /// Returns true if the hero can see a certain coordinate.
 ///
 /// Uses globals: player, hero, proom, places (via flat/chat).
-pub unsafe fn cansee(y: i32, x: i32) -> u8 {
-    if player_has(MonsterFlags::BLIND) {
+pub unsafe fn cansee(y: i32, x: i32, dungeon: &Dungeon) -> u8 {
+    if player_has(MonsterFlags::BLIND, dungeon) {
         return false as u8;
     }
-    if dist(y, x, hero_pos().y, hero_pos().x) < LAMPDIST {
-        if (flat_at(y, x) & F_PASS) != 0 {
-            if y != hero_pos().y
-                && x != hero_pos().x
-                && !crate::game::tile_at(y, hero_pos().x).is_walkable()
-                && !crate::game::tile_at(hero_pos().y, x).is_walkable()
+    if dist(y, x, hero_pos(dungeon).y, hero_pos(dungeon).x) < LAMPDIST {
+        if (flat_at(y, x, dungeon) & F_PASS) != 0 {
+            if y != hero_pos(dungeon).y
+                && x != hero_pos(dungeon).x
+                && !tile_at(y, hero_pos(dungeon).x, dungeon).is_walkable()
+                && !tile_at(hero_pos(dungeon).y, x, dungeon).is_walkable()
             {
                 return false as u8;
             }
@@ -666,8 +848,8 @@ pub unsafe fn cansee(y: i32, x: i32) -> u8 {
     // We can only see if the hero in the same room as
     // the coordinate and the room is lit or if it is close.
     let tp = IVec2 { x, y };
-    let rer = roomin(tp);
-    if rer == DUNGEON.player.room() && !crate::game::room_dark(rer) {
+    let rer = roomin(tp, dungeon);
+    if rer == dungeon.player.room() && !dungeon.with_level(|level| level.room_dark(rer)) {
         true as u8
     } else {
         false as u8
@@ -682,41 +864,46 @@ pub unsafe fn cansee(y: i32, x: i32) -> u8 {
 /// otherwise it may target a nearby floor object it wants to pick up.
 ///
 /// Uses globals: monsters, hero, proom, lvl_obj, mlist.
-pub unsafe fn update_dest(id: MonsterId, random: &mut Random) {
-    let Some(m) = Mon::get(id) else {
+pub unsafe fn update_dest(
+    id: MonsterId,
+    random: &mut Random,
+    dungeon: &Dungeon,
+    monsters: *const [MonsterInfo; 26],
+) {
+    let Some(m) = Mon::get(id, dungeon) else {
         return;
     };
-    let prob = monsters[m.typ.map_or(0, |k| k.index())].m_carry;
-    if prob <= 0 || m.room == DUNGEON.player.room() || see_monst(id) != false as u8 {
-        crate::entity::player::set_monster_dest(id, DestRef::Hero);
+    let prob = (*monsters)[m.typ.map_or(0, |k| k.index())].m_carry;
+    if prob <= 0 || m.room == dungeon.player.room() || see_monst(id, dungeon) != false as u8 {
+        crate::entity::player::set_monster_dest(id, DestRef::Hero, dungeon);
         return;
     }
-    for obj_id in crate::game::item_ids() {
-        let info = crate::item::arena::with_object(&DUNGEON.objects, obj_id, |data| (data.o_type, data.o_pos));
+    for obj_id in item_ids(dungeon) {
+        let info = crate::item::arena::with_object(&dungeon.objects, obj_id, |data| (data.o_type, data.o_pos));
         let Some((otype, opos)) = info else {
             continue;
         };
         if matches!(otype, ItemType::Scroll(ScrollType::Scare)) {
             continue;
         }
-        if roomin(opos) == m.room
+        if roomin(opos, dungeon) == m.room
             && random.rnd(100) < prob
         {
             let obj_dest = DestRef::Object(obj_id);
             let mut taken = false;
-            for mid in DUNGEON.monster_list.ids() {
-                if crate::entity::player::monster_dest(mid) == obj_dest {
+            for mid in dungeon.monster_list.ids() {
+                if crate::entity::player::monster_dest(mid, dungeon) == obj_dest {
                     taken = true;
                     break;
                 }
             }
             if !taken {
-                crate::entity::player::set_monster_dest(id, obj_dest);
+                crate::entity::player::set_monster_dest(id, obj_dest, dungeon);
                 return;
             }
         }
     }
-    crate::entity::player::set_monster_dest(id, DestRef::Hero);
+    crate::entity::player::set_monster_dest(id, DestRef::Hero, dungeon);
 }
 
 /// dist:
@@ -731,4 +918,153 @@ pub unsafe fn dist(y1: i32, x1: i32, y2: i32, x2: i32) -> i32 {
 /// Call dist() with appropriate arguments for coord pointers
 pub unsafe fn dist_cp(c1: IVec2, c2: IVec2) -> i32 {
     dist(c1.y, c1.x, c2.y, c2.x)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn monster_glyphs_use_the_supplied_dungeon() {
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        let id = first.monster_list.spawn_actor();
+        let other_id = second.monster_list.spawn_actor();
+        assert_eq!(id, other_id);
+        first.monster_list.with_mut(id, |thing| {
+            if let Thing::Monster { data } = thing {
+                data.t_type = Some(MonsterType::Xeroc);
+                data.t_disguise = b'?';
+            }
+        });
+        second.monster_list.with_mut(other_id, |thing| {
+            if let Thing::Monster { data } = thing {
+                data.t_type = Some(MonsterType::Dragon);
+                data.t_disguise = b'D';
+            }
+        });
+        assert_eq!(monster_glyph(id, &first), '?');
+        assert_eq!(monster_type_glyph(id, &first), 'X');
+        assert_eq!(monster_glyph(id, &second), 'D');
+        assert_eq!(monster_type_glyph(id, &second), 'D');
+        first.monster_list.remove(id);
+        assert_eq!(monster_glyph(id, &first), ' ');
+        assert_eq!(monster_type_glyph(id, &first), ' ');
+    }
+
+    #[test]
+    fn snapshots_read_and_write_only_the_supplied_dungeon() {
+        let dungeon = Dungeon::empty();
+        let other = Dungeon::empty();
+        let id = dungeon.monster_list.spawn_actor();
+        let other_id = other.monster_list.spawn_actor();
+        assert_eq!(id, other_id);
+
+        let mut snapshot = Mon::get(id, &dungeon).unwrap();
+        snapshot.pos = IVec2::new(8, 6);
+        snapshot.turn = !snapshot.turn;
+        snapshot.oldch = b'#';
+        snapshot.dest = DestRef::Hero;
+        snapshot.flags.insert(MonsterFlags::RUN);
+        snapshot.room = Some(2);
+        snapshot.set(id, &dungeon);
+
+        let saved = Mon::get(id, &dungeon).unwrap();
+        assert_eq!(saved.pos, snapshot.pos);
+        assert_eq!(saved.turn, snapshot.turn);
+        assert_eq!(saved.oldch, snapshot.oldch);
+        assert_eq!(saved.dest, snapshot.dest);
+        assert!(saved.has(MonsterFlags::RUN));
+        assert_eq!(saved.room, snapshot.room);
+        assert_ne!(Mon::get(other_id, &other).unwrap().pos, snapshot.pos);
+        dungeon.monster_list.remove(id);
+        assert!(Mon::get(id, &dungeon).is_none());
+        assert!(Mon::get(other_id, &other).is_some());
+    }
+
+    #[test]
+    fn destinations_use_supplied_owners_and_live_gold_mirror() {
+        let dungeon = Dungeon::empty();
+        let other = Dungeon::empty();
+        dungeon.player.set_pos(IVec2::new(3, 4));
+        other.player.set_pos(IVec2::new(30, 14));
+        let id = dungeon.monster_list.spawn_actor();
+        let mut snapshot = Mon::get(id, &dungeon).unwrap();
+        snapshot.pos = IVec2::new(9, 7);
+        snapshot.set(id, &dungeon);
+        let obj = dungeon.objects.new_item_id();
+        dungeon.objects.with_object_mut(obj, |o| o.o_pos = IVec2::new(12, 8));
+        let mut gold = [IVec2::ZERO; GameConfig::MAX_ROOMS];
+        let gold_ptr = &raw const gold;
+
+        unsafe {
+            assert_eq!(resolve_dest(DestRef::Hero, &dungeon, gold_ptr), dungeon.player.pos());
+            assert_eq!(resolve_dest(DestRef::Hero, &other, gold_ptr), other.player.pos());
+            assert_eq!(resolve_dest(DestRef::Monster(id), &dungeon, gold_ptr), snapshot.pos);
+            assert_eq!(resolve_dest(DestRef::Object(obj), &dungeon, gold_ptr), IVec2::new(12, 8));
+            gold[1] = IVec2::new(15, 9);
+            assert_eq!(resolve_dest(DestRef::RoomGold(1), &dungeon, gold_ptr), gold[1]);
+            gold[1] = IVec2::new(16, 10);
+            assert_eq!(resolve_dest(DestRef::RoomGold(1), &dungeon, gold_ptr), gold[1]);
+            assert_eq!(resolve_dest(DestRef::RoomGold(GameConfig::MAX_ROOMS), &dungeon, gold_ptr), dungeon.player.pos());
+            dungeon.monster_list.remove(id);
+            dungeon.objects.remove(obj);
+            assert_eq!(resolve_dest(DestRef::Monster(id), &dungeon, gold_ptr), dungeon.player.pos());
+            assert_eq!(resolve_dest(DestRef::Object(obj), &dungeon, gold_ptr), dungeon.player.pos());
+        }
+    }
+
+    #[test]
+    fn movement_and_visibility_read_supplied_level_and_player() {
+        let dungeon = Dungeon::empty();
+        let other = Dungeon::empty();
+        let start = IVec2::new(4, 4);
+        let end = IVec2::new(5, 5);
+        dungeon.with_level_mut(|level| {
+            level.map.set(IVec2::new(4, 5), crate::tile::Tile::Floor);
+            level.map.set(IVec2::new(5, 4), crate::tile::Tile::Floor);
+            level.map.set(end, crate::tile::Tile::Floor);
+        });
+        other.with_level_mut(|level| {
+            level.map.set(IVec2::new(4, 5), crate::tile::Tile::Wall);
+        });
+        dungeon.player.set_pos(start);
+        dungeon.player.remove_flag(MonsterFlags::BLIND);
+        other.player.set_pos(start);
+        other.player.add_flag(MonsterFlags::BLIND);
+
+        unsafe {
+            assert_eq!(diag_ok(start, end, &dungeon), 1);
+            assert_eq!(diag_ok(start, end, &other), 0);
+            assert_eq!(cansee(start.y, start.x, &dungeon), 1);
+            assert_eq!(cansee(start.y, start.x, &other), 0);
+        }
+        assert!(cell_is_walkable(end.y, end.x, &dungeon));
+        let id = dungeon.monster_list.spawn_actor();
+        dungeon.monster_map.set(end.y as usize, end.x as usize, Some(id));
+        assert!(!cell_is_walkable(end.y, end.x, &dungeon));
+    }
+
+    #[test]
+    fn floor_items_and_flat_flags_use_supplied_dungeon() {
+        let dungeon = Dungeon::empty();
+        let other = Dungeon::empty();
+        let obj = dungeon.objects.new_item_id();
+        let cp = IVec2::new(7, 6);
+        dungeon.with_level_mut(|level| {
+            level.items.push(obj);
+            let idx = cp.y as usize * GameConfig::LEVEL_WIDTH + cp.x as usize;
+            level.flags.passnum[idx] = 3;
+            level.flags.passage[idx] = true;
+            level.flags.real[idx] = true;
+            level.flags.seen[idx] = true;
+        });
+        assert_eq!(item_ids(&dungeon), vec![obj]);
+        assert!(item_ids(&other).is_empty());
+        unsafe {
+            assert_eq!(flat_at(cp.y, cp.x, &dungeon), 3 | F_PASS | crate::draw::F_REAL | crate::draw::F_SEEN);
+        }
+        dungeon.objects.remove(obj);
+        assert!(item_ids(&dungeon).is_empty());
+    }
 }

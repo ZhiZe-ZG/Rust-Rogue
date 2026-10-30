@@ -258,7 +258,7 @@ pub unsafe fn main_loop_step() {
 
     let hero_pos = DUNGEON.player.pos();
     oldpos = hero_pos;
-    oldrp = roomin(hero_pos);
+    oldrp = roomin(hero_pos, &DUNGEON);
     start_daemon(Daemon::UiRender, 0, AFTER);
     Daemon::UiRender.run(0, &mut RNG.lock().unwrap());
     let mut command_state = CommandState::default();

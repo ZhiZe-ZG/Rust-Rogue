@@ -487,9 +487,15 @@ pub unsafe fn look(wakeup: u8, random: &mut Random) {
                         continue;
                     }
                     if wakeup != 0 {
-                        wake_monster(y, x, random);
+                        wake_monster(
+                            y,
+                            x,
+                            random,
+                            &DUNGEON,
+                            &raw const crate::game::globals::monsters,
+                        );
                     }
-                    if see_monst(id) != 0 {
+                    if see_monst(id, &DUNGEON) != 0 {
                         if player_has(MonsterFlags::HALU) {
                             ch = random.rnd(26) + b'A' as i32;
                         } else {
@@ -642,7 +648,7 @@ unsafe fn cchar_at_cursor() -> u8 {
 /// enter_room:
 /// Code that is executed whenever the hero appears in a room.
 pub unsafe fn enter_room(cp: IVec2, random: &mut Random) {
-    let rp = roomin(cp);
+    let rp = roomin(cp, &DUNGEON);
     if rp.is_none() {
         return;
     }
@@ -684,7 +690,7 @@ pub unsafe fn enter_room(cp: IVec2, random: &mut Random) {
                             data.t_oldch = ch as u8;
                         }
                     });
-                    if see_monst(id) == 0 {
+                    if see_monst(id, &DUNGEON) == 0 {
                         if player_has(MonsterFlags::SEEMONST) {
                             crate::ui::terminal::UI.set_reverse_video(true);
                             crate::ui::terminal::UI.write_glyph(monster_glyph(id));

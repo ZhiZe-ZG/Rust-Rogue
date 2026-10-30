@@ -10,7 +10,7 @@ use crate::draw::{look, map_cell_reveal};
 use crate::dungeon::Dungeon;
 use crate::entity::monsters::{new_monster_id, randmonster};
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing};
-use crate::game::globals::ObjInfo;
+use crate::game::globals::{MonsterInfo, ObjInfo};
 use crate::init::pick_color;
 use crate::item::arena::ThingId;
 use crate::item::item_type::{ItemFilter, ItemType};
@@ -154,6 +154,7 @@ pub(crate) unsafe fn read_scroll(
     pot_info: &[ObjInfo],
     ring_info: &[ObjInfo],
     ws_info: &[ObjInfo],
+    monsters: *const [MonsterInfo; 26],
 ) {
     // Do not hold a shared borrow of the mutable scroll table across input.
     let scr_names = (&*scr_info).to_vec();
@@ -296,7 +297,8 @@ pub(crate) unsafe fn read_scroll(
                 msg_str("you hear a faint cry of anguish in the distance");
             } else {
                 let id = dungeon.monster_list.spawn_actor();
-                new_monster_id(id, randmonster(false, random), mp, random);
+                new_monster_id(id, randmonster(false, random, dungeon), mp,
+                    random, dungeon, monsters);
             }
         }
         ScrollType::IdentifyPotion
