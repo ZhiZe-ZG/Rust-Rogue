@@ -1322,15 +1322,13 @@ pub fn monster_info(index: usize) -> MonsterInfo {
 
 // ─── Rust-owned string globals ───────────────────────────────────────────────
 //
-// `whoami`, `fruit`, `home`, `file_name`, `huh` and the shared `prbuf` scratch
+// `whoami`, `home`, `file_name`, `huh` and the shared `prbuf` scratch
 // buffer were previously `char[N]` buffers written through `strcpy`/`CStr`.
 // They are now owned Rust `String`s behind a `Mutex`, read/written through the
 // accessors below.
 
 /// Player name storage.
 static WHOAMI: Mutex<String> = Mutex::new(String::new());
-/// Player's fruit-name storage.
-static FRUIT: Mutex<String> = Mutex::new(String::new());
 /// Home-directory storage.
 static HOME: Mutex<String> = Mutex::new(String::new());
 /// Current save-file-name storage.
@@ -1353,20 +1351,6 @@ pub fn set_whoami(name: String) {
 /// Run `op` with the player's name borrowed.
 pub fn with_whoami<R>(op: impl FnOnce(&str) -> R) -> R {
     op(&lock(&WHOAMI))
-}
-
-/// The player's fruit name (`char fruit[]`); defaults to `"slime-mold"`.
-pub fn fruit() -> String {
-    let mut value = lock(&FRUIT);
-    if value.is_empty() {
-        *value = "slime-mold".to_owned();
-    }
-    value.clone()
-}
-
-/// Replace the player's fruit name.
-pub fn set_fruit(name: String) {
-    *lock(&FRUIT) = name;
 }
 
 /// The player's home directory (`char home[]`). Empty until set.

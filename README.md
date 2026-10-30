@@ -52,6 +52,7 @@ Callers outside these modules still obtain dependencies from the singleton owner
 - `player`: the hero actor and its equipment, defined by `Player` in [src/game/player.rs](src/game/player.rs).
 - `objects`: the generational `ThingArena` in [src/item/arena.rs](src/item/arena.rs), shared by floor items, player inventory, monster packs, and equipment handles.
 - `scroll_names`: randomly generated scroll labels behind an `RwLock`, accessed through `scroll_name()`, `scroll_names()`, and their setters. Each dungeon has independent names that persist across level changes and save/restore.
+- `fruit`: the customizable fruit name behind an `RwLock`, accessed through `fruit()` and `set_fruit()`. It defaults to `slime-mold`, is configured by the `fruit` option, and is saved and restored per game.
 
 It also owns atomic fields for `max_level` (deepest dungeon depth), `no_food` (food-generation counter), `ntraps`, `seenstairs`, and `amulet`. These are not standalone globals. Use methods such as `max_depth()`, `seen_stairs()`, `set_seen_stairs()`, and `has_amulet()`.
 
@@ -156,7 +157,7 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `ws_made`: wand/staff material names.
 - `ws_type`: wand/staff kind names.
 - `WHOAMI`: player name buffer.
-- `FRUIT`: chosen fruit name.
+- The chosen fruit name is owned by `Dungeon`, not a standalone `FRUIT` global.
 - `HOME`: home-directory string.
 - `FILE_NAME`: current save filename.
 - `HUH`: message history buffer.

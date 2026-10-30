@@ -38,6 +38,8 @@ pub struct Dungeon {
     level: RwLock<Option<Level>>,
     /// Generated scroll labels, shared across levels within this game.
     scroll_names: RwLock<Vec<String>>,
+    /// Custom fruit name used in food and potion flavor text.
+    fruit: RwLock<String>,
     /// Highest dungeon depth reached so far.
     max_level: AtomicI32,
     /// Whether food generation is disabled.
@@ -73,6 +75,7 @@ impl Dungeon {
         Self {
             level: RwLock::new(None),
             scroll_names: RwLock::new(Vec::new()),
+            fruit: RwLock::new(String::new()),
             max_level: AtomicI32::new(0),
             no_food: AtomicI32::new(0),
             ntraps: AtomicI32::new(0),
@@ -83,6 +86,20 @@ impl Dungeon {
             objects: ThingArena::new(),
             player: Player::EMPTY,
         }
+    }
+
+    /// The chosen fruit name, defaulting to `slime-mold` when unset or empty.
+    pub fn fruit(&self) -> String {
+        let mut fruit = self.fruit.write().unwrap_or_else(|poison| poison.into_inner());
+        if fruit.is_empty() {
+            *fruit = "slime-mold".to_owned();
+        }
+        fruit.clone()
+    }
+
+    /// Replace the fruit name used by options and save restoration.
+    pub fn set_fruit(&self, name: String) {
+        *self.fruit.write().unwrap_or_else(|poison| poison.into_inner()) = name;
     }
 
     /// Replace all generated scroll names, including when restoring a game.
@@ -349,6 +366,23 @@ pub(crate) fn bump_no_food() {
 #[cfg(test)]
 mod tests {
     use super::Dungeon;
+
+    #[test]
+    fn fruit_names_are_owned_by_each_dungeon() {
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        assert_eq!(first.fruit(), "slime-mold");
+        first.set_fruit("mango".to_owned());
+        assert_eq!(first.fruit(), "mango");
+        assert_eq!(second.fruit(), "slime-mold");
+
+        let restored = Dungeon::empty();
+        restored.set_fruit(first.fruit());
+        assert_eq!(restored.fruit(), "mango");
+        first.set_fruit(String::new());
+        assert_eq!(first.fruit(), "slime-mold");
+        assert_eq!(restored.fruit(), "mango");
+    }
 
     #[test]
     fn scroll_names_are_owned_by_each_dungeon() {

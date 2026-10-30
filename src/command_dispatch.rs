@@ -327,7 +327,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                     }
                     Command::Quaff => {
                         let levels = e_levels;
-                        let fruit = crate::game::globals::fruit();
+                        let fruit = DUNGEON.fruit();
                         quaff(&mut RNG.lock().unwrap(), &DUNGEON, &crate::ui::terminal::UI,
                             &raw mut pot_info as *mut [_], &raw mut after, terse,
                             max_stats.strength, &levels, &fruit, again, &raw mut inpack,

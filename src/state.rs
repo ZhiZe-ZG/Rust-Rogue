@@ -464,7 +464,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         prbuf: crate::game::globals::prbuf(),
         release: crate::vers::release(),
         whoami: crate::game::globals::whoami(),
-        fruit: crate::game::globals::fruit(),
+        fruit: DUNGEON.fruit(),
         home: crate::game::globals::get_home(),
         scroll_names: DUNGEON.scroll_names(),
         inv_t_names: crate::game::globals::inv_t_names(),
@@ -608,7 +608,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     crate::game::globals::set_prbuf(s.prbuf);
     crate::vers::set_release(s.release);
     crate::game::globals::set_whoami(s.whoami);
-    crate::game::globals::set_fruit(s.fruit);
+    DUNGEON.set_fruit(s.fruit);
     crate::game::globals::set_home(s.home);
     DUNGEON.set_scroll_names(s.scroll_names);
     for (i, name) in s.inv_t_names.iter().enumerate() {

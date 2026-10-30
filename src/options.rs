@@ -196,7 +196,7 @@ unsafe fn paint(s: &str) {
 unsafe fn str_target_value(target: StrTarget) -> String {
     match target {
         StrTarget::Name => crate::game::globals::whoami(),
-        StrTarget::Fruit => crate::game::globals::fruit(),
+        StrTarget::Fruit => crate::dungeon::DUNGEON.fruit(),
         StrTarget::File => crate::game::globals::file_name(),
         StrTarget::None => String::new(),
     }
@@ -205,7 +205,7 @@ unsafe fn str_target_value(target: StrTarget) -> String {
 unsafe fn set_str_target(target: StrTarget, value: String) {
     match target {
         StrTarget::Name => crate::game::globals::set_whoami(value),
-        StrTarget::Fruit => crate::game::globals::set_fruit(value),
+        StrTarget::Fruit => crate::dungeon::DUNGEON.set_fruit(value),
         StrTarget::File => crate::game::globals::set_file_name(value),
         StrTarget::None => {}
     }

@@ -152,7 +152,7 @@ pub unsafe fn eat() {
     if which == 1 {
         msg_str(&format!(
             "my, that was a yummy {}",
-            crate::game::globals::fruit()
+            DUNGEON.fruit()
         ));
     } else if {
         let mut random = RNG.lock().unwrap();
