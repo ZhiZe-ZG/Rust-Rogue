@@ -47,13 +47,13 @@ unsafe fn lockfile_mtime(path: &str) -> Option<i64> {
 /// init_check:
 /// Check to see if it is proper to play the game now.
 ///
-/// Reads the player name and dungeon-owned fruit setting.
+/// Reads the dungeon-owned player name and fruit setting.
 ///
 /// The MAXLOAD / MAXUSERS features are not enabled in the standard
 /// build (config.h leaves both undefined), so this is a no-op.
 pub unsafe fn init_check() {
     let _ = (
-        crate::game::globals::whoami(),
+        crate::dungeon::DUNGEON.whoami(),
         crate::dungeon::DUNGEON.fruit(),
     );
 }

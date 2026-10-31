@@ -167,7 +167,7 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
                 slot -= 1;
             }
 
-            let mut name = crate::game::globals::whoami();
+            let mut name = crate::dungeon::DUNGEON.whoami();
             if name.len() >= MAXSTR {
                 name.truncate(MAXSTR - 1);
             }
@@ -303,7 +303,7 @@ pub unsafe fn death(monst: u8) {
                 crate::ui::terminal::UI.write_text_at(IVec2::new(33, 16), &phrase);
             }
         }
-        let hero_name = crate::game::globals::whoami();
+        let hero_name = crate::dungeon::DUNGEON.whoami();
         crate::ui::terminal::UI
             .write_text_at(IVec2::new(center_string(&hero_name) as i32, 14), &hero_name);
         let score_text = format!("{} Au", get_purse());

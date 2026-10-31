@@ -40,6 +40,8 @@ pub struct Dungeon {
     scroll_names: RwLock<Vec<String>>,
     /// Custom fruit name used in food and potion flavor text.
     fruit: RwLock<String>,
+    /// Player name used by options, scores, and save files.
+    whoami: RwLock<String>,
     /// Highest dungeon depth reached so far.
     max_level: AtomicI32,
     /// Whether food generation is disabled.
@@ -76,6 +78,7 @@ impl Dungeon {
             level: RwLock::new(None),
             scroll_names: RwLock::new(Vec::new()),
             fruit: RwLock::new(String::new()),
+            whoami: RwLock::new(String::new()),
             max_level: AtomicI32::new(0),
             no_food: AtomicI32::new(0),
             ntraps: AtomicI32::new(0),
@@ -86,6 +89,16 @@ impl Dungeon {
             objects: ThingArena::new(),
             player: Player::EMPTY,
         }
+    }
+
+    /// The player's name, empty until set.
+    pub fn whoami(&self) -> String {
+        self.whoami.read().unwrap_or_else(|poison| poison.into_inner()).clone()
+    }
+
+    /// Replace the player's name used by options and save restoration.
+    pub fn set_whoami(&self, name: String) {
+        *self.whoami.write().unwrap_or_else(|poison| poison.into_inner()) = name;
     }
 
     /// The chosen fruit name, defaulting to `slime-mold` when unset or empty.
@@ -366,6 +379,26 @@ pub(crate) fn bump_no_food() {
 #[cfg(test)]
 mod tests {
     use super::Dungeon;
+
+    #[test]
+    fn player_names_are_owned_by_each_dungeon() {
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        assert_eq!(first.whoami(), "");
+        first.set_whoami("Ada".to_owned());
+        assert_eq!(first.whoami(), "Ada");
+        assert_eq!(second.whoami(), "");
+
+        let mut snapshot = first.whoami();
+        snapshot.push_str(" Lovelace");
+        assert_eq!(first.whoami(), "Ada");
+        let restored = Dungeon::empty();
+        restored.set_whoami(snapshot);
+        assert_eq!(restored.whoami(), "Ada Lovelace");
+        first.set_whoami(String::new());
+        assert_eq!(first.whoami(), "");
+        assert_eq!(restored.whoami(), "Ada Lovelace");
+    }
 
     #[test]
     fn fruit_names_are_owned_by_each_dungeon() {

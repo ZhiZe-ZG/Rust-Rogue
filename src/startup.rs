@@ -199,12 +199,12 @@ unsafe fn init_home_and_save_path() {
 
 /// Resolve the player name from the environment when it is not already known.
 unsafe fn init_identity(had_options: bool) {
-    if !had_options || crate::game::globals::whoami().is_empty() {
+    if !had_options || crate::dungeon::DUNGEON.whoami().is_empty() {
         let username = std::env::var("USER")
             .or_else(|_| std::env::var("LOGNAME"))
             .or_else(|_| std::env::var("USERNAME"))
             .unwrap_or_else(|_| "nobody".to_owned());
-        crate::game::globals::set_whoami(crate::options::filter_printable(&username));
+        crate::dungeon::DUNGEON.set_whoami(crate::options::filter_printable(&username));
     }
 }
 
