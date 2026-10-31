@@ -52,6 +52,7 @@ Callers outside these modules still obtain dependencies from the singleton owner
 - The live `monster_list` and per-cell `monster_map`.
 - `player`: the hero actor and its equipment, defined by `Player` in [src/game/player.rs](src/game/player.rs).
 - `Player` also owns the atomic `purse`, `food_left`, `hungry_state`, and `quiet` counters, plus a separately locked `max_stats` snapshot. Maximum-stat locks are held only for short reads/updates, never across input or gameplay callbacks. Item/entity dependencies remain individual shared atomic or lock references; save field names and initial values are unchanged.
+- Player inventory accounting is also owned by `Player`: atomic `inpack` preserves the legacy capacity rules (grouped missile stacks count as one), and mutex-protected `pack_used` allocates inventory letters. These are separate explicit dependencies, with no bitmap lock retained across callbacks. They are not derived from pack length, which would change stack behavior; existing snapshot fields remain unchanged.
 - `objects`: the generational `ThingArena` in [src/item/arena.rs](src/item/arena.rs), shared by floor items, player inventory, monster packs, and equipment handles.
 - `scroll_names`: randomly generated scroll labels behind an `RwLock`, accessed through `scroll_name()`, `scroll_names()`, and their setters. Each dungeon has independent names that persist across level changes and save/restore.
 - `p_colors` and `r_stones`: randomized potion colors and ring stones in separate lock-protected arrays, accessed through snapshot getters and whole-table setters. Assignments are independent per dungeon and persist across levels and save/restore; their snapshot field names are unchanged.
@@ -103,7 +104,6 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 
 #### Player / inventory / progress state
 
-- `pack_used`: record of used pack slots.
 - `orig_dsusp`: original terminal delayed-suspend character.
 - `l_last_comm`: previous last command value.
 - `l_last_dir`: previous last direction value.
@@ -111,7 +111,6 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `last_dir`: most recent movement direction.
 - `NUMSCORES`: immutable maximum number of retained scores; `NUMNAME` is its display label.
 - `n_objs`: number of eligible choices during item selection.
-- `inpack`: count of pack contents.
 - `inv_type`: current inventory display type.
 - `max_hit`: maximum hit value used by combat calculations.
 - `a_class`: constant armor class table used by the game.

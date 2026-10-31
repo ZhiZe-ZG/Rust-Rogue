@@ -460,7 +460,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         to_death: to_death != 0,
         tombstone: tombstone != 0,
         wizard: crate::wizard::wizard_mode(),
-        pack_used,
+        pack_used: *DUNGEON.player.pack_used.lock().unwrap_or_else(|poison| poison.into_inner()),
         dir_ch,
         runch,
         take,
@@ -488,7 +488,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         n_objs,
         ntraps: DUNGEON.ntraps(),
         hungry_state: DUNGEON.player.hungry_state.load(std::sync::atomic::Ordering::Relaxed),
-        inpack,
+        inpack: DUNGEON.player.inpack.load(std::sync::atomic::Ordering::Relaxed),
         inv_type,
         max_level: crate::dungeon::max_depth(),
         mpos: crate::ui::terminal::UI.get_mpos(),
@@ -603,7 +603,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     set_flag!(to_death);
     set_flag!(tombstone);
     crate::wizard::set_wizard_mode(s.wizard);
-    pack_used = s.pack_used;
+    *DUNGEON.player.pack_used.lock().unwrap_or_else(|poison| poison.into_inner()) = s.pack_used;
     dir_ch = s.dir_ch;
     runch = s.runch;
     take = s.take;
@@ -672,7 +672,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     n_objs = s.n_objs;
     DUNGEON.set_ntraps(s.ntraps);
     DUNGEON.player.hungry_state.store(s.hungry_state, std::sync::atomic::Ordering::Relaxed);
-    inpack = s.inpack;
+    DUNGEON.player.inpack.store(s.inpack, std::sync::atomic::Ordering::Relaxed);
     inv_type = s.inv_type;
     crate::dungeon::set_max_depth(s.max_level);
     crate::ui::terminal::UI.set_mpos(s.mpos);

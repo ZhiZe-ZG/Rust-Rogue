@@ -433,6 +433,28 @@ mod tests {
     use super::Dungeon;
 
     #[test]
+    fn inventory_accounting_is_owned_by_each_player() {
+        use std::sync::atomic::Ordering::Relaxed;
+
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        first.player.inpack.store(3, Relaxed);
+        let letter = unsafe { crate::item::pack::pack_char(&first.player.pack_used) };
+        assert_eq!(letter, b'a');
+        assert_eq!(second.player.inpack.load(Relaxed), 0);
+        assert_eq!(*second.player.pack_used.lock().unwrap(), [0; 26]);
+
+        let saved_letters = *first.player.pack_used.lock().unwrap();
+        second.player.inpack.store(first.player.inpack.load(Relaxed), Relaxed);
+        *second.player.pack_used.lock().unwrap() = saved_letters;
+        first.player.inpack.store(0, Relaxed);
+        *first.player.pack_used.lock().unwrap() = [0; 26];
+        assert_eq!(second.player.inpack.load(Relaxed), 3);
+        assert_eq!(second.player.pack_used.lock().unwrap()[0], 1);
+        assert_eq!(unsafe { crate::item::pack::pack_char(&second.player.pack_used) }, b'b');
+    }
+
+    #[test]
     fn player_progress_is_owned_by_each_dungeon() {
         use std::sync::atomic::Ordering::Relaxed;
 

@@ -7,9 +7,10 @@
 //! raw handles produced by the item arena through the legacy order/stack merge
 //! algorithm of the C original.
 //!
-//! State pointers must remain valid and writable throughout each call. Callers
+//! Remaining state pointers must remain valid and writable throughout each call. Callers
 //! must not retain exclusive references to their storage across UI/daemon
-//! reentry; the helpers only perform immediate raw reads and writes.
+//! reentry. Pack counts use relaxed atomics; letter bitmap locks are held only
+//! for immediate bitmap access, never across gameplay helpers.
 
 use crate::command::Command;
 use crate::direction::Direction;
@@ -24,6 +25,8 @@ use crate::misc::show_floor;
 use crate::ui::input::readchar;
 use crate::ui::output::{addmsg_str, endmsg, msg_str};
 use glam::IVec2;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::Mutex;
 
 const MAXPACK: i32 = 23;
 const PASSAGE: u8 = b'#' as u8;
@@ -93,8 +96,8 @@ pub unsafe fn add_pack_id(
     mut item: Option<ThingId>,
     silent: bool,
     dungeon: &Dungeon,
-    inpack: *mut i32,
-    pack_used: *mut [u8; 26],
+    inpack: &AtomicI32,
+    pack_used: &Mutex<[u8; 26]>,
     terse: u8,
     inv_describe: u8,
     arm_info: &[ObjInfo],
@@ -216,7 +219,7 @@ pub unsafe fn add_pack_id(
                         {
                             let item_count = with_object(&dungeon.objects, item_id, |x| x.o_count).unwrap_or(0);
                             with_object_mut(&dungeon.objects, o, |x| x.o_count += item_count);
-                            *inpack -= 1;
+                            inpack.fetch_sub(1, Ordering::Relaxed);
                             if !pack_room_id(from_floor, item_id, dungeon, inpack, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) {
                                 return;
                             }
@@ -304,19 +307,121 @@ mod tests {
 
     #[test]
     fn pack_letters_only_update_the_supplied_bitmap() {
-        let mut used = [0; 26];
-        let mut other = [0; 26];
+        let used = Mutex::new([0; 26]);
+        let other = Mutex::new([0; 26]);
         unsafe {
-            assert_eq!(pack_char(&mut other), b'a');
+            assert_eq!(pack_char(&other), b'a');
             for letter in b'a'..=b'z' {
-                assert_eq!(pack_char(&mut used), letter);
+                assert_eq!(pack_char(&used), letter);
             }
-            assert_eq!(used, [1; 26]);
+            assert_eq!(*used.lock().unwrap(), [1; 26]);
             // Preserve the legacy fallback when no free letter remains.
-            assert_eq!(pack_char(&mut used), b'a');
+            assert_eq!(pack_char(&used), b'a');
         }
+        let other = other.lock().unwrap();
         assert_eq!(other[0], 1);
         assert_eq!(&other[1..], &[0; 25]);
+    }
+
+    #[test]
+    fn pack_letters_recover_a_poisoned_bitmap() {
+        let used = Mutex::new([0; 26]);
+        let _ = std::panic::catch_unwind(|| {
+            let mut bitmap = used.lock().unwrap();
+            bitmap[0] = 1;
+            panic!("poison bitmap");
+        });
+        assert!(used.is_poisoned());
+        unsafe {
+            assert_eq!(pack_char(&used), b'b');
+        }
+
+        let dungeon = Dungeon::empty();
+        let id = dungeon.objects.insert(Thing::object(ThingObject {
+            o_count: 1,
+            o_packch: b'b',
+            ..ThingObject::default()
+        }));
+        dungeon.player.set_pack(vec![id]);
+        let inpack = AtomicI32::new(1);
+        let mut last_pick = Some(id);
+        unsafe {
+            assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &mut last_pick, &used), Some(id));
+        }
+        assert_eq!(inpack.load(Ordering::Relaxed), 0);
+        // Both bitmap helpers release their guards before returning.
+        let bitmap = used.try_lock().unwrap_or_else(|error| match error {
+            std::sync::TryLockError::Poisoned(poisoned) => poisoned.into_inner(),
+            std::sync::TryLockError::WouldBlock => panic!("bitmap lock is still held"),
+        });
+        assert_eq!(bitmap[0], 1);
+        assert_eq!(bitmap[1], 0);
+    }
+
+    #[test]
+    fn leaving_invalid_pack_letters_does_not_change_the_bitmap() {
+        let dungeon = Dungeon::empty();
+        let inpack = AtomicI32::new(1);
+        let used = Mutex::new([1; 26]);
+        let mut last_pick = None;
+        for packch in [0, b'a' - 1, b'z' + 1, u8::MAX] {
+            let id = dungeon.objects.insert(Thing::object(ThingObject {
+                o_count: 1,
+                o_packch: packch,
+                ..ThingObject::default()
+            }));
+            dungeon.player.set_pack(vec![id]);
+            inpack.store(1, Ordering::Relaxed);
+            unsafe {
+                assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &mut last_pick, &used), Some(id));
+            }
+            assert_eq!(inpack.load(Ordering::Relaxed), 0);
+            assert_eq!(*used.try_lock().unwrap(), [1; 26]);
+            assert!(dungeon.player.pack().is_empty());
+        }
+    }
+
+    #[test]
+    fn grouped_stacks_keep_one_capacity_slot_at_the_limit() {
+        let dungeon = Dungeon::empty();
+        let stack = dungeon.objects.insert(Thing::object(ThingObject {
+            o_type: ItemType::Weapon(0),
+            o_count: 3,
+            o_group: 7,
+            o_packch: b'a',
+            ..ThingObject::default()
+        }));
+        let incoming = dungeon.objects.insert(Thing::object(ThingObject {
+            o_type: ItemType::Weapon(0),
+            o_count: 2,
+            o_group: 7,
+            ..ThingObject::default()
+        }));
+        dungeon.player.set_pack(vec![stack]);
+        let inpack = AtomicI32::new(MAXPACK);
+        let used = Mutex::new([0; 26]);
+        used.lock().unwrap()[0] = 1;
+        let mut last_pick = None;
+        unsafe {
+            add_pack_id(Some(incoming), true, &dungeon, &inpack, &used, 0, 1, &[], &[], &[], &[], &[], &[]);
+            assert_eq!(inpack.load(Ordering::Relaxed), MAXPACK);
+            assert_eq!(dungeon.player.pack(), vec![stack]);
+            assert!(!dungeon.objects.contains(incoming));
+            // Preserve the legacy grouped merge's extra increment exactly.
+            assert_eq!(dungeon.objects.with_object(stack, |o| o.o_count), Some(6));
+
+            let split = leave_pack_id(stack, true, false, &dungeon, &inpack, &mut last_pick, &used).unwrap();
+            assert_ne!(split, stack);
+            assert_eq!(inpack.load(Ordering::Relaxed), MAXPACK);
+            assert_eq!(dungeon.objects.with_object(stack, |o| o.o_count), Some(5));
+            assert_eq!(dungeon.objects.with_object(split, |o| o.o_count), Some(1));
+            assert_eq!(used.lock().unwrap()[0], 1);
+
+            assert_eq!(leave_pack_id(stack, false, true, &dungeon, &inpack, &mut last_pick, &used), Some(stack));
+        }
+        assert_eq!(inpack.load(Ordering::Relaxed), MAXPACK - 1);
+        assert_eq!(*used.try_lock().unwrap(), [0; 26]);
+        assert!(dungeon.player.pack().is_empty());
     }
 
     #[test]
@@ -347,32 +452,32 @@ mod tests {
             ..ThingObject::default()
         }));
         dungeon.player.set_pack(vec![id]);
-        let mut inpack = 2;
+        let inpack = AtomicI32::new(2);
         let mut last_pick = None;
-        let mut pack_used = [0; 26];
-        pack_used[2] = 1;
+        let pack_used = Mutex::new([0; 26]);
+        pack_used.lock().unwrap()[2] = 1;
 
         unsafe {
-            let split = leave_pack_id(id, true, false, &dungeon, &mut inpack, &mut last_pick, &mut pack_used).unwrap();
+            let split = leave_pack_id(id, true, false, &dungeon, &inpack, &mut last_pick, &pack_used).unwrap();
             assert_ne!(split, id);
             assert_eq!(dungeon.objects.with_object(split, |o| o.o_count), Some(1));
             assert_eq!(dungeon.objects.with_object(id, |o| o.o_count), Some(1));
             assert_eq!(dungeon.player.pack(), vec![id]);
-            assert_eq!(inpack, 1);
+            assert_eq!(inpack.load(Ordering::Relaxed), 1);
             assert_eq!(last_pick, Some(id));
-            assert_eq!(pack_used[2], 1);
+            assert_eq!(pack_used.lock().unwrap()[2], 1);
 
-            assert_eq!(leave_pack_id(id, false, false, &dungeon, &mut inpack, &mut last_pick, &mut pack_used), Some(id));
-            assert_eq!(inpack, 0);
+            assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &mut last_pick, &pack_used), Some(id));
+            assert_eq!(inpack.load(Ordering::Relaxed), 0);
             assert_eq!(last_pick, None);
-            assert_eq!(pack_used[2], 0);
+            assert_eq!(pack_used.lock().unwrap()[2], 0);
             assert!(dungeon.player.pack().is_empty());
             assert!(other.objects.is_empty());
             assert!(other.player.pack().is_empty());
 
             dungeon.objects.remove(id);
-            assert_eq!(leave_pack_id(id, false, false, &dungeon, &mut inpack, &mut last_pick, &mut pack_used), None);
-            assert_eq!(inpack, 0);
+            assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &mut last_pick, &pack_used), None);
+            assert_eq!(inpack.load(Ordering::Relaxed), 0);
         }
     }
 
@@ -380,8 +485,8 @@ mod tests {
     fn pickup_transfers_floor_items_and_merges_only_distinct_objects() {
         unsafe {
             let dungeon = Dungeon::empty();
-            let mut inpack = 0;
-            let mut pack_used = [0; 26];
+            let inpack = AtomicI32::new(0);
+            let pack_used = Mutex::new([0; 26]);
             // Silent, successful pickups never consult the naming tables.
             let pos = dungeon.player.pos();
             let food = dungeon.objects.insert(Thing::object(ThingObject {
@@ -391,15 +496,15 @@ mod tests {
                 ..ThingObject::default()
             }));
             dungeon.with_level_mut(|level| level.add_item(food));
-            add_pack_id(None, true, &dungeon, &mut inpack, &mut pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
+            add_pack_id(None, true, &dungeon, &inpack, &pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
             assert_eq!(dungeon.player.pack(), vec![food]);
             assert_eq!(floor_item(&dungeon), None);
-            assert_eq!(inpack, 1);
+            assert_eq!(inpack.load(Ordering::Relaxed), 1);
             assert!(dungeon.objects
                 .with_object(food, |obj| obj.o_flags.contains(ObjectFlags::FOUND))
                 .unwrap());
 
-            add_pack_id(None, true, &dungeon, &mut inpack, &mut pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
+            add_pack_id(None, true, &dungeon, &inpack, &pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
             assert_eq!(dungeon.objects.with_object(food, |obj| obj.o_count), Some(1));
             assert_eq!(dungeon.player.pack(), vec![food]);
 
@@ -410,10 +515,10 @@ mod tests {
                 ..ThingObject::default()
             }));
             dungeon.with_level_mut(|level| level.add_item(weapon));
-            add_pack_id(None, true, &dungeon, &mut inpack, &mut pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
+            add_pack_id(None, true, &dungeon, &inpack, &pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
             assert_eq!(dungeon.player.pack(), vec![food, weapon]);
             assert_eq!(floor_item(&dungeon), None);
-            assert_eq!(inpack, 2);
+            assert_eq!(inpack.load(Ordering::Relaxed), 2);
             assert_eq!(dungeon.objects.with_object(food, |obj| obj.o_packch), Some(b'a'));
             assert_eq!(dungeon.objects.with_object(weapon, |obj| obj.o_packch), Some(b'b'));
 
@@ -424,12 +529,12 @@ mod tests {
                 ..ThingObject::default()
             }));
             dungeon.with_level_mut(|level| level.add_item(more_food));
-            add_pack_id(None, true, &dungeon, &mut inpack, &mut pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
+            add_pack_id(None, true, &dungeon, &inpack, &pack_used, 0, 1, &[], &[], &[], &[], &[], &[]);
             assert_eq!(dungeon.player.pack(), vec![food, weapon]);
             assert_eq!(floor_item(&dungeon), None);
             assert_eq!(dungeon.objects.with_object(food, |obj| obj.o_count), Some(2));
             assert!(!dungeon.objects.contains(more_food));
-            assert_eq!(inpack, 3);
+            assert_eq!(inpack.load(Ordering::Relaxed), 3);
         }
     }
 }
@@ -439,7 +544,7 @@ pub unsafe fn pack_room_id(
     from_floor: bool,
     id: ThingId,
     dungeon: &Dungeon,
-    inpack: *mut i32,
+    inpack: &AtomicI32,
     terse: u8,
     inv_describe: u8,
     arm_info: &[ObjInfo],
@@ -449,7 +554,7 @@ pub unsafe fn pack_room_id(
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
 ) -> bool {
-    if *inpack + 1 > MAXPACK {
+    if inpack.load(Ordering::Relaxed) + 1 > MAXPACK {
         if terse == 0 {
             addmsg_str("there's ");
         }
@@ -461,7 +566,7 @@ pub unsafe fn pack_room_id(
         if from_floor {
             move_msg_id(id, dungeon, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info);
         }
-        *inpack = MAXPACK;
+        inpack.store(MAXPACK, Ordering::Relaxed);
         return false;
     }
 
@@ -472,7 +577,7 @@ pub unsafe fn pack_room_id(
         crate::draw::write_cell_glyph(hero_coord(dungeon), floor_char_for_room(dungeon) as char);
     }
 
-    *inpack += 1;
+    inpack.fetch_add(1, Ordering::Relaxed);
     true
 }
 
@@ -487,19 +592,19 @@ pub unsafe fn leave_pack_id(
     newobj: bool,
     all: bool,
     dungeon: &Dungeon,
-    inpack: *mut i32,
+    inpack: &AtomicI32,
     last_pick: *mut Option<ThingId>,
-    pack_used: *mut [u8; 26],
+    pack_used: &Mutex<[u8; 26]>,
 ) -> Option<ThingId> {
     let (count, group, packch) =
         crate::item::arena::with_object(&dungeon.objects, id, |o| (o.o_count, o.o_group, o.o_packch))?;
 
-    *inpack -= 1;
+    inpack.fetch_sub(1, Ordering::Relaxed);
     if count > 1 && !all {
         *last_pick = Some(id);
         dungeon.objects.with_object_mut(id, |o| o.o_count -= 1);
         if group != 0 {
-            *inpack += 1;
+            inpack.fetch_add(1, Ordering::Relaxed);
         }
         if newobj {
             let cloned = dungeon.objects.with(id, |thing| thing.clone())?;
@@ -511,20 +616,20 @@ pub unsafe fn leave_pack_id(
         }
     } else {
         *last_pick = None;
-        if (packch as usize) >= b'a' as usize {
-            (*pack_used)[packch as usize - 'a' as usize] = false as u8;
+        if (b'a'..=b'z').contains(&packch) {
+            let mut used = pack_used.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            used[(packch - b'a') as usize] = 0;
         }
         dungeon.player.remove_from_pack(id);
         Some(id)
     }
 }
 
-pub unsafe fn pack_char(pack_used: *mut [u8; 26]) -> u8 {
-    // `pack_used` is a 26-entry array (one slot per letter); index it directly so
-    // no reference is held across reentrant helper calls.
+pub unsafe fn pack_char(pack_used: &Mutex<[u8; 26]>) -> u8 {
+    let mut used = pack_used.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     for i in 0..26 {
-        if (*pack_used)[i] == 0 {
-            (*pack_used)[i] = true as u8;
+        if used[i] == 0 {
+            used[i] = 1;
             return (b'a' + i as u8) as u8;
         }
     }
@@ -591,9 +696,9 @@ pub unsafe fn inventory(
 pub unsafe fn pick_up(
     ch: u8,
     dungeon: &Dungeon,
-    inpack: *mut i32,
+    inpack: &AtomicI32,
     move_on: u8,
-    pack_used: *mut [u8; 26],
+    pack_used: &Mutex<[u8; 26]>,
     purse: &std::sync::atomic::AtomicI32,
     terse: u8,
     inv_describe: u8,
@@ -815,9 +920,9 @@ pub unsafe fn picky_inven(
 unsafe fn pick_up_char(
     ch: u8,
     dungeon: &Dungeon,
-    inpack: *mut i32,
+    inpack: &AtomicI32,
     move_on: u8,
-    pack_used: *mut [u8; 26],
+    pack_used: &Mutex<[u8; 26]>,
     purse: &std::sync::atomic::AtomicI32,
     terse: u8,
     inv_describe: u8,

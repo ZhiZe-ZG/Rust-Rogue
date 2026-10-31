@@ -253,7 +253,7 @@ const SYLLS: &[&str] = &[
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
-use crate::game::globals::{a_class, group, inpack, inv_describe, pack_used, terse};
+use crate::game::globals::{a_class, group, inv_describe, terse};
 
 // ─── Exported functions ───────────────────────────────────────────────────────
 
@@ -276,7 +276,7 @@ pub unsafe fn init_player() {
         o.o_type = ItemType::Food;
         o.o_count = 1;
     });
-    add_pack_id(Some(food), true, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+    add_pack_id(Some(food), true, &DUNGEON, &DUNGEON.player.inpack, &DUNGEON.player.pack_used,
         terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
         &weap_names, &ws_names);
 
@@ -290,7 +290,7 @@ pub unsafe fn init_player() {
         o.o_count = 1;
     });
     DUNGEON.player.set_armor_id(Some(armor));
-    add_pack_id(Some(armor), true, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+    add_pack_id(Some(armor), true, &DUNGEON, &DUNGEON.player.inpack, &DUNGEON.player.pack_used,
         terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
         &weap_names, &ws_names);
 
@@ -302,7 +302,7 @@ pub unsafe fn init_player() {
         o.o_dplus = 1;
         o.o_flags.insert(ObjectFlags::KNOW);
     });
-    add_pack_id(Some(mace_id), true, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+    add_pack_id(Some(mace_id), true, &DUNGEON, &DUNGEON.player.inpack, &DUNGEON.player.pack_used,
         terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
         &weap_names, &ws_names);
     DUNGEON.player.set_weapon_id(Some(mace_id));
@@ -314,7 +314,7 @@ pub unsafe fn init_player() {
         o.o_hplus = 1;
         o.o_flags.insert(ObjectFlags::KNOW);
     });
-    add_pack_id(Some(bow_id), true, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+    add_pack_id(Some(bow_id), true, &DUNGEON, &DUNGEON.player.inpack, &DUNGEON.player.pack_used,
         terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
         &weap_names, &ws_names);
 
@@ -328,7 +328,7 @@ pub unsafe fn init_player() {
         } + 25;
         o.o_flags.insert(ObjectFlags::KNOW);
     });
-    add_pack_id(Some(arrow_id), true, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+    add_pack_id(Some(arrow_id), true, &DUNGEON, &DUNGEON.player.inpack, &DUNGEON.player.pack_used,
         terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
         &weap_names, &ws_names);
 }

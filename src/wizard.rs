@@ -80,9 +80,9 @@ fn master_enabled() -> bool {
 }
 
 use crate::game::globals::{
-    a_class, after, again, count, group, inpack, inv_describe, l_last_comm,
+    a_class, after, again, count, group, inv_describe, l_last_comm,
     l_last_dir, l_last_pick, last_comm, last_dir, last_pick,
-    n_objs, no_move, pack_used, running, terse, vf_hit,
+    n_objs, no_move, running, terse, vf_hit,
 };
 
 pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
@@ -297,7 +297,7 @@ pub unsafe fn create_obj() {
     let scr_names = (&*(&raw const scr_info)).clone();
     let weap_names = (&*(&raw const weap_info)).clone();
     let ws_names = (&*(&raw const ws_info)).clone();
-    add_pack_id(Some(obj), false, &DUNGEON, &raw mut inpack, &raw mut pack_used,
+    add_pack_id(Some(obj), false, &DUNGEON, &DUNGEON.player.inpack, &DUNGEON.player.pack_used,
         terse, inv_describe, &arm_names, &pot_names, &ring_names, &scr_names,
         &weap_names, &ws_names);
 }

@@ -237,6 +237,10 @@ fn hero_monster_mut(thing: &mut Thing) -> &mut ThingMonster {
 pub struct Player {
     hero: RwLock<Option<Thing>>,
     equipment: Equipment,
+    /// Legacy pack-capacity accounting (grouped missiles count as one).
+    pub inpack: AtomicI32,
+    /// Allocated inventory letters, one entry for each of a through z.
+    pub pack_used: Mutex<[u8; 26]>,
     /// Gold currently carried by the hero.
     pub purse: AtomicI32,
     /// Remaining nutrition and current hunger indicator.
@@ -252,6 +256,8 @@ impl Player {
     pub(crate) const EMPTY: Self = Self {
         hero: RwLock::new(None),
         equipment: Equipment::EMPTY,
+        inpack: AtomicI32::new(0),
+        pack_used: Mutex::new([0; 26]),
         purse: AtomicI32::new(0),
         food_left: AtomicI32::new(0),
         hungry_state: AtomicI32::new(0),

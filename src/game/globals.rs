@@ -106,8 +106,6 @@ pub static mut tombstone: u8 = 1;
 /// Whether master-mode features are available.
 #[allow(non_upper_case_globals)]
 pub const master_mode_enabled: u8 = 1;
-/// Tracks which inventory slots contain an item.
-pub static mut pack_used: [u8; 26] = [0; 26];
 
 /// Direction encoded by the last direction character.
 pub static mut dir_ch: Direction = Direction::None;
@@ -133,8 +131,6 @@ pub const NUMSCORES: u32 = 10;
 pub const NUMNAME: &str = "Ten";
 /// Number of objects initialized in the object tables.
 pub static mut n_objs: i32 = 0;
-/// Number of objects currently in the pack.
-pub static mut inpack: i32 = 0;
 /// Current inventory display mode.
 pub static mut inv_type: i32 = 0;
 /// Maximum hit value reached by the player.
@@ -1202,12 +1198,6 @@ pub static mut ws_info: [ObjInfo; MAXSTICKS] = [
 // The statics above remain `static mut` (they are still shared with the
 // save/restore layer), but UI code reads and writes them through these small
 // wrappers so it does not have to open `unsafe` blocks itself.
-
-/// The number of items currently carried (`inpack`).
-#[inline]
-pub fn get_inpack() -> i32 {
-    unsafe { inpack }
-}
 
 /// A by-value snapshot of the daemon/fuse table (`D_LIST`).
 ///

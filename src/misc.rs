@@ -171,9 +171,9 @@ pub unsafe fn eat() {
         false,
         false,
         &DUNGEON,
-        &raw mut globals::inpack,
+        &DUNGEON.player.inpack,
         &raw mut globals::last_pick,
-        &raw mut globals::pack_used,
+        &DUNGEON.player.pack_used,
     );
 }
 
