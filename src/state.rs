@@ -151,6 +151,8 @@ pub struct GameSnapshot {
     pub fruit: String,
     pub home: String,
     pub scroll_names: Vec<String>,
+    /// Retained for save compatibility; restoration ignores these fixed names.
+    #[serde(default)]
     pub inv_t_names: Vec<String>,
     /// Retained for save compatibility; restoration ignores these fixed names.
     #[serde(default)]
@@ -174,6 +176,8 @@ pub struct GameSnapshot {
     pub max_level: i32,
     pub mpos: i32,
     pub no_food: i32,
+    /// Retained for save compatibility; restoration uses the fixed armor table.
+    #[serde(default)]
     pub a_class: Vec<i32>,
     pub count: i32,
     pub food_left: i32,
@@ -184,6 +188,8 @@ pub struct GameSnapshot {
     pub quiet: i32,
     pub vf_hit: i32,
     pub seed: i32,
+    /// Retained for save compatibility; restoration uses fixed thresholds.
+    #[serde(default)]
     pub e_levels: Vec<i32>,
     pub delta: IVec2,
     pub oldpos: IVec2,
@@ -611,10 +617,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     DUNGEON.set_fruit(s.fruit);
     crate::game::globals::set_home(s.home);
     DUNGEON.set_scroll_names(s.scroll_names);
-    for (i, name) in s.inv_t_names.iter().enumerate() {
-        crate::game::globals::set_inv_t_name(i, name.clone());
-    }
-    // Legacy trap_names are accepted but cannot override the fixed table.
+    // Legacy inv_t_names and trap_names cannot override the fixed tables.
     for (i, name) in s.p_colors.iter().enumerate() {
         if i < p_colors.len() {
             p_colors[i] = resolve_static_str(name, &crate::colors::POTION_COLORS);
@@ -666,11 +669,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     crate::dungeon::set_max_depth(s.max_level);
     mpos = s.mpos;
     crate::dungeon::set_no_food(s.no_food);
-    for (i, v) in s.a_class.iter().enumerate() {
-        if i < a_class.len() {
-            a_class[i] = *v;
-        }
-    }
+    // Legacy a_class and e_levels cannot override the fixed game rules.
     count = s.count;
     food_left = s.food_left;
     lastscore = s.lastscore;
@@ -680,11 +679,6 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     quiet = s.quiet;
     vf_hit = s.vf_hit;
     seed = s.seed;
-    for (i, v) in s.e_levels.iter().enumerate() {
-        if i < e_levels.len() {
-            e_levels[i] = *v;
-        }
-    }
     delta = s.delta;
     oldpos = s.oldpos;
 
@@ -993,5 +987,31 @@ mod tests {
         let migrated = ron::ser::to_string_pretty(&legacy, ron::ser::PrettyConfig::default())
             .expect("reserialize legacy save");
         assert_eq!(migrated, text);
+
+        // Historical overrides still deserialize, but are only compatibility
+        // data; the engine's rule tables remain compile-time constants.
+        let mut old_rules = snapshot;
+        old_rules.a_class = vec![-99];
+        old_rules.e_levels = vec![123];
+        old_rules.inv_t_names = vec!["Custom".to_owned()];
+        let old_text = ron::ser::to_string(&old_rules).expect("serialize old rule overrides");
+        let old: GameSnapshot = ron::de::from_str(&old_text).expect("accept old rule overrides");
+        assert_eq!(old.a_class, vec![-99]);
+        assert_eq!(old.e_levels, vec![123]);
+        assert_eq!(old.inv_t_names, vec!["Custom"]);
+        assert_eq!(crate::game::globals::a_class[0], 8);
+        assert_eq!(crate::game::globals::e_levels[0], 10);
+        assert_eq!(crate::game::globals::inv_t_name(0), "Overwrite");
+
+        let without_rules = old_text
+            .replace("a_class:[-99],", "")
+            .replace("e_levels:[123],", "")
+            .replace("inv_t_names:[\"Custom\"],", "");
+        assert_ne!(without_rules, old_text);
+        let missing: GameSnapshot = ron::de::from_str(&without_rules)
+            .expect("accept saves without fixed rule fields");
+        assert!(missing.a_class.is_empty());
+        assert!(missing.e_levels.is_empty());
+        assert!(missing.inv_t_names.is_empty());
     }
 }

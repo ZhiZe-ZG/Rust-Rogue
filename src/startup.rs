@@ -221,7 +221,6 @@ unsafe fn init_seed(seed_arg: Option<i32>) {
 
 /// Build the object/trap/colour tables and the initial player.
 unsafe fn init_game_tables() {
-    crate::game::globals::init_inv_t_names();
     init_probs();
     init_player();
     init_names();

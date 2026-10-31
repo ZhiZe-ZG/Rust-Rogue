@@ -235,7 +235,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             &raw mut group, &raw mut has_hit, &raw const weap_info,
                             &terse, &raw mut max_stats, &raw mut quiet,
                             &raw mut kamikaze, &raw mut vf_hit, &raw const fight_flush,
-                            &raw mut monsters, &raw const e_levels,
+                            &raw mut monsters, &e_levels,
                         );
                     }
                     Command::Run(direction) => do_run(
@@ -311,7 +311,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 &ring_names, &scr_names, &ws_names,
                                 &raw mut count, &raw mut quiet, &raw mut to_death,
                                 &raw mut kamikaze, &raw mut vf_hit, &raw const fight_flush,
-                                &raw mut monsters, &raw const e_levels, &raw mut max_stats,
+                                &raw mut monsters, &e_levels, &raw mut max_stats,
                             );
                         }
                     }
@@ -431,7 +431,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 &scr_names, &weap_names, &raw mut count, &raw mut quiet,
                                 &raw mut has_hit, &raw mut to_death, &raw mut kamikaze,
                                 &raw mut vf_hit, &raw const fight_flush, &raw mut monsters,
-                                &raw const e_levels);
+                                &e_levels);
                         } else {
                             after = false as u8;
                         }

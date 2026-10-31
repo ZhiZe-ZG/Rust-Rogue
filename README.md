@@ -96,7 +96,7 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `terse`: immutable constant set to `0`; output is always verbose, not runtime-configurable.
 - `to_death`: controls repeated fighting, not whether the player is dead.
 - `tombstone`: whether the death screen / tombstone is enabled.
-- `master_mode_enabled`: wizard-mode gate for master-mode debugging.
+- `master_mode_enabled`: immutable constant set to `1`, enabling the master-mode debugging gate.
 - `dir_ch`: most-recent input direction, represented by `Direction`.
 - `runch`: current running direction, represented by `Direction`.
 - `take`: last object-take command state.
@@ -116,7 +116,7 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `inv_type`: current inventory display type.
 - `max_hit`: maximum hit value used by combat calculations.
 - `mpos`: current message cursor column / pagination position.
-- `a_class`: armor class table used by the game.
+- `a_class`: constant armor class table used by the game.
 - `count`: remaining command repetitions.
 - `scoreboard`: open score file handle.
 - `food_left`: remaining food units.
@@ -127,7 +127,7 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `quiet`: turn counter used for regeneration, not output volume.
 - `vf_hit`: venus-flytrap hit counter state.
 - `seed`: RNG seed.
-- `e_levels`: experience thresholds per level.
+- `e_levels`: constant experience thresholds per level.
 - `delta`: last movement delta / offset vector.
 - `oldpos`: previous player position.
 - `l_last_pick`: last picked item for the previous cycle.
@@ -163,7 +163,7 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `FILE_NAME`: current save filename.
 - `HUH`: message history buffer.
 - `PRBUF`: shared scratch string buffer.
-- `INV_T_NAMES`: inventory display style names.
+- `INV_T_NAMES`: constant inventory display style names (`Overwrite`, `Slow`, `Clear`), available without initialization.
 
 ### Other singleton owners and local state
 
@@ -222,6 +222,8 @@ The runtime options in [src/options.rs](src/options.rs) are `flush`, `jump`, `se
 The snapshot adapts runtime ownership to saved fields: `seenstairs`, `amulet`, `ntraps`, `max_level`, and `no_food` are saved from `DUNGEON`, while depth is stored in the level snapshot. Daemons and the `between`/`group` counters are also persisted. Terminal resources, rendering caches, open file handles, and command-loop-local bookkeeping are not. Some output-related globals, including message flags and `mpos`, are persisted; not all UI-related state is transient.
 
 The `trap_names` snapshot field is retained for compatibility and written with the fixed trap names. Older saved names are accepted but ignored during restoration; customized trap names in old saves no longer override `TRAP_NAMES`. A missing `trap_names` field is also accepted.
+
+The `a_class`, `e_levels`, and `inv_t_names` snapshot fields are likewise retained and written with their constant values. Older saved overrides are accepted but ignored during restoration, and missing fields are accepted. Armor classes, experience thresholds, and inventory style labels are fixed game rules rather than mutable save state.
 
 The hero, pack, and equipment are read from `DUNGEON.player`, and item records are read from `DUNGEON.objects`. Restoration allocates fresh arena handles and reconnects saved item references. The snapshot retains a `terse` field for format compatibility, but restoring it does not change the fixed verbose output mode. The saved `seed` field is not a serialized copy of the live `StdRng` state.
 

@@ -129,7 +129,7 @@ impl Dungeon {
                     &raw const globals::scr_info,
                     &raw const globals::weap_info,
                     &raw const globals::ws_info,
-                    &raw const globals::a_class,
+                    &globals::a_class,
                     &raw mut globals::group,
                 );
             }
@@ -198,7 +198,7 @@ impl Dungeon {
                         &raw const globals::scr_info,
                         &raw const globals::weap_info,
                         &raw const globals::ws_info,
-                        &raw const globals::a_class,
+                        &globals::a_class,
                         &raw mut globals::group,
                     );
                 }

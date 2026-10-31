@@ -112,7 +112,8 @@ pub static mut to_death: u8 = 0;
 /// Whether the tombstone should be displayed on death.
 pub static mut tombstone: u8 = 1;
 /// Whether master-mode features are available.
-pub static master_mode_enabled: u8 = 1;
+#[allow(non_upper_case_globals)]
+pub const master_mode_enabled: u8 = 1;
 /// Tracks which inventory slots contain an item.
 pub static mut pack_used: [u8; 26] = [0; 26];
 
@@ -159,7 +160,8 @@ pub static mut max_hit: i32 = 0;
 /// Current message cursor position.
 pub static mut mpos: i32 = 0;
 /// Armor class values indexed by armor kind.
-pub static mut a_class: [i32; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
+#[allow(non_upper_case_globals)]
+pub const a_class: [i32; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
 /// Number of turns elapsed in the current action.
 pub static mut count: i32 = 0;
 /// The open score file, or `None` when it is not open.
@@ -181,7 +183,8 @@ pub static mut vf_hit: i32 = 0;
 /// Current random-number seed.
 pub static mut seed: i32 = 0;
 /// Experience thresholds for each player level.
-pub static mut e_levels: [i32; 21] = [
+#[allow(non_upper_case_globals)]
+pub const e_levels: [i32; 21] = [
     10, 20, 40, 80, 160, 320, 640, 1300, 2600, 5200, 13000, 26000, 50000, 100000, 200000, 400000,
     800000, 2000000, 4000000, 8000000, 0,
 ];
@@ -1378,14 +1381,11 @@ pub fn set_prbuf(value: String) {
 
 // ─── Rust-owned string tables ────────────────────────────────────────────────
 //
-// These were previously C strings allocated with `malloc`/`free` and addressed
-// through `[*mut u8; N]` / `*mut u8` globals. They are now owned Rust
-// `String`s behind a `Mutex`, matching the container-owner style used elsewhere
-// (`DUNGEON.monster_list`, `DUNGEON.objects`, `DUNGEON.player`). Callers
-// read/write through the small accessors below.
+// Fixed lookup tables use string slices. Accessors return owned strings for
+// compatibility with callers and the legacy snapshot fields.
 
 /// Inventory display style names, previously `char *inv_t_name[]`.
-pub static INV_T_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+pub const INV_T_NAMES: [&str; 3] = ["Overwrite", "Slow", "Clear"];
 
 /// Fixed trap kind names, indexed by the legacy trap-kind discriminants.
 pub const TRAP_NAMES: [&str; 8] = [
@@ -1403,33 +1403,14 @@ fn lock<T>(cell: &Mutex<T>) -> MutexGuard<'_, T> {
     cell.lock().unwrap_or_else(|poison| poison.into_inner())
 }
 
-/// Install the default inventory display style names.
-pub fn init_inv_t_names() {
-    let mut names = lock(&INV_T_NAMES);
-    *names = vec![
-        "Overwrite".to_owned(),
-        "Slow".to_owned(),
-        "Clear".to_owned(),
-    ];
-}
-
 /// The inventory display style name at `index` (empty string when out of range).
 pub fn inv_t_name(index: usize) -> String {
-    lock(&INV_T_NAMES).get(index).cloned().unwrap_or_default()
+    INV_T_NAMES.get(index).copied().unwrap_or_default().to_owned()
 }
 
-/// Set the inventory display style name at `index`.
-pub fn set_inv_t_name(index: usize, name: String) {
-    let mut names = lock(&INV_T_NAMES);
-    if names.len() <= index {
-        names.resize_with(index + 1, String::new);
-    }
-    names[index] = name;
-}
-
-/// A snapshot clone of all inventory display style names.
+/// Owned copies of the fixed inventory display style names for snapshots.
 pub fn inv_t_names() -> Vec<String> {
-    lock(&INV_T_NAMES).clone()
+    INV_T_NAMES.iter().map(|name| (*name).to_owned()).collect()
 }
 
 /// The trap name at `index` (empty string when out of range).
@@ -1440,6 +1421,37 @@ pub fn trap_name(index: usize) -> String {
 /// Owned copies of the fixed trap names for legacy snapshot compatibility.
 pub fn trap_names() -> Vec<String> {
     TRAP_NAMES.iter().map(|name| (*name).to_owned()).collect()
+}
+
+#[cfg(test)]
+mod fixed_table_tests {
+    use super::*;
+
+    #[test]
+    fn game_tables_are_compile_time_constants() {
+        const MASTER: u8 = master_mode_enabled;
+        const ARMOR: [i32; 8] = a_class;
+        const LEVELS: [i32; 21] = e_levels;
+        assert_eq!(MASTER, 1);
+        assert_eq!(ARMOR, [8, 7, 7, 6, 5, 4, 4, 3]);
+        assert_eq!(LEVELS[0], 10);
+        assert_eq!(LEVELS[19], 8_000_000);
+        assert_eq!(LEVELS[20], 0);
+    }
+
+    #[test]
+    fn inventory_names_need_no_initialization() {
+        const NAMES: [&str; 3] = INV_T_NAMES;
+        for (index, name) in NAMES.iter().enumerate() {
+            assert_eq!(inv_t_name(index), *name);
+        }
+        assert_eq!(inv_t_name(3), "");
+        assert_eq!(inv_t_name(usize::MAX), "");
+        let mut snapshot = inv_t_names();
+        snapshot[0] = "custom".to_owned();
+        assert_eq!(inv_t_name(0), "Overwrite");
+        assert_eq!(inv_t_names(), NAMES);
+    }
 }
 
 #[cfg(test)]

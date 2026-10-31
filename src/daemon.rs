@@ -93,7 +93,7 @@ impl Daemon {
                 &raw mut globals::vf_hit,
                 &raw mut globals::purse,
                 &raw const globals::fight_flush,
-                &raw const globals::e_levels,
+                &globals::e_levels,
                 &raw mut globals::monsters,
                 &raw mut globals::inpack,
                 &raw mut globals::last_pick,
