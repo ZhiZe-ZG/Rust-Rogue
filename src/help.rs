@@ -1,7 +1,7 @@
 //! Command help and map-symbol identification.
 
 use crate::config::GameConfig;
-use crate::game::globals::{lower_msg, monsters, mpos};
+use crate::game::globals::monsters;
 use crate::ui::input::{readchar, wait_for};
 use crate::ui::output;
 use crate::ui::output::msg_str;
@@ -171,14 +171,14 @@ static IDENT_ITEMS: &[IdentItem] = &[
 pub(crate) unsafe fn help() {
     msg_str("character you want help for (* for all): ");
     let helpch = readchar() as u8;
-    mpos = 0;
+    crate::ui::terminal::UI.set_mpos(0);
 
     if helpch != b'*' {
         crate::ui::terminal::UI.move_cursor(IVec2::new(0, 0));
         if let Some(entry) = HELP_ENTRIES.iter().find(|entry| entry.ch == helpch) {
-            lower_msg = true as u8;
+            crate::ui::terminal::UI.lower_msg.store(1, std::sync::atomic::Ordering::Relaxed);
             msg_str(&format!("{}{}", output::format_key(entry.ch), entry.desc));
-            lower_msg = false as u8;
+            crate::ui::terminal::UI.lower_msg.store(0, std::sync::atomic::Ordering::Relaxed);
         } else {
             msg_str(&format!(
                 "unknown character '{}'",
@@ -228,7 +228,7 @@ pub(crate) unsafe fn help() {
 pub(crate) unsafe fn identify() {
     msg_str("what do you want identified? ");
     let ch = readchar();
-    mpos = 0;
+    crate::ui::terminal::UI.set_mpos(0);
     if ch == ESCAPE {
         msg_str("");
         return;

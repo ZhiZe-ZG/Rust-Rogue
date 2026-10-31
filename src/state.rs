@@ -446,16 +446,16 @@ unsafe fn build_snapshot() -> GameSnapshot {
         inv_describe: inv_describe != 0,
         jump: jump != 0,
         kamikaze: kamikaze != 0,
-        lower_msg: lower_msg != 0,
+        lower_msg: crate::ui::terminal::UI.lower_msg_enabled(),
         move_on: move_on != 0,
-        msg_esc: msg_esc != 0,
+        msg_esc: crate::ui::terminal::UI.msg_esc_enabled(),
         passgo: passgo != 0,
         playing: playing != 0,
         q_comm: q_comm != 0,
         running: running != 0,
-        save_msg: save_msg != 0,
+        save_msg: crate::ui::terminal::UI.save_msg_enabled(),
         see_floor: see_floor != 0,
-        stat_msg: stat_msg != 0,
+        stat_msg: crate::ui::terminal::UI.stat_msg_enabled(),
         terse: terse != 0,
         to_death: to_death != 0,
         tombstone: tombstone != 0,
@@ -466,8 +466,8 @@ unsafe fn build_snapshot() -> GameSnapshot {
         take,
 
         file_name: crate::game::globals::file_name(),
-        huh: crate::game::globals::huh_string(),
-        prbuf: crate::game::globals::prbuf(),
+        huh: crate::ui::terminal::UI.huh_string(),
+        prbuf: crate::ui::terminal::UI.prbuf(),
         release: crate::vers::release(),
         whoami: DUNGEON.whoami(),
         fruit: DUNGEON.fruit(),
@@ -491,7 +491,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         inpack,
         inv_type,
         max_level: crate::dungeon::max_depth(),
-        mpos,
+        mpos: crate::ui::terminal::UI.get_mpos(),
         no_food: crate::dungeon::no_food(),
         a_class: a_class.to_vec(),
         count,
@@ -588,16 +588,16 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     set_flag!(inv_describe);
     set_flag!(jump);
     set_flag!(kamikaze);
-    set_flag!(lower_msg);
+    crate::ui::terminal::UI.lower_msg.store(s.lower_msg as u8, std::sync::atomic::Ordering::Relaxed);
     set_flag!(move_on);
-    set_flag!(msg_esc);
+    crate::ui::terminal::UI.msg_esc.store(s.msg_esc as u8, std::sync::atomic::Ordering::Relaxed);
     set_flag!(passgo);
     set_flag!(playing);
     set_flag!(q_comm);
     set_flag!(running);
-    set_flag!(save_msg);
+    crate::ui::terminal::UI.save_msg.store(s.save_msg as u8, std::sync::atomic::Ordering::Relaxed);
     set_flag!(see_floor);
-    set_flag!(stat_msg);
+    crate::ui::terminal::UI.stat_msg.store(s.stat_msg as u8, std::sync::atomic::Ordering::Relaxed);
     // Keep the serialized terse field for compatibility, but output is now
     // fixed to verbose by the compile-time constant.
     set_flag!(to_death);
@@ -610,8 +610,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
 
     // ── strings / string tables ─────────────────────────────────────────
     crate::game::globals::set_file_name(s.file_name);
-    crate::game::globals::set_huh_string(&s.huh);
-    crate::game::globals::set_prbuf(s.prbuf);
+    crate::ui::terminal::UI.set_huh_string(&s.huh);
+    crate::ui::terminal::UI.set_prbuf(s.prbuf);
     crate::vers::set_release(s.release);
     DUNGEON.set_whoami(s.whoami);
     DUNGEON.set_fruit(s.fruit);
@@ -675,7 +675,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     inpack = s.inpack;
     inv_type = s.inv_type;
     crate::dungeon::set_max_depth(s.max_level);
-    mpos = s.mpos;
+    crate::ui::terminal::UI.set_mpos(s.mpos);
     crate::dungeon::set_no_food(s.no_food);
     // Legacy a_class and e_levels cannot override the fixed game rules.
     count = s.count;

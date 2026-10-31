@@ -91,13 +91,13 @@ const USES: [i32; RingType::COUNT] = [
 /// Prompts for a ring and equips it on an available hand, applying immediate ring effects.
 ///
 /// # Safety
-/// `mpos` must remain writable without an overlapping exclusive reference
-/// across reentrant input and message calls.
+/// Raw pointer parameters must remain valid for their accesses across reentrant
+/// input and message calls. `mpos` and `msg_esc` use shared atomic references.
 pub unsafe fn ring_on(
     random: &mut Random,
     dungeon: &Dungeon,
     terse: u8,
-    mpos: *mut i32,
+    mpos: &std::sync::atomic::AtomicI32,
     after: *mut u8,
     again: u8,
     l_last_comm: Command,
@@ -106,7 +106,7 @@ pub unsafe fn ring_on(
     last_comm: *mut Command,
     last_dir: *mut Direction,
     last_pick: *mut Option<ThingId>,
-    msg_esc: *mut u8,
+    msg_esc: &std::sync::atomic::AtomicU8,
     n_objs: *mut i32,
     inv_describe: u8,
     arm_info: &[ObjInfo],
@@ -184,12 +184,13 @@ pub unsafe fn ring_on(
 /// Removes a worn ring from the chosen hand after passing drop constraints.
 ///
 /// # Safety
-/// `mpos` has the same writable, reentrant-storage requirements as in `ring_on`.
+/// `max_stats` must remain valid for its accesses across reentrant calls.
+/// `mpos` uses a shared atomic reference.
 pub unsafe fn ring_off(
     random: &mut Random,
     dungeon: &Dungeon,
     terse: u8,
-    mpos: *mut i32,
+    mpos: &std::sync::atomic::AtomicI32,
     inv_describe: u8,
     arm_info: &[ObjInfo],
     pot_info: &[ObjInfo],
@@ -221,7 +222,7 @@ pub unsafe fn ring_off(
         hand as usize == LEFT
     };
 
-    *mpos = 0;
+    mpos.store(0, std::sync::atomic::Ordering::Relaxed);
     let obj = if left_hand {
         dungeon.player.equipment().left_ring_id()
     } else {
@@ -245,9 +246,9 @@ pub unsafe fn ring_off(
 /// Asks which hand the player means and returns LEFT, RIGHT, or -1 on escape.
 ///
 /// # Safety
-/// `mpos` must remain writable for the call. Do not retain an exclusive
-/// reference to its storage while input/message callbacks can access it.
-pub unsafe fn gethand(terse: u8, mpos: *mut i32) -> i32 {
+/// Input/message callbacks must satisfy their safety requirements. `mpos` uses
+/// a shared atomic reference, including across reentrant callbacks.
+pub unsafe fn gethand(terse: u8, mpos: &std::sync::atomic::AtomicI32) -> i32 {
     loop {
         if terse != 0 {
             msg_str("left or right ring? ");
@@ -260,7 +261,7 @@ pub unsafe fn gethand(terse: u8, mpos: *mut i32) -> i32 {
             return -1;
         }
 
-        *mpos = 0;
+        mpos.store(0, std::sync::atomic::Ordering::Relaxed);
         if c == b'l' || c == b'L' {
             return LEFT as i32;
         }

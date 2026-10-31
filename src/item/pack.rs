@@ -535,7 +535,7 @@ pub unsafe fn inventory(
     items: &[ThingId],
     filter: ItemFilter,
     dungeon: &Dungeon,
-    msg_esc: *mut u8,
+    msg_esc: &std::sync::atomic::AtomicU8,
     n_objs: *mut i32,
     terse: u8,
     inv_describe: u8,
@@ -558,14 +558,14 @@ pub unsafe fn inventory(
         }
 
         *n_objs += 1;
-        *msg_esc = 1;
+        msg_esc.store(1, std::sync::atomic::Ordering::Relaxed);
         let format = if packch == 0 {
             "%s".to_string()
         } else {
             format!("{}) %s", packch as char)
         };
         let _ = add_line(&format, &inv_name_id(id, false, dungeon, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info));
-        *msg_esc = 0;
+        msg_esc.store(0, std::sync::atomic::Ordering::Relaxed);
     }
 
     if *n_objs == 0 {
@@ -647,8 +647,8 @@ pub unsafe fn get_item_id(
     last_comm: *mut Command,
     last_dir: *mut Direction,
     last_pick: *mut Option<ThingId>,
-    mpos: *mut i32,
-    msg_esc: *mut u8,
+    mpos: &std::sync::atomic::AtomicI32,
+    msg_esc: &std::sync::atomic::AtomicU8,
     n_objs: *mut i32,
     terse: u8,
     inv_describe: u8,
@@ -684,7 +684,7 @@ pub unsafe fn get_item_id(
         }
         msg_str("? (* for list): ");
         ch = readchar();
-        *mpos = 0;
+        mpos.store(0, std::sync::atomic::Ordering::Relaxed);
         if ch == ESCAPE {
             reset_last(l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick);
             *after = false as u8;
@@ -693,7 +693,7 @@ pub unsafe fn get_item_id(
         }
         *n_objs = 1;
         if ch == '*' as i32 {
-            *mpos = 0;
+            mpos.store(0, std::sync::atomic::Ordering::Relaxed);
             if inventory(&pack_ptrs(dungeon), filter, dungeon, msg_esc, n_objs, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) == 0 {
                 *after = false as u8;
                 return None;
@@ -771,7 +771,7 @@ pub unsafe fn move_msg_id(
 
 pub unsafe fn picky_inven(
     dungeon: &Dungeon,
-    mpos: *mut i32,
+    mpos: &std::sync::atomic::AtomicI32,
     terse: u8,
     inv_describe: u8,
     arm_info: &[ObjInfo],
@@ -792,7 +792,7 @@ pub unsafe fn picky_inven(
         } else {
             "which item do you wish to inventory: "
         });
-        *mpos = 0;
+        mpos.store(0, std::sync::atomic::Ordering::Relaxed);
         let mch = readchar() as u8;
         if mch as i32 == ESCAPE {
             msg_str("");

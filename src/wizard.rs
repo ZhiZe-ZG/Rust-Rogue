@@ -81,7 +81,7 @@ fn master_enabled() -> bool {
 
 use crate::game::globals::{
     a_class, after, again, count, group, inpack, inv_describe, l_last_comm,
-    l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc,
+    l_last_dir, l_last_pick, last_comm, last_dir, last_pick,
     n_objs, no_move, pack_used, running, terse, vf_hit,
 };
 
@@ -102,8 +102,8 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
         let ws_names = (&*(&raw const ws_info)).clone();
         obj = get_item_id("identify", filter, &DUNGEON, &raw mut after,
             again, l_last_comm, l_last_dir, l_last_pick, &raw mut last_comm,
-            &raw mut last_dir, &raw mut last_pick, &raw mut mpos,
-            &raw mut msg_esc, &raw mut n_objs, terse, inv_describe,
+            &raw mut last_dir, &raw mut last_pick, &crate::ui::terminal::UI.mpos,
+            &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, terse, inv_describe,
             &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names);
         if insist != 0 {
             if n_objs == 0 {
@@ -186,7 +186,7 @@ pub unsafe fn create_obj() {
 
     msg_str("type of item: ");
     let type_ch = readchar();
-    mpos = 0;
+    crate::ui::terminal::UI.set_mpos(0);
     msg_str(&format!(
         "which {} do you want? (0-f)",
         (type_ch as u8) as char
@@ -203,7 +203,7 @@ pub unsafe fn create_obj() {
         o.o_group = 0;
         o.o_count = 1;
     });
-    mpos = 0;
+    crate::ui::terminal::UI.set_mpos(0);
 
     let otype = DUNGEON.objects
         .with_object(obj, |o| o.o_type)
@@ -212,7 +212,7 @@ pub unsafe fn create_obj() {
         ItemType::Weapon(_) | ItemType::Armor(_) => {
             msg_str("blessing? (+,-,n)");
             let bless = readchar() as u8;
-            mpos = 0;
+            crate::ui::terminal::UI.set_mpos(0);
             if bless == ('-' as u8) {
                 DUNGEON.objects.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
             }
@@ -262,7 +262,7 @@ pub unsafe fn create_obj() {
                 0 | 1 | 2 | 3 | 6 | 7 => {
                     msg_str("blessing? (+,-,n)");
                     let bless = readchar() as u8;
-                    mpos = 0;
+                    crate::ui::terminal::UI.set_mpos(0);
                     if bless == ('-' as u8) {
                         DUNGEON.objects.with_object_mut(obj, |o| o.o_flags.insert(ObjectFlags::CURSED));
                     }

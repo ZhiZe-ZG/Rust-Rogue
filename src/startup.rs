@@ -13,7 +13,7 @@ use crate::dungeon::DUNGEON;
 use crate::entity::chase::roomin;
 use crate::entity::player::MonsterFlags;
 use crate::game::globals::{
-    after, count, get_purse, in_shell, inv_type, mpos, oldpos, oldrp, playing, purse,
+    after, count, get_purse, in_shell, inv_type, oldpos, oldrp, playing, purse,
     q_comm, seed, to_death,
 };
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
@@ -268,13 +268,13 @@ pub unsafe fn main_loop_step() {
 /// quit:
 /// Have player make certain, then exit.
 ///
-/// Uses globals: q_comm, mpos, purse, count, to_death.
+/// Uses globals: q_comm, purse, count, to_death, and UI-owned message position.
 pub unsafe fn quit() {
     /*
      * Reset the signal in case we got here via an interrupt
      */
     if q_comm == 0 {
-        mpos = 0;
+        crate::ui::terminal::UI.set_mpos(0);
     }
     let old_cursor = crate::ui::terminal::UI.cursor_pos();
     msg_str("really quit?");
@@ -293,7 +293,7 @@ pub unsafe fn quit() {
         status();
         crate::ui::terminal::UI.move_cursor(old_cursor);
         output::refresh();
-        mpos = 0;
+        crate::ui::terminal::UI.set_mpos(0);
         count = 0;
         to_death = 0;
     }

@@ -69,12 +69,12 @@ impl Default for CommandState {
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
 use crate::game::globals::{
-    e_levels, group, inpack, max_stats, msg_esc, n_objs, pack_used,
+    e_levels, group, inpack, max_stats, n_objs, pack_used,
     fight_flush, monsters, no_move, oldpos, passgo, quiet, vf_hit,
     after, again, count, delta, dir_ch, door_stop, firstmove, get_food_left, get_inpack, has_hit,
     inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
-    last_pick, lastscore, max_hit, move_on, mpos, no_command, purse, q_comm,
-    runch, running, save_msg, stat_msg, take, terse, to_death,
+    last_pick, lastscore, max_hit, move_on, no_command, purse, q_comm,
+    runch, running, take, terse, to_death,
 };
 
 // ─── Extern C functions called from this module ───────────────────────────────
@@ -104,11 +104,12 @@ fn cstr_at(s: &str) -> String {
 ///
 /// Uses globals: player, has_hit, running, door_stop, lastscore,
 /// purse, hero, jump, take, after, no_command,
-/// count, move_on, mpos, runch, to_death, countch, l_last_comm /
+/// count, move_on, runch, to_death, countch, l_last_comm /
 /// last_comm / last_dir / last_pick (via reset_last/last_*), lvl_obj,
 /// terse, mlist (via moat), max_hit, mp/t_flags (via to_death),
-/// dir_ch, delta, q_comm, huh, release, amulet, level, seenstairs,
-/// tr_name, stat_msg, inpack, food_left, equipment, inv_describe.
+/// dir_ch, delta, q_comm, release, amulet, level, seenstairs,
+/// tr_name, inpack, food_left, equipment, inv_describe.
+/// Message state is owned by `crate::ui::terminal::UI`.
 /// Wizard mode is queried and updated through `crate::wizard` accessors.
 pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
     let mut ntimes = initial_move_budget(player_has(MonsterFlags::HASTE));
@@ -306,7 +307,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 &DUNGEON, terse, &weap_names, &raw mut after, again,
                                 &raw mut inpack, l_last_comm, l_last_dir, l_last_pick,
                                 &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
-                                &raw mut mpos, &raw mut msg_esc, &raw mut n_objs,
+                                &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs,
                                 &raw mut pack_used, inv_describe, &arm_names, &pot_names,
                                 &ring_names, &scr_names, &ws_names,
                                 &raw mut count, &raw mut quiet, &raw mut to_death,
@@ -332,8 +333,8 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             &raw mut pot_info as *mut [_], &raw mut after, terse,
                             max_stats.strength, &levels, &fruit, again, &raw mut inpack,
                             l_last_comm, l_last_dir, l_last_pick, &raw mut last_comm,
-                            &raw mut last_dir, &raw mut last_pick, &raw mut mpos,
-                            &raw mut msg_esc, &raw mut n_objs, &raw mut pack_used,
+                            &raw mut last_dir, &raw mut last_pick, &crate::ui::terminal::UI.mpos,
+                            &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, &raw mut pack_used,
                             inv_describe, &arm_names, &ring_names, &scr_names,
                             &weap_names, &ws_names, &raw mut max_stats);
                     }
@@ -346,20 +347,20 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                     Command::Inventory => {
                         after = false as u8;
                         inventory(&crate::item::pack::pack_ptrs(&DUNGEON), ItemFilter::Any,
-                            &DUNGEON, &raw mut msg_esc, &raw mut n_objs, terse,
+                            &DUNGEON, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, terse,
                             inv_describe, &arm_names, &pot_names, &ring_names,
                             &scr_names, &weap_names, &ws_names);
                     }
                     Command::InventorySelect => {
                         after = false as u8;
-                        picky_inven(&DUNGEON, &raw mut mpos, terse, inv_describe,
+                        picky_inven(&DUNGEON, &crate::ui::terminal::UI.mpos, terse, inv_describe,
                             &arm_names, &pot_names, &ring_names, &scr_names,
                             &weap_names, &ws_names);
                     }
                     Command::Drop => drop(&mut RNG.lock().unwrap(), &DUNGEON,
                         &raw mut after, again, &raw mut inpack, l_last_comm, l_last_dir,
                         l_last_pick, &raw mut last_comm, &raw mut last_dir,
-                        &raw mut last_pick, &raw mut mpos, &raw mut msg_esc,
+                        &raw mut last_pick, &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc,
                         &raw mut n_objs, &raw mut pack_used, terse, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
                         &raw mut max_stats),
@@ -368,32 +369,32 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         &weap_names, &raw mut no_command, terse, &raw mut after,
                         again, &raw mut inpack, l_last_comm, l_last_dir, l_last_pick,
                         &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
-                        &raw mut mpos, &raw mut msg_esc, &raw mut n_objs,
+                        &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs,
                         &raw mut pack_used, inv_describe, &arm_names, &pot_names,
                         &ring_names, &ws_names, &raw const monsters),
                     Command::Eat => eat(),
                     Command::Wield => wield(&mut RNG.lock().unwrap(), &DUNGEON, terse,
                         &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
                         &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
-                        &raw mut mpos, &raw mut msg_esc, &raw mut n_objs, inv_describe,
+                        &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
                         &raw mut max_stats),
                     Command::Wear => wear(&mut RNG.lock().unwrap(), &DUNGEON, terse,
                         &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
                         &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
-                        &raw mut mpos, &raw mut msg_esc, &raw mut n_objs, inv_describe,
+                        &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
                     Command::TakeOff => take_off(&mut RNG.lock().unwrap(), &DUNGEON,
                         terse, &raw mut after, inv_describe, &arm_names, &pot_names,
                         &ring_names, &scr_names, &weap_names, &ws_names, &raw mut max_stats),
                     Command::RingOn => ring_on(&mut RNG.lock().unwrap(), &DUNGEON,
-                        terse, &raw mut mpos, &raw mut after, again, l_last_comm,
+                        terse, &crate::ui::terminal::UI.mpos, &raw mut after, again, l_last_comm,
                         l_last_dir, l_last_pick, &raw mut last_comm, &raw mut last_dir,
-                        &raw mut last_pick, &raw mut msg_esc, &raw mut n_objs, inv_describe,
+                        &raw mut last_pick, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
                         &raw mut max_stats),
                     Command::RingOff => ring_off(&mut RNG.lock().unwrap(), &DUNGEON,
-                        terse, &raw mut mpos, inv_describe, &arm_names, &pot_names,
+                        terse, &crate::ui::terminal::UI.mpos, inv_describe, &arm_names, &pot_names,
                         &ring_names, &scr_names, &weap_names, &ws_names, &raw mut max_stats),
                     Command::Options => {
                         option();
@@ -426,7 +427,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 &raw mut ws_info as *mut [_], &raw mut after, delta, terse,
                                 again, l_last_comm, l_last_dir, l_last_pick,
                                 &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
-                                &raw mut mpos, &raw mut msg_esc, &raw mut n_objs,
+                                &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs,
                                 inv_describe, &arm_names, &pot_names, &ring_names,
                                 &scr_names, &weap_names, &raw mut count, &raw mut quiet,
                                 &raw mut has_hit, &raw mut to_death, &raw mut kamikaze,
@@ -439,7 +440,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                     Command::Discover => after = false as u8,
                     Command::MessageHistory => {
                         after = false as u8;
-                        msg_str(&crate::game::globals::huh_string());
+                        msg_str(&crate::ui::terminal::UI.huh_string());
                     }
                     Command::Refresh => {
                         after = false as u8;
@@ -546,9 +547,9 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         );
                     }
                     Command::Status => {
-                        stat_msg = true as u8;
+                        crate::ui::terminal::UI.stat_msg.store(1, std::sync::atomic::Ordering::Relaxed);
                         status();
-                        stat_msg = false as u8;
+                        crate::ui::terminal::UI.stat_msg.store(0, std::sync::atomic::Ordering::Relaxed);
                         after = false as u8;
                     }
                     _ => {
@@ -565,7 +566,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 }
                                 Command::WizardInventory => {
                                     let _ = inventory(&DUNGEON.player.pack(), ItemFilter::Any,
-                                        &DUNGEON, &raw mut msg_esc, &raw mut n_objs, terse,
+                                        &DUNGEON, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, terse,
                                         inv_describe, &arm_names, &pot_names, &ring_names,
                                         &scr_names, &weap_names, &ws_names);
                                 }
@@ -601,8 +602,8 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                         ItemFilter::Category(ItemType::STICK),
                                         &DUNGEON, &raw mut after, again, l_last_comm,
                                         l_last_dir, l_last_pick, &raw mut last_comm,
-                                        &raw mut last_dir, &raw mut last_pick, &raw mut mpos,
-                                        &raw mut msg_esc, &raw mut n_objs, terse, inv_describe,
+                                        &raw mut last_dir, &raw mut last_pick, &crate::ui::terminal::UI.mpos,
+                                        &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, terse, inv_describe,
                                         &arm_names, &pot_names, &ring_names, &scr_names,
                                         &weap_names, &ws_names,
                                     );
@@ -707,7 +708,7 @@ unsafe fn read_command(command_state: &mut CommandState) -> (Command, bool) {
     } else {
         let command = Command::from_key_event(crate::ui::input::read_key_event());
         move_on = false as u8;
-        if mpos != 0 {
+        if crate::ui::terminal::UI.get_mpos() != 0 {
             msg_str("");
         }
         command
@@ -755,15 +756,15 @@ mod command_loop_tests {
 /// illcom:
 /// What to do with an illegal command.
 ///
-/// Uses globals: save_msg, count.
+/// Uses global count and UI-owned message-saving state.
 pub unsafe fn illcom(command: Command) {
-    save_msg = false as u8;
+    crate::ui::terminal::UI.save_msg.store(0, std::sync::atomic::Ordering::Relaxed);
     count = 0;
     msg_str(&format!(
         "illegal command '{}'",
         command.illegal_command_name()
     ));
-    save_msg = true as u8;
+    crate::ui::terminal::UI.save_msg.store(1, std::sync::atomic::Ordering::Relaxed);
 }
 
 // ─── search() ─────────────────────────────────────────────────────────────────
@@ -922,7 +923,7 @@ pub unsafe fn levit_check() -> u8 {
 /// Allow a user to call a potion, scroll, or ring something.
 ///
 /// Uses dungeon-owned appearance names and global item identification tables,
-/// terse, and prbuf.
+/// terse, and UI-owned message state.
 pub unsafe fn call() {
     let arm_names = (&*(&raw const arm_info)).clone();
     let pot_names = (&*(&raw const pot_info)).clone();
@@ -933,7 +934,7 @@ pub unsafe fn call() {
     let Some(obj) = get_item_id("call", ItemFilter::Callable, &DUNGEON,
         &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
         &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
-        &raw mut mpos, &raw mut msg_esc, &raw mut n_objs, terse, inv_describe,
+        &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, terse, inv_describe,
         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names) else {
         return;
     };

@@ -9,8 +9,7 @@ use crate::{
     dungeon::DUNGEON,
     game::{
         globals::{
-            get_hungry_state, get_max_stats, get_mpos, get_purse, lower_msg_enabled,
-            msg_esc_enabled, save_msg_enabled, set_huh_string, set_mpos, stat_msg_enabled,
+            get_hungry_state, get_max_stats, get_purse,
         },
     },
     ui::input::{readchar, wait_for},
@@ -120,7 +119,7 @@ fn display_message(text: &str) -> MessageResult {
     if text.is_empty() {
         UI.move_cursor(IVec2::new(0, 0));
         UI.clear_to_end_of_line();
-        set_mpos(0);
+        UI.set_mpos(0);
         return MessageResult::Displayed;
     }
 
@@ -164,16 +163,16 @@ pub(crate) fn endmsg() -> MessageResult {
         (std::mem::take(&mut state.pending), state.next_position)
     };
 
-    if save_msg_enabled() {
-        set_huh_string(&pending);
+    if UI.save_msg_enabled() {
+        UI.set_huh_string(&pending);
     }
 
-    let mpos = get_mpos();
+    let mpos = UI.get_mpos();
     if mpos != 0 {
         UI.write_text_at(IVec2::new(mpos, 0), "--More--");
         refresh();
 
-        if !msg_esc_enabled() {
+        if !UI.msg_esc_enabled() {
             wait_for(' ');
         } else {
             loop {
@@ -183,7 +182,7 @@ pub(crate) fn endmsg() -> MessageResult {
                 }
                 if ch == ESCAPE {
                     pending.clear();
-                    set_mpos(0);
+                    UI.set_mpos(0);
                     let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
                     state.next_position = 0;
                     return MessageResult::Escaped;
@@ -192,7 +191,7 @@ pub(crate) fn endmsg() -> MessageResult {
         }
     }
 
-    if !lower_msg_enabled() && pending.len() > 1 {
+    if !UI.lower_msg_enabled() && pending.len() > 1 {
         if let Some(first) = pending.get_mut(0..1) {
             first.make_ascii_uppercase();
         }
@@ -200,7 +199,7 @@ pub(crate) fn endmsg() -> MessageResult {
 
     UI.write_text_at(IVec2::new(0, 0), &pending);
     UI.clear_to_end_of_line();
-    set_mpos(next_position);
+    UI.set_mpos(next_position);
     let mut state = UI.message.lock().unwrap_or_else(|lock| lock.into_inner());
     state.next_position = 0;
     refresh();
@@ -221,7 +220,7 @@ pub(crate) fn status() {
 
     let hungry_state = get_hungry_state();
     let purse = get_purse();
-    let stat_msg = stat_msg_enabled();
+    let stat_msg = UI.stat_msg_enabled();
 
     if UI.status_hp.load(Ordering::Relaxed) == pstats.hit_points
         && UI.status_experience.load(Ordering::Relaxed) == pstats.experience

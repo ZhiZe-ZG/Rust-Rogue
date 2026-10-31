@@ -85,7 +85,7 @@ impl Error for RestoreError {
     }
 }
 
-use crate::game::globals::{master_mode_enabled, mpos};
+use crate::game::globals::master_mode_enabled;
 
 /// Checks the restored player state and reports whether the saved game is already dead.
 unsafe fn restore_player_dead() -> bool {
@@ -97,7 +97,7 @@ pub unsafe fn save_game() {
     let mut c: i32;
     let mut buf: String;
 
-    mpos = 0;
+    crate::ui::terminal::UI.set_mpos(0);
 
     'over: loop {
         if !crate::game::globals::file_name().is_empty() {
@@ -107,7 +107,7 @@ pub unsafe fn save_game() {
                     crate::game::globals::file_name()
                 ));
                 c = readchar();
-                mpos = 0;
+                crate::ui::terminal::UI.set_mpos(0);
                 if c == ESCAPE {
                     msg_str("");
                     return;
@@ -131,7 +131,7 @@ pub unsafe fn save_game() {
 
         loop {
             if buf.is_empty() {
-                mpos = 0;
+                crate::ui::terminal::UI.set_mpos(0);
                 msg_str("file name: ");
                 match read_line("") {
                     None => {
@@ -140,13 +140,13 @@ pub unsafe fn save_game() {
                     }
                     Some(text) => buf = text,
                 }
-                mpos = 0;
+                crate::ui::terminal::UI.set_mpos(0);
             }
 
             if Path::new(&buf).exists() {
                 loop {
                     msg_str("File exists.  Do you wish to overwrite it?");
-                    mpos = 0;
+                    crate::ui::terminal::UI.set_mpos(0);
                     c = readchar();
                     if c == ESCAPE {
                         msg_str("");
@@ -253,7 +253,7 @@ pub unsafe fn restore(file: &str) -> Result<(), RestoreError> {
         }
     }
 
-    mpos = 0;
+    crate::ui::terminal::UI.set_mpos(0);
 
     if restore_player_dead() {
         output::flush_now();

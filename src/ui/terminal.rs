@@ -14,7 +14,7 @@
 use std::io::Write;
 #[cfg(not(test))]
 use std::sync::atomic::AtomicU32;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 use std::sync::{LazyLock, Mutex};
 
 use glam::IVec2;
@@ -50,6 +50,15 @@ pub(super) struct MessageState {
 type Backend = CrosstermBackend<Box<dyn Write + Send>>;
 
 pub(crate) struct UiState {
+    /// Message pagination cursor and flags. Shared atomics permit prompt
+    /// callbacks to update them without retaining a lock across input.
+    pub(crate) mpos: AtomicI32,
+    pub(crate) msg_esc: AtomicU8,
+    pub(crate) save_msg: AtomicU8,
+    pub(crate) lower_msg: AtomicU8,
+    pub(crate) stat_msg: AtomicU8,
+    huh: Mutex<String>,
+    prbuf: Mutex<String>,
     grid: Mutex<[[ScreenCell; NCOLS]; NROWS]>,
     cursor: Mutex<IVec2>,
     reverse_video: AtomicBool,
@@ -80,6 +89,13 @@ pub(crate) struct UiState {
 impl UiState {
     const fn new() -> Self {
         Self {
+            mpos: AtomicI32::new(0),
+            msg_esc: AtomicU8::new(0),
+            save_msg: AtomicU8::new(1),
+            lower_msg: AtomicU8::new(0),
+            stat_msg: AtomicU8::new(0),
+            huh: Mutex::new(String::new()),
+            prbuf: Mutex::new(String::new()),
             grid: Mutex::new([[ScreenCell::BLANK; NCOLS]; NROWS]),
             cursor: Mutex::new(IVec2::ZERO),
             reverse_video: AtomicBool::new(false),
@@ -113,6 +129,46 @@ impl UiState {
             #[cfg(not(test))]
             status_experience: AtomicI32::new(0),
         }
+    }
+
+    pub(crate) fn get_mpos(&self) -> i32 {
+        self.mpos.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn set_mpos(&self, value: i32) {
+        self.mpos.store(value, Ordering::Relaxed);
+    }
+
+    pub(crate) fn msg_esc_enabled(&self) -> bool {
+        self.msg_esc.load(Ordering::Relaxed) != 0
+    }
+
+    pub(crate) fn save_msg_enabled(&self) -> bool {
+        self.save_msg.load(Ordering::Relaxed) != 0
+    }
+
+    pub(crate) fn lower_msg_enabled(&self) -> bool {
+        self.lower_msg.load(Ordering::Relaxed) != 0
+    }
+
+    pub(crate) fn stat_msg_enabled(&self) -> bool {
+        self.stat_msg.load(Ordering::Relaxed) != 0
+    }
+
+    pub(crate) fn huh_string(&self) -> String {
+        lock(&self.huh).clone()
+    }
+
+    pub(crate) fn set_huh_string(&self, text: &str) {
+        *lock(&self.huh) = text.to_owned();
+    }
+
+    pub(crate) fn prbuf(&self) -> String {
+        lock(&self.prbuf).clone()
+    }
+
+    pub(crate) fn set_prbuf(&self, value: String) {
+        *lock(&self.prbuf) = value;
     }
 
     pub(crate) fn init_terminal(&self) {
@@ -347,6 +403,48 @@ impl Drop for UiState {
 }
 
 pub(crate) static UI: UiState = UiState::new();
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn message_state_is_owned_by_each_ui() {
+        let first = UiState::new();
+        let second = UiState::new();
+        assert_eq!(first.get_mpos(), 0);
+        assert!(!first.msg_esc_enabled());
+        assert!(first.save_msg_enabled());
+        assert!(!first.lower_msg_enabled());
+        assert!(!first.stat_msg_enabled());
+        assert_eq!(first.huh_string(), "");
+        assert_eq!(first.prbuf(), "");
+
+        first.set_mpos(12);
+        first.msg_esc.store(1, Ordering::Relaxed);
+        first.save_msg.store(0, Ordering::Relaxed);
+        first.lower_msg.store(1, Ordering::Relaxed);
+        first.stat_msg.store(1, Ordering::Relaxed);
+        first.set_huh_string("remembered");
+        first.set_prbuf("scratch".to_owned());
+        assert_eq!(first.get_mpos(), 12);
+        assert!(first.msg_esc_enabled());
+        assert!(!first.save_msg_enabled());
+        assert!(first.lower_msg_enabled());
+        assert!(first.stat_msg_enabled());
+        let mut history = first.huh_string();
+        history.clear();
+        assert_eq!(first.huh_string(), "remembered");
+        assert_eq!(first.prbuf(), "scratch");
+        assert_eq!(second.get_mpos(), 0);
+        assert!(!second.msg_esc_enabled());
+        assert!(second.save_msg_enabled());
+        assert!(!second.lower_msg_enabled());
+        assert!(!second.stat_msg_enabled());
+        assert_eq!(second.huh_string(), "");
+        assert_eq!(second.prbuf(), "");
+    }
+}
 
 /// Lock a `Mutex`, recovering from poisoning instead of panicking.
 #[inline]

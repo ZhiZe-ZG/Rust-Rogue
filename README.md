@@ -39,6 +39,7 @@ Functions in [src/item/mod.rs](src/item/mod.rs) and [src/entity/mod.rs](src/enti
 - Random draws use a supplied `&mut Random`, rather than locking `RNG` inside these modules.
 - Flags and counters such as `has_hit`, `running`, `count`, `inpack`, and `group`, and tables such as `monsters` and the item metadata arrays, are explicit parameters. UI-dependent item operations also receive their UI owner.
 - Values and shared references are used where appropriate. Reentrant mutable state is passed through individual raw pointers so an exclusive reference is not held across combat, input, or daemon callbacks. Callers must keep that storage valid and avoid conflicting borrows; immutable metadata snapshots are used where callbacks could otherwise mutate a borrowed table.
+- Message cursor and escape-flag dependencies are separate shared atomic references, supplied from `UiState`; no UI lock or exclusive borrow is retained across prompts.
 - Constants such as `terse` and immutable lookup tables remain available directly. `entity::player` retains a compatibility re-export of `nh`, but does not directly read or write that global.
 
 Callers outside these modules still obtain dependencies from the singleton owners and [src/game/globals.rs](src/game/globals.rs). External gameplay, rendering, message, and equipment helpers can still access globals internally, so passing a separate dungeon does not yet make the entire engine instance-independent or thread-safe. Parameterized `check_level()` and `chg_str()` implementations in [src/entity/player.rs](src/entity/player.rs) coexist with legacy singleton-backed versions in [src/misc.rs](src/misc.rs).
@@ -85,16 +86,12 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `inv_describe`: controls whether inventory items are described in detail.
 - `jump`: suppresses intermediate screen updates during running.
 - `kamikaze`: enables the special kamikaze behavior.
-- `lower_msg`: message-priority/capitalization flag; suppresses automatic initial capitalization when set.
 - `move_on`: whether movement continues after an action.
-- `msg_esc`: allows the user to leave the message display.
 - `passgo`: controls automatic passage-following during running.
 - `playing`: global game-running flag.
 - `q_comm`: quit-flow sentinel used during quit confirmation and handling.
 - `running`: whether the player is in a running movement state.
-- `save_msg`: whether messages are saved to the message history.
 - `see_floor`: whether floor tiles are visible or hidden.
-- `stat_msg`: whether the status line is shown through the message area.
 - `terse`: immutable constant set to `0`; output is always verbose, not runtime-configurable.
 - `to_death`: controls repeated fighting, not whether the player is dead.
 - `tombstone`: whether the death screen / tombstone is enabled.
@@ -117,7 +114,6 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `inpack`: count of pack contents.
 - `inv_type`: current inventory display type.
 - `max_hit`: maximum hit value used by combat calculations.
-- `mpos`: current message cursor column / pagination position.
 - `a_class`: constant armor class table used by the game.
 - `count`: remaining command repetitions.
 - `scoreboard`: open score file handle.
@@ -157,8 +153,6 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 
 - `HOME`: home-directory string.
 - `FILE_NAME`: current save filename.
-- `HUH`: message history buffer.
-- `PRBUF`: shared scratch string buffer.
 - `INV_T_NAMES`: constant inventory display style names (`Overwrite`, `Slow`, `Clear`), available without initialization.
 
 ### Other singleton owners and local state
@@ -171,6 +165,8 @@ The current owners and other module-local statics outside the main globals modul
 - `WIZARD`: private atomic wizard-mode state in [src/wizard.rs](src/wizard.rs), reached through `wizard_mode()`, `set_wizard_mode()`, and `is_wizard()`. The old public mutable `wizard` global is absent; wizard helpers remain.
 - `LFD`: optional file handle used by platform locking helpers.
 - `UI`: the `UiState` owner in [src/ui/terminal.rs](src/ui/terminal.rs), containing the grid, cursor, reverse-video mode, timeout, shutdown state, terminal backend, pending-render flag, message buffer, and status caches. Former standalone terminal/message/cache globals are fields of this owner.
+
+`UiState` also owns the atomic pagination cursor `mpos` and message flags `msg_esc` (allow pagination escape), `save_msg` (remember messages, enabled by default), `lower_msg` (suppress initial capitalization), and `stat_msg` (show status in the message area). Its mutex-protected `huh` history and `prbuf` compatibility scratch buffer replace `HUH` and `PRBUF`. String accessors return copies and release locks before input or output callbacks. Existing snapshot fields remain unchanged and restore into this UI-owned state.
 - Exit-request atomics in [src/startup.rs](src/startup.rs) and the rendered-level cache in [src/daemon.rs](src/daemon.rs).
 
 `CommandState` in [src/command_dispatch.rs](src/command_dispatch.rs) is local to the main loop and passed into dispatch. Its repeat/run command fields and new-count flag replace the old `COUNTCH`, `DIRECTION`, and `NEWCOUNT` statics. The `Command` and `Direction` enums replace untyped command/direction bytes in gameplay state.

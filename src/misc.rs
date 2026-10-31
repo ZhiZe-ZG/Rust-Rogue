@@ -44,7 +44,7 @@ const F_SEEN: u8 = 0x40;
 
 use crate::game::globals::{
     after, again, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump,
-    last_dir, max_stats, mpos, no_command, no_move, oldpos, passgo, runch, running, see_floor, terse,
+    last_dir, max_stats, no_command, no_move, oldpos, passgo, runch, running, see_floor, terse,
 };
 
 #[inline]
@@ -111,8 +111,8 @@ pub unsafe fn eat() {
         &raw mut globals::last_comm,
         &raw mut globals::last_dir,
         &raw mut globals::last_pick,
-        &raw mut globals::mpos,
-        &raw mut globals::msg_esc,
+        &crate::ui::terminal::UI.mpos,
+        &crate::ui::terminal::UI.msg_esc,
         &raw mut globals::n_objs,
         globals::terse,
         globals::inv_describe,
@@ -324,7 +324,7 @@ pub unsafe fn get_dir() -> u8 {
                     return false as u8;
                 }
                 _ => {
-                    mpos = 0;
+                    crate::ui::terminal::UI.set_mpos(0);
                     msg_str("which direction? ");
                     gotit = false;
                 }
@@ -358,7 +358,7 @@ pub unsafe fn get_dir() -> u8 {
             }
         }
     }
-    mpos = 0;
+    crate::ui::terminal::UI.set_mpos(0);
     true as u8
 }
 

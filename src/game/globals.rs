@@ -84,12 +84,8 @@ pub static mut inv_describe: u8 = 1;
 pub static mut jump: u8 = 0;
 /// Enables the kamikaze combat behavior.
 pub static mut kamikaze: u8 = 0;
-/// Enables lower-priority message output.
-pub static mut lower_msg: u8 = 0;
 /// Requests movement onto the next tile.
 pub static mut move_on: u8 = 0;
-/// Whether the escape key should be shown in messages.
-pub static mut msg_esc: u8 = 0;
 /// Allows passage through a staircase.
 pub static mut passgo: u8 = 0;
 /// Whether the game loop is active.
@@ -98,12 +94,8 @@ pub static mut playing: u8 = 1;
 pub static mut q_comm: u8 = 0;
 /// Whether the player is currently running.
 pub static mut running: u8 = 0;
-/// Whether save-related messages should be displayed.
-pub static mut save_msg: u8 = 1;
 /// Whether floor contents should be visible.
 pub static mut see_floor: u8 = 1;
-/// Whether a status message is pending.
-pub static mut stat_msg: u8 = 0;
 /// Message output is always verbose; this flag is not configurable at runtime.
 #[allow(non_upper_case_globals)]
 pub const terse: u8 = 0;
@@ -149,8 +141,6 @@ pub static mut inpack: i32 = 0;
 pub static mut inv_type: i32 = 0;
 /// Maximum hit value reached by the player.
 pub static mut max_hit: i32 = 0;
-/// Current message cursor position.
-pub static mut mpos: i32 = 0;
 /// Armor class values indexed by armor kind.
 #[allow(non_upper_case_globals)]
 pub const a_class: [i32; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
@@ -1243,45 +1233,6 @@ pub fn get_purse() -> i32 {
     unsafe { purse }
 }
 
-/// The current message cursor column used for `--More--` pagination.
-#[inline]
-pub fn get_mpos() -> i32 {
-    unsafe { mpos }
-}
-
-/// Set the message cursor column.
-#[inline]
-pub fn set_mpos(value: i32) {
-    unsafe {
-        mpos = value;
-    }
-}
-
-/// Whether the player may leave the message display; when false only the first
-/// message line is shown.
-#[inline]
-pub fn msg_esc_enabled() -> bool {
-    unsafe { msg_esc != 0 }
-}
-
-/// Whether messages should be saved into the `huh` history buffer.
-#[inline]
-pub fn save_msg_enabled() -> bool {
-    unsafe { save_msg != 0 }
-}
-
-/// Whether messages are displayed in lower case.
-#[inline]
-pub fn lower_msg_enabled() -> bool {
-    unsafe { lower_msg != 0 }
-}
-
-/// Whether the status line is being shown through the message line.
-#[inline]
-pub fn stat_msg_enabled() -> bool {
-    unsafe { stat_msg != 0 }
-}
-
 /// The player's maximum stats (the "max_stats" table).
 #[inline]
 pub fn get_max_stats() -> Stats {
@@ -1317,8 +1268,8 @@ pub fn monster_info(index: usize) -> MonsterInfo {
 
 // ─── Rust-owned string globals ───────────────────────────────────────────────
 //
-// `home`, `file_name`, `huh` and the shared `prbuf` scratch
-// buffer were previously `char[N]` buffers written through `strcpy`/`CStr`.
+// `home` and `file_name` were previously `char[N]` buffers written through
+// `strcpy`/`CStr`.
 // They are now owned Rust `String`s behind a `Mutex`, read/written through the
 // accessors below.
 
@@ -1326,10 +1277,6 @@ pub fn monster_info(index: usize) -> MonsterInfo {
 static HOME: Mutex<String> = Mutex::new(String::new());
 /// Current save-file-name storage.
 static FILE_NAME: Mutex<String> = Mutex::new(String::new());
-/// Message-history storage.
-static HUH: Mutex<String> = Mutex::new(String::new());
-/// Shared formatted-message scratch storage.
-static PRBUF: Mutex<String> = Mutex::new(String::new());
 
 /// The player's home directory (`char home[]`). Empty until set.
 pub fn get_home() -> String {
@@ -1349,26 +1296,6 @@ pub fn file_name() -> String {
 /// Replace the save-file name.
 pub fn set_file_name(value: String) {
     *lock(&FILE_NAME) = value;
-}
-
-/// The message-history buffer (`char huh[]`).
-pub fn huh_string() -> String {
-    lock(&HUH).clone()
-}
-
-/// Copy `text` into the message-history buffer.
-pub fn set_huh_string(text: &str) {
-    *lock(&HUH) = text.to_owned();
-}
-
-/// The shared scratch string buffer (`char prbuf[]`).
-pub fn prbuf() -> String {
-    lock(&PRBUF).clone()
-}
-
-/// Replace the shared scratch string buffer.
-pub fn set_prbuf(value: String) {
-    *lock(&PRBUF) = value;
 }
 
 // ─── Rust-owned string tables ────────────────────────────────────────────────

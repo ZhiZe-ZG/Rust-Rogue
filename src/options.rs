@@ -101,7 +101,7 @@ pub struct OPTION {
 }
 
 use crate::game::globals::{
-    after, fight_flush, inv_type, jump, mpos, passgo, see_floor, tombstone,
+    after, fight_flush, inv_type, jump, passgo, see_floor, tombstone,
 };
 
 unsafe fn hero_pos() -> IVec2 {
@@ -369,7 +369,7 @@ pub unsafe fn read_line(initial: &str) -> Option<String> {
     crate::ui::terminal::UI.move_cursor(origin);
     paint(&out);
     output::refresh();
-    mpos += buf.len() as i32;
+    crate::ui::terminal::UI.mpos.fetch_add(buf.len() as i32, std::sync::atomic::Ordering::Relaxed);
 
     if c == ESCAPE {
         None

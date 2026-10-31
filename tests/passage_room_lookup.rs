@@ -1,7 +1,7 @@
 use glam::IVec2;
 use rogue_rust::dungeon::DUNGEON;
 use rogue_rust::entity::chase::roomin;
-use rogue_rust::game::globals::{huh_string, set_huh_string, set_mpos};
+use rogue_rust::ui::{huh_string, set_huh_string, set_mpos};
 use rogue_rust::game::with_current_level_mut;
 use rogue_rust::level::Level;
 use rogue_rust::structure::Room;
