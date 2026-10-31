@@ -475,8 +475,8 @@ unsafe fn build_snapshot() -> GameSnapshot {
         scroll_names: DUNGEON.scroll_names(),
         inv_t_names: crate::game::globals::inv_t_names(),
         trap_names: crate::game::globals::trap_names(),
-        p_colors: p_colors.iter().map(|c| (*c).to_string()).collect(),
-        r_stones: r_stones.iter().map(|c| (*c).to_string()).collect(),
+        p_colors: DUNGEON.p_colors().iter().map(|c| (*c).to_string()).collect(),
+        r_stones: DUNGEON.r_stones().iter().map(|c| (*c).to_string()).collect(),
         ws_type: ws_type.iter().map(|c| (*c).to_string()).collect(),
         ws_made: ws_made.iter().map(|c| (*c).to_string()).collect(),
 
@@ -618,20 +618,24 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     crate::game::globals::set_home(s.home);
     DUNGEON.set_scroll_names(s.scroll_names);
     // Legacy inv_t_names and trap_names cannot override the fixed tables.
+    let mut colors = [""; 14];
     for (i, name) in s.p_colors.iter().enumerate() {
-        if i < p_colors.len() {
-            p_colors[i] = resolve_static_str(name, &crate::colors::POTION_COLORS);
+        if i < colors.len() {
+            colors[i] = resolve_static_str(name, &crate::colors::POTION_COLORS);
         }
     }
+    DUNGEON.set_p_colors(colors);
+    let mut stones = [""; 14];
     for (i, name) in s.r_stones.iter().enumerate() {
-        if i < r_stones.len() {
-            r_stones[i] = crate::init::stones
+        if i < stones.len() {
+            stones[i] = crate::init::stones
                 .iter()
                 .find(|st| st.st_name == name)
                 .map(|st| st.st_name)
                 .unwrap_or("");
         }
     }
+    DUNGEON.set_r_stones(stones);
     for (i, name) in s.ws_type.iter().enumerate() {
         if i < ws_type.len() {
             ws_type[i] = if name == "staff" { "staff" } else { "wand" };

@@ -338,6 +338,7 @@ pub unsafe fn init_colors() {
     // which was reset at the start of every init routine anyway; the Rust local
     // is zero-initialised for free).
     let mut used = [0u8; crate::colors::POTION_COLOR_COUNT];
+    let mut colors = [""; MAXPOTIONS];
     for i in 0..MAXPOTIONS {
         let j = loop {
             let j = {
@@ -349,8 +350,9 @@ pub unsafe fn init_colors() {
             }
         };
         used[j] = 1;
-        crate::game::globals::p_colors[i] = crate::colors::POTION_COLORS[j];
+        colors[i] = crate::colors::POTION_COLORS[j];
     }
+    DUNGEON.set_p_colors(colors);
 }
 
 /// Generate random pronounceable names for each scroll.
@@ -394,6 +396,7 @@ pub unsafe fn init_names() {
 /// Assign a random stone setting to each ring type.
 pub unsafe fn init_stones() {
     let mut used = [0u8; NSTONES];
+    let mut names = [""; MAXRINGS];
     for i in 0..MAXRINGS {
         let j = loop {
             let j = {
@@ -405,9 +408,10 @@ pub unsafe fn init_stones() {
             }
         };
         used[j] = 1;
-        crate::game::globals::r_stones[i] = stones[j].st_name;
+        names[i] = stones[j].st_name;
         ring_info[i].oi_worth += stones[j].st_value;
     }
+    DUNGEON.set_r_stones(names);
 }
 
 /// Assign random wood / metal materials to wands and staves.

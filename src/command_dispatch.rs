@@ -73,8 +73,8 @@ use crate::game::globals::{
     fight_flush, monsters, no_move, oldpos, passgo, quiet, vf_hit,
     after, again, count, delta, dir_ch, door_stop, firstmove, get_food_left, get_inpack, has_hit,
     inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
-    last_pick, lastscore, max_hit, move_on, mpos, no_command, p_colors, purse, q_comm,
-    r_stones, runch, running, save_msg, stat_msg, take, terse, to_death, ws_made,
+    last_pick, lastscore, max_hit, move_on, mpos, no_command, purse, q_comm,
+    runch, running, save_msg, stat_msg, take, terse, to_death, ws_made,
 };
 
 // ─── Extern C functions called from this module ───────────────────────────────
@@ -921,8 +921,8 @@ pub unsafe fn levit_check() -> u8 {
 /// call:
 /// Allow a user to call a potion, scroll, or ring something.
 ///
-/// Uses globals: ring_info, r_stones, pot_info, p_colors, scr_info,
-/// s_names, ws_info, ws_made, terse, prbuf.
+/// Uses dungeon-owned appearance names and global item identification tables,
+/// ws_made, terse, and prbuf.
 pub unsafe fn call() {
     let arm_names = (&*(&raw const arm_info)).clone();
     let pot_names = (&*(&raw const pot_info)).clone();
@@ -986,8 +986,8 @@ pub unsafe fn call() {
     let which = o_which as usize;
     let info = (&*op)[which].clone();
     let mut elsewise: String = match otype {
-        ItemType::Ring(_) => cstr_at(r_stones[which]),
-        ItemType::Potion(_) => cstr_at(p_colors[which]),
+        ItemType::Ring(_) => cstr_at(DUNGEON.r_stones()[which]),
+        ItemType::Potion(_) => cstr_at(DUNGEON.p_colors()[which]),
         ItemType::Scroll(_) => DUNGEON.scroll_name(which),
         _ => cstr_at(ws_made[which]),
     };

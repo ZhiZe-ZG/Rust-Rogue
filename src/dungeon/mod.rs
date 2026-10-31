@@ -38,6 +38,10 @@ pub struct Dungeon {
     level: RwLock<Option<Level>>,
     /// Generated scroll labels, shared across levels within this game.
     scroll_names: RwLock<Vec<String>>,
+    /// Randomized potion color assignments, shared across levels.
+    p_colors: RwLock<[&'static str; 14]>,
+    /// Randomized ring stone assignments, shared across levels.
+    r_stones: RwLock<[&'static str; 14]>,
     /// Custom fruit name used in food and potion flavor text.
     fruit: RwLock<String>,
     /// Player name used by options, scores, and save files.
@@ -77,6 +81,8 @@ impl Dungeon {
         Self {
             level: RwLock::new(None),
             scroll_names: RwLock::new(Vec::new()),
+            p_colors: RwLock::new([""; 14]),
+            r_stones: RwLock::new([""; 14]),
             fruit: RwLock::new(String::new()),
             whoami: RwLock::new(String::new()),
             max_level: AtomicI32::new(0),
@@ -89,6 +95,26 @@ impl Dungeon {
             objects: ThingArena::new(),
             player: Player::EMPTY,
         }
+    }
+
+    /// A snapshot of potion color assignments, empty until initialized.
+    pub fn p_colors(&self) -> [&'static str; 14] {
+        *self.p_colors.read().unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Replace all potion color assignments during initialization or restore.
+    pub fn set_p_colors(&self, colors: [&'static str; 14]) {
+        *self.p_colors.write().unwrap_or_else(|poison| poison.into_inner()) = colors;
+    }
+
+    /// A snapshot of ring stone assignments, empty until initialized.
+    pub fn r_stones(&self) -> [&'static str; 14] {
+        *self.r_stones.read().unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Replace all ring stone assignments during initialization or restore.
+    pub fn set_r_stones(&self, stones: [&'static str; 14]) {
+        *self.r_stones.write().unwrap_or_else(|poison| poison.into_inner()) = stones;
     }
 
     /// The player's name, empty until set.
@@ -379,6 +405,39 @@ pub(crate) fn bump_no_food() {
 #[cfg(test)]
 mod tests {
     use super::Dungeon;
+
+    #[test]
+    fn appearance_tables_are_owned_by_each_dungeon() {
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        assert_eq!(first.p_colors(), [""; 14]);
+        assert_eq!(first.r_stones(), [""; 14]);
+
+        let mut colors = first.p_colors();
+        colors[0] = "red";
+        let mut stones = first.r_stones();
+        stones[0] = "agate";
+        first.set_p_colors(colors);
+        first.set_r_stones(stones);
+        colors[0] = "blue";
+        stones[0] = "diamond";
+        assert_eq!(colors[0], "blue");
+        assert_eq!(stones[0], "diamond");
+        assert_eq!(first.p_colors()[0], "red");
+        assert_eq!(first.r_stones()[0], "agate");
+        assert_eq!(second.p_colors(), [""; 14]);
+        assert_eq!(second.r_stones(), [""; 14]);
+
+        let restored = Dungeon::empty();
+        restored.set_p_colors(first.p_colors());
+        restored.set_r_stones(first.r_stones());
+        first.set_p_colors([""; 14]);
+        first.set_r_stones([""; 14]);
+        assert_eq!(restored.p_colors()[0], "red");
+        assert_eq!(restored.r_stones()[0], "agate");
+        assert_eq!(first.p_colors(), [""; 14]);
+        assert_eq!(first.r_stones(), [""; 14]);
+    }
 
     #[test]
     fn player_names_are_owned_by_each_dungeon() {

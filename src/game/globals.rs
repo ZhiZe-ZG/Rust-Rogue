@@ -119,10 +119,6 @@ pub static mut pack_used: [u8; 26] = [0; 26];
 
 /// Direction encoded by the last direction character.
 pub static mut dir_ch: Direction = Direction::None;
-/// Per-item colour names (`char *p_colors[]`), now Rust string slices.
-pub static mut p_colors: [&'static str; MAXPOTIONS] = [""; MAXPOTIONS];
-/// Per-ring stone names (`char *r_stones[]`), now Rust string slices.
-pub static mut r_stones: [&'static str; MAXRINGS] = [""; MAXRINGS];
 /// Direction used by running movement.
 pub static mut runch: Direction = Direction::None;
 /// Whether the player is taking an item.
