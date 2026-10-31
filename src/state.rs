@@ -430,7 +430,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
             .collect()
     };
 
-    let daemons: Vec<CDelayedAction> = daemon_table().to_vec();
+    let daemons: Vec<CDelayedAction> = DUNGEON.scheduler.snapshot().to_vec();
 
     GameSnapshot {
         after: after != 0,
@@ -525,7 +525,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         level,
         max_stats: DUNGEON.player.max_stats(),
         oldrp,
-        between,
+        between: DUNGEON.scheduler.between(),
         group,
         nh: crate::entity::player::nh,
     }
@@ -713,11 +713,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     apply_obj(&mut things, &s.things);
 
     // ── daemons ─────────────────────────────────────────────────────────
-    for (i, slot) in s.daemons.iter().enumerate() {
-        if i < D_LIST.len() {
-            D_LIST[i] = *slot;
-        }
-    }
+    DUNGEON.scheduler.restore(&s.daemons);
 
     // ── level ───────────────────────────────────────────────────────────
     DUNGEON.monster_list.clear();
@@ -836,7 +832,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     // ── misc ────────────────────────────────────────────────────────────
     DUNGEON.player.set_max_stats(s.max_stats);
     oldrp = s.oldrp;
-    between = s.between;
+    DUNGEON.scheduler.set_between(s.between);
     group = s.group;
     crate::entity::player::nh = s.nh;
 }

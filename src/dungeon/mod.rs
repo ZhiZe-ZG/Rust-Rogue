@@ -34,6 +34,8 @@ pub use monster_map::MonsterMap;
 /// `mlist`/`DUNGEON.monster_map` monster owners) with one owner, keeping the
 /// same scoped-closure access pattern (see [`Dungeon::with_level`]).
 pub struct Dungeon {
+    /// Per-game delayed actions and wandering-monster pacing.
+    pub scheduler: crate::daemon::Scheduler,
     /// The live [`Level`], created lazily on first access.
     level: RwLock<Option<Level>>,
     /// Generated scroll labels, shared across levels within this game.
@@ -83,6 +85,7 @@ impl Dungeon {
     /// Build an empty dungeon, ready for lazy initialization.
     pub const fn empty() -> Self {
         Self {
+            scheduler: crate::daemon::Scheduler::new(),
             level: RwLock::new(None),
             scroll_names: RwLock::new(Vec::new()),
             p_colors: RwLock::new([""; 14]),

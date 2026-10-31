@@ -58,10 +58,6 @@ fn monster_view(id: crate::game::MonsterId) -> Option<(IVec2, u8, u8, MonsterFla
         .flatten()
 }
 
-// ─── Module globals ───────────────────────────────────────────────────────────
-
-use crate::game::globals::between;
-
 // ─── Daemon / fuse callbacks ──────────────────────────────────────────────────
 
 /// Apply the effects of searching and teleportation rings.
@@ -122,7 +118,7 @@ pub unsafe fn swander() {
 /// rollwand:
 /// Called to roll to see if a wandering monster starts up.
 pub unsafe fn rollwand(random: &mut Random) {
-    between += 1;
+    let between = DUNGEON.scheduler.advance_between() + 1;
     if between >= 4 {
         if random.roll(1, 6) == 4
         {
@@ -135,7 +131,7 @@ pub unsafe fn rollwand(random: &mut Random) {
             kill_daemon(Daemon::Rollwand);
             fuse(Daemon::Swander, 0, spread(70, random), BEFORE);
         }
-        between = 0;
+        DUNGEON.scheduler.set_between(0);
     }
 }
 

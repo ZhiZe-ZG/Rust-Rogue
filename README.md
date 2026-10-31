@@ -50,6 +50,7 @@ Callers outside these modules still obtain dependencies from the singleton owner
 
 - The current `Level`, accessed through scoped `with_level()` / `with_level_mut()` closures.
 - The live `monster_list` and per-cell `monster_map`.
+- `scheduler`: the `Scheduler` in [src/daemon.rs](src/daemon.rs), owning the 20 daemon/fuse slots and the wandering-monster `between` counter. Each callback runs after the scheduler lock is released; later slots are checked live so callbacks can cancel, extend, or schedule actions during a pass. Existing `daemons` and `between` save fields are unchanged; restoring a shorter table clears unused slots.
 - `player`: the hero actor and its equipment, defined by `Player` in [src/game/player.rs](src/game/player.rs).
 - `Player` also owns the atomic `purse`, `food_left`, `hungry_state`, and `quiet` counters, plus a separately locked `max_stats` snapshot. Maximum-stat locks are held only for short reads/updates, never across input or gameplay callbacks. Item/entity dependencies remain individual shared atomic or lock references; save field names and initial values are unchanged.
 - Player inventory accounting is also owned by `Player`: atomic `inpack` preserves the legacy capacity rules (grouped missile stacks count as one), and mutex-protected `pack_used` allocates inventory letters. These are separate explicit dependencies, with no bitmap lock retained across callbacks. They are not derived from pack length, which would change stack behavior; existing snapshot fields remain unchanged.
@@ -130,10 +131,8 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 
 #### Runtime tables and arrays
 
-- `between`: counter used to pace wandering monster generation.
 - `group`: stack-group identifier counter used during weapon initialization.
 - `nh`: legacy next-hero-position state retained for save compatibility; also re-exported by `entity::player`. Current movement computes its next position locally.
-- `D_LIST`: delayed-action daemon/fuse table.
 - `ROOM_GOLD`: stable per-room gold positions for chase targets.
 - `monsters`: monster prototype table used for monster metadata and stats.
 - `things`: top-level object category metadata.
