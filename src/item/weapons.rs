@@ -287,31 +287,25 @@ pub unsafe fn fall(
 }
 
 /// Initializes a weapon object with baseline damage, flags, and stack counts.
-///
-/// # Safety
-/// `group` must point to a writable stack-group counter for the entire call.
+/// Stack-group IDs are allocated atomically from the supplied counter.
 pub unsafe fn init_weapon(
     id: ThingId,
     which: i32,
     random: &mut Random,
     dungeon: &Dungeon,
-    group: *mut i32,
+    group: &std::sync::atomic::AtomicI32,
 ) {
     init_weapon_in(&dungeon.objects, id, which, random, group);
 }
 
 /// Initialize a weapon in the supplied arena using the shared template.
-///
-/// # Safety
-/// `group` must point to a writable stack-group counter. No exclusive reference
-/// to that storage may overlap reentrant access; only immediate raw reads and
-/// writes are performed here.
+/// Stack-group IDs are allocated atomically from the supplied counter.
 pub(crate) unsafe fn init_weapon_in(
     objects: &ThingArena,
     id: ThingId,
     which: i32,
     random: &mut Random,
-    group: *mut i32,
+    group: &std::sync::atomic::AtomicI32,
 ) {
     let Some(iwp) = INIT_DAM.get(which as usize).copied() else {
         return;
@@ -319,15 +313,12 @@ pub(crate) unsafe fn init_weapon_in(
 
     let many = iwp.iw_flags.contains(ObjectFlags::MANY);
     let (count, grp) = if which == DAGGER {
-        (random.rnd(4) + 2, *group)
+        (random.rnd(4) + 2, group.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
     } else if many {
-        (random.rnd(8) + 8, *group)
+        (random.rnd(8) + 8, group.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
     } else {
         (1, 0)
     };
-    if which == DAGGER || many {
-        *group += 1;
-    }
 
     objects.with_object_mut(id, |o| {
         o.o_type = ItemType::Weapon(which);
@@ -472,12 +463,43 @@ pub unsafe fn fallpos(pos: IVec2, random: &mut Random, dungeon: &Dungeon) -> Opt
 
 #[cfg(test)]
 mod tests {
-    use super::{chat, hero, hit_monster, num, set_damage, MonsterInfo, ObjInfo, ThingId, WEAPON};
+    use super::{chat, hero, hit_monster, init_weapon_in, num, set_damage, MonsterInfo, ObjInfo, ThingId, BOW, DAGGER, WEAPON};
     use crate::dungeon::Dungeon;
     use crate::entity::player::{Thing, ThingObject};
+    use crate::item::arena::ThingArena;
     use crate::item::item_type::ItemType;
-    use crate::rnd::Random;
+    use crate::rnd::{Random, RNG};
     use glam::IVec2;
+    use std::sync::atomic::{AtomicI32, Ordering};
+
+    #[test]
+    fn weapon_stack_groups_use_independent_atomic_counters() {
+        let objects = ThingArena::new();
+        let group = AtomicI32::new(2);
+        let other_group = AtomicI32::new(2);
+        let mut random = RNG.lock().unwrap();
+
+        for counter in [&group, &other_group] {
+            assert_eq!(counter.load(Ordering::Relaxed), 2);
+            for (which, expected_group, counts) in [
+                (BOW, 0, 1..=1),
+                (DAGGER, 2, 2..=5),
+                (BOW, 0, 1..=1),
+                (3, 3, 8..=15),
+                (BOW, 0, 1..=1),
+            ] {
+                let before = counter.load(Ordering::Relaxed);
+                let id = objects.new_item_id();
+                unsafe { init_weapon_in(&objects, id, which, &mut random, counter); }
+                let (grp, count) = objects.with_object(id, |o| (o.o_group, o.o_count)).unwrap();
+                assert_eq!(grp, expected_group);
+                assert!(counts.contains(&count));
+                assert_eq!(counter.load(Ordering::Relaxed), before + i32::from(expected_group != 0));
+            }
+        }
+        assert_eq!(group.load(Ordering::Relaxed), 4);
+        assert_eq!(other_group.load(Ordering::Relaxed), 4);
+    }
 
     #[test]
     fn thrown_combat_exposes_all_entity_dependencies() {

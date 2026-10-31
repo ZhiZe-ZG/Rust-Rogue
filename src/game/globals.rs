@@ -173,10 +173,6 @@ pub static mut oldrp: Option<usize> = None;
 // `game/game.rs`). They are process-wide game state, so they now live beside
 // the rest of the globals and are referenced through this module.
 
-/// Monster group counter used when initialising stacked weapons (legacy
-/// `int group` in `weapons.c`).
-pub static mut group: i32 = 2;
-
 /// Global "next hero position" used by the save/load subsystem (legacy
 /// `coord nh` in `move.c`/`state.c`).
 pub static mut nh: IVec2 = IVec2 { x: 0, y: 0 };

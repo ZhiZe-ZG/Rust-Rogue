@@ -263,7 +263,7 @@ pub unsafe fn new_thing_id(
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
     a_class: &[i32],
-    group: *mut i32,
+    group: &std::sync::atomic::AtomicI32,
 ) -> ThingId {
     new_thing_in(dungeon, random, things, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info, a_class, group)
 }
@@ -280,7 +280,7 @@ pub(crate) unsafe fn new_thing_in(
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
     a_class: &[i32],
-    group: *mut i32,
+    group: &std::sync::atomic::AtomicI32,
 ) -> ThingId {
     let cur_id = dungeon.objects.new_item_id();
 

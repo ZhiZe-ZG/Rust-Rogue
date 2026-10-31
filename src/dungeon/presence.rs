@@ -58,7 +58,7 @@ impl Dungeon {
             &weap_info,
             &ws_info,
             &a_class,
-            &raw mut globals::group,
+            &self.group,
         );
         self.objects.with_object_mut(id, |o| o.o_pos = pos);
         self.attach_floor(id);
@@ -130,7 +130,7 @@ impl Dungeon {
                     &raw const globals::weap_info,
                     &raw const globals::ws_info,
                     &globals::a_class,
-                    &raw mut globals::group,
+                    &self.group,
                 );
             }
             nm -= 1;
@@ -199,7 +199,7 @@ impl Dungeon {
                         &raw const globals::weap_info,
                         &raw const globals::ws_info,
                         &globals::a_class,
-                        &raw mut globals::group,
+                        &self.group,
                     );
                 }
             }

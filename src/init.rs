@@ -253,7 +253,7 @@ const SYLLS: &[&str] = &[
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
-use crate::game::globals::{a_class, group, inv_describe, terse};
+use crate::game::globals::{a_class, inv_describe, terse};
 
 // ─── Exported functions ───────────────────────────────────────────────────────
 
@@ -296,7 +296,7 @@ pub unsafe fn init_player() {
 
     // A +1 mace
     let mace_id = new_item_id(&DUNGEON.objects);
-    init_weapon(mace_id, MACE, &mut RNG.lock().unwrap(), &DUNGEON, &raw mut group);
+    init_weapon(mace_id, MACE, &mut RNG.lock().unwrap(), &DUNGEON, &DUNGEON.group);
     crate::dungeon::DUNGEON.objects.with_object_mut(mace_id, |o| {
         o.o_hplus = 1;
         o.o_dplus = 1;
@@ -309,7 +309,7 @@ pub unsafe fn init_player() {
 
     // A +1 bow
     let bow_id = new_item_id(&DUNGEON.objects);
-    init_weapon(bow_id, BOW, &mut RNG.lock().unwrap(), &DUNGEON, &raw mut group);
+    init_weapon(bow_id, BOW, &mut RNG.lock().unwrap(), &DUNGEON, &DUNGEON.group);
     crate::dungeon::DUNGEON.objects.with_object_mut(bow_id, |o| {
         o.o_hplus = 1;
         o.o_flags.insert(ObjectFlags::KNOW);
@@ -320,7 +320,7 @@ pub unsafe fn init_player() {
 
     // Arrows
     let arrow_id = new_item_id(&DUNGEON.objects);
-    init_weapon(arrow_id, ARROW, &mut RNG.lock().unwrap(), &DUNGEON, &raw mut group);
+    init_weapon(arrow_id, ARROW, &mut RNG.lock().unwrap(), &DUNGEON, &DUNGEON.group);
     crate::dungeon::DUNGEON.objects.with_object_mut(arrow_id, |o| {
         o.o_count = {
             let mut random = RNG.lock().unwrap();

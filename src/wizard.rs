@@ -80,7 +80,7 @@ fn master_enabled() -> bool {
 }
 
 use crate::game::globals::{
-    a_class, after, again, count, group, inv_describe, l_last_comm,
+    a_class, after, again, count, inv_describe, l_last_comm,
     l_last_dir, l_last_pick, last_comm, last_dir, last_pick,
     n_objs, no_move, running, terse, vf_hit,
 };
@@ -218,7 +218,7 @@ pub unsafe fn create_obj() {
             }
             if matches!(otype, ItemType::Weapon(_)) {
                 let w = DUNGEON.objects.with_object(obj, |o| o.o_which).unwrap_or(0);
-                init_weapon(obj, w, &mut RNG.lock().unwrap(), &DUNGEON, &raw mut group);
+                init_weapon(obj, w, &mut RNG.lock().unwrap(), &DUNGEON, &DUNGEON.group);
                 if bless == ('-' as u8) {
                     DUNGEON.objects.with_object_mut(obj, |o| {
                         o.o_hplus -= {

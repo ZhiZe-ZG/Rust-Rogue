@@ -70,7 +70,7 @@ impl Default for CommandState {
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
 use crate::game::globals::{
-    e_levels, group, n_objs,
+    e_levels, n_objs,
     fight_flush, monsters, no_move, oldpos, passgo, vf_hit,
     after, again, count, delta, dir_ch, door_stop, firstmove, has_hit,
     inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
@@ -234,7 +234,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             &raw mut after, &raw mut running, &raw mut to_death,
                             &raw const passgo, &raw mut runch, &raw const oldpos,
                             &raw mut take, &raw mut count, &raw mut no_command,
-                            &raw mut group, &raw mut has_hit, &raw const weap_info,
+                            &DUNGEON.group, &raw mut has_hit, &raw const weap_info,
                             &terse, &DUNGEON.player.max_stats, &DUNGEON.player.quiet,
                             &raw mut kamikaze, &raw mut vf_hit, &raw const fight_flush,
                             &raw mut monsters, &e_levels,
@@ -622,7 +622,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                      */
                                     let sword = new_item_id(&DUNGEON.objects);
                                     init_weapon(sword, TWOSWORD, &mut RNG.lock().unwrap(),
-                                        &DUNGEON, &raw mut group);
+                                        &DUNGEON, &DUNGEON.group);
                                     DUNGEON.objects.with_object_mut(sword, |o| {
                                         o.o_hplus = 1;
                                         o.o_dplus = 1;

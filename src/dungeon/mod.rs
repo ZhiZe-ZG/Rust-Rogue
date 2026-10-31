@@ -36,6 +36,8 @@ pub use monster_map::MonsterMap;
 pub struct Dungeon {
     /// Per-game delayed actions and wandering-monster pacing.
     pub scheduler: crate::daemon::Scheduler,
+    /// Next item stack-group identifier; legacy allocation starts at two.
+    pub group: AtomicI32,
     /// The live [`Level`], created lazily on first access.
     level: RwLock<Option<Level>>,
     /// Generated scroll labels, shared across levels within this game.
@@ -86,6 +88,7 @@ impl Dungeon {
     pub const fn empty() -> Self {
         Self {
             scheduler: crate::daemon::Scheduler::new(),
+            group: AtomicI32::new(2),
             level: RwLock::new(None),
             scroll_names: RwLock::new(Vec::new()),
             p_colors: RwLock::new([""; 14]),
@@ -434,6 +437,19 @@ pub(crate) fn bump_no_food() {
 #[cfg(test)]
 mod tests {
     use super::Dungeon;
+
+    #[test]
+    fn stack_group_counters_are_owned_by_each_dungeon() {
+        use std::sync::atomic::Ordering::Relaxed;
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        assert_eq!(first.group.fetch_add(1, Relaxed), 2);
+        assert_eq!(first.group.fetch_add(1, Relaxed), 3);
+        assert_eq!(second.group.load(Relaxed), 2);
+        second.group.store(first.group.load(Relaxed), Relaxed);
+        assert_eq!(second.group.fetch_add(1, Relaxed), 4);
+        assert_eq!(first.group.load(Relaxed), 4);
+    }
 
     #[test]
     fn inventory_accounting_is_owned_by_each_player() {

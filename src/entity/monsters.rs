@@ -462,7 +462,7 @@ pub unsafe fn give_pack_id(
     weap_info: *const [ObjInfo; 10],
     ws_info: *const [ObjInfo; 14],
     a_class: *const [i32; 8],
-    group: *mut i32,
+    group: &std::sync::atomic::AtomicI32,
 ) {
     let kind = dungeon.monster_list
         .with(id, |t| match t {

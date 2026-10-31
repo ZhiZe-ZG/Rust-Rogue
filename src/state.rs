@@ -526,7 +526,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         max_stats: DUNGEON.player.max_stats(),
         oldrp,
         between: DUNGEON.scheduler.between(),
-        group,
+        group: DUNGEON.group.load(std::sync::atomic::Ordering::Relaxed),
         nh: crate::entity::player::nh,
     }
 }
@@ -833,7 +833,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     DUNGEON.player.set_max_stats(s.max_stats);
     oldrp = s.oldrp;
     DUNGEON.scheduler.set_between(s.between);
-    group = s.group;
+    DUNGEON.group.store(s.group, std::sync::atomic::Ordering::Relaxed);
     crate::entity::player::nh = s.nh;
 }
 
