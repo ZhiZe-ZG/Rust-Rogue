@@ -487,7 +487,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         last_dir,
         n_objs,
         ntraps: DUNGEON.ntraps(),
-        hungry_state,
+        hungry_state: DUNGEON.player.hungry_state.load(std::sync::atomic::Ordering::Relaxed),
         inpack,
         inv_type,
         max_level: crate::dungeon::max_depth(),
@@ -495,12 +495,12 @@ unsafe fn build_snapshot() -> GameSnapshot {
         no_food: crate::dungeon::no_food(),
         a_class: a_class.to_vec(),
         count,
-        food_left,
+        food_left: DUNGEON.player.food_left.load(std::sync::atomic::Ordering::Relaxed),
         lastscore,
         no_command,
         no_move,
-        purse,
-        quiet,
+        purse: DUNGEON.player.purse.load(std::sync::atomic::Ordering::Relaxed),
+        quiet: DUNGEON.player.quiet.load(std::sync::atomic::Ordering::Relaxed),
         vf_hit,
         seed,
         e_levels: e_levels.to_vec(),
@@ -523,7 +523,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
         player_pack,
         equipment,
         level,
-        max_stats,
+        max_stats: DUNGEON.player.max_stats(),
         oldrp,
         between,
         group,
@@ -671,7 +671,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     last_dir = s.last_dir;
     n_objs = s.n_objs;
     DUNGEON.set_ntraps(s.ntraps);
-    hungry_state = s.hungry_state;
+    DUNGEON.player.hungry_state.store(s.hungry_state, std::sync::atomic::Ordering::Relaxed);
     inpack = s.inpack;
     inv_type = s.inv_type;
     crate::dungeon::set_max_depth(s.max_level);
@@ -679,12 +679,12 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     crate::dungeon::set_no_food(s.no_food);
     // Legacy a_class and e_levels cannot override the fixed game rules.
     count = s.count;
-    food_left = s.food_left;
+    DUNGEON.player.food_left.store(s.food_left, std::sync::atomic::Ordering::Relaxed);
     lastscore = s.lastscore;
     no_command = s.no_command;
     no_move = s.no_move;
-    purse = s.purse;
-    quiet = s.quiet;
+    DUNGEON.player.purse.store(s.purse, std::sync::atomic::Ordering::Relaxed);
+    DUNGEON.player.quiet.store(s.quiet, std::sync::atomic::Ordering::Relaxed);
     vf_hit = s.vf_hit;
     seed = s.seed;
     delta = s.delta;
@@ -834,7 +834,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     crate::game::globals::l_last_pick = resolve_id(&player_pack, s.equipment.l_last_pick);
 
     // ── misc ────────────────────────────────────────────────────────────
-    max_stats = s.max_stats;
+    DUNGEON.player.set_max_stats(s.max_stats);
     oldrp = s.oldrp;
     between = s.between;
     group = s.group;

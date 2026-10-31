@@ -13,6 +13,7 @@ use crate::rnd::{Random, RNG};
 use crate::ui::input::read_key_event;
 use crate::ui::output::{addmsg_str, msg_str};
 use glam::IVec2;
+use std::sync::atomic::Ordering;
 
 use crate::command::Command;
 use crate::entity::player::{MonsterFlags, Thing};
@@ -43,8 +44,8 @@ const NORM: i32 = 0;
 const F_SEEN: u8 = 0x40;
 
 use crate::game::globals::{
-    after, again, delta, dir_ch, door_stop, e_levels, firstmove, food_left, hungry_state, jump,
-    last_dir, max_stats, no_command, no_move, oldpos, passgo, runch, running, see_floor, terse,
+    after, again, delta, dir_ch, door_stop, e_levels, firstmove, jump,
+    last_dir, no_command, no_move, oldpos, passgo, runch, running, see_floor, terse,
 };
 
 #[inline]
@@ -134,17 +135,18 @@ pub unsafe fn eat() {
         return;
     }
 
-    if food_left < 0 {
-        food_left = 0;
+    if DUNGEON.player.food_left.load(Ordering::Relaxed) < 0 {
+        DUNGEON.player.food_left.store(0, Ordering::Relaxed);
     }
-    food_left += HUNGERTIME - 200 + {
+    let nutrition = HUNGERTIME - 200 + {
         let mut random = RNG.lock().unwrap();
         random.rnd(400)
     };
-    if food_left > STOMACHSIZE {
-        food_left = STOMACHSIZE;
+    DUNGEON.player.food_left.fetch_add(nutrition, Ordering::Relaxed);
+    if DUNGEON.player.food_left.load(Ordering::Relaxed) > STOMACHSIZE {
+        DUNGEON.player.food_left.store(STOMACHSIZE, Ordering::Relaxed);
     }
-    hungry_state = 0;
+    DUNGEON.player.hungry_state.store(0, Ordering::Relaxed);
     if DUNGEON.player.equipment().weapon_id() == Some(obj) {
         DUNGEON.player.set_weapon_id(None);
     }
@@ -217,9 +219,11 @@ pub unsafe fn chg_str(amt: i32) {
             comp = if reduced < 3 { 3 } else { reduced as u32 };
         }
     }
-    if comp > max_stats.strength {
-        max_stats.strength = comp;
-    }
+    DUNGEON.player.with_max_stats_mut(|stats| {
+        if comp > stats.strength {
+            stats.strength = comp;
+        }
+    });
 }
 
 pub fn add_str(sp: &mut u32, amt: i32) {

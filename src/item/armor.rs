@@ -81,6 +81,7 @@ pub unsafe fn wear(
 /// # Safety
 /// `after` must remain writable for the call without an overlapping exclusive
 /// reference across reentrant item/UI calls.
+/// `max_stats` uses a shared lock, with no guard held across gameplay helpers.
 pub unsafe fn take_off(
     random: &mut Random,
     dungeon: &Dungeon,
@@ -93,7 +94,7 @@ pub unsafe fn take_off(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) {
     let Some(obj) = dungeon.player.equipment().armor_id() else {
         *after = false as u8;

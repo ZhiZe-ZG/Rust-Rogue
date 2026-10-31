@@ -12,6 +12,8 @@
 //! call, including reentrant helpers. Access must be serialized; no live Rust
 //! references to their storage may conflict with writes. Table borrows are kept
 //! local or cloned before calling helpers that can reenter combat.
+//! `purse` and `quiet` are shared atomically. `max_stats` uses a shared lock;
+//! no guard is held across gameplay helpers or callbacks.
 
 use crate::rnd::Random;
 
@@ -151,7 +153,7 @@ pub unsafe fn fight(
     random: &mut Random,
     dungeon: &Dungeon,
     count: *mut i32,
-    quiet: *mut i32,
+    quiet: &std::sync::atomic::AtomicI32,
     has_hit: *mut u8,
     to_death: *mut u8,
     kamikaze: *mut u8,
@@ -170,7 +172,7 @@ pub unsafe fn fight(
 
     // Since we are fighting, things are not quiet — no healing.
     *count = 0;
-    *quiet = 0;
+    quiet.store(0, std::sync::atomic::Ordering::Relaxed);
     runto(mp, random, dungeon, monsters);
 
     // Let him know it was really a xeroc (if it was one).
@@ -259,14 +261,14 @@ pub unsafe fn attack(
     dungeon: &Dungeon,
     running: *mut u8,
     count: *mut i32,
-    quiet: *mut i32,
+    quiet: &std::sync::atomic::AtomicI32,
     to_death: *mut u8,
     kamikaze: *mut u8,
     has_hit: *mut u8,
     max_hit: *mut i32,
     no_command: *mut i32,
     vf_hit: *mut i32,
-    purse: *mut i32,
+    purse: &std::sync::atomic::AtomicI32,
     fight_flush: *const u8,
     e_levels: *const [i32; 21],
     monsters: *mut [MonsterInfo; 26],
@@ -280,12 +282,12 @@ pub unsafe fn attack(
     scr_info: *const [ObjInfo; 18],
     weap_info: *const [ObjInfo; 10],
     ws_info: *const [ObjInfo; 14],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) -> i32 {
     // Stop running / healing.
     *running = false as u8;
     *count = 0;
-    *quiet = 0;
+    quiet.store(0, std::sync::atomic::Ordering::Relaxed);
 
     let Some(mon) = Mon::get(tp, dungeon) else {
         return 0;
@@ -458,18 +460,16 @@ pub unsafe fn attack(
             } else if mtype == Some(MonsterType::Leprechaun) {
                 // Leprechaun: steals gold
                 let level = dungeon.current_depth();
-                let lastpurse = *purse;
-                *purse -= random.rnd(50 + 10 * level) + 2; // GOLDCALC
+                let lastpurse = purse.load(std::sync::atomic::Ordering::Relaxed);
+                purse.fetch_sub(random.rnd(50 + 10 * level) + 2, std::sync::atomic::Ordering::Relaxed); // GOLDCALC
                 if save(VS_MAGIC, random, dungeon) == 0 {
                     let g = random.rnd(50 + 10 * level) + 2;
-                    *purse -= g + g + g + g;
+                    purse.fetch_sub(g + g + g + g, std::sync::atomic::Ordering::Relaxed);
                 }
-                if *purse < 0 {
-                    *purse = 0;
-                }
+                purse.fetch_max(0, std::sync::atomic::Ordering::Relaxed);
                 remove_mon(mon.pos, tp, false as u8, random, dungeon, has_hit,
                     to_death, kamikaze, fight_flush, weap_info);
-                if *purse != lastpurse {
+                if purse.load(std::sync::atomic::Ordering::Relaxed) != lastpurse {
                     msg_str("your purse feels lighter");
                 }
                 *count = 0;

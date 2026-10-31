@@ -13,7 +13,7 @@ use crate::dungeon::DUNGEON;
 use crate::entity::chase::roomin;
 use crate::entity::player::MonsterFlags;
 use crate::game::globals::{
-    after, count, get_purse, in_shell, inv_type, oldpos, oldrp, playing, purse,
+    after, count, in_shell, inv_type, oldpos, oldrp, playing,
     q_comm, seed, to_death,
 };
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
@@ -280,12 +280,12 @@ pub unsafe fn quit() {
     msg_str("really quit?");
     if readchar() == b'y' as i32 {
         crate::ui::terminal::UI.clear();
-        let line = format!("You quit with {} gold pieces", get_purse());
+        let line = format!("You quit with {} gold pieces", DUNGEON.player.purse.load(Ordering::Relaxed));
         crate::ui::terminal::UI.write_text_at(IVec2::new(0, GameConfig::SCREEN_LINES - 2), &line);
         crate::ui::terminal::UI.move_cursor(IVec2::new(0, GameConfig::SCREEN_LINES - 1));
         output::refresh();
         EXIT_ON_INTERRUPT.store(true, Ordering::Relaxed);
-        score(purse, 1, 0);
+        score(DUNGEON.player.purse.load(Ordering::Relaxed), 1, 0);
         request_exit(0);
     } else {
         crate::ui::terminal::UI.move_cursor(IVec2::new(0, 0));

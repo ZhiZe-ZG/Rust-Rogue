@@ -10,6 +10,7 @@
 
 use crate::rnd::Random;
 use glam::IVec2;
+use std::sync::atomic::Ordering;
 
 use crate::ui::output::{addmsg_str, msg_str};
 
@@ -39,7 +40,7 @@ const STARVETIME: i32 = 850;
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
 use crate::game::globals::{
-    after, count, food_left, hungry_state, jump, no_command, quiet, running, terse, to_death,
+    after, count, jump, no_command, running, terse, to_death,
 };
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
@@ -85,7 +86,7 @@ pub unsafe fn ring_effects(random: &mut Random) {
 pub unsafe fn doctor(random: &mut Random) {
     let lv = DUNGEON.player.level();
     let ohp = DUNGEON.player.stats().hit_points;
-    quiet += 1;
+    let quiet = DUNGEON.player.quiet.fetch_add(1, Ordering::Relaxed) + 1;
     if lv < 8 {
         if quiet + (lv << 1) > 20 {
             DUNGEON.player.with_stats_mut(|stats| stats.hit_points += 1);
@@ -108,7 +109,7 @@ pub unsafe fn doctor(random: &mut Random) {
         if DUNGEON.player.stats().hit_points > max {
             DUNGEON.player.with_stats_mut(|stats| stats.hit_points = max);
         }
-        quiet = 0;
+        DUNGEON.player.quiet.store(0, Ordering::Relaxed);
     }
 }
 
@@ -189,12 +190,11 @@ pub unsafe fn nohaste() {
 /// stomach:
 /// Digest the hero's food.
 pub unsafe fn stomach(random: &mut Random) {
-    let orig_hungry = hungry_state;
+    let orig_hungry = DUNGEON.player.hungry_state.load(Ordering::Relaxed);
 
-    if food_left <= 0 {
+    if DUNGEON.player.food_left.load(Ordering::Relaxed) <= 0 {
         // Post-decrement comparison: check old value, then decrement.
-        let old_food = food_left;
-        food_left -= 1;
+        let old_food = DUNGEON.player.food_left.fetch_sub(1, Ordering::Relaxed);
         if old_food < -STARVETIME {
             death(b's' as u8);
             if crate::startup::exit_requested() {
@@ -208,7 +208,7 @@ pub unsafe fn stomach(random: &mut Random) {
             return;
         }
         no_command += random.rnd(8) + 4;
-        hungry_state = 3;
+        DUNGEON.player.hungry_state.store(3, Ordering::Relaxed);
         if terse == 0 {
             addmsg_str(choose_str(
                 "the munchies overpower your motor capabilities.  ",
@@ -217,19 +217,21 @@ pub unsafe fn stomach(random: &mut Random) {
         }
         msg_str(choose_str("You freak out", "You faint"));
     } else {
-        let oldfood = food_left;
-        food_left -= ring_eat(LEFT as i32, random, &DUNGEON)
+        let oldfood = DUNGEON.player.food_left.load(Ordering::Relaxed);
+        let consumption = ring_eat(LEFT as i32, random, &DUNGEON)
             + ring_eat(RIGHT as i32, random, &DUNGEON)
             + 1 - DUNGEON.has_amulet() as i32;
+        DUNGEON.player.food_left.fetch_sub(consumption, Ordering::Relaxed);
+        let food_left = DUNGEON.player.food_left.load(Ordering::Relaxed);
 
         if food_left < MORETIME && oldfood >= MORETIME {
-            hungry_state = 2;
+            DUNGEON.player.hungry_state.store(2, Ordering::Relaxed);
             msg_str(choose_str(
                 "the munchies are interfering with your motor capabilites",
                 "you are starting to feel weak",
             ));
         } else if food_left < 2 * MORETIME && oldfood >= 2 * MORETIME {
-            hungry_state = 1;
+            DUNGEON.player.hungry_state.store(1, Ordering::Relaxed);
             if terse != 0 {
                 msg_str(choose_str("getting the munchies", "getting hungry"));
             } else {
@@ -241,7 +243,7 @@ pub unsafe fn stomach(random: &mut Random) {
         }
     }
 
-    if hungry_state != orig_hungry {
+    if DUNGEON.player.hungry_state.load(Ordering::Relaxed) != orig_hungry {
         DUNGEON.player.remove_flag(MonsterFlags::RUN);
         running = false as u8;
         to_death = false as u8;

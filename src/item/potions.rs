@@ -220,10 +220,11 @@ unsafe fn do_pot_impl(
 /// Quaff a potion from the pack.
 ///
 /// # Safety
-/// `pot_info`, `after`, and `max_stats` must remain valid throughout the call,
+/// `pot_info` and `after` must remain valid throughout the call,
 /// without conflicting live references. The metadata slice must contain every
 /// potion kind and `e_levels` all 21 experience entries. Raw pointers keep
 /// borrows short across helpers that can reenter game state (including `call_it`).
+/// `max_stats` is shared through a lock; no guard is held across gameplay helpers.
 pub(crate) unsafe fn quaff(
     random: &mut Random,
     dungeon: &Dungeon,
@@ -252,7 +253,7 @@ pub(crate) unsafe fn quaff(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) {
     // Input/output can reenter metadata updates. Borrow an owned snapshot for
     // naming rather than the mutable potion table across those callbacks.

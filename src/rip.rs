@@ -2,8 +2,9 @@
 //!
 //! Ported from `src/c/rip.c` to Rust.
 use std::io::Write;
+use std::sync::atomic::Ordering;
 
-use crate::game::globals::{get_purse, monster_info, ALLSCORE, NUMSCORES, NUMNAME};
+use crate::game::globals::{monster_info, ALLSCORE, NUMSCORES, NUMNAME};
 use crate::item::arena::with_object;
 use crate::item::item_type::ItemType;
 use crate::item::things::inv_name_id;
@@ -32,7 +33,7 @@ pub const RIP_ART: &[&str] = &[
 ];
 
 use crate::dungeon::DUNGEON;
-use crate::game::globals::{purse, tombstone};
+use crate::game::globals::tombstone;
 
 #[inline]
 fn vowelstr(s: &str) -> &'static str {
@@ -235,7 +236,8 @@ pub unsafe fn score(amount: i32, flags: i32, monst: u8) {
 
 pub unsafe fn death(monst: u8) {
     let mut killer = killname(monst, false);
-    purse -= purse / 10;
+    let penalty = DUNGEON.player.purse.load(Ordering::Relaxed) / 10;
+    DUNGEON.player.purse.fetch_sub(penalty, Ordering::Relaxed);
     crate::ui::terminal::UI.clear();
 
     if tombstone == 0 {
@@ -259,10 +261,10 @@ pub unsafe fn death(monst: u8) {
             } else {
                 "a "
             };
-            let line = format!("{}{} with {} gold", article, killer, get_purse());
+            let line = format!("{}{} with {} gold", article, killer, DUNGEON.player.purse.load(Ordering::Relaxed));
             crate::ui::terminal::UI.write_text(&line);
         } else {
-            let line = format!("{} with {} gold", killer, get_purse());
+            let line = format!("{} with {} gold", killer, DUNGEON.player.purse.load(Ordering::Relaxed));
             crate::ui::terminal::UI.write_text(&line);
         }
     } else {
@@ -306,7 +308,7 @@ pub unsafe fn death(monst: u8) {
         let hero_name = crate::dungeon::DUNGEON.whoami();
         crate::ui::terminal::UI
             .write_text_at(IVec2::new(center_string(&hero_name) as i32, 14), &hero_name);
-        let score_text = format!("{} Au", get_purse());
+        let score_text = format!("{} Au", DUNGEON.player.purse.load(Ordering::Relaxed));
         crate::ui::terminal::UI.move_cursor(IVec2::new(center_string(&score_text) as i32, 15));
         crate::ui::terminal::UI.write_text(&score_text);
         let year = 1900 + 0;
@@ -315,7 +317,7 @@ pub unsafe fn death(monst: u8) {
     }
 
     output::refresh();
-    score(purse, if DUNGEON.has_amulet() { 3 } else { 0 }, monst);
+    score(DUNGEON.player.purse.load(Ordering::Relaxed), if DUNGEON.has_amulet() { 3 } else { 0 }, monst);
     print!("[Press return to continue]");
     let _ = std::io::stdout().flush();
     wait_for('\n');
@@ -348,7 +350,7 @@ pub unsafe fn total_winner() {
     wait_for(' ');
     crate::ui::terminal::UI.clear();
     crate::ui::terminal::UI.write_text_at(IVec2::new(0, 0), "   Worth  Item\n");
-    let oldpurse = purse;
+    let oldpurse = DUNGEON.player.purse.load(Ordering::Relaxed);
     for id in DUNGEON.player.pack() {
         let Some((item_type, o_count, packch)) =
             with_object(&DUNGEON.objects, id, |o| (o.o_type, o.o_count, o.o_packch))
@@ -382,12 +384,12 @@ pub unsafe fn total_winner() {
         );
         let line = format!("{} ) {:5}  {}\n", packch as u8, worth, item_name);
         crate::ui::terminal::UI.write_text(&line);
-        purse += worth;
+        DUNGEON.player.purse.fetch_add(worth, Ordering::Relaxed);
     }
     let summary = format!("   {:5}  Gold Pieces          ", oldpurse);
     crate::ui::terminal::UI.write_text(&summary);
     output::refresh();
-    score(purse, 2, b' ' as u8);
+    score(DUNGEON.player.purse.load(Ordering::Relaxed), 2, b' ' as u8);
     crate::startup::request_exit(0);
 }
 

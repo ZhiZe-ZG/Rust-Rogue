@@ -433,6 +433,44 @@ mod tests {
     use super::Dungeon;
 
     #[test]
+    fn player_progress_is_owned_by_each_dungeon() {
+        use std::sync::atomic::Ordering::Relaxed;
+
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        let defaults = first.player.max_stats();
+        assert_eq!(defaults.strength, 16);
+        assert_eq!(defaults.level, 1);
+        assert_eq!(defaults.armor, 10);
+        assert_eq!(defaults.hit_points, 12);
+        assert_eq!(defaults.max_hit_points, 12);
+        assert_eq!(&defaults.damage[..4], b"1x4\0");
+        first.player.purse.store(123, Relaxed);
+        first.player.food_left.store(456, Relaxed);
+        first.player.hungry_state.store(2, Relaxed);
+        first.player.quiet.store(7, Relaxed);
+        first.player.with_max_stats_mut(|stats| stats.strength = 20);
+        assert_eq!(second.player.purse.load(Relaxed), 0);
+        assert_eq!(second.player.food_left.load(Relaxed), 0);
+        assert_eq!(second.player.hungry_state.load(Relaxed), 0);
+        assert_eq!(second.player.quiet.load(Relaxed), 0);
+        assert_eq!(second.player.max_stats().strength, 16);
+
+        let restored = Dungeon::empty();
+        restored.player.purse.store(first.player.purse.load(Relaxed), Relaxed);
+        restored.player.food_left.store(first.player.food_left.load(Relaxed), Relaxed);
+        restored.player.hungry_state.store(first.player.hungry_state.load(Relaxed), Relaxed);
+        restored.player.quiet.store(first.player.quiet.load(Relaxed), Relaxed);
+        restored.player.set_max_stats(first.player.max_stats());
+        first.player.with_max_stats_mut(|stats| stats.strength = 18);
+        assert_eq!(restored.player.purse.load(Relaxed), 123);
+        assert_eq!(restored.player.food_left.load(Relaxed), 456);
+        assert_eq!(restored.player.hungry_state.load(Relaxed), 2);
+        assert_eq!(restored.player.quiet.load(Relaxed), 7);
+        assert_eq!(restored.player.max_stats().strength, 20);
+    }
+
+    #[test]
     fn wand_tables_are_owned_by_each_dungeon() {
         let first = Dungeon::empty();
         let second = Dungeon::empty();

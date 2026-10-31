@@ -7,11 +7,6 @@ use crate::ui::terminal::UI;
 use crate::{
     config::GameConfig,
     dungeon::DUNGEON,
-    game::{
-        globals::{
-            get_hungry_state, get_max_stats, get_purse,
-        },
-    },
     ui::input::{readchar, wait_for},
 };
 #[cfg(not(test))]
@@ -218,8 +213,8 @@ pub(crate) fn status() {
     let max_hp = pstats.max_hit_points;
     let temp = DUNGEON.player.armor_value().unwrap_or(pstats.armor);
 
-    let hungry_state = get_hungry_state();
-    let purse = get_purse();
+    let hungry_state = DUNGEON.player.hungry_state.load(Ordering::Relaxed);
+    let purse = DUNGEON.player.purse.load(Ordering::Relaxed);
     let stat_msg = UI.stat_msg_enabled();
 
     if UI.status_hp.load(Ordering::Relaxed) == pstats.hit_points
@@ -257,7 +252,7 @@ pub(crate) fn status() {
 
     let hpwidth = UI.hp_width.load(Ordering::Relaxed);
     let s_arm = UI.status_armor.load(Ordering::Relaxed);
-    let max_stats = get_max_stats();
+    let max_stats = DUNGEON.player.max_stats();
     let state_name = STATE_NAMES
         .get(hungry_state.max(0) as usize)
         .copied()

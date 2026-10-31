@@ -126,6 +126,8 @@ fn set_damage(dst: &mut [u8; 8], src: &[u8]) {
 /// State/table pointers must remain valid throughout reentrant combat and UI
 /// calls, without conflicting live references. `weap_info` must contain all ten
 /// weapon entries, including the transient bolt entry.
+/// `quiet` is shared atomically; `max_stats` uses a shared lock without holding
+/// a guard across gameplay helpers.
 pub unsafe fn missile(
     ydelta: i32,
     xdelta: i32,
@@ -154,14 +156,14 @@ pub unsafe fn missile(
     scr_info: &[ObjInfo],
     ws_info: &[ObjInfo],
     count: *mut i32,
-    quiet: *mut i32,
+    quiet: &std::sync::atomic::AtomicI32,
     to_death: *mut u8,
     kamikaze: *mut u8,
     vf_hit: *mut i32,
     fight_flush: *const u8,
     monsters: *mut [MonsterInfo; 26],
     e_levels: *const [i32; 21],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) {
     let Some(id) = get_item_id("throw", ItemFilter::Category(ItemType::WEAPON), dungeon, after, again, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc, n_objs, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) else {
         return;
@@ -346,6 +348,7 @@ pub(crate) unsafe fn init_weapon_in(
 /// # Safety
 /// All state/table pointers must remain valid throughout combat, including
 /// reentrant calls, with no conflicting references to mutable state.
+/// `quiet` is shared atomically and may be updated by reentrant helpers.
 pub unsafe fn hit_monster(
     y: i32,
     x: i32,
@@ -353,7 +356,7 @@ pub unsafe fn hit_monster(
     random: &mut Random,
     dungeon: &Dungeon,
     count: *mut i32,
-    quiet: *mut i32,
+    quiet: &std::sync::atomic::AtomicI32,
     has_hit: *mut u8,
     to_death: *mut u8,
     kamikaze: *mut u8,
@@ -382,6 +385,7 @@ pub fn num(n1: i32, n2: i32, obj_type: u8) -> String {
 /// # Safety
 /// `after` must remain writable, without an overlapping exclusive reference
 /// across reentrant item/UI calls.
+/// `max_stats` uses a shared lock, with no guard held across gameplay helpers.
 pub unsafe fn wield(
     random: &mut Random,
     dungeon: &Dungeon,
@@ -404,7 +408,7 @@ pub unsafe fn wield(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) {
     // Track the previously wielded weapon by arena handle (pointer-free).
     let oweapon = dungeon.player.equipment().weapon_id();
@@ -478,7 +482,7 @@ mod tests {
     #[test]
     fn thrown_combat_exposes_all_entity_dependencies() {
         let _: unsafe fn(
-            i32, i32, ThingId, &mut Random, &Dungeon, *mut i32, *mut i32,
+            i32, i32, ThingId, &mut Random, &Dungeon, *mut i32, &std::sync::atomic::AtomicI32,
             *mut u8, *mut u8, *mut u8, *mut i32, *const u8,
             *mut [MonsterInfo; 26], *const [ObjInfo; 10], *const [i32; 21],
         ) -> i32 = hit_monster;

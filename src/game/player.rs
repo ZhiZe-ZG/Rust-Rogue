@@ -17,6 +17,7 @@
 //! null-pointer sentinel to dereference and a freed object resolves to `None`.
 
 use std::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::atomic::AtomicI32;
 
 use crate::entity::player::{MonsterFlags, Stats, Thing, ThingMonster, ThingObject};
 use crate::item::arena::ThingId;
@@ -236,13 +237,52 @@ fn hero_monster_mut(thing: &mut Thing) -> &mut ThingMonster {
 pub struct Player {
     hero: RwLock<Option<Thing>>,
     equipment: Equipment,
+    /// Gold currently carried by the hero.
+    pub purse: AtomicI32,
+    /// Remaining nutrition and current hunger indicator.
+    pub food_left: AtomicI32,
+    pub hungry_state: AtomicI32,
+    /// Quiet turns accumulated toward regeneration.
+    pub quiet: AtomicI32,
+    /// Historical maximum-stat snapshot, separately locked from the hero.
+    pub max_stats: RwLock<Stats>,
 }
 
 impl Player {
     pub(crate) const EMPTY: Self = Self {
         hero: RwLock::new(None),
         equipment: Equipment::EMPTY,
+        purse: AtomicI32::new(0),
+        food_left: AtomicI32::new(0),
+        hungry_state: AtomicI32::new(0),
+        quiet: AtomicI32::new(0),
+        max_stats: RwLock::new(Stats {
+            strength: 16,
+            experience: 0,
+            level: 1,
+            armor: 10,
+            hit_points: 12,
+            damage: *b"1x4\0\0\0\0\0\0\0\0\0\0",
+            max_hit_points: 12,
+        }),
     };
+
+    /// Copy maximum stats without retaining a lock across gameplay callbacks.
+    pub fn max_stats(&self) -> Stats {
+        *self.max_stats.read().unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Replace the historical maximum-stat snapshot during restoration.
+    pub fn set_max_stats(&self, stats: Stats) {
+        *self.max_stats.write().unwrap_or_else(|poison| poison.into_inner()) = stats;
+    }
+
+    /// Update maximum stats; the closure must not reenter this lock or call
+    /// gameplay, input, or output helpers.
+    pub fn with_max_stats_mut<R>(&self, operation: impl FnOnce(&mut Stats) -> R) -> R {
+        let mut stats = self.max_stats.write().unwrap_or_else(|poison| poison.into_inner());
+        operation(&mut stats)
+    }
 
     /// Ensure the hero exists, initializing it on first access.
     #[inline]

@@ -145,6 +145,7 @@ pub(crate) unsafe fn fix_stick_in(objects: &ThingArena, id: ThingId, random: &mu
 /// State/table pointers must remain valid throughout reentrant combat and UI
 /// calls, without conflicting live references. Metadata slices must contain
 /// every kind, including the ten weapon entries used by transient bolts.
+/// `quiet` is shared atomically and may be updated by reentrant helpers.
 pub unsafe fn do_zap(
     random: &mut Random,
     dungeon: &Dungeon,
@@ -169,7 +170,7 @@ pub unsafe fn do_zap(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     count: *mut i32,
-    quiet: *mut i32,
+    quiet: &std::sync::atomic::AtomicI32,
     has_hit: *mut u8,
     to_death: *mut u8,
     kamikaze: *mut u8,
@@ -321,6 +322,7 @@ pub unsafe fn drain(dungeon: &Dungeon) {
 /// # Safety
 /// All state/table pointers must remain valid throughout reentrant combat,
 /// without live references conflicting with writes to mutable state.
+/// `quiet` is shared atomically and may be updated by reentrant helpers.
 pub unsafe fn fire_bolt(
     start: IVec2,
     dir: IVec2,
@@ -328,7 +330,7 @@ pub unsafe fn fire_bolt(
     random: &mut Random,
     dungeon: &Dungeon,
     count: *mut i32,
-    quiet: *mut i32,
+    quiet: &std::sync::atomic::AtomicI32,
     has_hit: *mut u8,
     to_death: *mut u8,
     kamikaze: *mut u8,
@@ -388,7 +390,7 @@ mod tests {
     #[test]
     fn bolt_combat_exposes_all_entity_dependencies() {
         let _: unsafe fn(
-            IVec2, IVec2, &str, &mut Random, &Dungeon, *mut i32, *mut i32,
+            IVec2, IVec2, &str, &mut Random, &Dungeon, *mut i32, &std::sync::atomic::AtomicI32,
             *mut u8, *mut u8, *mut u8, *mut i32, *const u8,
             *mut [MonsterInfo; 26], *const [ObjInfo; 10], *const [i32; 21],
         ) = fire_bolt;

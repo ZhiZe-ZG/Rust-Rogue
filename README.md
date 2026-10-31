@@ -51,6 +51,7 @@ Callers outside these modules still obtain dependencies from the singleton owner
 - The current `Level`, accessed through scoped `with_level()` / `with_level_mut()` closures.
 - The live `monster_list` and per-cell `monster_map`.
 - `player`: the hero actor and its equipment, defined by `Player` in [src/game/player.rs](src/game/player.rs).
+- `Player` also owns the atomic `purse`, `food_left`, `hungry_state`, and `quiet` counters, plus a separately locked `max_stats` snapshot. Maximum-stat locks are held only for short reads/updates, never across input or gameplay callbacks. Item/entity dependencies remain individual shared atomic or lock references; save field names and initial values are unchanged.
 - `objects`: the generational `ThingArena` in [src/item/arena.rs](src/item/arena.rs), shared by floor items, player inventory, monster packs, and equipment handles.
 - `scroll_names`: randomly generated scroll labels behind an `RwLock`, accessed through `scroll_name()`, `scroll_names()`, and their setters. Each dungeon has independent names that persist across level changes and save/restore.
 - `p_colors` and `r_stones`: randomized potion colors and ring stones in separate lock-protected arrays, accessed through snapshot getters and whole-table setters. Assignments are independent per dungeon and persist across levels and save/restore; their snapshot field names are unchanged.
@@ -110,19 +111,15 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `last_dir`: most recent movement direction.
 - `NUMSCORES`: immutable maximum number of retained scores; `NUMNAME` is its display label.
 - `n_objs`: number of eligible choices during item selection.
-- `hungry_state`: player hunger state / status level.
 - `inpack`: count of pack contents.
 - `inv_type`: current inventory display type.
 - `max_hit`: maximum hit value used by combat calculations.
 - `a_class`: constant armor class table used by the game.
 - `count`: remaining command repetitions.
 - `scoreboard`: open score file handle.
-- `food_left`: remaining food units.
 - `lastscore`: most recently recorded score value.
 - `no_command`: remaining turns during which commands are suppressed.
 - `no_move`: remaining turns during which movement is blocked.
-- `purse`: current gold count.
-- `quiet`: turn counter used for regeneration, not output volume.
 - `vf_hit`: venus-flytrap hit counter state.
 - `seed`: RNG seed.
 - `e_levels`: constant experience thresholds per level.
@@ -130,7 +127,6 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 - `oldpos`: previous player position.
 - `l_last_pick`: last picked item for the previous cycle.
 - `last_pick`: last picked item in the current cycle.
-- `max_stats`: player max-stat template.
 - `oldrp`: previous room index, represented by `Option<usize>`.
 
 #### Runtime tables and arrays

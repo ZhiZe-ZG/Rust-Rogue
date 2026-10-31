@@ -614,7 +614,10 @@ pub unsafe fn check_level(random: &mut Random, dungeon: &Dungeon, e_levels: *con
 }
 
 /// Change the supplied hero's strength and update its unmodified maximum.
-pub unsafe fn chg_str(amt: i32, dungeon: &Dungeon, max_stats: *mut Stats) {
+///
+/// The maximum's write lock recovers poison and is acquired only after other
+/// gameplay calls, so no guard spans a callback or reentrant helper.
+pub unsafe fn chg_str(amt: i32, dungeon: &Dungeon, max_stats: &std::sync::RwLock<Stats>) {
     if amt == 0 { return; }
     let strength = (dungeon.player.stats().strength as i32 + amt).clamp(3, 31) as u32;
     dungeon.player.with_stats_mut(|stats| stats.strength = strength);
@@ -624,8 +627,9 @@ pub unsafe fn chg_str(amt: i32, dungeon: &Dungeon, max_stats: *mut Stats) {
             unmodified = (unmodified as i32 - bonus).max(3) as u32;
         }
     }
-    if unmodified > (*max_stats).strength {
-        (*max_stats).strength = unmodified;
+    let mut maximum = max_stats.write().unwrap_or_else(|poison| poison.into_inner());
+    if unmodified > maximum.strength {
+        maximum.strength = unmodified;
     }
 }
 
@@ -683,7 +687,7 @@ pub unsafe fn be_trapped(
     weap_info: *const [ObjInfo; 10],
     to_death: *const u8,
     terse: *const u8,
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) -> TrapType {
     let trap =
         dungeon.with_level(|current| current.trap_at(pos.y as usize, pos.x as usize));
@@ -908,8 +912,8 @@ pub unsafe fn do_move(
     has_hit: *mut u8,
     weap_info: *const [ObjInfo; 10],
     terse: *const u8,
-    max_stats: *mut Stats,
-    quiet: *mut i32,
+    max_stats: &std::sync::RwLock<Stats>,
+    quiet: &std::sync::atomic::AtomicI32,
     kamikaze: *mut u8,
     vf_hit: *mut i32,
     fight_flush: *const u8,
@@ -1109,23 +1113,53 @@ mod tests {
         let second = Dungeon::empty();
         first.player.with_stats_mut(|stats| stats.strength = 10);
         second.player.with_stats_mut(|stats| stats.strength = 19);
-        let mut maximum = Stats::default();
+        let maximum = std::sync::RwLock::new(Stats::default());
         let mut running = 0;
         let mut after = 1;
         let mut direction = crate::direction::Direction::West;
         unsafe {
             do_run(crate::direction::Direction::North, &raw mut running, &raw mut after, &raw mut direction);
-            chg_str(30, &first, &raw mut maximum);
+            chg_str(30, &first, &maximum);
         }
         assert_eq!(running, 1);
         assert_eq!(after, 0);
         assert!(direction == crate::direction::Direction::North);
         assert_eq!(first.player.stats().strength, 31);
-        assert_eq!(maximum.strength, 31);
+        assert_eq!(maximum.read().unwrap().strength, 31);
         assert_eq!(second.player.stats().strength, 19);
-        unsafe { chg_str(-50, &first, &raw mut maximum); }
+        unsafe { chg_str(-50, &first, &maximum); }
         assert_eq!(first.player.stats().strength, 3);
-        assert_eq!(maximum.strength, 31);
+        assert_eq!(maximum.read().unwrap().strength, 31);
+    }
+
+    #[test]
+    fn strength_update_recovers_poisoned_maximum() {
+        let dungeon = Dungeon::empty();
+        dungeon.player.with_stats_mut(|stats| stats.strength = 10);
+        let maximum = std::sync::RwLock::new(Stats::default());
+        let result = std::panic::catch_unwind(|| {
+            let mut stats = maximum.write().unwrap();
+            stats.strength = 12;
+            panic!("poison maximum stats for recovery test");
+        });
+        assert!(result.is_err());
+        assert!(maximum.is_poisoned());
+
+        unsafe { chg_str(5, &dungeon, &maximum); }
+        assert_eq!(dungeon.player.stats().strength, 15);
+        assert_eq!(maximum.read().unwrap_or_else(|poison| poison.into_inner()).strength, 15);
+
+        unsafe { chg_str(-5, &dungeon, &maximum); }
+        assert_eq!(dungeon.player.stats().strength, 10);
+        assert_eq!(maximum.read().unwrap_or_else(|poison| poison.into_inner()).strength, 15);
+    }
+
+    #[test]
+    fn zero_strength_change_does_not_lock_maximum() {
+        let dungeon = Dungeon::empty();
+        let maximum = std::sync::RwLock::new(Stats::default());
+        let _guard = maximum.write().unwrap();
+        unsafe { chg_str(0, &dungeon, &maximum); }
     }
 
     /// Allocating and discarding objects keeps the tracked count balanced.

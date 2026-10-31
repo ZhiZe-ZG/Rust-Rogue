@@ -133,8 +133,6 @@ pub const NUMSCORES: u32 = 10;
 pub const NUMNAME: &str = "Ten";
 /// Number of objects initialized in the object tables.
 pub static mut n_objs: i32 = 0;
-/// Current hunger state.
-pub static mut hungry_state: i32 = 0;
 /// Number of objects currently in the pack.
 pub static mut inpack: i32 = 0;
 /// Current inventory display mode.
@@ -148,18 +146,12 @@ pub const a_class: [i32; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
 pub static mut count: i32 = 0;
 /// The open score file, or `None` when it is not open.
 pub static mut scoreboard: Option<std::fs::File> = None;
-/// Remaining food units.
-pub static mut food_left: i32 = 0;
 /// Previous score value used by score display logic.
 pub static mut lastscore: i32 = -1;
 /// Number of commands suppressed by the current action.
 pub static mut no_command: i32 = 0;
 /// Number of movement steps suppressed by the current action.
 pub static mut no_move: i32 = 0;
-/// Player's current purse in gold pieces.
-pub static mut purse: i32 = 0;
-/// Number of quiet turns accumulated.
-pub static mut quiet: i32 = 0;
 /// Current weapon-versus-foe hit value.
 pub static mut vf_hit: i32 = 0;
 /// Current random-number seed.
@@ -179,16 +171,6 @@ pub static mut l_last_pick: Option<crate::item::arena::ThingId> = None;
 /// Last object selected by the game.
 pub static mut last_pick: Option<crate::item::arena::ThingId> = None;
 
-/// Player maximum-stat snapshot.
-pub static mut max_stats: Stats = Stats {
-    strength: 16,
-    experience: 0,
-    level: 1,
-    armor: 10,
-    hit_points: 12,
-    damage: dmg_string("1x4"),
-    max_hit_points: 12,
-};
 /// Previous room containing the player.
 pub static mut oldrp: Option<usize> = None;
 
@@ -1221,34 +1203,10 @@ pub static mut ws_info: [ObjInfo; MAXSTICKS] = [
 // save/restore layer), but UI code reads and writes them through these small
 // wrappers so it does not have to open `unsafe` blocks itself.
 
-/// The player's hunger state (`0` = not hungry).
-#[inline]
-pub fn get_hungry_state() -> i32 {
-    unsafe { hungry_state }
-}
-
-/// The player's current gold.
-#[inline]
-pub fn get_purse() -> i32 {
-    unsafe { purse }
-}
-
-/// The player's maximum stats (the "max_stats" table).
-#[inline]
-pub fn get_max_stats() -> Stats {
-    unsafe { max_stats }
-}
-
 /// The number of items currently carried (`inpack`).
 #[inline]
 pub fn get_inpack() -> i32 {
     unsafe { inpack }
-}
-
-/// The hero's remaining food counter (`food_left`).
-#[inline]
-pub fn get_food_left() -> i32 {
-    unsafe { food_left }
 }
 
 /// A by-value snapshot of the daemon/fuse table (`D_LIST`).

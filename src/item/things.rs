@@ -208,13 +208,13 @@ pub unsafe fn inv_name_id(
 /// Pointer-free version of `dropcheck`: works on an arena [`ThingId`].
 ///
 /// # Safety
-/// `max_stats` must remain valid and writable across reentrant helpers, with no
-/// overlapping references to its storage.
+/// `max_stats` uses a shared lock. No guard is held across reentrant helpers;
+/// strength updates acquire a brief write lock after other gameplay calls.
 pub unsafe fn dropcheck_id(
     id: ThingId,
     random: &mut Random,
     dungeon: &Dungeon,
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) -> bool {
     let eq = dungeon.player.equipment();
     let is_weapon = eq.weapon_id() == Some(id);
@@ -425,7 +425,7 @@ pub unsafe fn drop(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) {
     let Some(id) = get_item_id("drop", ItemFilter::Any, dungeon, after, again, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc, n_objs, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) else {
         return;
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn equipment_checks_expose_the_strength_dependency() {
-        let _: unsafe fn(ThingId, &mut Random, &Dungeon, *mut Stats) -> bool = dropcheck_id;
+        let _: unsafe fn(ThingId, &mut Random, &Dungeon, &std::sync::RwLock<Stats>) -> bool = dropcheck_id;
     }
 
     #[test]

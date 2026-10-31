@@ -13,6 +13,7 @@ use crate::game::globals::{
 };
 use crate::dungeon::DUNGEON;
 use crate::rnd::{Random, RNG};
+use std::sync::atomic::Ordering;
 
 use crate::entity::player::{MonsterFlags, ObjectFlags, Thing, ThingMonster, ThingObject};
 use crate::item::arena::new_item_id;
@@ -252,14 +253,14 @@ const SYLLS: &[&str] = &[
 
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
-use crate::game::globals::{a_class, food_left, group, inpack, inv_describe, max_stats, pack_used, terse};
+use crate::game::globals::{a_class, group, inpack, inv_describe, pack_used, terse};
 
 // ─── Exported functions ───────────────────────────────────────────────────────
 
 /// Roll up the starting player: give food, armor, weapons, and arrows.
 pub unsafe fn init_player() {
-    DUNGEON.player.set_stats(max_stats);
-    food_left = HUNGERTIME;
+    DUNGEON.player.set_stats(DUNGEON.player.max_stats());
+    DUNGEON.player.food_left.store(HUNGERTIME, Ordering::Relaxed);
 
     // Item callbacks must not retain borrows of mutable global metadata.
     let arm_names = (&*(&raw const arm_info)).clone();

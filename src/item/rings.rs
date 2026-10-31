@@ -93,6 +93,7 @@ const USES: [i32; RingType::COUNT] = [
 /// # Safety
 /// Raw pointer parameters must remain valid for their accesses across reentrant
 /// input and message calls. `mpos` and `msg_esc` use shared atomic references.
+/// `max_stats` uses a shared lock, with no guard held across gameplay helpers.
 pub unsafe fn ring_on(
     random: &mut Random,
     dungeon: &Dungeon,
@@ -115,7 +116,7 @@ pub unsafe fn ring_on(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) {
     let Some(obj) = get_item_id("put on", ItemFilter::Category(ItemType::RING), dungeon, after, again, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir, last_pick, mpos, msg_esc, n_objs, terse, inv_describe, arm_info, pot_info, ring_info, scr_info, weap_info, ws_info) else {
         return;
@@ -184,8 +185,8 @@ pub unsafe fn ring_on(
 /// Removes a worn ring from the chosen hand after passing drop constraints.
 ///
 /// # Safety
-/// `max_stats` must remain valid for its accesses across reentrant calls.
-/// `mpos` uses a shared atomic reference.
+/// `mpos` uses a shared atomic reference. `max_stats` uses a shared lock,
+/// with no guard held across gameplay helpers.
 pub unsafe fn ring_off(
     random: &mut Random,
     dungeon: &Dungeon,
@@ -198,7 +199,7 @@ pub unsafe fn ring_off(
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
     ws_info: &[ObjInfo],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) {
     let eq = dungeon.player.equipment();
     let left_empty = eq.left_ring_id().is_none();

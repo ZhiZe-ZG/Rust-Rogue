@@ -594,7 +594,7 @@ pub unsafe fn pick_up(
     inpack: *mut i32,
     move_on: u8,
     pack_used: *mut [u8; 26],
-    purse: *mut i32,
+    purse: &std::sync::atomic::AtomicI32,
     terse: u8,
     inv_describe: u8,
     arm_info: &[ObjInfo],
@@ -712,8 +712,9 @@ pub unsafe fn get_item_id(
     }
 }
 
-pub unsafe fn money(value: i32, dungeon: &Dungeon, purse: *mut i32, terse: u8) {
-    *purse += value;
+/// Adds gold atomically before drawing or invoking reentrant message helpers.
+pub unsafe fn money(value: i32, dungeon: &Dungeon, purse: &std::sync::atomic::AtomicI32, terse: u8) {
+    purse.fetch_add(value, std::sync::atomic::Ordering::Relaxed);
     // The gold object was discarded, so the terrain glyph shows via draw.
     crate::draw::write_cell_glyph(hero_coord(dungeon), floor_char_for_room(dungeon) as char);
     if value > 0 {
@@ -817,7 +818,7 @@ unsafe fn pick_up_char(
     inpack: *mut i32,
     move_on: u8,
     pack_used: *mut [u8; 26],
-    purse: *mut i32,
+    purse: &std::sync::atomic::AtomicI32,
     terse: u8,
     inv_describe: u8,
     arm_info: &[ObjInfo],

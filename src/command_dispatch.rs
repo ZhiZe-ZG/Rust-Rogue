@@ -31,6 +31,7 @@ use crate::startup::{quit, shell};
 use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
 use crate::wizard::{create_obj, show_map, teleport, whatis};
 use glam::IVec2;
+use std::sync::atomic::Ordering;
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const F_REAL: u8 = 0x10u8 as u8;
@@ -69,11 +70,11 @@ impl Default for CommandState {
 // ─── Extern C globals ─────────────────────────────────────────────────────────
 
 use crate::game::globals::{
-    e_levels, group, inpack, max_stats, n_objs, pack_used,
-    fight_flush, monsters, no_move, oldpos, passgo, quiet, vf_hit,
-    after, again, count, delta, dir_ch, door_stop, firstmove, get_food_left, get_inpack, has_hit,
+    e_levels, group, inpack, n_objs, pack_used,
+    fight_flush, monsters, no_move, oldpos, passgo, vf_hit,
+    after, again, count, delta, dir_ch, door_stop, firstmove, get_inpack, has_hit,
     inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
-    last_pick, lastscore, max_hit, move_on, no_command, purse, q_comm,
+    last_pick, lastscore, max_hit, move_on, no_command, q_comm,
     runch, running, take, terse, to_death,
 };
 
@@ -140,7 +141,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
             door_stop = false as u8;
         }
         crate::daemon::Daemon::UiRender.run(0, &mut RNG.lock().unwrap());
-        lastscore = purse;
+        lastscore = DUNGEON.player.purse.load(Ordering::Relaxed);
         let hero = hero_pos();
         crate::ui::terminal::UI.move_cursor(IVec2::new(hero.x, hero.y));
         if !((running != 0 || count != 0) && jump != 0) {
@@ -209,7 +210,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                     crate::item::arena::with_object(&DUNGEON.objects, obj, |o| o.o_type.code())
                                         .unwrap_or(0);
                                 pick_up(code as u8, &DUNGEON, &raw mut inpack, move_on,
-                                    &raw mut pack_used, &raw mut purse, terse, inv_describe,
+                                    &raw mut pack_used, &DUNGEON.player.purse, terse, inv_describe,
                                     &arm_names, &pot_names, &ring_names, &scr_names,
                                     &weap_names, &ws_names);
                             }
@@ -234,7 +235,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             &raw const passgo, &raw mut runch, &raw const oldpos,
                             &raw mut take, &raw mut count, &raw mut no_command,
                             &raw mut group, &raw mut has_hit, &raw const weap_info,
-                            &terse, &raw mut max_stats, &raw mut quiet,
+                            &terse, &DUNGEON.player.max_stats, &DUNGEON.player.quiet,
                             &raw mut kamikaze, &raw mut vf_hit, &raw const fight_flush,
                             &raw mut monsters, &e_levels,
                         );
@@ -310,9 +311,9 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs,
                                 &raw mut pack_used, inv_describe, &arm_names, &pot_names,
                                 &ring_names, &scr_names, &ws_names,
-                                &raw mut count, &raw mut quiet, &raw mut to_death,
+                                &raw mut count, &DUNGEON.player.quiet, &raw mut to_death,
                                 &raw mut kamikaze, &raw mut vf_hit, &raw const fight_flush,
-                                &raw mut monsters, &e_levels, &raw mut max_stats,
+                                &raw mut monsters, &e_levels, &DUNGEON.player.max_stats,
                             );
                         }
                     }
@@ -331,12 +332,12 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         let fruit = DUNGEON.fruit();
                         quaff(&mut RNG.lock().unwrap(), &DUNGEON, &crate::ui::terminal::UI,
                             &raw mut pot_info as *mut [_], &raw mut after, terse,
-                            max_stats.strength, &levels, &fruit, again, &raw mut inpack,
+                            DUNGEON.player.max_stats().strength, &levels, &fruit, again, &raw mut inpack,
                             l_last_comm, l_last_dir, l_last_pick, &raw mut last_comm,
                             &raw mut last_dir, &raw mut last_pick, &crate::ui::terminal::UI.mpos,
                             &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, &raw mut pack_used,
                             inv_describe, &arm_names, &ring_names, &scr_names,
-                            &weap_names, &ws_names, &raw mut max_stats);
+                            &weap_names, &ws_names, &DUNGEON.player.max_stats);
                     }
                     Command::Quit => {
                         after = false as u8;
@@ -363,7 +364,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         &raw mut last_pick, &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc,
                         &raw mut n_objs, &raw mut pack_used, terse, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
-                        &raw mut max_stats),
+                        &DUNGEON.player.max_stats),
                     Command::ReadScroll => read_scroll(&mut RNG.lock().unwrap(), &DUNGEON,
                         &crate::ui::terminal::UI, &raw mut scr_info as *mut [_],
                         &weap_names, &raw mut no_command, terse, &raw mut after,
@@ -378,7 +379,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
                         &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
-                        &raw mut max_stats),
+                        &DUNGEON.player.max_stats),
                     Command::Wear => wear(&mut RNG.lock().unwrap(), &DUNGEON, terse,
                         &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
                         &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
@@ -386,16 +387,16 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
                     Command::TakeOff => take_off(&mut RNG.lock().unwrap(), &DUNGEON,
                         terse, &raw mut after, inv_describe, &arm_names, &pot_names,
-                        &ring_names, &scr_names, &weap_names, &ws_names, &raw mut max_stats),
+                        &ring_names, &scr_names, &weap_names, &ws_names, &DUNGEON.player.max_stats),
                     Command::RingOn => ring_on(&mut RNG.lock().unwrap(), &DUNGEON,
                         terse, &crate::ui::terminal::UI.mpos, &raw mut after, again, l_last_comm,
                         l_last_dir, l_last_pick, &raw mut last_comm, &raw mut last_dir,
                         &raw mut last_pick, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
-                        &raw mut max_stats),
+                        &DUNGEON.player.max_stats),
                     Command::RingOff => ring_off(&mut RNG.lock().unwrap(), &DUNGEON,
                         terse, &crate::ui::terminal::UI.mpos, inv_describe, &arm_names, &pot_names,
-                        &ring_names, &scr_names, &weap_names, &ws_names, &raw mut max_stats),
+                        &ring_names, &scr_names, &weap_names, &ws_names, &DUNGEON.player.max_stats),
                     Command::Options => {
                         option();
                         after = false as u8;
@@ -429,7 +430,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
                                 &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs,
                                 inv_describe, &arm_names, &pot_names, &ring_names,
-                                &scr_names, &weap_names, &raw mut count, &raw mut quiet,
+                                &scr_names, &weap_names, &raw mut count, &DUNGEON.player.quiet,
                                 &raw mut has_hit, &raw mut to_death, &raw mut kamikaze,
                                 &raw mut vf_hit, &raw const fight_flush, &raw mut monsters,
                                 &e_levels);
@@ -586,7 +587,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 Command::WizardMap => show_map(),
                                 Command::WizardTeleport => teleport(&mut RNG.lock().unwrap()),
                                 Command::WizardFood => {
-                                    msg_str(&format!("food left: {}", get_food_left()));
+                                    msg_str(&format!("food left: {}", DUNGEON.player.food_left.load(Ordering::Relaxed)));
                                 }
                                 Command::WizardAddPassage => add_pass(),
                                 Command::WizardToggleSee => {
@@ -674,7 +675,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
             let weap_names = (&*(&raw const weap_info)).clone();
             let ws_names = (&*(&raw const ws_info)).clone();
             pick_up(take, &DUNGEON, &raw mut inpack, move_on, &raw mut pack_used,
-                &raw mut purse, terse, inv_describe, &arm_names, &pot_names,
+                &DUNGEON.player.purse, terse, inv_describe, &arm_names, &pot_names,
                 &ring_names, &scr_names, &weap_names, &ws_names);
         }
         if running == 0 {

@@ -10,6 +10,8 @@
 //! Raw state/table parameters must remain valid and initialized throughout the
 //! call, including reentrant helpers. Access must be serialized, with no live
 //! references conflicting with writes. Only short-lived table reads are made.
+//! `purse` and `quiet` are shared atomically. `max_stats` uses a shared lock;
+//! no guard is held across gameplay helpers or callbacks.
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
@@ -206,14 +208,14 @@ pub unsafe fn runners(
     delta: *mut IVec2,
     running: *mut u8,
     count: *mut i32,
-    quiet: *mut i32,
+    quiet: &std::sync::atomic::AtomicI32,
     to_death: *mut u8,
     kamikaze: *mut u8,
     has_hit: *mut u8,
     max_hit: *mut i32,
     no_command: *mut i32,
     vf_hit: *mut i32,
-    purse: *mut i32,
+    purse: &std::sync::atomic::AtomicI32,
     fight_flush: *const u8,
     e_levels: *const [i32; 21],
     monsters: *mut [MonsterInfo; 26],
@@ -229,7 +231,7 @@ pub unsafe fn runners(
     ws_info: *const [ObjInfo; 14],
     see_floor: *const u8,
     room_gold: *const [IVec2; GameConfig::MAX_ROOMS],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) {
     for id in dungeon.monster_list.ids() {
         let Some(m) = Mon::get(id, dungeon) else {
@@ -280,14 +282,14 @@ pub unsafe fn move_monst(
     delta: *mut IVec2,
     running: *mut u8,
     count: *mut i32,
-    quiet: *mut i32,
+    quiet: &std::sync::atomic::AtomicI32,
     to_death: *mut u8,
     kamikaze: *mut u8,
     has_hit: *mut u8,
     max_hit: *mut i32,
     no_command: *mut i32,
     vf_hit: *mut i32,
-    purse: *mut i32,
+    purse: &std::sync::atomic::AtomicI32,
     fight_flush: *const u8,
     e_levels: *const [i32; 21],
     monsters: *mut [MonsterInfo; 26],
@@ -303,7 +305,7 @@ pub unsafe fn move_monst(
     ws_info: *const [ObjInfo; 14],
     see_floor: *const u8,
     room_gold: *const [IVec2; GameConfig::MAX_ROOMS],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) -> i32 {
     let Some(m) = Mon::get(id, dungeon) else {
         return 0;
@@ -388,14 +390,14 @@ pub unsafe fn do_chase(
     delta: *mut IVec2,
     running: *mut u8,
     count: *mut i32,
-    quiet: *mut i32,
+    quiet: &std::sync::atomic::AtomicI32,
     to_death: *mut u8,
     kamikaze: *mut u8,
     has_hit: *mut u8,
     max_hit: *mut i32,
     no_command: *mut i32,
     vf_hit: *mut i32,
-    purse: *mut i32,
+    purse: &std::sync::atomic::AtomicI32,
     fight_flush: *const u8,
     e_levels: *const [i32; 21],
     monsters: *mut [MonsterInfo; 26],
@@ -411,7 +413,7 @@ pub unsafe fn do_chase(
     ws_info: *const [ObjInfo; 14],
     see_floor: *const u8,
     room_gold: *const [IVec2; GameConfig::MAX_ROOMS],
-    max_stats: *mut Stats,
+    max_stats: &std::sync::RwLock<Stats>,
 ) -> i32 {
     let Some(mut m) = Mon::get(id, dungeon) else {
         return 0;
@@ -493,7 +495,7 @@ pub unsafe fn do_chase(
                     weap_info, e_levels);
                 *running = false as u8;
                 *count = 0;
-                *quiet = 0;
+                quiet.store(0, std::sync::atomic::Ordering::Relaxed);
                 if *to_death != 0 && !m.has(MonsterFlags::TARGET) {
                     *to_death = false as u8;
                     *kamikaze = false as u8;
