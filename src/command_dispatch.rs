@@ -74,7 +74,7 @@ use crate::game::globals::{
     after, again, count, delta, dir_ch, door_stop, firstmove, get_food_left, get_inpack, has_hit,
     inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
     last_pick, lastscore, max_hit, move_on, mpos, no_command, purse, q_comm,
-    runch, running, save_msg, stat_msg, take, terse, to_death, ws_made,
+    runch, running, save_msg, stat_msg, take, terse, to_death,
 };
 
 // ─── Extern C functions called from this module ───────────────────────────────
@@ -922,7 +922,7 @@ pub unsafe fn levit_check() -> u8 {
 /// Allow a user to call a potion, scroll, or ring something.
 ///
 /// Uses dungeon-owned appearance names and global item identification tables,
-/// ws_made, terse, and prbuf.
+/// terse, and prbuf.
 pub unsafe fn call() {
     let arm_names = (&*(&raw const arm_info)).clone();
     let pot_names = (&*(&raw const pot_info)).clone();
@@ -989,7 +989,7 @@ pub unsafe fn call() {
         ItemType::Ring(_) => cstr_at(DUNGEON.r_stones()[which]),
         ItemType::Potion(_) => cstr_at(DUNGEON.p_colors()[which]),
         ItemType::Scroll(_) => DUNGEON.scroll_name(which),
-        _ => cstr_at(ws_made[which]),
+        _ => cstr_at(DUNGEON.ws_made()[which]),
     };
 
     if let Some(guess) = &info.oi_guess {

@@ -418,6 +418,8 @@ pub unsafe fn init_stones() {
 pub unsafe fn init_materials() {
     let mut used = [0u8; NWOOD];
     let mut metused: [u8; NMETAL] = [0; NMETAL];
+    let mut kinds = [""; MAXSTICKS];
+    let mut materials = [""; MAXSTICKS];
     for i in 0..MAXSTICKS {
         loop {
             if {
@@ -430,8 +432,8 @@ pub unsafe fn init_materials() {
                     random.rnd(NMETAL as i32)
                 } as usize;
                 if metused[j] == 0 {
-                    crate::game::globals::ws_type[i] = "wand";
-                    crate::game::globals::ws_made[i] = metal[j];
+                    kinds[i] = "wand";
+                    materials[i] = metal[j];
                     metused[j] = 1;
                     break;
                 }
@@ -441,14 +443,16 @@ pub unsafe fn init_materials() {
                     random.rnd(NWOOD as i32)
                 } as usize;
                 if used[j] == 0 {
-                    crate::game::globals::ws_type[i] = "staff";
-                    crate::game::globals::ws_made[i] = wood[j];
+                    kinds[i] = "staff";
+                    materials[i] = wood[j];
                     used[j] = 1;
                     break;
                 }
             }
         }
     }
+    DUNGEON.set_ws_type(kinds);
+    DUNGEON.set_ws_made(materials);
 }
 
 /// Accumulate cumulative probabilities for one item-info table.

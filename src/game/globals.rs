@@ -123,10 +123,6 @@ pub static mut dir_ch: Direction = Direction::None;
 pub static mut runch: Direction = Direction::None;
 /// Whether the player is taking an item.
 pub static mut take: u8 = 0;
-/// Wand/staff material names (`char *ws_made[]`), now Rust string slices.
-pub static mut ws_made: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
-/// Wand/staff kind names (`char *ws_type[]`), now Rust string slices.
-pub static mut ws_type: [&'static str; MAXSTICKS] = [""; MAXSTICKS];
 /// Previous suspend signal state.
 pub static mut orig_dsusp: i32 = 0;
 /// Last command read by the legacy input path.

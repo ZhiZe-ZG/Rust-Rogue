@@ -53,6 +53,7 @@ Callers outside these modules still obtain dependencies from the singleton owner
 - `objects`: the generational `ThingArena` in [src/item/arena.rs](src/item/arena.rs), shared by floor items, player inventory, monster packs, and equipment handles.
 - `scroll_names`: randomly generated scroll labels behind an `RwLock`, accessed through `scroll_name()`, `scroll_names()`, and their setters. Each dungeon has independent names that persist across level changes and save/restore.
 - `p_colors` and `r_stones`: randomized potion colors and ring stones in separate lock-protected arrays, accessed through snapshot getters and whole-table setters. Assignments are independent per dungeon and persist across levels and save/restore; their snapshot field names are unchanged.
+- `ws_made` and `ws_type`: randomized wand/staff materials and kinds in separate lock-protected arrays, accessed through snapshot getters and whole-table setters. Assignments are independent per dungeon and persist across levels and save/restore; their snapshot field names are unchanged.
 - `fruit`: the customizable fruit name behind an `RwLock`, accessed through `fruit()` and `set_fruit()`. It defaults to `slime-mold`, is configured by the `fruit` option, and is saved and restored per game.
 - `whoami`: the player name behind an `RwLock`, accessed through `whoami()` and `set_whoami()`. It starts empty, is configured at startup or through the `name` option, and is saved and restored per game.
 
@@ -154,8 +155,6 @@ The remaining mutable game-state bucket is in [src/game/globals.rs](src/game/glo
 
 #### String / table-backed globals
 
-- `ws_made`: wand/staff material names.
-- `ws_type`: wand/staff kind names.
 - `HOME`: home-directory string.
 - `FILE_NAME`: current save filename.
 - `HUH`: message history buffer.

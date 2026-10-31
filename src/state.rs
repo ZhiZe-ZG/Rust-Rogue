@@ -477,8 +477,8 @@ unsafe fn build_snapshot() -> GameSnapshot {
         trap_names: crate::game::globals::trap_names(),
         p_colors: DUNGEON.p_colors().iter().map(|c| (*c).to_string()).collect(),
         r_stones: DUNGEON.r_stones().iter().map(|c| (*c).to_string()).collect(),
-        ws_type: ws_type.iter().map(|c| (*c).to_string()).collect(),
-        ws_made: ws_made.iter().map(|c| (*c).to_string()).collect(),
+        ws_type: DUNGEON.ws_type().iter().map(|c| (*c).to_string()).collect(),
+        ws_made: DUNGEON.ws_made().iter().map(|c| (*c).to_string()).collect(),
 
         orig_dsusp,
         l_last_comm,
@@ -636,14 +636,16 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
         }
     }
     DUNGEON.set_r_stones(stones);
+    let mut kinds = [""; 14];
     for (i, name) in s.ws_type.iter().enumerate() {
-        if i < ws_type.len() {
-            ws_type[i] = if name == "staff" { "staff" } else { "wand" };
+        if i < kinds.len() {
+            kinds[i] = if name == "staff" { "staff" } else { "wand" };
         }
     }
+    let mut materials = [""; 14];
     for (i, name) in s.ws_made.iter().enumerate() {
-        if i < ws_made.len() {
-            ws_made[i] = if ws_type[i] == "staff" {
+        if i < materials.len() {
+            materials[i] = if kinds[i] == "staff" {
                 crate::init::wood
                     .iter()
                     .find(|w| **w == *name)
@@ -658,6 +660,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
             };
         }
     }
+    DUNGEON.set_ws_type(kinds);
+    DUNGEON.set_ws_made(materials);
 
     // ── numeric globals ─────────────────────────────────────────────────
     orig_dsusp = s.orig_dsusp;

@@ -42,6 +42,10 @@ pub struct Dungeon {
     p_colors: RwLock<[&'static str; 14]>,
     /// Randomized ring stone assignments, shared across levels.
     r_stones: RwLock<[&'static str; 14]>,
+    /// Randomized wand/staff material assignments, shared across levels.
+    ws_made: RwLock<[&'static str; 14]>,
+    /// Randomized wand/staff kind assignments, shared across levels.
+    ws_type: RwLock<[&'static str; 14]>,
     /// Custom fruit name used in food and potion flavor text.
     fruit: RwLock<String>,
     /// Player name used by options, scores, and save files.
@@ -83,6 +87,8 @@ impl Dungeon {
             scroll_names: RwLock::new(Vec::new()),
             p_colors: RwLock::new([""; 14]),
             r_stones: RwLock::new([""; 14]),
+            ws_made: RwLock::new([""; 14]),
+            ws_type: RwLock::new([""; 14]),
             fruit: RwLock::new(String::new()),
             whoami: RwLock::new(String::new()),
             max_level: AtomicI32::new(0),
@@ -115,6 +121,26 @@ impl Dungeon {
     /// Replace all ring stone assignments during initialization or restore.
     pub fn set_r_stones(&self, stones: [&'static str; 14]) {
         *self.r_stones.write().unwrap_or_else(|poison| poison.into_inner()) = stones;
+    }
+
+    /// A snapshot of wand/staff material assignments, empty until initialized.
+    pub fn ws_made(&self) -> [&'static str; 14] {
+        *self.ws_made.read().unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Replace all wand/staff materials during initialization or restore.
+    pub fn set_ws_made(&self, materials: [&'static str; 14]) {
+        *self.ws_made.write().unwrap_or_else(|poison| poison.into_inner()) = materials;
+    }
+
+    /// A snapshot of wand/staff kinds, empty until initialized.
+    pub fn ws_type(&self) -> [&'static str; 14] {
+        *self.ws_type.read().unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Replace all wand/staff kinds during initialization or restore.
+    pub fn set_ws_type(&self, kinds: [&'static str; 14]) {
+        *self.ws_type.write().unwrap_or_else(|poison| poison.into_inner()) = kinds;
     }
 
     /// The player's name, empty until set.
@@ -405,6 +431,40 @@ pub(crate) fn bump_no_food() {
 #[cfg(test)]
 mod tests {
     use super::Dungeon;
+
+    #[test]
+    fn wand_tables_are_owned_by_each_dungeon() {
+        let first = Dungeon::empty();
+        let second = Dungeon::empty();
+        assert_eq!(first.ws_made(), [""; 14]);
+        assert_eq!(first.ws_type(), [""; 14]);
+
+        let mut materials = first.ws_made();
+        let mut kinds = first.ws_type();
+        materials[0] = "oaken";
+        kinds[0] = "staff";
+        first.set_ws_made(materials);
+        first.set_ws_type(kinds);
+        materials[0] = "iron";
+        kinds[0] = "wand";
+        assert_eq!(materials[0], "iron");
+        assert_eq!(kinds[0], "wand");
+        assert_eq!(first.ws_made()[0], "oaken");
+        assert_eq!(first.ws_type()[0], "staff");
+        assert_eq!(second.ws_made(), [""; 14]);
+        assert_eq!(second.ws_type(), [""; 14]);
+
+        let restored = Dungeon::empty();
+        restored.set_ws_made(first.ws_made());
+        restored.set_ws_type(first.ws_type());
+        first.set_ws_made([""; 14]);
+        first.set_ws_type([""; 14]);
+        assert_eq!(first.ws_made(), [""; 14]);
+        assert_eq!(first.ws_type(), [""; 14]);
+        restored.set_current_depth(2);
+        assert_eq!(restored.ws_made()[0], "oaken");
+        assert_eq!(restored.ws_type()[0], "staff");
+    }
 
     #[test]
     fn appearance_tables_are_owned_by_each_dungeon() {
