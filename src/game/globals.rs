@@ -2,7 +2,6 @@
 //!
 //! Mirrors the process-wide storage the original C code declared in
 //! `extern.c` and `init.c`: material tables, monster state, and other globals.
-use crate::command::Command;
 use crate::config::GameConfig;
 use crate::direction::Direction;
 use crate::entity::stats::Stats;
@@ -60,8 +59,6 @@ pub struct ObjInfo {
 pub const ALLSCORE: u8 = 1;
 /// Daemon scheduling phase flag.
 pub static mut after: u8 = 0;
-/// Requests that the current command be repeated.
-pub static mut again: u8 = 0;
 /// Stops automatic movement at the next door.
 pub static mut door_stop: u8 = 0;
 /// Flushes pending input during combat.
@@ -111,14 +108,6 @@ pub static mut runch: Direction = Direction::None;
 pub static mut take: u8 = 0;
 /// Previous suspend signal state.
 pub static mut orig_dsusp: i32 = 0;
-/// Last command read by the legacy input path.
-pub static mut l_last_comm: Command = Command::UnknownKey;
-/// Last direction read by the legacy input path.
-pub static mut l_last_dir: Direction = Direction::None;
-/// Last command processed by the game.
-pub static mut last_comm: Command = Command::UnknownKey;
-/// Last direction processed by the game.
-pub static mut last_dir: Direction = Direction::None;
 /// Maximum number of scores retained in the score table.
 ///
 /// Immutable: the original never reassigned `numscores` at runtime.
@@ -134,8 +123,6 @@ pub static mut max_hit: i32 = 0;
 /// Armor class values indexed by armor kind.
 #[allow(non_upper_case_globals)]
 pub const a_class: [i32; MAXARMORS] = [8, 7, 7, 6, 5, 4, 4, 3];
-/// Number of turns elapsed in the current action.
-pub static mut count: i32 = 0;
 /// The open score file, or `None` when it is not open.
 pub static mut scoreboard: Option<std::fs::File> = None;
 /// Previous score value used by score display logic.
@@ -158,10 +145,6 @@ pub const e_levels: [i32; 21] = [
 pub static mut delta: IVec2 = IVec2 { x: 0, y: 0 };
 /// Previous player position.
 pub static mut oldpos: IVec2 = IVec2 { x: 0, y: 0 };
-/// Previous object selected by the legacy input path.
-pub static mut l_last_pick: Option<crate::item::arena::ThingId> = None;
-/// Last object selected by the game.
-pub static mut last_pick: Option<crate::item::arena::ThingId> = None;
 
 /// Previous room containing the player.
 pub static mut oldrp: Option<usize> = None;

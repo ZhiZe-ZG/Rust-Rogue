@@ -11,6 +11,8 @@
 //! must not retain exclusive references to their storage across UI/daemon
 //! reentry. Pack counts use relaxed atomics; letter bitmap locks are held only
 //! for immediate bitmap access, never across gameplay helpers.
+//! Repeat command/direction/selection slots use shared `CommandValue` cells;
+//! their locks are released by each `get`/`set` before invoking helpers.
 
 use crate::command::Command;
 use crate::direction::Direction;
@@ -344,9 +346,9 @@ mod tests {
         }));
         dungeon.player.set_pack(vec![id]);
         let inpack = AtomicI32::new(1);
-        let mut last_pick = Some(id);
+        let last_pick = crate::command_dispatch::CommandValue::new(Some(id));
         unsafe {
-            assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &mut last_pick, &used), Some(id));
+            assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &last_pick, &used), Some(id));
         }
         assert_eq!(inpack.load(Ordering::Relaxed), 0);
         // Both bitmap helpers release their guards before returning.
@@ -363,7 +365,7 @@ mod tests {
         let dungeon = Dungeon::empty();
         let inpack = AtomicI32::new(1);
         let used = Mutex::new([1; 26]);
-        let mut last_pick = None;
+        let last_pick = crate::command_dispatch::CommandValue::new(None);
         for packch in [0, b'a' - 1, b'z' + 1, u8::MAX] {
             let id = dungeon.objects.insert(Thing::object(ThingObject {
                 o_count: 1,
@@ -373,7 +375,7 @@ mod tests {
             dungeon.player.set_pack(vec![id]);
             inpack.store(1, Ordering::Relaxed);
             unsafe {
-                assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &mut last_pick, &used), Some(id));
+                assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &last_pick, &used), Some(id));
             }
             assert_eq!(inpack.load(Ordering::Relaxed), 0);
             assert_eq!(*used.try_lock().unwrap(), [1; 26]);
@@ -401,7 +403,7 @@ mod tests {
         let inpack = AtomicI32::new(MAXPACK);
         let used = Mutex::new([0; 26]);
         used.lock().unwrap()[0] = 1;
-        let mut last_pick = None;
+        let last_pick = crate::command_dispatch::CommandValue::new(None);
         unsafe {
             add_pack_id(Some(incoming), true, &dungeon, &inpack, &used, 0, 1, &[], &[], &[], &[], &[], &[]);
             assert_eq!(inpack.load(Ordering::Relaxed), MAXPACK);
@@ -410,14 +412,14 @@ mod tests {
             // Preserve the legacy grouped merge's extra increment exactly.
             assert_eq!(dungeon.objects.with_object(stack, |o| o.o_count), Some(6));
 
-            let split = leave_pack_id(stack, true, false, &dungeon, &inpack, &mut last_pick, &used).unwrap();
+            let split = leave_pack_id(stack, true, false, &dungeon, &inpack, &last_pick, &used).unwrap();
             assert_ne!(split, stack);
             assert_eq!(inpack.load(Ordering::Relaxed), MAXPACK);
             assert_eq!(dungeon.objects.with_object(stack, |o| o.o_count), Some(5));
             assert_eq!(dungeon.objects.with_object(split, |o| o.o_count), Some(1));
             assert_eq!(used.lock().unwrap()[0], 1);
 
-            assert_eq!(leave_pack_id(stack, false, true, &dungeon, &inpack, &mut last_pick, &used), Some(stack));
+            assert_eq!(leave_pack_id(stack, false, true, &dungeon, &inpack, &last_pick, &used), Some(stack));
         }
         assert_eq!(inpack.load(Ordering::Relaxed), MAXPACK - 1);
         assert_eq!(*used.try_lock().unwrap(), [0; 26]);
@@ -428,17 +430,30 @@ mod tests {
     fn reset_last_restores_each_supplied_repeat_slot() {
         let dungeon = Dungeon::empty();
         let id = dungeon.objects.new_item_id();
-        let mut command = Command::Inventory;
-        let mut direction = Direction::None;
-        let mut pick = None;
+        let command = crate::command_dispatch::CommandValue::new(Command::Inventory);
+        let direction = crate::command_dispatch::CommandValue::new(Direction::None);
+        let pick = crate::command_dispatch::CommandValue::new(None);
+        let other_command = crate::command_dispatch::CommandValue::new(Command::Inventory);
+        let other_direction = crate::command_dispatch::CommandValue::new(Direction::None);
+        let other_pick = crate::command_dispatch::CommandValue::new(None::<ThingId>);
         let saved_command = Command::Drop;
         let saved_direction = Direction::North;
         unsafe {
-            reset_last(saved_command, saved_direction, Some(id), &mut command, &mut direction, &mut pick);
+            reset_last(saved_command, saved_direction, Some(id), &command, &direction, &pick);
         }
-        assert_eq!(command, saved_command);
-        assert_eq!(direction, saved_direction);
-        assert_eq!(pick, Some(id));
+        assert_eq!(command.get(), saved_command);
+        assert_eq!(direction.get(), saved_direction);
+        assert_eq!(pick.get(), Some(id));
+        assert_eq!(other_command.get(), Command::Inventory);
+        assert_eq!(other_direction.get(), Direction::None);
+        assert_eq!(other_pick.get(), None);
+
+        unsafe {
+            reset_last(Command::Inventory, Direction::None, None, &command, &direction, &pick);
+        }
+        assert_eq!(command.get(), Command::Inventory);
+        assert_eq!(direction.get(), Direction::None);
+        assert_eq!(pick.get(), None);
     }
 
     #[test]
@@ -453,30 +468,30 @@ mod tests {
         }));
         dungeon.player.set_pack(vec![id]);
         let inpack = AtomicI32::new(2);
-        let mut last_pick = None;
+        let last_pick = crate::command_dispatch::CommandValue::new(None);
         let pack_used = Mutex::new([0; 26]);
         pack_used.lock().unwrap()[2] = 1;
 
         unsafe {
-            let split = leave_pack_id(id, true, false, &dungeon, &inpack, &mut last_pick, &pack_used).unwrap();
+            let split = leave_pack_id(id, true, false, &dungeon, &inpack, &last_pick, &pack_used).unwrap();
             assert_ne!(split, id);
             assert_eq!(dungeon.objects.with_object(split, |o| o.o_count), Some(1));
             assert_eq!(dungeon.objects.with_object(id, |o| o.o_count), Some(1));
             assert_eq!(dungeon.player.pack(), vec![id]);
             assert_eq!(inpack.load(Ordering::Relaxed), 1);
-            assert_eq!(last_pick, Some(id));
+            assert_eq!(last_pick.get(), Some(id));
             assert_eq!(pack_used.lock().unwrap()[2], 1);
 
-            assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &mut last_pick, &pack_used), Some(id));
+            assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &last_pick, &pack_used), Some(id));
             assert_eq!(inpack.load(Ordering::Relaxed), 0);
-            assert_eq!(last_pick, None);
+            assert_eq!(last_pick.get(), None);
             assert_eq!(pack_used.lock().unwrap()[2], 0);
             assert!(dungeon.player.pack().is_empty());
             assert!(other.objects.is_empty());
             assert!(other.player.pack().is_empty());
 
             dungeon.objects.remove(id);
-            assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &mut last_pick, &pack_used), None);
+            assert_eq!(leave_pack_id(id, false, false, &dungeon, &inpack, &last_pick, &pack_used), None);
             assert_eq!(inpack.load(Ordering::Relaxed), 0);
         }
     }
@@ -593,7 +608,7 @@ pub unsafe fn leave_pack_id(
     all: bool,
     dungeon: &Dungeon,
     inpack: &AtomicI32,
-    last_pick: *mut Option<ThingId>,
+    last_pick: &crate::command_dispatch::CommandValue<Option<ThingId>>,
     pack_used: &Mutex<[u8; 26]>,
 ) -> Option<ThingId> {
     let (count, group, packch) =
@@ -601,7 +616,7 @@ pub unsafe fn leave_pack_id(
 
     inpack.fetch_sub(1, Ordering::Relaxed);
     if count > 1 && !all {
-        *last_pick = Some(id);
+        last_pick.set(Some(id));
         dungeon.objects.with_object_mut(id, |o| o.o_count -= 1);
         if group != 0 {
             inpack.fetch_add(1, Ordering::Relaxed);
@@ -615,7 +630,7 @@ pub unsafe fn leave_pack_id(
             Some(id)
         }
     } else {
-        *last_pick = None;
+        last_pick.set(None);
         if (b'a'..=b'z').contains(&packch) {
             let mut used = pack_used.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             used[(packch - b'a') as usize] = 0;
@@ -749,9 +764,9 @@ pub unsafe fn get_item_id(
     l_last_comm: Command,
     l_last_dir: Direction,
     l_last_pick: Option<ThingId>,
-    last_comm: *mut Command,
-    last_dir: *mut Direction,
-    last_pick: *mut Option<ThingId>,
+    last_comm: &crate::command_dispatch::CommandValue<Command>,
+    last_dir: &crate::command_dispatch::CommandValue<Direction>,
+    last_pick: &crate::command_dispatch::CommandValue<Option<ThingId>>,
     mpos: &std::sync::atomic::AtomicI32,
     msg_esc: &std::sync::atomic::AtomicU8,
     n_objs: *mut i32,
@@ -772,7 +787,7 @@ pub unsafe fn get_item_id(
     }
 
     if again != 0 {
-        if let Some(id) = *last_pick {
+        if let Some(id) = last_pick.get() {
             return Some(id);
         }
         msg_str("you ran out");
@@ -847,13 +862,13 @@ pub unsafe fn reset_last(
     l_last_comm: Command,
     l_last_dir: Direction,
     l_last_pick: Option<ThingId>,
-    last_comm: *mut Command,
-    last_dir: *mut Direction,
-    last_pick: *mut Option<ThingId>,
+    last_comm: &crate::command_dispatch::CommandValue<Command>,
+    last_dir: &crate::command_dispatch::CommandValue<Direction>,
+    last_pick: &crate::command_dispatch::CommandValue<Option<ThingId>>,
 ) {
-    *last_comm = l_last_comm;
-    *last_dir = l_last_dir;
-    *last_pick = l_last_pick;
+    last_comm.set(l_last_comm);
+    last_dir.set(l_last_dir);
+    last_pick.set(l_last_pick);
 }
 
 /// Pointer-free core of `move_msg`: works on an arena handle.

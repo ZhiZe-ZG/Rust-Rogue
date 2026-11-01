@@ -2,7 +2,8 @@
 //!
 //! Ported from `src/c/things.c` to Rust.
 //!
-//! State pointers must remain valid and writable throughout each call, without
+//! Repeat state uses shared `CommandValue` cells with no lock across helpers.
+//! Remaining state pointers must remain valid and writable throughout each call, without
 //! exclusive references overlapping reentrant UI/daemon access. Metadata slices
 //! must include every indexed kind and must not be mutated during the call.
 use crate::command::Command;
@@ -410,9 +411,9 @@ pub unsafe fn drop(
     l_last_comm: Command,
     l_last_dir: Direction,
     l_last_pick: Option<ThingId>,
-    last_comm: *mut Command,
-    last_dir: *mut Direction,
-    last_pick: *mut Option<ThingId>,
+    last_comm: &crate::command_dispatch::CommandValue<Command>,
+    last_dir: &crate::command_dispatch::CommandValue<Direction>,
+    last_pick: &crate::command_dispatch::CommandValue<Option<ThingId>>,
     mpos: &std::sync::atomic::AtomicI32,
     msg_esc: &std::sync::atomic::AtomicU8,
     n_objs: *mut i32,

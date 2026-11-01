@@ -40,7 +40,7 @@ const STARVETIME: i32 = 850;
 // ─── Extern C globals ────────────────────────────────────────────────────────
 
 use crate::game::globals::{
-    after, count, jump, no_command, running, terse, to_death,
+    after, jump, no_command, running, terse, to_death,
 };
 
 // ─── Module-local helpers ─────────────────────────────────────────────────────
@@ -243,7 +243,7 @@ pub unsafe fn stomach(random: &mut Random) {
         DUNGEON.player.remove_flag(MonsterFlags::RUN);
         running = false as u8;
         to_death = false as u8;
-        count = 0;
+        DUNGEON.command_state.count.store(0, Ordering::Relaxed);
     }
 }
 

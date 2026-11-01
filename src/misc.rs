@@ -44,8 +44,8 @@ const NORM: i32 = 0;
 const F_SEEN: u8 = 0x40;
 
 use crate::game::globals::{
-    after, again, delta, dir_ch, door_stop, e_levels, firstmove, jump,
-    last_dir, no_command, no_move, oldpos, passgo, runch, running, see_floor, terse,
+    after, delta, dir_ch, door_stop, e_levels, firstmove, jump,
+    no_command, no_move, oldpos, passgo, runch, running, see_floor, terse,
 };
 
 #[inline]
@@ -105,13 +105,13 @@ pub unsafe fn eat() {
         ItemFilter::Category(ItemType::Food),
         &DUNGEON,
         &raw mut globals::after,
-        globals::again,
-        globals::l_last_comm,
-        globals::l_last_dir,
-        globals::l_last_pick,
-        &raw mut globals::last_comm,
-        &raw mut globals::last_dir,
-        &raw mut globals::last_pick,
+        DUNGEON.command_state.again.load(Ordering::Relaxed),
+        DUNGEON.command_state.l_last_comm.get(),
+        DUNGEON.command_state.l_last_dir.get(),
+        DUNGEON.command_state.l_last_pick.get(),
+        &DUNGEON.command_state.last_comm,
+        &DUNGEON.command_state.last_dir,
+        &DUNGEON.command_state.last_pick,
         &crate::ui::terminal::UI.mpos,
         &crate::ui::terminal::UI.msg_esc,
         &raw mut globals::n_objs,
@@ -172,7 +172,7 @@ pub unsafe fn eat() {
         false,
         &DUNGEON,
         &DUNGEON.player.inpack,
-        &raw mut globals::last_pick,
+        &DUNGEON.command_state.last_pick,
         &DUNGEON.player.pack_used,
     );
 }
@@ -294,12 +294,10 @@ pub fn is_current_id(id: crate::item::arena::ThingId) -> bool {
 
 pub unsafe fn get_dir() -> u8 {
     let mut gotit: bool;
-    let mut last_delt: IVec2 = IVec2 { x: 0, y: 0 };
 
-    if again != 0 && last_dir != crate::direction::Direction::None {
-        delta.y = last_delt.y;
-        delta.x = last_delt.x;
-        dir_ch = last_dir;
+    if let Some(direction) = DUNGEON.command_state.repeated_direction() {
+        dir_ch = direction;
+        delta = dir_ch.delta();
     } else {
         if terse == 0 {
             msg_str("which direction? ");
@@ -316,14 +314,14 @@ pub unsafe fn get_dir() -> u8 {
                     delta.x = movement.x;
                 }
                 Command::Escape => {
-                    last_dir = crate::direction::Direction::None;
+                    DUNGEON.command_state.last_dir.set(crate::direction::Direction::None);
                     reset_last(
-                        globals::l_last_comm,
-                        globals::l_last_dir,
-                        globals::l_last_pick,
-                        &raw mut globals::last_comm,
-                        &raw mut globals::last_dir,
-                        &raw mut globals::last_pick,
+                        DUNGEON.command_state.l_last_comm.get(),
+                        DUNGEON.command_state.l_last_dir.get(),
+                        DUNGEON.command_state.l_last_pick.get(),
+                        &DUNGEON.command_state.last_comm,
+                        &DUNGEON.command_state.last_dir,
+                        &DUNGEON.command_state.last_pick,
                     );
                     return false as u8;
                 }
@@ -337,9 +335,7 @@ pub unsafe fn get_dir() -> u8 {
                 break;
             }
         }
-        last_dir = dir_ch;
-        last_delt.y = delta.y;
-        last_delt.x = delta.x;
+        DUNGEON.command_state.last_dir.set(dir_ch);
     }
 
     if player_has(MonsterFlags::HUH)

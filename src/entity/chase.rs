@@ -10,8 +10,9 @@
 //! Raw state/table parameters must remain valid and initialized throughout the
 //! call, including reentrant helpers. Access must be serialized, with no live
 //! references conflicting with writes. Only short-lived table reads are made.
-//! `purse` and `quiet` are shared atomically. `max_stats` uses a shared lock;
-//! no guard is held across gameplay helpers or callbacks.
+//! `count`, `purse`, and `quiet` are shared atomically; `last_pick` uses a
+//! shared `CommandValue` cell. `max_stats` uses a shared lock; no guard is held
+//! across gameplay helpers or callbacks.
 
 use crate::config::GameConfig;
 use crate::entity::fight::attack;
@@ -207,7 +208,7 @@ pub unsafe fn runners(
     dungeon: &Dungeon,
     delta: *mut IVec2,
     running: *mut u8,
-    count: *mut i32,
+    count: &std::sync::atomic::AtomicI32,
     quiet: &std::sync::atomic::AtomicI32,
     to_death: *mut u8,
     kamikaze: *mut u8,
@@ -220,7 +221,7 @@ pub unsafe fn runners(
     e_levels: *const [i32; 21],
     monsters: *mut [MonsterInfo; 26],
     inpack: &std::sync::atomic::AtomicI32,
-    last_pick: *mut Option<ThingId>,
+    last_pick: &crate::command_dispatch::CommandValue<Option<ThingId>>,
     pack_used: &std::sync::Mutex<[u8; 26]>,
     inv_describe: *const u8,
     arm_info: *const [ObjInfo; 8],
@@ -281,7 +282,7 @@ pub unsafe fn move_monst(
     dungeon: &Dungeon,
     delta: *mut IVec2,
     running: *mut u8,
-    count: *mut i32,
+    count: &std::sync::atomic::AtomicI32,
     quiet: &std::sync::atomic::AtomicI32,
     to_death: *mut u8,
     kamikaze: *mut u8,
@@ -294,7 +295,7 @@ pub unsafe fn move_monst(
     e_levels: *const [i32; 21],
     monsters: *mut [MonsterInfo; 26],
     inpack: &std::sync::atomic::AtomicI32,
-    last_pick: *mut Option<ThingId>,
+    last_pick: &crate::command_dispatch::CommandValue<Option<ThingId>>,
     pack_used: &std::sync::Mutex<[u8; 26]>,
     inv_describe: *const u8,
     arm_info: *const [ObjInfo; 8],
@@ -389,7 +390,7 @@ pub unsafe fn do_chase(
     dungeon: &Dungeon,
     delta: *mut IVec2,
     running: *mut u8,
-    count: *mut i32,
+    count: &std::sync::atomic::AtomicI32,
     quiet: &std::sync::atomic::AtomicI32,
     to_death: *mut u8,
     kamikaze: *mut u8,
@@ -402,7 +403,7 @@ pub unsafe fn do_chase(
     e_levels: *const [i32; 21],
     monsters: *mut [MonsterInfo; 26],
     inpack: &std::sync::atomic::AtomicI32,
-    last_pick: *mut Option<ThingId>,
+    last_pick: &crate::command_dispatch::CommandValue<Option<ThingId>>,
     pack_used: &std::sync::Mutex<[u8; 26]>,
     inv_describe: *const u8,
     arm_info: *const [ObjInfo; 8],
@@ -494,7 +495,7 @@ pub unsafe fn do_chase(
                     has_hit, to_death, kamikaze, vf_hit, fight_flush, monsters,
                     weap_info, e_levels);
                 *running = false as u8;
-                *count = 0;
+                count.store(0, std::sync::atomic::Ordering::Relaxed);
                 quiet.store(0, std::sync::atomic::Ordering::Relaxed);
                 if *to_death != 0 && !m.has(MonsterFlags::TARGET) {
                     *to_death = false as u8;

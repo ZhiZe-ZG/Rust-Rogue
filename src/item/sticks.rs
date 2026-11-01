@@ -157,9 +157,9 @@ pub unsafe fn do_zap(
     l_last_comm: Command,
     l_last_dir: Direction,
     l_last_pick: Option<ThingId>,
-    last_comm: *mut Command,
-    last_dir: *mut Direction,
-    last_pick: *mut Option<ThingId>,
+    last_comm: &crate::command_dispatch::CommandValue<Command>,
+    last_dir: &crate::command_dispatch::CommandValue<Direction>,
+    last_pick: &crate::command_dispatch::CommandValue<Option<ThingId>>,
     mpos: &std::sync::atomic::AtomicI32,
     msg_esc: &std::sync::atomic::AtomicU8,
     n_objs: *mut i32,
@@ -169,7 +169,7 @@ pub unsafe fn do_zap(
     ring_info: &[ObjInfo],
     scr_info: &[ObjInfo],
     weap_info: &[ObjInfo],
-    count: *mut i32,
+    count: &std::sync::atomic::AtomicI32,
     quiet: &std::sync::atomic::AtomicI32,
     has_hit: *mut u8,
     to_death: *mut u8,
@@ -329,7 +329,7 @@ pub unsafe fn fire_bolt(
     _name: &str,
     random: &mut Random,
     dungeon: &Dungeon,
-    count: *mut i32,
+    count: &std::sync::atomic::AtomicI32,
     quiet: &std::sync::atomic::AtomicI32,
     has_hit: *mut u8,
     to_death: *mut u8,
@@ -390,7 +390,8 @@ mod tests {
     #[test]
     fn bolt_combat_exposes_all_entity_dependencies() {
         let _: unsafe fn(
-            IVec2, IVec2, &str, &mut Random, &Dungeon, *mut i32, &std::sync::atomic::AtomicI32,
+            IVec2, IVec2, &str, &mut Random, &Dungeon,
+            &std::sync::atomic::AtomicI32, &std::sync::atomic::AtomicI32,
             *mut u8, *mut u8, *mut u8, *mut i32, *const u8,
             *mut [MonsterInfo; 26], *const [ObjInfo; 10], *const [i32; 21],
         ) = fire_bolt;

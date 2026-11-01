@@ -80,9 +80,7 @@ fn master_enabled() -> bool {
 }
 
 use crate::game::globals::{
-    a_class, after, again, count, inv_describe, l_last_comm,
-    l_last_dir, l_last_pick, last_comm, last_dir, last_pick,
-    n_objs, no_move, running, terse, vf_hit,
+    a_class, after, inv_describe, n_objs, no_move, running, terse, vf_hit,
 };
 
 pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
@@ -101,8 +99,8 @@ pub unsafe fn whatis(insist: u8, filter: ItemFilter) {
         let weap_names = (&*(&raw const weap_info)).clone();
         let ws_names = (&*(&raw const ws_info)).clone();
         obj = get_item_id("identify", filter, &DUNGEON, &raw mut after,
-            again, l_last_comm, l_last_dir, l_last_pick, &raw mut last_comm,
-            &raw mut last_dir, &raw mut last_pick, &crate::ui::terminal::UI.mpos,
+            DUNGEON.command_state.again.load(Ordering::Relaxed), DUNGEON.command_state.l_last_comm.get(), DUNGEON.command_state.l_last_dir.get(), DUNGEON.command_state.l_last_pick.get(), &DUNGEON.command_state.last_comm,
+            &DUNGEON.command_state.last_dir, &DUNGEON.command_state.last_pick, &crate::ui::terminal::UI.mpos,
             &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, terse, inv_describe,
             &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names);
         if insist != 0 {
@@ -326,7 +324,7 @@ pub unsafe fn teleport(random: &mut Random) {
         damage[..dmg.len()].copy_from_slice(dmg);
     }
     no_move = 0;
-    count = 0;
+    DUNGEON.command_state.count.store(0, Ordering::Relaxed);
     running = false as u8;
     flush_type();
 }

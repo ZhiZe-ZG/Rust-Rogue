@@ -6,6 +6,8 @@
 //! Raw dependency pointers must be valid and initialized for the entire call,
 //! including reentrant helpers. Callers must serialize access and must not keep
 //! references to those slots alive across calls that can mutate them.
+//! Repeat `count` is a shared atomic accessed with relaxed ordering, not a raw
+//! dependency pointer.
 use crate::config::GameConfig;
 use crate::draw::{
     enter_room as draw_enter_room, leave_room as draw_leave_room, turnref as draw_turnref,
@@ -679,7 +681,7 @@ pub unsafe fn be_trapped(
     dungeon: &Dungeon,
     random: &mut Random,
     running: *mut u8,
-    count: *mut i32,
+    count: &std::sync::atomic::AtomicI32,
     no_move: *mut i32,
     no_command: *mut i32,
     group: &std::sync::atomic::AtomicI32,
@@ -697,7 +699,7 @@ pub unsafe fn be_trapped(
     }
 
     *running = false as u8;
-    *count = 0;
+    count.store(0, std::sync::atomic::Ordering::Relaxed);
     dungeon.with_level_mut(|current| {
         current.reveal_trap(pos.y as usize, pos.x as usize);
     });
@@ -906,7 +908,7 @@ pub unsafe fn do_move(
     runch: *mut crate::direction::Direction,
     oldpos: *const IVec2,
     take: *mut u8,
-    count: *mut i32,
+    count: &std::sync::atomic::AtomicI32,
     no_command: *mut i32,
     group: &std::sync::atomic::AtomicI32,
     has_hit: *mut u8,

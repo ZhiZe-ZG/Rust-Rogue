@@ -34,6 +34,8 @@ pub use monster_map::MonsterMap;
 /// `mlist`/`DUNGEON.monster_map` monster owners) with one owner, keeping the
 /// same scoped-closure access pattern (see [`Dungeon::with_level`]).
 pub struct Dungeon {
+    /// Command history and repeat state for this game.
+    pub command_state: crate::command_dispatch::CommandState,
     /// Per-game delayed actions and wandering-monster pacing.
     pub scheduler: crate::daemon::Scheduler,
     /// Next item stack-group identifier; legacy allocation starts at two.
@@ -88,6 +90,7 @@ impl Dungeon {
     pub const fn empty() -> Self {
         Self {
             scheduler: crate::daemon::Scheduler::new(),
+            command_state: crate::command_dispatch::CommandState::new(),
             group: AtomicI32::new(2),
             level: RwLock::new(None),
             scroll_names: RwLock::new(Vec::new()),

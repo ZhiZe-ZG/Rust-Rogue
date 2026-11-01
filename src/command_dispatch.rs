@@ -31,7 +31,8 @@ use crate::startup::{quit, shell};
 use crate::ui::output::{self, addmsg_str, endmsg, msg_str, status};
 use crate::wizard::{create_obj, show_map, teleport, whatis};
 use glam::IVec2;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
+use std::sync::Mutex;
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const F_REAL: u8 = 0x10u8 as u8;
@@ -51,19 +52,81 @@ const MASTER: bool = true;
 
 // ─── Command-local persistent state ──────────────────────────────────────────
 
-pub(crate) struct CommandState {
-    repeat_command: Command,
-    run_command: Command,
-    new_count: bool,
+/// A copyable command value whose lock never escapes an individual access.
+/// Recover poisoned locks so a cancelled callback cannot disable command input.
+pub struct CommandValue<T: Copy>(Mutex<T>);
+
+impl<T: Copy> CommandValue<T> {
+    pub const fn new(value: T) -> Self {
+        Self(Mutex::new(value))
+    }
+
+    pub fn get(&self) -> T {
+        *self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub fn set(&self, value: T) {
+        *self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = value;
+    }
+}
+
+/// Dungeon-owned command history and transient repeat state.
+pub struct CommandState {
+    pub again: AtomicU8,
+    pub count: AtomicI32,
+    pub last_comm: CommandValue<Command>,
+    pub last_dir: CommandValue<Direction>,
+    pub last_pick: CommandValue<Option<ThingId>>,
+    pub l_last_comm: CommandValue<Command>,
+    pub l_last_dir: CommandValue<Direction>,
+    pub l_last_pick: CommandValue<Option<ThingId>>,
+    pub(crate) repeat_command: CommandValue<Command>,
+    pub(crate) run_command: CommandValue<Command>,
+    pub(crate) new_count: CommandValue<bool>,
+}
+
+impl CommandState {
+    pub const fn new() -> Self {
+        Self {
+            again: AtomicU8::new(0),
+            count: AtomicI32::new(0),
+            last_comm: CommandValue::new(Command::UnknownKey),
+            last_dir: CommandValue::new(Direction::None),
+            last_pick: CommandValue::new(None),
+            l_last_comm: CommandValue::new(Command::UnknownKey),
+            l_last_dir: CommandValue::new(Direction::None),
+            l_last_pick: CommandValue::new(None),
+            repeat_command: CommandValue::new(Command::UnknownKey),
+            run_command: CommandValue::new(Command::UnknownKey),
+            new_count: CommandValue::new(false),
+        }
+    }
+
+    /// Reuse a direction only while replaying a command with direction history.
+    pub(crate) fn repeated_direction(&self) -> Option<Direction> {
+        let direction = self.last_dir.get();
+        (self.again.load(Ordering::Relaxed) != 0 && direction != Direction::None)
+            .then_some(direction)
+    }
+
+    fn remember_command(&self, command: Command) {
+        self.l_last_comm.set(self.last_comm.get());
+        self.l_last_dir.set(self.last_dir.get());
+        self.l_last_pick.set(self.last_pick.get());
+        self.last_comm.set(command);
+        self.last_dir.set(Direction::None);
+        self.last_pick.set(None);
+    }
+
+    fn cancel_repetition(&self) {
+        self.count.store(0, Ordering::Relaxed);
+        self.again.store(0, Ordering::Relaxed);
+    }
 }
 
 impl Default for CommandState {
     fn default() -> Self {
-        Self {
-            repeat_command: Command::UnknownKey,
-            run_command: Command::UnknownKey,
-            new_count: false,
-        }
+        Self::new()
     }
 }
 
@@ -72,9 +135,8 @@ impl Default for CommandState {
 use crate::game::globals::{
     e_levels, n_objs,
     fight_flush, monsters, no_move, oldpos, passgo, vf_hit,
-    after, again, count, delta, dir_ch, door_stop, firstmove, has_hit,
-    inv_describe, jump, kamikaze, l_last_comm, l_last_dir, l_last_pick, last_comm, last_dir,
-    last_pick, lastscore, max_hit, move_on, no_command, q_comm,
+    after, delta, dir_ch, door_stop, firstmove, has_hit,
+    inv_describe, jump, kamikaze, lastscore, max_hit, move_on, no_command, q_comm,
     runch, running, take, terse, to_death,
 };
 
@@ -105,14 +167,14 @@ fn cstr_at(s: &str) -> String {
 ///
 /// Uses globals: player, has_hit, running, door_stop, lastscore,
 /// purse, hero, jump, take, after, no_command,
-/// count, move_on, runch, to_death, countch, l_last_comm /
-/// last_comm / last_dir / last_pick (via reset_last/last_*), lvl_obj,
+/// move_on, runch, to_death, lvl_obj,
 /// terse, mlist (via moat), max_hit, mp/t_flags (via to_death),
 /// dir_ch, delta, q_comm, release, amulet, level, seenstairs,
 /// tr_name, inpack, food_left, equipment, inv_describe.
 /// Message state is owned by `crate::ui::terminal::UI`.
+/// Repeat counts and command history are owned by the supplied `CommandState`.
 /// Wizard mode is queried and updated through `crate::wizard` accessors.
-pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
+pub(crate) unsafe fn do_command(command_state: &CommandState) {
     let mut ntimes = initial_move_budget(player_has(MonsterFlags::HASTE));
 
     /*
@@ -126,7 +188,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
 
     while ntimes > 0 {
         ntimes -= 1;
-        again = false as u8;
+        command_state.again.store(0, Ordering::Relaxed);
         // Level transitions can retry this command before the AFTER daemon
         // phase, so let the UI repaint a changed level before look/input.
         crate::daemon::Daemon::UiRender.run(0, &mut RNG.lock().unwrap());
@@ -144,7 +206,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
         lastscore = DUNGEON.player.purse.load(Ordering::Relaxed);
         let hero = hero_pos();
         crate::ui::terminal::UI.move_cursor(IVec2::new(hero.x, hero.y));
-        if !((running != 0 || count != 0) && jump != 0) {
+        if !((running != 0 || command_state.count.load(Ordering::Relaxed) != 0) && jump != 0) {
             output::refresh(); // Draw screen
         }
         take = 0;
@@ -161,20 +223,15 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
             /*
              * execute a command
              */
-            if count != 0 && running == 0 {
-                count -= 1;
+            if command_state.count.load(Ordering::Relaxed) != 0 && running == 0 {
+                command_state.count.fetch_sub(1, Ordering::Relaxed);
             }
             if !matches!(command, Command::Again | Command::Escape)
                 && running == 0
-                && count == 0
+                && command_state.count.load(Ordering::Relaxed) == 0
                 && to_death == 0
             {
-                l_last_comm = last_comm;
-                l_last_dir = last_dir;
-                l_last_pick = last_pick;
-                last_comm = command;
-                last_dir = Direction::None;
-                last_pick = None;
+                command_state.remember_command(command);
             }
 
             // ── Command dispatch ────────────────────────────────────────────
@@ -233,7 +290,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             &mut RNG.lock().unwrap(), &raw mut firstmove, &raw mut no_move,
                             &raw mut after, &raw mut running, &raw mut to_death,
                             &raw const passgo, &raw mut runch, &raw const oldpos,
-                            &raw mut take, &raw mut count, &raw mut no_command,
+                            &raw mut take, &command_state.count, &raw mut no_command,
                             &DUNGEON.group, &raw mut has_hit, &raw const weap_info,
                             &terse, &DUNGEON.player.max_stats, &DUNGEON.player.quiet,
                             &raw mut kamikaze, &raw mut vf_hit, &raw const fight_flush,
@@ -248,11 +305,11 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             door_stop = true as u8;
                             firstmove = true as u8;
                         }
-                        command = if count != 0 && !command_state.new_count {
-                            command_state.run_command
+                        command = if command_state.count.load(Ordering::Relaxed) != 0 && !command_state.new_count.get() {
+                            command_state.run_command.get()
                         } else {
                             let run = Command::Run(direction);
-                            command_state.run_command = run;
+                            command_state.run_command.set(run);
                             run
                         };
                         continue 'dispatch;
@@ -305,25 +362,25 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                 delta.x,
                                 &raw mut has_hit,
                                 &mut RNG.lock().unwrap(),
-                                &DUNGEON, terse, &weap_names, &raw mut after, again,
-                                &DUNGEON.player.inpack, l_last_comm, l_last_dir, l_last_pick,
-                                &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+                                &DUNGEON, terse, &weap_names, &raw mut after, command_state.again.load(Ordering::Relaxed),
+                                &DUNGEON.player.inpack, command_state.l_last_comm.get(), command_state.l_last_dir.get(), command_state.l_last_pick.get(),
+                                &command_state.last_comm, &command_state.last_dir, &command_state.last_pick,
                                 &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs,
                                 &DUNGEON.player.pack_used, inv_describe, &arm_names, &pot_names,
                                 &ring_names, &scr_names, &ws_names,
-                                &raw mut count, &DUNGEON.player.quiet, &raw mut to_death,
+                                &command_state.count, &DUNGEON.player.quiet, &raw mut to_death,
                                 &raw mut kamikaze, &raw mut vf_hit, &raw const fight_flush,
                                 &raw mut monsters, &e_levels, &DUNGEON.player.max_stats,
                             );
                         }
                     }
                     Command::Again => {
-                        if last_comm == Command::UnknownKey {
+                        if command_state.last_comm.get() == Command::UnknownKey {
                             msg_str("you haven't typed a command yet");
                             after = false as u8;
                         } else {
-                            command = last_comm;
-                            again = true as u8;
+                            command = command_state.last_comm.get();
+                            command_state.again.store(1, Ordering::Relaxed);
                             continue 'dispatch;
                         }
                     }
@@ -332,9 +389,9 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         let fruit = DUNGEON.fruit();
                         quaff(&mut RNG.lock().unwrap(), &DUNGEON, &crate::ui::terminal::UI,
                             &raw mut pot_info as *mut [_], &raw mut after, terse,
-                            DUNGEON.player.max_stats().strength, &levels, &fruit, again, &DUNGEON.player.inpack,
-                            l_last_comm, l_last_dir, l_last_pick, &raw mut last_comm,
-                            &raw mut last_dir, &raw mut last_pick, &crate::ui::terminal::UI.mpos,
+                            DUNGEON.player.max_stats().strength, &levels, &fruit, command_state.again.load(Ordering::Relaxed), &DUNGEON.player.inpack,
+                            command_state.l_last_comm.get(), command_state.l_last_dir.get(), command_state.l_last_pick.get(), &command_state.last_comm,
+                            &command_state.last_dir, &command_state.last_pick, &crate::ui::terminal::UI.mpos,
                             &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, &DUNGEON.player.pack_used,
                             inv_describe, &arm_names, &ring_names, &scr_names,
                             &weap_names, &ws_names, &DUNGEON.player.max_stats);
@@ -359,39 +416,39 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             &weap_names, &ws_names);
                     }
                     Command::Drop => drop(&mut RNG.lock().unwrap(), &DUNGEON,
-                        &raw mut after, again, &DUNGEON.player.inpack, l_last_comm, l_last_dir,
-                        l_last_pick, &raw mut last_comm, &raw mut last_dir,
-                        &raw mut last_pick, &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc,
+                        &raw mut after, command_state.again.load(Ordering::Relaxed), &DUNGEON.player.inpack, command_state.l_last_comm.get(), command_state.l_last_dir.get(),
+                        command_state.l_last_pick.get(), &command_state.last_comm, &command_state.last_dir,
+                        &command_state.last_pick, &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc,
                         &raw mut n_objs, &DUNGEON.player.pack_used, terse, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
                         &DUNGEON.player.max_stats),
                     Command::ReadScroll => read_scroll(&mut RNG.lock().unwrap(), &DUNGEON,
                         &crate::ui::terminal::UI, &raw mut scr_info as *mut [_],
                         &weap_names, &raw mut no_command, terse, &raw mut after,
-                        again, &DUNGEON.player.inpack, l_last_comm, l_last_dir, l_last_pick,
-                        &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+                        command_state.again.load(Ordering::Relaxed), &DUNGEON.player.inpack, command_state.l_last_comm.get(), command_state.l_last_dir.get(), command_state.l_last_pick.get(),
+                        &command_state.last_comm, &command_state.last_dir, &command_state.last_pick,
                         &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs,
                         &DUNGEON.player.pack_used, inv_describe, &arm_names, &pot_names,
                         &ring_names, &ws_names, &raw const monsters),
                     Command::Eat => eat(),
                     Command::Wield => wield(&mut RNG.lock().unwrap(), &DUNGEON, terse,
-                        &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
-                        &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+                        &raw mut after, command_state.again.load(Ordering::Relaxed), command_state.l_last_comm.get(), command_state.l_last_dir.get(), command_state.l_last_pick.get(),
+                        &command_state.last_comm, &command_state.last_dir, &command_state.last_pick,
                         &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
                         &DUNGEON.player.max_stats),
                     Command::Wear => wear(&mut RNG.lock().unwrap(), &DUNGEON, terse,
-                        &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
-                        &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+                        &raw mut after, command_state.again.load(Ordering::Relaxed), command_state.l_last_comm.get(), command_state.l_last_dir.get(), command_state.l_last_pick.get(),
+                        &command_state.last_comm, &command_state.last_dir, &command_state.last_pick,
                         &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names),
                     Command::TakeOff => take_off(&mut RNG.lock().unwrap(), &DUNGEON,
                         terse, &raw mut after, inv_describe, &arm_names, &pot_names,
                         &ring_names, &scr_names, &weap_names, &ws_names, &DUNGEON.player.max_stats),
                     Command::RingOn => ring_on(&mut RNG.lock().unwrap(), &DUNGEON,
-                        terse, &crate::ui::terminal::UI.mpos, &raw mut after, again, l_last_comm,
-                        l_last_dir, l_last_pick, &raw mut last_comm, &raw mut last_dir,
-                        &raw mut last_pick, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, inv_describe,
+                        terse, &crate::ui::terminal::UI.mpos, &raw mut after, command_state.again.load(Ordering::Relaxed), command_state.l_last_comm.get(),
+                        command_state.l_last_dir.get(), command_state.l_last_pick.get(), &command_state.last_comm, &command_state.last_dir,
+                        &command_state.last_pick, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, inv_describe,
                         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names,
                         &DUNGEON.player.max_stats),
                     Command::RingOff => ring_off(&mut RNG.lock().unwrap(), &DUNGEON,
@@ -426,11 +483,11 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                         if get_dir() != 0 {
                             do_zap(&mut RNG.lock().unwrap(), &DUNGEON,
                                 &raw mut ws_info as *mut [_], &raw mut after, delta, terse,
-                                again, l_last_comm, l_last_dir, l_last_pick,
-                                &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+                                command_state.again.load(Ordering::Relaxed), command_state.l_last_comm.get(), command_state.l_last_dir.get(), command_state.l_last_pick.get(),
+                                &command_state.last_comm, &command_state.last_dir, &command_state.last_pick,
                                 &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs,
                                 inv_describe, &arm_names, &pot_names, &ring_names,
-                                &scr_names, &weap_names, &raw mut count, &DUNGEON.player.quiet,
+                                &scr_names, &weap_names, &command_state.count, &DUNGEON.player.quiet,
                                 &raw mut has_hit, &raw mut to_death, &raw mut kamikaze,
                                 &raw mut vf_hit, &raw const fight_flush, &raw mut monsters,
                                 &e_levels);
@@ -514,9 +571,8 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                     }
                     Command::Escape => {
                         door_stop = false as u8;
-                        count = 0;
+                        command_state.cancel_repetition();
                         after = false as u8;
-                        again = false as u8;
                     }
                     Command::MoveOn => {
                         move_on = true as u8;
@@ -524,7 +580,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                             after = false as u8;
                         } else {
                             command = Command::Move(dir_ch);
-                            command_state.repeat_command = Command::Move(dir_ch);
+                            command_state.repeat_command.set(Command::Move(dir_ch));
                             continue 'dispatch;
                         }
                     }
@@ -601,9 +657,9 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
                                     let item = get_item_id(
                                         "charge",
                                         ItemFilter::Category(ItemType::STICK),
-                                        &DUNGEON, &raw mut after, again, l_last_comm,
-                                        l_last_dir, l_last_pick, &raw mut last_comm,
-                                        &raw mut last_dir, &raw mut last_pick, &crate::ui::terminal::UI.mpos,
+                                        &DUNGEON, &raw mut after, command_state.again.load(Ordering::Relaxed), command_state.l_last_comm.get(),
+                                        command_state.l_last_dir.get(), command_state.l_last_pick.get(), &command_state.last_comm,
+                                        &command_state.last_dir, &command_state.last_pick, &crate::ui::terminal::UI.mpos,
                                         &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, terse, inv_describe,
                                         &arm_names, &pot_names, &ring_names, &scr_names,
                                         &weap_names, &ws_names,
@@ -692,7 +748,7 @@ pub(crate) unsafe fn do_command(command_state: &mut CommandState) {
 
 /// Read the next command, consume any repeat-count prefix, and report whether
 /// the command should be dispatched this turn (cooldown turns dispatch nothing).
-unsafe fn read_command(command_state: &mut CommandState) -> (Command, bool) {
+unsafe fn read_command(command_state: &CommandState) -> (Command, bool) {
     if no_command != 0 {
         no_command -= 1;
         if no_command == 0 {
@@ -704,8 +760,8 @@ unsafe fn read_command(command_state: &mut CommandState) -> (Command, bool) {
 
     let mut command = if running != 0 || to_death != 0 {
         Command::Move(runch)
-    } else if count != 0 {
-        command_state.repeat_command
+    } else if command_state.count.load(Ordering::Relaxed) != 0 {
+        command_state.repeat_command.get()
     } else {
         let command = Command::from_key_event(crate::ui::input::read_key_event());
         move_on = false as u8;
@@ -715,18 +771,18 @@ unsafe fn read_command(command_state: &mut CommandState) -> (Command, bool) {
         command
     };
 
-    command_state.new_count = false;
+    command_state.new_count.set(false);
     if let Command::Digit(first_digit) = command {
-        count = 0;
-        command_state.new_count = true;
+        command_state.count.store(0, Ordering::Relaxed);
+        command_state.new_count.set(true);
         let (next_command, prefix_count) = Command::capture_count_prefix(first_digit, || {
             Command::from_key_event(crate::ui::input::read_key_event())
         });
         command = next_command;
-        count = prefix_count;
-        command_state.repeat_command = command;
-        if !command_state.repeat_command.is_repeatable() {
-            count = 0;
+        command_state.count.store(prefix_count, Ordering::Relaxed);
+        command_state.repeat_command.set(command);
+        if !command_state.repeat_command.get().is_repeatable() {
+            command_state.count.store(0, Ordering::Relaxed);
         }
     }
 
@@ -743,7 +799,144 @@ fn initial_move_budget(haste: bool) -> i32 {
 
 #[cfg(test)]
 mod command_loop_tests {
-    use super::initial_move_budget;
+    use super::{initial_move_budget, CommandState, CommandValue};
+    use crate::command::Command;
+    use crate::direction::Direction;
+    use crate::item::arena::ThingArena;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn command_values_are_independent_and_const_constructible() {
+        const INITIAL: CommandValue<Command> = CommandValue::new(Command::Rest);
+        let value = INITIAL;
+        let other = CommandValue::new(Command::Search);
+        assert_eq!(value.get(), Command::Rest);
+        value.set(Command::Drop);
+        assert_eq!(value.get(), Command::Drop);
+        assert_eq!(other.get(), Command::Search);
+    }
+
+    #[test]
+    fn command_value_recovers_poison_for_reads_and_writes() {
+        let value = CommandValue::new(Command::Rest);
+        let result = std::panic::catch_unwind(|| {
+            let mut guard = value.0.lock().unwrap();
+            *guard = Command::Search;
+            panic!("poison command value");
+        });
+        assert!(result.is_err());
+        assert!(value.0.is_poisoned());
+        assert_eq!(value.get(), Command::Search);
+        value.set(Command::Drop);
+        assert_eq!(value.get(), Command::Drop);
+    }
+
+    #[test]
+    fn command_state_constructors_start_with_empty_history() {
+        const INITIAL: CommandState = CommandState::new();
+        for state in [INITIAL, CommandState::default()] {
+            assert_eq!(state.again.load(Ordering::Relaxed), 0);
+            assert_eq!(state.count.load(Ordering::Relaxed), 0);
+            assert_eq!(state.last_comm.get(), Command::UnknownKey);
+            assert_eq!(state.last_dir.get(), Direction::None);
+            assert_eq!(state.last_pick.get(), None);
+            assert_eq!(state.l_last_comm.get(), Command::UnknownKey);
+            assert_eq!(state.l_last_dir.get(), Direction::None);
+            assert_eq!(state.l_last_pick.get(), None);
+            assert_eq!(state.repeat_command.get(), Command::UnknownKey);
+            assert_eq!(state.run_command.get(), Command::UnknownKey);
+            assert!(!state.new_count.get());
+        }
+    }
+
+    #[test]
+    fn cancelled_item_command_restores_history_without_touching_other_state() {
+        let state = CommandState::new();
+        let other = CommandState::new();
+        let arena = ThingArena::new();
+        let id = arena.new_item_id();
+        state.last_comm.set(Command::Throw);
+        state.last_dir.set(Direction::North);
+        state.last_pick.set(Some(id));
+
+        state.remember_command(Command::Quaff);
+        assert_eq!(state.last_comm.get(), Command::Quaff);
+        assert_eq!(state.last_dir.get(), Direction::None);
+        assert_eq!(state.last_pick.get(), None);
+        assert_eq!(state.l_last_comm.get(), Command::Throw);
+        assert_eq!(state.l_last_dir.get(), Direction::North);
+        assert_eq!(state.l_last_pick.get(), Some(id));
+
+        unsafe {
+            crate::item::pack::reset_last(
+                state.l_last_comm.get(), state.l_last_dir.get(), state.l_last_pick.get(),
+                &state.last_comm, &state.last_dir, &state.last_pick,
+            );
+        }
+        assert_eq!(state.last_comm.get(), Command::Throw);
+        assert_eq!(state.last_dir.get(), Direction::North);
+        assert_eq!(state.last_pick.get(), Some(id));
+        assert_eq!(other.last_comm.get(), Command::UnknownKey);
+        assert_eq!(other.last_dir.get(), Direction::None);
+        assert_eq!(other.last_pick.get(), None);
+    }
+
+    #[test]
+    fn repeated_direction_retains_the_movement_delta() {
+        let state = CommandState::new();
+        state.last_dir.set(Direction::East);
+        assert_eq!(state.repeated_direction(), None);
+        state.again.store(1, Ordering::Relaxed);
+        assert_eq!(state.repeated_direction().map(Direction::delta), Some(glam::IVec2::new(1, 0)));
+        state.last_dir.set(Direction::None);
+        assert_eq!(state.repeated_direction(), None);
+    }
+
+    #[test]
+    fn escape_cancels_repetition_without_erasing_history() {
+        let state = CommandState::new();
+        let other = CommandState::new();
+        state.last_comm.set(Command::Search);
+        state.last_dir.set(Direction::West);
+        state.l_last_comm.set(Command::Rest);
+        state.repeat_command.set(Command::Search);
+        state.run_command.set(Command::Run(Direction::West));
+        state.new_count.set(true);
+        state.count.store(5, Ordering::Relaxed);
+        state.again.store(1, Ordering::Relaxed);
+        other.count.store(3, Ordering::Relaxed);
+        other.again.store(1, Ordering::Relaxed);
+
+        state.cancel_repetition();
+        assert_eq!(state.count.load(Ordering::Relaxed), 0);
+        assert_eq!(state.again.load(Ordering::Relaxed), 0);
+        assert_eq!(state.last_comm.get(), Command::Search);
+        assert_eq!(state.last_dir.get(), Direction::West);
+        assert_eq!(state.l_last_comm.get(), Command::Rest);
+        assert_eq!(state.repeat_command.get(), Command::Search);
+        assert_eq!(state.run_command.get(), Command::Run(Direction::West));
+        assert!(state.new_count.get());
+        assert_eq!(other.count.load(Ordering::Relaxed), 3);
+        assert_eq!(other.again.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn shared_state_keeps_callback_updates_live() {
+        let state = CommandState::new();
+        state.remember_command(Command::Throw);
+        let callback = |state: &CommandState| {
+            state.last_comm.set(Command::Drop);
+            state.last_dir.set(Direction::East);
+            state.count.store(7, Ordering::Relaxed);
+            state.repeat_command.set(Command::Search);
+        };
+        callback(&state);
+        assert_eq!(state.last_comm.get(), Command::Drop);
+        assert_eq!(state.last_dir.get(), Direction::East);
+        assert_eq!(state.count.fetch_sub(1, Ordering::Relaxed), 7);
+        assert_eq!(state.count.load(Ordering::Relaxed), 6);
+        assert_eq!(state.repeat_command.get(), Command::Search);
+    }
 
     #[test]
     fn haste_adds_one_move_to_the_initial_budget() {
@@ -757,10 +950,10 @@ mod command_loop_tests {
 /// illcom:
 /// What to do with an illegal command.
 ///
-/// Uses global count and UI-owned message-saving state.
+/// Uses dungeon-owned repeat count and UI-owned message-saving state.
 pub unsafe fn illcom(command: Command) {
     crate::ui::terminal::UI.save_msg.store(0, std::sync::atomic::Ordering::Relaxed);
-    count = 0;
+    DUNGEON.command_state.count.store(0, Ordering::Relaxed);
     msg_str(&format!(
         "illegal command '{}'",
         command.illegal_command_name()
@@ -773,7 +966,7 @@ pub unsafe fn illcom(command: Command) {
 /// search:
 /// Player gropes about him to find hidden things.
 ///
-/// Uses globals: hero, player, places (via chat/flat), count, running,
+/// Uses dungeon-owned repeat count and globals: hero, player, places (via chat/flat), running,
 /// terse, tr_name.
 pub unsafe fn search(random: &mut Random) {
     let hero = hero_pos();
@@ -806,7 +999,7 @@ pub unsafe fn search(random: &mut Random) {
                             crate::draw::reveal_secret_at(y, x);
                             msg_str("a secret door");
                             found = true;
-                            count = false as u8 as i32;
+                            DUNGEON.command_state.count.store(0, Ordering::Relaxed);
                             running = false as u8;
                         }
                     }
@@ -831,7 +1024,7 @@ pub unsafe fn search(random: &mut Random) {
                                 msg_str(&name);
                             }
                             found = true;
-                            count = false as u8 as i32;
+                            DUNGEON.command_state.count.store(0, Ordering::Relaxed);
                             running = false as u8;
                         }
                     }
@@ -840,7 +1033,7 @@ pub unsafe fn search(random: &mut Random) {
                         {
                             crate::draw::reveal_secret_at(y, x);
                             found = true;
-                            count = false as u8 as i32;
+                            DUNGEON.command_state.count.store(0, Ordering::Relaxed);
                             running = false as u8;
                         }
                     }
@@ -933,8 +1126,8 @@ pub unsafe fn call() {
     let weap_names = (&*(&raw const weap_info)).clone();
     let ws_names = (&*(&raw const ws_info)).clone();
     let Some(obj) = get_item_id("call", ItemFilter::Callable, &DUNGEON,
-        &raw mut after, again, l_last_comm, l_last_dir, l_last_pick,
-        &raw mut last_comm, &raw mut last_dir, &raw mut last_pick,
+        &raw mut after, DUNGEON.command_state.again.load(Ordering::Relaxed), DUNGEON.command_state.l_last_comm.get(), DUNGEON.command_state.l_last_dir.get(), DUNGEON.command_state.l_last_pick.get(),
+        &DUNGEON.command_state.last_comm, &DUNGEON.command_state.last_dir, &DUNGEON.command_state.last_pick,
         &crate::ui::terminal::UI.mpos, &crate::ui::terminal::UI.msg_esc, &raw mut n_objs, terse, inv_describe,
         &arm_names, &pot_names, &ring_names, &scr_names, &weap_names, &ws_names) else {
         return;

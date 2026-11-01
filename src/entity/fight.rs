@@ -12,8 +12,9 @@
 //! call, including reentrant helpers. Access must be serialized; no live Rust
 //! references to their storage may conflict with writes. Table borrows are kept
 //! local or cloned before calling helpers that can reenter combat.
-//! `purse` and `quiet` are shared atomically. `max_stats` uses a shared lock;
-//! no guard is held across gameplay helpers or callbacks.
+//! `count`, `purse`, and `quiet` are shared atomically; `last_pick` uses a
+//! shared `CommandValue` cell. `max_stats` uses a shared lock; no guard is held
+//! across gameplay helpers or callbacks.
 
 use crate::rnd::Random;
 
@@ -152,7 +153,7 @@ pub unsafe fn fight(
     thrown: u8,
     random: &mut Random,
     dungeon: &Dungeon,
-    count: *mut i32,
+    count: &std::sync::atomic::AtomicI32,
     quiet: &std::sync::atomic::AtomicI32,
     has_hit: *mut u8,
     to_death: *mut u8,
@@ -171,7 +172,7 @@ pub unsafe fn fight(
     };
 
     // Since we are fighting, things are not quiet — no healing.
-    *count = 0;
+    count.store(0, std::sync::atomic::Ordering::Relaxed);
     quiet.store(0, std::sync::atomic::Ordering::Relaxed);
     runto(mp, random, dungeon, monsters);
 
@@ -260,7 +261,7 @@ pub unsafe fn attack(
     random: &mut Random,
     dungeon: &Dungeon,
     running: *mut u8,
-    count: *mut i32,
+    count: &std::sync::atomic::AtomicI32,
     quiet: &std::sync::atomic::AtomicI32,
     to_death: *mut u8,
     kamikaze: *mut u8,
@@ -273,7 +274,7 @@ pub unsafe fn attack(
     e_levels: *const [i32; 21],
     monsters: *mut [MonsterInfo; 26],
     inpack: &std::sync::atomic::AtomicI32,
-    last_pick: *mut Option<ThingId>,
+    last_pick: &crate::command_dispatch::CommandValue<Option<ThingId>>,
     pack_used: &std::sync::Mutex<[u8; 26]>,
     inv_describe: *const u8,
     arm_info: *const [ObjInfo; 8],
@@ -286,7 +287,7 @@ pub unsafe fn attack(
 ) -> i32 {
     // Stop running / healing.
     *running = false as u8;
-    *count = 0;
+    count.store(0, std::sync::atomic::Ordering::Relaxed);
     quiet.store(0, std::sync::atomic::Ordering::Relaxed);
 
     let Some(mon) = Mon::get(tp, dungeon) else {
@@ -472,7 +473,7 @@ pub unsafe fn attack(
                 if purse.load(std::sync::atomic::Ordering::Relaxed) != lastpurse {
                     msg_str("your purse feels lighter");
                 }
-                *count = 0;
+                count.store(0, std::sync::atomic::Ordering::Relaxed);
                 return -1;
             } else if mtype == Some(MonsterType::Nymph) {
                 // Nymph: steals a magic item
@@ -527,7 +528,7 @@ pub unsafe fn attack(
                     );
                     msg_str(&format!("she stole {name}!"));
                     let _ = dungeon.objects.remove(steal);
-                    *count = 0;
+                    count.store(0, std::sync::atomic::Ordering::Relaxed);
                     return -1;
                 }
             }
@@ -553,7 +554,7 @@ pub unsafe fn attack(
     if *fight_flush != 0 && *to_death == 0 {
         flush_type();
     }
-    *count = 0;
+    count.store(0, std::sync::atomic::Ordering::Relaxed);
     0
 }
 

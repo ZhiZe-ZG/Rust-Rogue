@@ -5,7 +5,7 @@ use std::fmt;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
-use crate::command_dispatch::{do_command, CommandState};
+use crate::command_dispatch::do_command;
 use crate::command_line_parameter::CommandLineParameter;
 use crate::config::GameConfig;
 use crate::daemon::{fuse, start_daemon, Daemon};
@@ -13,7 +13,7 @@ use crate::dungeon::DUNGEON;
 use crate::entity::chase::roomin;
 use crate::entity::player::MonsterFlags;
 use crate::game::globals::{
-    after, count, in_shell, inv_type, oldpos, oldrp, playing,
+    after, in_shell, inv_type, oldpos, oldrp, playing,
     q_comm, seed, to_death,
 };
 use crate::init::{init_colors, init_materials, init_names, init_player, init_probs, init_stones};
@@ -259,16 +259,15 @@ pub unsafe fn main_loop_step() {
     oldrp = roomin(hero_pos, &DUNGEON);
     start_daemon(Daemon::UiRender, 0, AFTER);
     Daemon::UiRender.run(0, &mut RNG.lock().unwrap());
-    let mut command_state = CommandState::default();
     while playing != 0 && !exit_requested() {
-        do_command(&mut command_state); /* Command execution */
+        do_command(&DUNGEON.command_state); /* Command execution */
     }
 }
 
 /// quit:
 /// Have player make certain, then exit.
 ///
-/// Uses globals: q_comm, purse, count, to_death, and UI-owned message position.
+/// Uses dungeon-owned purse/repeat state, q_comm, to_death, and UI message position.
 pub unsafe fn quit() {
     /*
      * Reset the signal in case we got here via an interrupt
@@ -294,7 +293,7 @@ pub unsafe fn quit() {
         crate::ui::terminal::UI.move_cursor(old_cursor);
         output::refresh();
         crate::ui::terminal::UI.set_mpos(0);
-        count = 0;
+        DUNGEON.command_state.count.store(0, Ordering::Relaxed);
         to_death = 0;
     }
 }

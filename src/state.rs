@@ -20,6 +20,7 @@ use crate::direction::Direction;
 use glam::IVec2;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
+use std::sync::atomic::Ordering;
 
 use crate::daemon::CDelayedAction;
 use crate::entity::monsters::MonsterType;
@@ -180,6 +181,13 @@ pub struct GameSnapshot {
     #[serde(default)]
     pub a_class: Vec<i32>,
     pub count: i32,
+    // Optional for compatibility with saves predating command-state ownership.
+    #[serde(default)]
+    pub repeat_command: Option<Command>,
+    #[serde(default)]
+    pub run_command: Option<Command>,
+    #[serde(default)]
+    pub new_count: bool,
     pub food_left: i32,
     pub lastscore: i32,
     pub no_command: i32,
@@ -372,8 +380,8 @@ unsafe fn build_snapshot() -> GameSnapshot {
         left_ring: list_index_of_id(&hero_pack, eq.left_ring_id()),
         right_ring: list_index_of_id(&hero_pack, eq.right_ring_id()),
         weapon: list_index_of_id(&hero_pack, eq.weapon_id()),
-        last_pick: list_index_of_id(&hero_pack, crate::game::globals::last_pick),
-        l_last_pick: list_index_of_id(&hero_pack, crate::game::globals::l_last_pick),
+        last_pick: list_index_of_id(&hero_pack, DUNGEON.command_state.last_pick.get()),
+        l_last_pick: list_index_of_id(&hero_pack, DUNGEON.command_state.l_last_pick.get()),
     };
 
     // Level snapshot.
@@ -434,7 +442,7 @@ unsafe fn build_snapshot() -> GameSnapshot {
 
     GameSnapshot {
         after: after != 0,
-        again: again != 0,
+        again: DUNGEON.command_state.again.load(Ordering::Relaxed) != 0,
         seenstairs: DUNGEON.seen_stairs(),
         amulet: DUNGEON.has_amulet(),
         door_stop: door_stop != 0,
@@ -481,10 +489,10 @@ unsafe fn build_snapshot() -> GameSnapshot {
         ws_made: DUNGEON.ws_made().iter().map(|c| (*c).to_string()).collect(),
 
         orig_dsusp,
-        l_last_comm,
-        l_last_dir,
-        last_comm,
-        last_dir,
+        l_last_comm: DUNGEON.command_state.l_last_comm.get(),
+        l_last_dir: DUNGEON.command_state.l_last_dir.get(),
+        last_comm: DUNGEON.command_state.last_comm.get(),
+        last_dir: DUNGEON.command_state.last_dir.get(),
         n_objs,
         ntraps: DUNGEON.ntraps(),
         hungry_state: DUNGEON.player.hungry_state.load(std::sync::atomic::Ordering::Relaxed),
@@ -494,7 +502,10 @@ unsafe fn build_snapshot() -> GameSnapshot {
         mpos: crate::ui::terminal::UI.get_mpos(),
         no_food: crate::dungeon::no_food(),
         a_class: a_class.to_vec(),
-        count,
+        count: DUNGEON.command_state.count.load(Ordering::Relaxed),
+        repeat_command: Some(DUNGEON.command_state.repeat_command.get()),
+        run_command: Some(DUNGEON.command_state.run_command.get()),
+        new_count: DUNGEON.command_state.new_count.get(),
         food_left: DUNGEON.player.food_left.load(std::sync::atomic::Ordering::Relaxed),
         lastscore,
         no_command,
@@ -576,7 +587,7 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
         };
     }
     set_flag!(after);
-    set_flag!(again);
+    DUNGEON.command_state.again.store(s.again as u8, Ordering::Relaxed);
     DUNGEON.set_seen_stairs(s.seenstairs);
     DUNGEON.set_amulet(s.amulet);
     set_flag!(door_stop);
@@ -665,10 +676,10 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
 
     // ── numeric globals ─────────────────────────────────────────────────
     orig_dsusp = s.orig_dsusp;
-    l_last_comm = s.l_last_comm;
-    l_last_dir = s.l_last_dir;
-    last_comm = s.last_comm;
-    last_dir = s.last_dir;
+    DUNGEON.command_state.l_last_comm.set(s.l_last_comm);
+    DUNGEON.command_state.l_last_dir.set(s.l_last_dir);
+    DUNGEON.command_state.last_comm.set(s.last_comm);
+    DUNGEON.command_state.last_dir.set(s.last_dir);
     n_objs = s.n_objs;
     DUNGEON.set_ntraps(s.ntraps);
     DUNGEON.player.hungry_state.store(s.hungry_state, std::sync::atomic::Ordering::Relaxed);
@@ -678,7 +689,14 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     crate::ui::terminal::UI.set_mpos(s.mpos);
     crate::dungeon::set_no_food(s.no_food);
     // Legacy a_class and e_levels cannot override the fixed game rules.
-    count = s.count;
+    DUNGEON.command_state.count.store(s.count, Ordering::Relaxed);
+    DUNGEON.command_state.repeat_command.set(s.repeat_command.unwrap_or(Command::UnknownKey));
+    DUNGEON.command_state.run_command.set(s.run_command.unwrap_or(Command::UnknownKey));
+    DUNGEON.command_state.new_count.set(s.new_count);
+    // Older saves did not retain the command paired with a repeat count.
+    if s.repeat_command.is_none() {
+        DUNGEON.command_state.count.store(0, Ordering::Relaxed);
+    }
     DUNGEON.player.food_left.store(s.food_left, std::sync::atomic::Ordering::Relaxed);
     lastscore = s.lastscore;
     no_command = s.no_command;
@@ -826,8 +844,8 @@ unsafe fn apply_snapshot(s: GameSnapshot) {
     DUNGEON.player.set_left_ring_id(resolve_id(&player_pack, s.equipment.left_ring));
     DUNGEON.player.set_right_ring_id(resolve_id(&player_pack, s.equipment.right_ring));
     DUNGEON.player.set_weapon_id(resolve_id(&player_pack, s.equipment.weapon));
-    crate::game::globals::last_pick = resolve_id(&player_pack, s.equipment.last_pick);
-    crate::game::globals::l_last_pick = resolve_id(&player_pack, s.equipment.l_last_pick);
+    DUNGEON.command_state.last_pick.set(resolve_id(&player_pack, s.equipment.last_pick));
+    DUNGEON.command_state.l_last_pick.set(resolve_id(&player_pack, s.equipment.l_last_pick));
 
     // ── misc ────────────────────────────────────────────────────────────
     DUNGEON.player.set_max_stats(s.max_stats);
@@ -905,6 +923,9 @@ mod tests {
             no_food: 0,
             a_class: vec![8, 7, 7, 6, 5, 4, 4, 3],
             count: 0,
+            repeat_command: Some(Command::Search),
+            run_command: Some(Command::Run(Direction::East)),
+            new_count: true,
             food_left: 1300,
             lastscore: -1,
             no_command: 0,
@@ -977,6 +998,18 @@ mod tests {
         let text = ron::ser::to_string_pretty(&snapshot, ron::ser::PrettyConfig::default())
             .expect("serialize");
         let back: GameSnapshot = ron::de::from_str(&text).expect("deserialize");
+        assert_eq!(back.repeat_command, Some(Command::Search));
+        assert_eq!(back.run_command, Some(Command::Run(Direction::East)));
+        assert!(back.new_count);
+        let old_command_text = text.lines()
+            .filter(|line| !["repeat_command:", "run_command:", "new_count:"]
+                .iter().any(|field| line.trim_start().starts_with(field)))
+            .collect::<Vec<_>>().join("\n");
+        let old_commands: GameSnapshot = ron::de::from_str(&old_command_text)
+            .expect("load saves without repeat bookkeeping");
+        assert_eq!(old_commands.repeat_command, None);
+        assert_eq!(old_commands.run_command, None);
+        assert!(!old_commands.new_count);
         assert_eq!(back.seed, 42);
         assert_eq!(back.player.t_pos, IVec2::new(3, 4));
         assert_eq!(back.pot_info[0].guess.as_deref(), Some("fizzy"));
